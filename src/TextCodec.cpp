@@ -1,11 +1,19 @@
 #include <ssg/TextCodec.h>
 
-#include <ssg/open_metrics.h>
-
 #include <algorithm>
 #include <utility>
 
 namespace ssg {
+namespace {
+
+thread_local std::uint64_t utf8ValidationCount = 0;
+
+}
+
+void noteUtf8Validation() { ++utf8ValidationCount; }
+std::uint64_t utf8ValidationCalls() { return utf8ValidationCount; }
+void resetUtf8ValidationCalls() { utf8ValidationCount = 0; }
+
 namespace {
 
 struct Scalar {
@@ -42,7 +50,6 @@ void appendUtf8(std::string& output, char32_t value) {
 
 ScalarResult decodeUtf8(std::span<const std::uint8_t> input,
                          std::size_t baseOffset = 0) {
-    OpenPhaseTimer timer{OpenPhase::DecodeValidate};
     noteUtf8Validation();
     ScalarResult result;
     for (std::size_t index = 0; index < input.size();) {
@@ -97,7 +104,6 @@ ScalarResult decodeUtf8(std::span<const std::uint8_t> input,
 
 ScalarResult decodeUtf16(std::span<const std::uint8_t> input,
                           bool littleEndian, std::size_t baseOffset) {
-    OpenPhaseTimer timer{OpenPhase::DecodeValidate};
     ScalarResult result;
     if (input.size() % 2 != 0) {
         result.error = invalidInput(
@@ -147,7 +153,6 @@ constexpr std::array<char32_t, 32> kWindows1252High{
 
 ScalarResult decodeSingleByte(std::span<const std::uint8_t> input,
                                 TextEncoding encoding) {
-    OpenPhaseTimer timer{OpenPhase::DecodeValidate};
     ScalarResult result;
     result.scalars.reserve(input.size());
     for (std::size_t index = 0; index < input.size(); ++index) {
@@ -195,7 +200,6 @@ DecodeTextResult normalized(ScalarResult scalarResult,
     if (scalarResult.error.has_value()) {
         return {std::nullopt, std::move(scalarResult.error)};
     }
-    OpenPhaseTimer timer{OpenPhase::EolScan};
     DecodedText text;
     text.status.encoding = encoding;
     text.status.hadBom = hadBom;
@@ -247,7 +251,6 @@ std::span<const std::uint8_t> skip(
 DecodeTextResult decodeUtf8Fused(std::span<const std::uint8_t> input,
                                    std::size_t baseOffset,
                                    TextEncoding encoding, bool hadBom) {
-    OpenPhaseTimer timer{OpenPhase::DecodeValidate};
     noteUtf8Validation();
     DecodedText text;
     text.status.encoding = encoding;

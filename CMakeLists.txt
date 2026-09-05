@@ -816,10 +816,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 
 endif()
 
-target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/open_metrics.cpp
-)
-
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
         NAME test_open_equivalence

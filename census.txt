@@ -3455,10 +3455,13 @@ ssg/TextCodec.h	func	ssg::ValidatedUtf8::bytes	SharedBytes () const noexcept
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::operator=	ValidatedUtf8 &(ValidatedUtf8 &&) noexcept
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::operator=	ValidatedUtf8 &(const ValidatedUtf8 &)
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::view	std::string_view () const noexcept
+ssg/TextCodec.h	func	ssg::noteUtf8Validation	void ()
 ssg/TextCodec.h	func	ssg::operator==	bool (const DecodedText &, const DecodedText &)
 ssg/TextCodec.h	func	ssg::operator==	bool (const TextEncodingError &, const TextEncodingError &)
 ssg/TextCodec.h	func	ssg::operator==	bool (const TextEncodingStatus &, const TextEncodingStatus &)
 ssg/TextCodec.h	func	ssg::operator==	bool (const TextEncodingViewState &, const TextEncodingViewState &)
+ssg/TextCodec.h	func	ssg::resetUtf8ValidationCalls	void ()
+ssg/TextCodec.h	func	ssg::utf8ValidationCalls	std::uint64_t ()
 ssg/TextCodec.h	struct	ssg::DecodeTextResult
 ssg/TextCodec.h	struct	ssg::DecodedText
 ssg/TextCodec.h	struct	ssg::EncodeTextOptions
@@ -4155,26 +4158,6 @@ ssg/focus.h	enumerator	ssg::FocusTarget::Panel
 ssg/focus.h	enumerator	ssg::FocusTarget::Prompt
 ssg/focus.h	func	ssg::focusTargetName	std::string_view (FocusTarget) noexcept
 ssg/focus.h	func	ssg::keymapContexts	std::array<std::string_view, 5> () noexcept
-ssg/open_metrics.h	class	ssg::OpenPhaseTimer
-ssg/open_metrics.h	enum	ssg::OpenPhase
-ssg/open_metrics.h	enumerator	ssg::OpenPhase::Count
-ssg/open_metrics.h	enumerator	ssg::OpenPhase::DecodeValidate
-ssg/open_metrics.h	enumerator	ssg::OpenPhase::DocumentBuild
-ssg/open_metrics.h	enumerator	ssg::OpenPhase::EolScan
-ssg/open_metrics.h	enumerator	ssg::OpenPhase::NulScan
-ssg/open_metrics.h	enumerator	ssg::OpenPhase::Read
-ssg/open_metrics.h	enumerator	ssg::OpenPhase::StateDirtyCheck
-ssg/open_metrics.h	func	ssg::OpenPhaseTimer::OpenPhaseTimer	void (OpenPhase) noexcept
-ssg/open_metrics.h	func	ssg::OpenPhaseTimer::OpenPhaseTimer	void (const OpenPhaseTimer &)
-ssg/open_metrics.h	func	ssg::OpenPhaseTimer::operator=	OpenPhaseTimer &(const OpenPhaseTimer &)
-ssg/open_metrics.h	func	ssg::notePieceTreeText	void ()
-ssg/open_metrics.h	func	ssg::noteUtf8Validation	void ()
-ssg/open_metrics.h	func	ssg::openPhaseNs	std::uint64_t (OpenPhase)
-ssg/open_metrics.h	func	ssg::pieceTreeTextCalls	std::uint64_t ()
-ssg/open_metrics.h	func	ssg::resetOpenPhaseTiming	void ()
-ssg/open_metrics.h	func	ssg::resetPieceTreeTextCalls	void ()
-ssg/open_metrics.h	func	ssg::resetUtf8ValidationCalls	void ()
-ssg/open_metrics.h	func	ssg::utf8ValidationCalls	std::uint64_t ()
 ssg/platform_files.h	class	ssg::ExclusiveFileLock
 ssg/platform_files.h	class	ssg::FileIoFaultInjector
 ssg/platform_files.h	enum	ssg::FileIoStatus

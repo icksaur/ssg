@@ -1,6 +1,5 @@
 #include <ssg/Workspace.h>
 
-#include <ssg/open_metrics.h>
 #include <ssg/SharedBytes.h>
 
 #include <algorithm>
@@ -31,7 +30,6 @@ WorkspaceResult failure(WorkspaceError error, std::string message) {
 }
 
 std::vector<std::uint8_t> readFileBytes(const std::filesystem::path& path) {
-    OpenPhaseTimer timer{OpenPhase::Read};
     auto result = readFile(path);
     if (!result.ok()) {
         throw std::runtime_error("failed to open file for reading: " +
@@ -433,11 +431,7 @@ public:
                               bool dirty,
                               DocumentMode mode = DocumentMode::Edit) {
         const auto id = FileDocumentId{nextDocument++};
-        bool hasNul;
-        {
-            OpenPhaseTimer timer{OpenPhase::NulScan};
-            hasNul = containsNul(asUnsignedBytes(bytes));
-        }
+        const bool hasNul = containsNul(asUnsignedBytes(bytes));
         if (hasNul) {
             entries.push_back({id, std::move(key), std::move(label),
                                FileContentKind::Binary, {}, std::move(bytes),
@@ -454,10 +448,7 @@ public:
                 const SharedBytes persisted =
                     dirty ? SharedBytes{} : proof.bytes();
                 const auto persistedStatus = decoded.text->status;
-                Document document = [&] {
-                    OpenPhaseTimer timer{OpenPhase::DocumentBuild};
-                    return Document{std::move(proof), mode};
-                }();
+                Document document{std::move(proof), mode};
                 entries.push_back(
                     {id, std::move(key), std::move(label),
                      FileContentKind::Text, std::move(*decoded.text),
@@ -611,7 +602,6 @@ std::optional<WorkspaceDocumentState> Workspace::state(
     if (!entry) {
         return std::nullopt;
     }
-    OpenPhaseTimer timer{OpenPhase::StateDirtyCheck};
     const auto text = entry->document.snapshot().text;
     const bool untitled = entry->key.kind() == JournalDocumentKeyKind::Untitled;
     // An untitled buffer used to be dirty unconditionally.  Technically true --

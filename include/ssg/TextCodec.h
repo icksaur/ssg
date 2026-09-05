@@ -14,6 +14,10 @@
 
 namespace ssg {
 
+void noteUtf8Validation();
+[[nodiscard]] std::uint64_t utf8ValidationCalls();
+void resetUtf8ValidationCalls();
+
 enum class LineTerminator : std::uint8_t {
     None,
     Lf,

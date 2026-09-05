@@ -1,7 +1,5 @@
 #include <ssg/PieceTree.h>
 
-#include <ssg/open_metrics.h>
-
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
@@ -311,7 +309,6 @@ bool PieceTree::empty() const noexcept {
 }
 
 std::string PieceTree::text() const {
-    notePieceTreeText();
     std::string result;
     result.reserve(size());
     appendText(root_, originalBuffer_.view(), addBuffer_, result);
