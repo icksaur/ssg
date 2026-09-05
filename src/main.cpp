@@ -46,8 +46,7 @@ void recordStartupMark(char const* phase) {
     if (path == nullptr) return;
     timespec now{};
     clock_gettime(CLOCK_MONOTONIC, &now);
-    long long const ns =
-        static_cast<long long>(now.tv_sec) * 1'000'000'000LL + now.tv_nsec;
+    long long const ns = static_cast<long long>(now.tv_sec) * 1'000'000'000LL + now.tv_nsec;
     // seam-exempt: append-only diagnostic trace, not file content access
     if (std::FILE* file = std::fopen(path, "a"); file != nullptr) {
         std::fprintf(file, "%s %lld\n", phase, ns);
@@ -73,8 +72,7 @@ struct FdReadiness {
     bool initScript = false;
 };
 
-FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd,
-                          int initScriptFd = -1) {
+FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd, int initScriptFd = -1) {
     fd_set set;
     FD_ZERO(&set);
     FD_SET(STDIN_FILENO, &set);
@@ -89,15 +87,10 @@ FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd,
         maxFd = std::max(maxFd, initScriptFd);
     }
     timeval timeout{timeoutMs / 1000, (timeoutMs % 1000) * 1000};
-    int const ready =
-        ::select(maxFd + 1, &set, nullptr, nullptr,
-                 timeoutMs < 0 ? nullptr : &timeout);
+    int const ready = ::select(maxFd + 1, &set, nullptr, nullptr, timeoutMs < 0 ? nullptr : &timeout);
     if (ready <= 0) return {};
-    return {
-        FD_ISSET(STDIN_FILENO, &set) != 0,
-        signalFd >= 0 ? FD_ISSET(signalFd, &set) != 0 : false,
-        gitDiffFd >= 0 ? FD_ISSET(gitDiffFd, &set) != 0 : false,
-        initScriptFd >= 0 ? FD_ISSET(initScriptFd, &set) != 0 : false};
+    return {FD_ISSET(STDIN_FILENO, &set) != 0, signalFd >= 0 ? FD_ISSET(signalFd, &set) != 0 : false, gitDiffFd >= 0 ? FD_ISSET(gitDiffFd, &set) != 0 : false,
+            initScriptFd >= 0 ? FD_ISSET(initScriptFd, &set) != 0 : false};
 }
 
 extern "C" void signalTagHandler(int signo) {
@@ -123,32 +116,25 @@ void popGrapheme(std::string& text) {
 }
 
 void popWord(std::string& text) {
-    while (!text.empty() &&
-           !ssg::isWordByte(static_cast<unsigned char>(text.back()))) {
+    while (!text.empty() && !ssg::isWordByte(static_cast<unsigned char>(text.back()))) {
         text.pop_back();
     }
-    while (!text.empty() &&
-           ssg::isWordByte(static_cast<unsigned char>(text.back()))) {
+    while (!text.empty() && ssg::isWordByte(static_cast<unsigned char>(text.back()))) {
         text.pop_back();
     }
 }
 
-}
+} // namespace
 
-ViewActionResult applyScriptViewAction(EditorSession& runtime,
-                                       GridPresenter& presenter,
-                                       const ViewAction& request) {
+ViewActionResult applyScriptViewAction(EditorSession& runtime, GridPresenter& presenter, const ViewAction& request) {
     auto frame = presenter.project(runtime, {terminalSize(), {}});
     if (!frame) {
-        return {ViewActionStatus::Rejected, std::nullopt,
-                "view action has no current grid frame"};
+        return {ViewActionStatus::Rejected, std::nullopt, "view action has no current grid frame"};
     }
     return presenter.apply(request, *frame);
 }
 
-const char* environmentVariable(std::string_view name) {
-    return std::getenv(std::string{name}.c_str());
-}
+const char* environmentVariable(std::string_view name) { return std::getenv(std::string{name}.c_str()); }
 
 class PaletteView;
 
@@ -186,21 +172,17 @@ struct PointerState {
 
 void drainSignals(SsgContext& context);
 std::optional<GridPresentation> renderFrame(SsgContext& context);
-ClientInputOutcome handleInputResult(SsgContext& context,
-                                     ClientInputResult result);
-ClientInputOutcome routeInput(SsgContext& context, KeyStroke stroke,
-                              std::string text);
+ClientInputOutcome handleInputResult(SsgContext& context, ClientInputResult result);
+ClientInputOutcome routeInput(SsgContext& context, KeyStroke stroke, std::string text);
 void handleTerminalReply(SsgContext& context, const Decoded& decoded);
 void handlePaste(SsgContext& context, const Decoded& decoded);
 void handleScroll(SsgContext& context, const Decoded& decoded);
 void handleKey(SsgContext& context, const Decoded& decoded, bool& quit);
-void handlePointer(SsgContext& context, const Decoded& decoded,
-                   PointerState& pointer);
-void dispatchBufferedInput(SsgContext& context, std::string& buffer,
-                           PointerState& pointer, bool& quit);
+void handlePointer(SsgContext& context, const Decoded& decoded, PointerState& pointer);
+void dispatchBufferedInput(SsgContext& context, std::string& buffer, PointerState& pointer, bool& quit);
 
 class PaletteView {
-public:
+  public:
     explicit PaletteView(SsgContext& context) : context_{context} {}
 
     void scroll(std::int64_t delta) {
@@ -210,12 +192,10 @@ public:
         window_.firstVisible = offset.firstVisible();
     }
 
-    void scrollToFraction(std::uint32_t numerator,
-                          std::uint32_t denominator) {
+    void scrollToFraction(std::uint32_t numerator, std::uint32_t denominator) {
         if (!open_) return;
         auto offset = scrollOffset();
-        offset.toFraction(numerator, denominator, candidateCount(),
-                          window_.paneRows);
+        offset.toFraction(numerator, denominator, candidateCount(), window_.paneRows);
         window_.firstVisible = offset.firstVisible();
     }
 
@@ -250,23 +230,18 @@ public:
         }
     }
 
-    [[nodiscard]] PaletteReport report() {
-        return open_ ? PaletteSearcher{}.report(candidates_, window_)
-                     : PaletteReport{};
-    }
+    [[nodiscard]] PaletteReport report() { return open_ ? PaletteSearcher{}.report(candidates_, window_) : PaletteReport{}; }
 
     void adopt(const GridPresentation& snapshot) {
         activation_ = snapshot.paletteView.activePicker;
         mode_ = activation_ ? activation_->mode : SearchMode::Command;
-        if (auto const* published =
-                snapshot.paletteView.candidatesFor(mode_)) {
+        if (auto const* published = snapshot.paletteView.candidatesFor(mode_)) {
             candidates_ = *published;
         } else {
             candidates_.clear();
         }
         if (snapshot.document) {
-            window_.paneRows = static_cast<std::uint32_t>(
-                std::max(snapshot.document->content.height, 1));
+            window_.paneRows = static_cast<std::uint32_t>(std::max(snapshot.document->content.height, 1));
         }
         const bool wasOpen = open_;
         open_ = snapshot.promptStatus.activeKind == PromptKind::Palette;
@@ -277,29 +252,20 @@ public:
         }
     }
 
-    [[nodiscard]] std::optional<std::string> candidateId(
-        std::size_t rankedIndex) const {
+    [[nodiscard]] std::optional<std::string> candidateId(std::size_t rankedIndex) const {
         const auto order = ranked();
         if (rankedIndex >= order.size()) return std::nullopt;
         return candidates_[order[rankedIndex]].id;
     }
 
-    [[nodiscard]] std::optional<PickerActivation> activation() const {
-        return activation_;
-    }
+    [[nodiscard]] std::optional<PickerActivation> activation() const { return activation_; }
 
-private:
-    [[nodiscard]] std::vector<std::size_t> ranked() const {
-        return PaletteSearcher{}.rank(candidates_, window_.query);
-    }
+  private:
+    [[nodiscard]] std::vector<std::size_t> ranked() const { return PaletteSearcher{}.rank(candidates_, window_.query); }
 
-    [[nodiscard]] std::uint32_t candidateCount() const {
-        return static_cast<std::uint32_t>(ranked().size());
-    }
+    [[nodiscard]] std::uint32_t candidateCount() const { return static_cast<std::uint32_t>(ranked().size()); }
 
-    [[nodiscard]] ScrollOffset scrollOffset() const {
-        return ScrollOffset{window_.firstVisible};
-    }
+    [[nodiscard]] ScrollOffset scrollOffset() const { return ScrollOffset{window_.firstVisible}; }
 
     void revealSelection() {
         const auto order = ranked();
@@ -308,9 +274,7 @@ private:
         }
         if (order.empty()) return;
         auto offset = scrollOffset();
-        offset.revealSelection(
-            static_cast<std::uint32_t>(window_.selected),
-            static_cast<std::uint32_t>(order.size()), window_.paneRows);
+        offset.revealSelection(static_cast<std::uint32_t>(window_.selected), static_cast<std::uint32_t>(order.size()), window_.paneRows);
         window_.firstVisible = offset.firstVisible();
     }
 
@@ -347,32 +311,26 @@ void drainSignals(SsgContext& context) {
 }
 
 std::optional<GridPresentation> renderFrame(SsgContext& context) {
-    auto snapshot = context.presenter.project(
-        context.runtime, {terminalSize(), context.palette->report()});
+    auto snapshot = context.presenter.project(context.runtime, {terminalSize(), context.palette->report()});
     if (!snapshot) return std::nullopt;
 
     context.focus = effectiveUiFocus(snapshot->uiTree);
     context.palette->adopt(*snapshot);
-    if (auto const bytes = context.clipboardWriter.bytesFor(
-            snapshot->clipboardWrite,
-            context.capabilities.has(Capability::ClipboardWrite))) {
+    if (auto const bytes = context.clipboardWriter.bytesFor(snapshot->clipboardWrite, context.capabilities.has(Capability::ClipboardWrite))) {
         writeAll(*bytes);
     }
     return snapshot;
 }
 
-ClientInputOutcome handleInputResult(SsgContext& context,
-                                     ClientInputResult result) {
+ClientInputOutcome handleInputResult(SsgContext& context, ClientInputResult result) {
     if (result.command) context.activeSnapshot.reset();
     if (result.clientOwned) context.palette->apply(*result.clientOwned);
-    if (result.outcome != ClientInputOutcome::ViewOwned || !result.command ||
-        !result.command->viewAction) {
+    if (result.outcome != ClientInputOutcome::ViewOwned || !result.command || !result.command->viewAction) {
         return result.outcome;
     }
     if (!context.activeSnapshot) context.activeSnapshot = renderFrame(context);
     if (!context.activeSnapshot) return ClientInputOutcome::Rejected;
-    auto applied = context.presenter.apply(*result.command->viewAction,
-                                           *context.activeSnapshot);
+    auto applied = context.presenter.apply(*result.command->viewAction, *context.activeSnapshot);
     if (!applied.accepted()) return ClientInputOutcome::Rejected;
     if (applied.transition) {
         auto transition = context.runtime.input(*applied.transition);
@@ -384,12 +342,7 @@ ClientInputOutcome handleInputResult(SsgContext& context,
     return result.outcome;
 }
 
-ClientInputOutcome routeInput(SsgContext& context, KeyStroke stroke,
-                              std::string text) {
-    return handleInputResult(
-        context, context.runtime.input(
-                     ClientKeyInput{stroke, std::move(text)}));
-}
+ClientInputOutcome routeInput(SsgContext& context, KeyStroke stroke, std::string text) { return handleInputResult(context, context.runtime.input(ClientKeyInput{stroke, std::move(text)})); }
 
 void handleTerminalReply(SsgContext& context, const Decoded& decoded) {
     context.capabilities.observeReply(decoded.reply);
@@ -406,20 +359,14 @@ void handlePaste(SsgContext& context, const Decoded& decoded) {
 void handleScroll(SsgContext& context, const Decoded& decoded) {
     HitRegion region = HitRegion::None;
     if (context.activeSnapshot) {
-        region = HitTester{*context.activeSnapshot}
-                     .at(decoded.pointer.column, decoded.pointer.row)
-                     .region;
+        region = HitTester{*context.activeSnapshot}.at(decoded.pointer.column, decoded.pointer.row).region;
     }
     switch (route_wheel(region)) {
     case WheelTarget::editor:
-        (void)handleInputResult(
-            context, context.runtime.input(
-                ScrollLinesInput{{ScrollTarget::Document, decoded.scroll}}));
+        (void)handleInputResult(context, context.runtime.input(ScrollLinesInput{{ScrollTarget::Document, decoded.scroll}}));
         break;
     case WheelTarget::tree:
-        (void)handleInputResult(
-            context, context.runtime.input(
-                ScrollLinesInput{{ScrollTarget::Tree, decoded.scroll}}));
+        (void)handleInputResult(context, context.runtime.input(ScrollLinesInput{{ScrollTarget::Tree, decoded.scroll}}));
         break;
     case WheelTarget::palette:
         context.palette->scroll(decoded.scroll);
@@ -437,8 +384,7 @@ void handleKey(SsgContext& context, const Decoded& decoded, bool& quit) {
     (void)routeInput(context, decoded.stroke, decoded.text);
 }
 
-void handlePointer(SsgContext& context, const Decoded& decoded,
-                   PointerState& pointer) {
+void handlePointer(SsgContext& context, const Decoded& decoded, PointerState& pointer) {
     pointer.lastColumn = decoded.pointer.column;
     pointer.lastRow = decoded.pointer.row;
     RegionHit hit;
@@ -449,31 +395,20 @@ void handlePointer(SsgContext& context, const Decoded& decoded,
         HitTester tester{*context.activeSnapshot};
         if (pointer.gutterDrag && decoded.pointer.kind == PointerKind::drag) {
             hit.region = pointer.gutterDrag->region;
-            int const relativeRow =
-                decoded.pointer.row - pointer.gutterDrag->gutterY;
-            auto const fraction =
-                gutter_fraction(relativeRow, pointer.gutterDrag->grabOffset,
-                                pointer.gutterDrag->travel);
+            int const relativeRow = decoded.pointer.row - pointer.gutterDrag->gutterY;
+            auto const fraction = gutter_fraction(relativeRow, pointer.gutterDrag->grabOffset, pointer.gutterDrag->travel);
             hit.scrollNumerator = fraction.numerator;
             hit.scrollDenominator = fraction.denominator;
         } else {
             hit = tester.at(decoded.pointer.column, decoded.pointer.row);
-            const bool leftPress =
-                decoded.pointer.kind == PointerKind::press &&
-                decoded.pointer.button == PointerButton::left;
+            const bool leftPress = decoded.pointer.kind == PointerKind::press && decoded.pointer.button == PointerButton::left;
             if (leftPress && is_scrollbar_region(hit.region)) {
                 if (auto const thumb = tester.gutterThumb(hit.region)) {
-                    int const relativeRow =
-                        decoded.pointer.row - thumb->gutterY;
-                    int const travel = static_cast<int>(thumb->viewportRows) -
-                                       static_cast<int>(thumb->thumbSize);
-                    int const grabOffset = scrollbar_grab_offset(
-                        relativeRow, static_cast<int>(thumb->thumbStart),
-                        static_cast<int>(thumb->thumbSize));
-                    pointer.gutterDrag = GutterDrag{
-                        hit.region, thumb->gutterY, travel, grabOffset};
-                    auto const fraction =
-                        gutter_fraction(relativeRow, grabOffset, travel);
+                    int const relativeRow = decoded.pointer.row - thumb->gutterY;
+                    int const travel = static_cast<int>(thumb->viewportRows) - static_cast<int>(thumb->thumbSize);
+                    int const grabOffset = scrollbar_grab_offset(relativeRow, static_cast<int>(thumb->thumbStart), static_cast<int>(thumb->thumbSize));
+                    pointer.gutterDrag = GutterDrag{hit.region, thumb->gutterY, travel, grabOffset};
+                    auto const fraction = gutter_fraction(relativeRow, grabOffset, travel);
                     hit.scrollNumerator = fraction.numerator;
                     hit.scrollDenominator = fraction.denominator;
                 }
@@ -483,74 +418,50 @@ void handlePointer(SsgContext& context, const Decoded& decoded,
         }
 
         if (hit.region == HitRegion::Editor) {
-            targets.document_position = SelectionNavigator::resolvePosition(
-                context.activeSnapshot->documentText, ByteOffset{hit.byteOffset});
+            targets.document_position = SelectionNavigator::resolvePosition(context.activeSnapshot->documentText, ByteOffset{hit.byteOffset});
         } else if (hit.region == HitRegion::Tab) {
             auto const& tabs = context.activeSnapshot->tabs.tabs;
             if (hit.tabIndex < tabs.size()) {
                 targets.tab_id = tabs[hit.tabIndex].id;
             }
         } else if (hit.region == HitRegion::Palette) {
-            targets.picker_candidate_id =
-                context.palette->candidateId(hit.itemIndex);
+            targets.picker_candidate_id = context.palette->candidateId(hit.itemIndex);
             targets.picker_activation = context.palette->activation();
-        } else if (hit.region == HitRegion::HeaderField ||
-                   hit.region == HitRegion::FooterField) {
+        } else if (hit.region == HitRegion::HeaderField || hit.region == HitRegion::FooterField) {
             if (hit.fieldId) targets.ui_node_id = UiNodeId{*hit.fieldId};
         } else if (hit.region == HitRegion::NoticeAction) {
             targets.notice_action_id = hit.fieldId;
-        } else if (hit.region == HitRegion::ExternalAction &&
-                   hit.externalFileId && hit.commandId) {
+        } else if (hit.region == HitRegion::ExternalAction && hit.externalFileId && hit.commandId) {
             const auto fileId = DiffFileId{*hit.externalFileId};
-            for (auto const& file :
-                 context.activeSnapshot->externalModification.files) {
+            for (auto const& file : context.activeSnapshot->externalModification.files) {
                 if (file.id != fileId) continue;
                 for (auto const& action : file.actions) {
                     if (action.command == *hit.commandId) {
-                        targets.external_invocation =
-                            ExternalActionInvocation{file.id, action.action};
+                        targets.external_invocation = ExternalActionInvocation{file.id, action.action};
                         break;
                     }
                 }
             }
         }
 
-        static constexpr auto doubleClickWindow =
-            std::chrono::milliseconds{400};
-        const bool leftEditorPress =
-            decoded.pointer.kind == PointerKind::press &&
-            decoded.pointer.button == PointerButton::left &&
-            hit.region == HitRegion::Editor;
+        static constexpr auto doubleClickWindow = std::chrono::milliseconds{400};
+        const bool leftEditorPress = decoded.pointer.kind == PointerKind::press && decoded.pointer.button == PointerButton::left && hit.region == HitRegion::Editor;
         if (leftEditorPress && targets.document_position &&
-            register_click_is_double(
-                pointer.clickTracker, std::chrono::steady_clock::now(),
-                context.activeSnapshot->tabs.active
-                    ? context.activeSnapshot->tabs.active->value()
-                    : 0,
-                decoded.pointer.row, decoded.pointer.column,
-                doubleClickWindow)) {
+            register_click_is_double(pointer.clickTracker, std::chrono::steady_clock::now(), context.activeSnapshot->tabs.active ? context.activeSnapshot->tabs.active->value() : 0,
+                                     decoded.pointer.row, decoded.pointer.column, doubleClickWindow)) {
             doubleClickPosition = targets.document_position;
         }
     }
 
-    bool const effectiveAlt = decoded.pointer.kind == PointerKind::press
-                                  ? decoded.pointer.alt
-                                  : pointer.altDrag;
-    auto plan =
-        doubleClickPosition
-            ? double_click_dispatch(*doubleClickPosition)
-            : route_pointer(hit, decoded.pointer.button, decoded.pointer.kind,
-                            effectiveAlt, pointer.dragging,
-                            pointer.dragAnchor, targets);
+    bool const effectiveAlt = decoded.pointer.kind == PointerKind::press ? decoded.pointer.alt : pointer.altDrag;
+    auto plan = doubleClickPosition ? double_click_dispatch(*doubleClickPosition)
+                                    : route_pointer(hit, decoded.pointer.button, decoded.pointer.kind, effectiveAlt, pointer.dragging, pointer.dragAnchor, targets);
     if (plan.semantic_input) {
-        (void)handleInputResult(
-            context, context.runtime.input(*plan.semantic_input));
+        (void)handleInputResult(context, context.runtime.input(*plan.semantic_input));
     }
     if (plan.command) (void)context.runtime.dispatch(*plan.command);
-    if (plan.client_scroll &&
-        plan.client_scroll->target == WheelTarget::palette) {
-        context.palette->scrollToFraction(plan.client_scroll->numerator,
-                                          plan.client_scroll->denominator);
+    if (plan.client_scroll && plan.client_scroll->target == WheelTarget::palette) {
+        context.palette->scrollToFraction(plan.client_scroll->numerator, plan.client_scroll->denominator);
     }
     if (plan.begins_drag) {
         pointer.dragging = true;
@@ -567,15 +478,13 @@ void handlePointer(SsgContext& context, const Decoded& decoded,
     }
 }
 
-void dispatchBufferedInput(SsgContext& context, std::string& buffer,
-                           PointerState& pointer, bool& quit) {
+void dispatchBufferedInput(SsgContext& context, std::string& buffer, PointerState& pointer, bool& quit) {
     char bytes[4096];
     while (!buffer.empty() && !quit) {
         std::size_t consumed = 0;
         auto decoded = decode_input(buffer, false, consumed);
         if (decoded.status == DecodeStatus::incomplete) {
-            auto const ready =
-                waitReadiness(kEscapeTimeoutMs, context.signalReadFd, -1);
+            auto const ready = waitReadiness(kEscapeTimeoutMs, context.signalReadFd, -1);
             if (ready.signal) drainSignals(context);
             if (ready.input) {
                 auto more = ::read(STDIN_FILENO, bytes, sizeof bytes);
@@ -593,12 +502,10 @@ void dispatchBufferedInput(SsgContext& context, std::string& buffer,
             handleTerminalReply(context, decoded);
             continue;
         }
-        if (decoded.status == DecodeStatus::pointer &&
-            decoded.pointer.kind == PointerKind::drag) {
+        if (decoded.status == DecodeStatus::pointer && decoded.pointer.kind == PointerKind::drag) {
             std::size_t peekConsumed = 0;
             const auto next = decode_input(buffer, false, peekConsumed);
-            if (next.status == DecodeStatus::pointer &&
-                next.pointer.kind == PointerKind::drag) {
+            if (next.status == DecodeStatus::pointer && next.pointer.kind == PointerKind::drag) {
                 continue;
             }
         }
@@ -625,22 +532,18 @@ void dispatchBufferedInput(SsgContext& context, std::string& buffer,
     }
 }
 
-}
+} // namespace ssg::app
 
 int main(int argc, char** argv) {
     using namespace ssg::app;
 
     recordStartupMark("main_entry");
-    const int firstOperand =
-        argc > 1 && std::string_view{argv[1]} == "--" ? 2 : 1;
-    const fs::path argument =
-        argc > firstOperand ? argv[firstOperand] : fs::path{};
+    const int firstOperand = argc > 1 && std::string_view{argv[1]} == "--" ? 2 : 1;
+    const fs::path argument = argc > firstOperand ? argv[firstOperand] : fs::path{};
     auto target = resolve_launch(argument);
 
     fs::path stateBase;
-    if (const char* stateOverride = std::getenv("SSG_STATE_DIR");
-        stateOverride != nullptr && *stateOverride != '\0' &&
-        fs::path{stateOverride}.is_absolute()) {
+    if (const char* stateOverride = std::getenv("SSG_STATE_DIR"); stateOverride != nullptr && *stateOverride != '\0' && fs::path{stateOverride}.is_absolute()) {
         stateBase = stateOverride;
     } else {
         stateBase = ssg::userStateRoot("ssg");
@@ -648,8 +551,7 @@ int main(int argc, char** argv) {
     std::error_code code;
     fs::create_directories(stateBase / "scratch", code);
     fs::create_directories(stateBase / "archive", code);
-    for (const auto& dir :
-         {stateBase, stateBase / "scratch", stateBase / "archive"}) {
+    for (const auto& dir : {stateBase, stateBase / "scratch", stateBase / "archive"}) {
         std::error_code permissionError;
         if (fs::is_directory(dir, permissionError)) {
             try {
@@ -659,8 +561,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    auto recoveryBase =
-        fs::temp_directory_path() / ("ssg-" + std::to_string(::getpid()));
+    auto recoveryBase = fs::temp_directory_path() / ("ssg-" + std::to_string(::getpid()));
     fs::create_directories(recoveryBase / "recovery", code);
 
     ssg::EditorSessionConfig config;
@@ -682,10 +583,7 @@ int main(int argc, char** argv) {
 
     ssg::GridPresenter presenter;
     recordStartupMark("post_presenter_init");
-    ssg::ScriptHost scripts{
-        runtime,
-        std::bind_front(applyScriptViewAction, std::ref(runtime),
-                        std::ref(presenter))};
+    ssg::ScriptHost scripts{runtime, std::bind_front(applyScriptViewAction, std::ref(runtime), std::ref(presenter))};
     auto const appliedInitScript = loadInitScript(scripts, runtime);
     std::optional<InitScriptWatcher> initScriptWatcher;
     if (auto scriptPath = resolveInitScriptPath()) {
@@ -700,8 +598,7 @@ int main(int argc, char** argv) {
         openedNamedFile = openResult.accepted();
     }
     if (!startsWithAnEditableDocument) {
-        startsWithAnEditableDocument =
-            runtime.dispatch({"file.new", {}}).accepted();
+        startsWithAnEditableDocument = runtime.dispatch({"file.new", {}}).accepted();
     }
     recordStartupMark("post_open");
 
@@ -716,22 +613,14 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "ssg: failed to create signal pipe\n");
         return 1;
     }
-    ::fcntl(signalPipe[0], F_SETFL,
-            ::fcntl(signalPipe[0], F_GETFL, 0) | O_NONBLOCK);
-    ::fcntl(signalPipe[1], F_SETFL,
-            ::fcntl(signalPipe[1], F_GETFL, 0) | O_NONBLOCK);
+    ::fcntl(signalPipe[0], F_SETFL, ::fcntl(signalPipe[0], F_GETFL, 0) | O_NONBLOCK);
+    ::fcntl(signalPipe[1], F_SETFL, ::fcntl(signalPipe[1], F_GETFL, 0) | O_NONBLOCK);
     gSignalPipeWrite = signalPipe[1];
     installSignalTagHandler(SIGWINCH);
     installSignalTagHandler(SIGTERM);
     installSignalTagHandler(SIGHUP);
 
-    SsgContext context{runtime,
-                       presenter,
-                       scripts,
-                       terminal,
-                       initScriptWatcher ? &*initScriptWatcher : nullptr,
-                       gitDiffWakeFd,
-                       signalPipe[0]};
+    SsgContext context{runtime, presenter, scripts, terminal, initScriptWatcher ? &*initScriptWatcher : nullptr, gitDiffWakeFd, signalPipe[0]};
     context.palette = std::make_unique<PaletteView>(context);
     auto& mode = context.terminal;
     ssg::ColorDepth const colorDepth = context.capabilities.colorDepth();
@@ -749,13 +638,9 @@ int main(int argc, char** argv) {
         while (!quit) {
             // Motion floods can otherwise render every event and pin a core.
             if (pointer.gutterDrag.has_value() || pointer.dragging) {
-                const auto sinceFrame =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now() - lastFrameAt)
-                        .count();
+                const auto sinceFrame = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - lastFrameAt).count();
                 if (sinceFrame < kDragFrameIntervalMs) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds{
-                        kDragFrameIntervalMs - sinceFrame});
+                    std::this_thread::sleep_for(std::chrono::milliseconds{kDragFrameIntervalMs - sinceFrame});
                 }
             }
             lastFrameAt = std::chrono::steady_clock::now();
@@ -763,8 +648,7 @@ int main(int argc, char** argv) {
             auto& snapshot = context.activeSnapshot;
             if (snapshot) {
                 auto grid = ssg::Renderer{}.render(*snapshot, &renderLineCache);
-                std::string frame = ssg::app::encode_frame(
-                    grid, colorDepth, !pointer.gutterDrag.has_value());
+                std::string frame = ssg::app::encode_frame(grid, colorDepth, !pointer.gutterDrag.has_value());
                 if (!firstFrameMarked) {
                     recordStartupMark("first_content_frame");
                     firstFrameMarked = true;
@@ -773,12 +657,8 @@ int main(int argc, char** argv) {
                     // The file provider does not exist until deferred enrichment.
                     // A named file should not start obscured by the sidebar.
                     if (!openedNamedFile) {
-                        if (auto const panelResult = runtime.dispatch(
-                                {"panel.show_files", {}});
-                            !panelResult.accepted()) {
-                            std::fprintf(stderr,
-                                         "ssg: could not open Files sidebar: %s\n",
-                                         panelResult.message.c_str());
+                        if (auto const panelResult = runtime.dispatch({"panel.show_files", {}}); !panelResult.accepted()) {
+                            std::fprintf(stderr, "ssg: could not open Files sidebar: %s\n", panelResult.message.c_str());
                         }
                     }
                     // Showing the sidebar focuses it, so restore the requested file.
@@ -794,27 +674,18 @@ int main(int argc, char** argv) {
             char bytes[4096];
             std::optional<int> dragEdge;
             if (pointer.dragging && snapshot && snapshot->document) {
-                dragEdge = ssg::app::edge_scroll(
-                    pointer.dragging, pointer.lastRow,
-                    snapshot->document->content);
+                dragEdge = ssg::app::edge_scroll(pointer.dragging, pointer.lastRow, snapshot->document->content);
             }
             if (dragEdge) {
-                auto const ready = waitReadiness(
-                    kEdgeScrollIntervalMs, context.signalReadFd, -1);
+                auto const ready = waitReadiness(kEdgeScrollIntervalMs, context.signalReadFd, -1);
                 if (ready.signal) {
                     // A held drag must not defer resize or termination.
                     drainSignals(context);
                     continue;
                 }
                 if (!ready.input) {
-                    (void)handleInputResult(
-                        context, runtime.input(ssg::DocumentPointerInput{
-                            std::nullopt, false, false,
-                            ssg::InputPointerButton::Primary,
-                            ssg::InputPointerPhase::Move,
-                            *dragEdge < 0
-                                ? ssg::DocumentPointerEdge::Before
-                                : ssg::DocumentPointerEdge::After}));
+                    (void)handleInputResult(context, runtime.input(ssg::DocumentPointerInput{std::nullopt, false, false, ssg::InputPointerButton::Primary, ssg::InputPointerPhase::Move,
+                                                                                             *dragEdge < 0 ? ssg::DocumentPointerEdge::Before : ssg::DocumentPointerEdge::After}));
                     continue;
                 }
             }
@@ -822,10 +693,7 @@ int main(int argc, char** argv) {
             // An autosave timeout repaints only when a draft was written.
             FdReadiness wait;
             while (true) {
-                wait = waitReadiness(
-                    kAutosaveTickMs, context.signalReadFd,
-                    context.gitDiffWakeFd,
-                    initScriptWatcher ? initScriptWatcher->wakeDescriptor() : -1);
+                wait = waitReadiness(kAutosaveTickMs, context.signalReadFd, context.gitDiffWakeFd, initScriptWatcher ? initScriptWatcher->wakeDescriptor() : -1);
                 if (wait.input || wait.signal || wait.gitDiff || wait.initScript) {
                     break;
                 }
