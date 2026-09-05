@@ -1642,7 +1642,7 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
                        ssg::InputPointerPhase::Release})
             .outcome,
         ssg::ClientInputOutcome::Dispatched);
-    const auto second = ssg::SelectionNavigator::resolvePosition(
+    const auto second = ssg::resolveSelectionPosition(
         runtime.activeDocumentText(), ssg::ByteOffset{7});
     ASSERT_TRUE(second.has_value());
     if (!second) return;
@@ -2384,21 +2384,21 @@ TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
 
     // Two identical wrap snapshots: the second re-shapes nothing from the
     // document -- only the constant chrome/prompt shaping remains.
-    ssg::GraphemeLayout::resetCellRunCalls();
+    ssg::resetCellRunCalls();
     (void)grid.present(runtime);
-    auto const base = ssg::GraphemeLayout::cellRunCalls();
-    ssg::GraphemeLayout::resetCellRunCalls();
+    auto const base = ssg::cellRunCalls();
+    ssg::resetCellRunCalls();
     (void)grid.present(runtime);
-    ASSERT_EQ(ssg::GraphemeLayout::cellRunCalls(), base);
+    ASSERT_EQ(ssg::cellRunCalls(), base);
 
     // An edit bumps the document revision, so the whole document is re-shaped:
     // the count jumps well past the cached-snapshot baseline.
     ASSERT_TRUE(runtime.dispatch({"text.insert",
                                   ssg::TextInputArguments{"z"}})
                     .accepted());
-    ssg::GraphemeLayout::resetCellRunCalls();
+    ssg::resetCellRunCalls();
     (void)grid.present(runtime);
-    ASSERT_TRUE(ssg::GraphemeLayout::cellRunCalls() > base);
+    ASSERT_TRUE(ssg::cellRunCalls() > base);
     std::filesystem::remove_all(root);
 }
 
@@ -2432,12 +2432,12 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
         ssg::test::GridTestView grid{dims};
         (void)runtime.dispatch({"file.open",  file});
         (void)grid.present(runtime);
-        ssg::GraphemeLayout::resetCellRunCalls();
+        ssg::resetCellRunCalls();
         for (int i = 0; i < 4; ++i) {
             (void)grid.dispatch(
                 runtime, {"cursor.line_down",  {}});
         }
-        return ssg::GraphemeLayout::cellRunCalls();
+        return ssg::cellRunCalls();
     };
 
     auto const smallCalls = navSegmentations("small.txt");

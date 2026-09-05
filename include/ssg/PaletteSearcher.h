@@ -150,19 +150,15 @@ struct PaletteWindowState {
     std::uint32_t paneRows = 1;
 };
 
-class PaletteSearcher {
-public:
-    [[nodiscard]] std::vector<std::size_t> rank(
-        std::vector<PaletteCandidate> const& candidates,
-        std::string_view query) const;
+[[nodiscard]] std::vector<std::size_t> rankPaletteCandidates(
+    std::vector<PaletteCandidate> const& candidates, std::string_view query);
 
-    [[nodiscard]] std::string ghost(std::string_view topLabel,
-                                    std::string_view query) const;
+[[nodiscard]] std::string paletteGhost(std::string_view topLabel,
+                                       std::string_view query);
 
-    [[nodiscard]] PaletteReport report(
-        std::vector<PaletteCandidate> const& candidates,
-        PaletteWindowState& window) const;
-};
+[[nodiscard]] PaletteReport buildPaletteReport(
+    std::vector<PaletteCandidate> const& candidates,
+    PaletteWindowState& window);
 
 // The shared match-and-order contract, as a pure function of the published state.
 // This is the SPECIFICATION a responsive client executes locally against the same

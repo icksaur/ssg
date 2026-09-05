@@ -157,7 +157,7 @@ NavigationTransition emptyTransition() { return {}; }
 
 } // namespace
 
-ParsedSearchQuery WorkspaceSearcher::parse(std::string_view query) const {
+ParsedSearchQuery parseWorkspaceSearchQuery(std::string_view query) {
     ParsedSearchQuery result;
     if (query.empty()) {
         return result;
@@ -202,9 +202,9 @@ void SearchCancellationToken::cancel() const noexcept {
     cancelled_->store(true, std::memory_order_relaxed);
 }
 
-std::vector<SearchResult> WorkspaceSearcher::rank(
+std::vector<SearchResult> rankWorkspaceSearch(
     const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
-    const SearchCancellationToken& cancellation) const {
+    const SearchCancellationToken& cancellation) {
     if (query.error != SearchQueryError::None || cancellation.cancelled()) {
         return {};
     }
@@ -222,9 +222,9 @@ std::vector<SearchResult> WorkspaceSearcher::rank(
     return {};
 }
 
-WorkspaceSearchBatch WorkspaceSearcher::evaluate(
+WorkspaceSearchBatch evaluateWorkspaceSearch(
     const WorkspaceSnapshot& workspace,
-    const WorkspaceSearchRequest& request) const {
+    const WorkspaceSearchRequest& request) {
     WorkspaceSearchBatch batch{.generation = request.generation,
                                .sourceRevision = request.sourceRevision};
     if (request.cancellation.cancelled()) {
@@ -232,13 +232,14 @@ WorkspaceSearchBatch WorkspaceSearcher::evaluate(
         return batch;
     }
     batch.sourceRevision = workspace.revision;
-    batch.results = rank(workspace, request.query, request.cancellation);
+    batch.results =
+        rankWorkspaceSearch(workspace, request.query, request.cancellation);
     batch.cancelled = request.cancellation.cancelled();
     return batch;
 }
 
-std::optional<NavigationTarget> SearchNavigator::target(
-    const SearchResult& result) const {
+std::optional<NavigationTarget> searchNavigationTarget(
+    const SearchResult& result) {
     if (result.path.empty()) {
         return std::nullopt;
     }
@@ -252,8 +253,8 @@ std::optional<NavigationTarget> SearchNavigator::target(
                                           : std::nullopt};
 }
 
-std::optional<NavigationTarget> SearchNavigator::gotoLine(
-    std::string path, const ParsedSearchQuery& query) const {
+std::optional<NavigationTarget> searchGotoLine(
+    std::string path, const ParsedSearchQuery& query) {
     if (path.empty() || query.mode != SearchMode::Line ||
         query.error != SearchQueryError::None || !query.line) {
         return std::nullopt;
@@ -397,7 +398,7 @@ WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
     WorkspaceSearchRequest request{
         .generation = state_.searchGeneration + 1,
         .sourceRevision = sourceRevision,
-        .query = WorkspaceSearcher{}.parse(query)};
+        .query = parseWorkspaceSearchQuery(query)};
     state_.revision = sourceRevision;
     state_.query = std::move(query);
     state_.mode = request.query.mode;
@@ -412,7 +413,7 @@ WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
 WorkspaceSearchBatch SearchController::evaluate(
     const WorkspaceSearchRequest& request,
     const WorkspaceSnapshot& workspace) const {
-    return WorkspaceSearcher{}.evaluate(workspace, request);
+    return evaluateWorkspaceSearch(workspace, request);
 }
 
 void SearchController::cancelWorkspaceSearch() noexcept {

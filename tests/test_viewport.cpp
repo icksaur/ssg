@@ -34,7 +34,7 @@ std::vector<CellRun> runs(std::initializer_list<std::string_view> lines) {
     std::vector<CellRun> result;
     result.reserve(lines.size());
     for (const auto line : lines) {
-        result.push_back(ssg::GraphemeLayout{}.computeRun(line));
+        result.push_back(ssg::computeCellRun(line));
     }
     return result;
 }
@@ -50,11 +50,11 @@ std::vector<CellRun> cellRunsFromText(std::string_view text, int tab) {
         auto end = text.find('\n', start);
         auto line = text.substr(
             start, end == std::string_view::npos ? end : end - start);
-        result.push_back(ssg::GraphemeLayout{}.computeRun(line, tab));
+        result.push_back(ssg::computeCellRun(line, tab));
         if (end == std::string_view::npos) break;
         start = end + 1;
     }
-    if (result.empty()) result.push_back(ssg::GraphemeLayout{}.computeRun("", tab));
+    if (result.empty()) result.push_back(ssg::computeCellRun("", tab));
     return result;
 }
 
@@ -467,7 +467,7 @@ TEST(listScrollViewMatchesComputeViewportMetrics) {
     // editor's compute_viewport already does for the same (total, viewport,
     // first) — no regression in the reused thumb math.
     std::vector<CellRun> lines;
-    for (int i = 0; i < 40; ++i) lines.push_back(ssg::GraphemeLayout{}.computeRun("line", 4));
+    for (int i = 0; i < 40; ++i) lines.push_back(ssg::computeCellRun("line", 4));
     auto viewport = ssg::computeViewport(lines, ssg::ViewportDimensions{20, 10}, 7);
     auto list = ssg::listScrollView(
         viewport.totalVisualRows, 10, 7, std::nullopt, false);
@@ -634,7 +634,7 @@ TEST(unwrappedEndByteOffsetIsTheTrueLineEnd) {
                 doc, ViewportDimensions{columns, 8}, 0, firstCol, 4);
             for (const auto& row : proj.visibleRows) {
                 ASSERT_EQ(row.endByteOffset, wantEnd[row.logicalLine]);
-                auto pos = ssg::SelectionNavigator::resolvePosition(
+                auto pos = ssg::resolveSelectionPosition(
                     doc, ssg::ByteOffset{row.endByteOffset});
                 ASSERT_TRUE(pos.has_value());
                 if (pos) {
@@ -741,7 +741,7 @@ TEST(scrollMappingIsInertWhenNothingScrolls) {
 }
 
 // Lever 2 (visible-line cache). A LineLayoutCache hit must be byte-identical to a
-// fresh GraphemeLayout::computeRun -- the cache key is the exact (text, tabWidth)
+// fresh computeCellRun -- the cache key is the exact (text, tabWidth)
 // so it needs no semantic invalidation. Covers tabs, wide graphemes, and
 // combining sequences, and the (text, tabWidth) key discrimination.
 TEST(cachedLineLayoutEqualsFreshComputeRun) {
@@ -768,7 +768,7 @@ TEST(cachedLineLayoutEqualsFreshComputeRun) {
         "",
     };
     for (const auto& line : lines) {
-        const auto fresh = ssg::GraphemeLayout{}.computeRun(line, 4);
+        const auto fresh = ssg::computeCellRun(line, 4);
         // First call (miss) and a second (hit) must both equal the fresh run.
         ASSERT_TRUE(sameRun(cache.run(line, 4), fresh));
         ASSERT_TRUE(sameRun(cache.run(line, 4), fresh));
@@ -777,9 +777,9 @@ TEST(cachedLineLayoutEqualsFreshComputeRun) {
     // distinct entry equal to its own fresh run, and the two coexist.
     ssg::LineLayoutCache widthCache;
     ASSERT_TRUE(sameRun(widthCache.run("a\tb", 8),
-                        ssg::GraphemeLayout{}.computeRun("a\tb", 8)));
+                        ssg::computeCellRun("a\tb", 8)));
     ASSERT_TRUE(sameRun(widthCache.run("a\tb", 2),
-                        ssg::GraphemeLayout{}.computeRun("a\tb", 2)));
+                        ssg::computeCellRun("a\tb", 2)));
     ASSERT_EQ(widthCache.size(), std::size_t{2});
 
     // Bounded: a capacity-2 cache never holds more than 2 entries.
@@ -799,14 +799,14 @@ TEST(unwrappedProjectionReusesCachedVisibleLines) {
     ssg::LineLayoutCache cache;
     (void)ssg::computeUnwrappedViewport(doc, dims, 0, 0, 4, nullptr,
                                            std::nullopt, &cache);  // warm
-    ssg::GraphemeLayout::resetCellRunCalls();
+    ssg::resetCellRunCalls();
     (void)ssg::computeUnwrappedViewport(doc, dims, 0, 0, 4, nullptr,
                                            std::nullopt, &cache);
-    ASSERT_EQ(ssg::GraphemeLayout::cellRunCalls(), std::uint64_t{0});
+    ASSERT_EQ(ssg::cellRunCalls(), std::uint64_t{0});
     // Without a cache the same projection re-segments the visible lines.
-    ssg::GraphemeLayout::resetCellRunCalls();
+    ssg::resetCellRunCalls();
     (void)ssg::computeUnwrappedViewport(doc, dims, 0, 0, 4);
-    ASSERT_TRUE(ssg::GraphemeLayout::cellRunCalls() > 0);
+    ASSERT_TRUE(ssg::cellRunCalls() > 0);
 }
 
 SSG_TEST_SUITE(test_viewport) {

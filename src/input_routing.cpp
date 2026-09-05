@@ -302,10 +302,10 @@ ClientInputResult inputLocked(EditorSession::Impl& impl_,
                                 for (const auto& range :
                                      transition.selections) {
                                     auto anchor =
-                                        SelectionNavigator::resolvePosition(
+                                        resolveSelectionPosition(
                                             text, range.anchor);
                                     auto active =
-                                        SelectionNavigator::resolvePosition(
+                                        resolveSelectionPosition(
                                             text, range.active);
                                     if (!anchor || !active) {
                                         return rejectTarget(
@@ -364,7 +364,7 @@ ClientInputResult inputLocked(EditorSession::Impl& impl_,
                     const auto resolvePosition = [&]()
                         -> std::optional<DocumentPosition> {
                         if (!semantic.position) return std::nullopt;
-                        return SelectionNavigator::resolvePosition(
+                        return resolveSelectionPosition(
                             impl_.activeText(), *semantic.position);
                     };
                     if (semantic.phase == InputPointerPhase::Press) {

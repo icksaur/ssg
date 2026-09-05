@@ -150,7 +150,7 @@ SSG_TEST_SUITE(test_gcb_oracle) {
             utf8 += encodeUtf8(e.cp);
 
         // Run compute_cell_run
-        const auto run = ssg::GraphemeLayout{}.computeRun(utf8);
+        const auto run = ssg::computeCellRun(utf8);
 
         // Expected clusters = number of ÷-separated segments
         // break_bytes has the byte offsets where breaks occur (between spans)

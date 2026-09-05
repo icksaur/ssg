@@ -245,11 +245,11 @@ std::optional<SelectionSet> remapSelections(
     std::vector<Selection> values;
     values.reserve(before.items().size());
     const auto resolveMapped = [&](std::uint64_t offset) {
-        auto resolved = ssg::SelectionNavigator::resolvePosition(
+        auto resolved = ssg::resolveSelectionPosition(
             resultingText, ByteOffset{offset}, tabWidth);
         while (!resolved && offset < resultingText.size()) {
             ++offset;
-            resolved = ssg::SelectionNavigator::resolvePosition(
+            resolved = ssg::resolveSelectionPosition(
                 resultingText, ByteOffset{offset}, tabWidth);
         }
         return resolved;
@@ -271,7 +271,7 @@ bool validateSelections(std::string_view text,
                          const SelectionSet& selections, int tabWidth) {
     for (const auto& selection : selections.items()) {
         for (const auto* endpoint : {&selection.anchor, &selection.active}) {
-            const auto resolved = ssg::SelectionNavigator::resolvePosition(
+            const auto resolved = ssg::resolveSelectionPosition(
                 text, endpoint->byteOffset, tabWidth);
             if (!resolved || *resolved != *endpoint) {
                 return false;
@@ -494,7 +494,7 @@ std::vector<TextEdit> transposeEdits(const DocumentSnapshot& document,
             --lineIndex;
         }
         const auto& line = lines[lineIndex];
-        const auto run = GraphemeLayout{}.computeRun(
+        const auto run = computeCellRun(
             std::string_view{document.text}.substr(
                 line.start, line.contentEnd - line.start));
         if (run.spans.size() < 2) {
@@ -544,9 +544,9 @@ std::vector<TextEdit> transposeEdits(const DocumentSnapshot& document,
 
 }  // namespace
 
-EditCommandResult EditInterpreter::apply(
+EditCommandResult applyEditCommand(
     const DocumentSnapshot& document, const SelectionSet& selections,
-    EditCommandSettings settings, EditCommand command) const {
+    EditCommandSettings settings, EditCommand command) {
     if (document.mode == DocumentMode::ReadOnly) {
         return failure(EditCommandError::ReadOnly,
                        "edit command requires an editable document");

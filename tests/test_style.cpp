@@ -287,7 +287,7 @@ TEST(styleDefineWithAnEmptyTableIsANoOp) {
 
 
 // A glyph is the one string that reaches a terminal cell without passing
-// through GraphemeLayout on the way, so it is the one place a control byte can
+// through computeCellRun on the way, so it is the one place a control byte can
 // reach the terminal and change how it reads what follows.
 TEST(aStyleGlyphThatEmitsAModeIsRejectedNamingItsKey) {
     ssg::Style const base{};

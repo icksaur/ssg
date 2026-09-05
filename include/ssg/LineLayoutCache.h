@@ -3,7 +3,7 @@
 // A bounded LRU cache of grapheme-shaped line runs.
 //
 // A line's CellRun is a pure function of its exact (text, tabWidth), so a cache
-// hit is byte-identical to a fresh GraphemeLayout::computeRun and the cache
+// hit is byte-identical to a fresh computeCellRun and the cache
 // needs NO semantic invalidation -- only capacity eviction. This is the
 // library-only rendering seam for Lever 2's visible-line shaping: the two hot
 // visible-line paths (Renderer's paint pass and computeUnwrappedViewport)
@@ -54,7 +54,7 @@ public:
         }
         entries_.push_front(
             Entry{std::string{text}, tabWidth,
-                  GraphemeLayout{}.computeRun(text, tabWidth)});
+                  computeCellRun(text, tabWidth)});
         index_.emplace(Key{std::string_view{entries_.front().text}, tabWidth},
                        entries_.begin());
         if (entries_.size() > capacity_) {

@@ -304,7 +304,7 @@ std::optional<GridPresentation> GridPresenter::project(
             PaletteWindowState window;
             window.paneRows = static_cast<std::uint32_t>(
                 std::max(pickerNode->rect.height, 1));
-            palette = PaletteSearcher{}.report(*candidates, window);
+            palette = buildPaletteReport(*candidates, window);
         }
     }
 
@@ -349,7 +349,7 @@ std::optional<GridPresentation> GridPresenter::project(
             selections, proposedNavigation.firstVisualRow,
             proposedNavigation.firstVisualColumn,
             proposedNavigation.desiredCell};
-        auto revealed = SelectionNavigator{}.apply(
+        auto revealed = navigateSelection(
             documentText, selectionView, SelectionCommand::ViewRevealCaret,
             revealViewport, {}, {}, 4, wordWrap, activeDiffFile);
         if (revealed.accepted() && revealed.delta.replacement) {
@@ -376,7 +376,7 @@ std::optional<GridPresentation> GridPresenter::project(
             std::size_t start = 0;
             while (start <= documentText.size()) {
                 const auto end = documentText.find('\n', start);
-                state.wrappedCellRuns.push_back(GraphemeLayout{}.computeRun(
+                state.wrappedCellRuns.push_back(computeCellRun(
                     documentText.substr(start, end == std::string::npos
                                                    ? end
                                                    : end - start),
@@ -489,7 +489,7 @@ ViewActionResult GridPresenter::apply(ViewAction const& request,
                   std::max(activeDocumentPane->content.height, 1))
             : std::max(presentation->viewport.scrollbar.viewportRows,
                        std::uint32_t{1});
-        auto result = SelectionNavigator{}.apply(
+        auto result = navigateSelection(
             frame.documentText, before, command,
             {paneColumns, paneRows}, {}, {}, 4,
             frame.wordWrap, activeDiff);

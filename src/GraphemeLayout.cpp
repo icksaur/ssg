@@ -1335,7 +1335,7 @@ static DecodeResult decodeUtf8(const uint8_t* data,
             4, true};
 }
 
-CellRun GraphemeLayout::computeRun(std::string_view lineUtf8, int tabWidth) const {
+CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
     if (tabWidth < 1 || tabWidth > 16) {
         throw std::invalid_argument("tab width must be between 1 and 16");
     }
@@ -1523,7 +1523,7 @@ CellRun GraphemeLayout::computeRun(std::string_view lineUtf8, int tabWidth) cons
     return result;
 }
 
-std::uint64_t GraphemeLayout::cellRunCalls() { return gCellRunCalls; }
-void GraphemeLayout::resetCellRunCalls() { gCellRunCalls = 0; }
+std::uint64_t cellRunCalls() { return gCellRunCalls; }
+void resetCellRunCalls() { gCellRunCalls = 0; }
 
 }  // namespace ssg

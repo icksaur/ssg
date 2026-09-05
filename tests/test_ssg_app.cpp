@@ -308,8 +308,8 @@ TEST(unicodeEndToEndGridAndEncoding) {
     // The caret advances by exactly 2 columns across the wide CJK glyph: byte
     // offset 2 (before the glyph) resolves to column startx+2, and offset 5 (just
     // after it, at 'e') to column startx+4 — a literal +2.
-    auto before = ssg::SelectionNavigator::resolvePosition(line, ssg::ByteOffset{2});
-    auto after = ssg::SelectionNavigator::resolvePosition(line, ssg::ByteOffset{5});
+    auto before = ssg::resolveSelectionPosition(line, ssg::ByteOffset{2});
+    auto after = ssg::resolveSelectionPosition(line, ssg::ByteOffset{5});
     ASSERT_TRUE(before.has_value());
     ASSERT_TRUE(after.has_value());
     auto caretColumnAt = [&](std::optional<ssg::DocumentPosition> pos) -> int {
@@ -2218,8 +2218,8 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
                     .accepted());
 
     auto const doc = runtime.activeDocumentText();
-    auto const p2 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{2});
-    auto const p7 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{7});
+    auto const p2 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{2});
+    auto const p7 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{7});
     ASSERT_TRUE(p2.has_value() && p7.has_value());
     if (!p2 || !p7) return;
 

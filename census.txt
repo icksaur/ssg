@@ -498,17 +498,15 @@ ssg/DraftAutosaveScheduler.h	struct	ssg::AutosaveCandidate
 ssg/DraftAutosaveScheduler.h	var	ssg::AutosaveCandidate::contentHash	std::uint64_t
 ssg/DraftAutosaveScheduler.h	var	ssg::AutosaveCandidate::dirty	bool
 ssg/DraftAutosaveScheduler.h	var	ssg::AutosaveCandidate::id	FileDocumentId
-ssg/DraftReopenClassifier.h	class	ssg::DraftReopenClassifier
 ssg/DraftReopenClassifier.h	enum	ssg::DraftReopenClass
 ssg/DraftReopenClassifier.h	enumerator	ssg::DraftReopenClass::Conflict
 ssg/DraftReopenClassifier.h	enumerator	ssg::DraftReopenClass::Converged
 ssg/DraftReopenClassifier.h	enumerator	ssg::DraftReopenClass::Missing
 ssg/DraftReopenClassifier.h	enumerator	ssg::DraftReopenClass::Unchanged
-ssg/DraftReopenClassifier.h	func	ssg::DraftReopenClassifier::classify	DraftReopenClass (const std::optional<DraftBaseline> &, std::string_view, const std::optional<DraftDiskState> &) const
+ssg/DraftReopenClassifier.h	func	ssg::classifyDraftReopen	DraftReopenClass (const std::optional<DraftBaseline> &, std::string_view, const std::optional<DraftDiskState> &)
 ssg/DraftReopenClassifier.h	struct	ssg::DraftDiskState
 ssg/DraftReopenClassifier.h	var	ssg::DraftDiskState::decodedText	std::string
 ssg/DraftReopenClassifier.h	var	ssg::DraftDiskState::rawBytes	std::string
-ssg/EditCommands.h	class	ssg::EditInterpreter
 ssg/EditCommands.h	enum	ssg::EditCommand
 ssg/EditCommands.h	enum	ssg::EditCommandError
 ssg/EditCommands.h	enumerator	ssg::EditCommand::DeleteLine
@@ -532,7 +530,7 @@ ssg/EditCommands.h	enumerator	ssg::EditCommandError::ReadOnly
 ssg/EditCommands.h	enumerator	ssg::EditCommandError::UnknownCommand
 ssg/EditCommands.h	func	ssg::EditCommandResult::accepted	bool () const noexcept
 ssg/EditCommands.h	func	ssg::EditCommandSettings::operator==	bool (const EditCommandSettings &) const
-ssg/EditCommands.h	func	ssg::EditInterpreter::apply	EditCommandResult (const DocumentSnapshot &, const SelectionSet &, EditCommandSettings, EditCommand) const
+ssg/EditCommands.h	func	ssg::applyEditCommand	EditCommandResult (const DocumentSnapshot &, const SelectionSet &, EditCommandSettings, EditCommand)
 ssg/EditCommands.h	struct	ssg::EditCommandResult
 ssg/EditCommands.h	struct	ssg::EditCommandSettings
 ssg/EditCommands.h	var	ssg::EditCommandResult::error	EditCommandError
@@ -1008,7 +1006,6 @@ ssg/FilesystemWatcher.h	var	ssg::WorkspaceEntry::path	std::filesystem::path
 ssg/FilesystemWatcher.h	var	ssg::WorkspaceEntry::state	WatchFileState
 ssg/FilesystemWatcher.h	var	ssg::WorkspaceScan::complete	bool
 ssg/FilesystemWatcher.h	var	ssg::WorkspaceScan::entries	std::vector<WorkspaceEntry>
-ssg/FindReplace.h	class	ssg::FindMatcher
 ssg/FindReplace.h	class	ssg::FindReplaceController
 ssg/FindReplace.h	enum	ssg::FindReplaceCommand
 ssg/FindReplace.h	enum	ssg::FindReplaceError
@@ -1040,7 +1037,6 @@ ssg/FindReplace.h	enumerator	ssg::FindReplaceError::StaleRevision
 ssg/FindReplace.h	enumerator	ssg::FindReplaceError::WorkspaceRejected
 ssg/FindReplace.h	func	ssg::ByteRange::operator==	bool (const ByteRange &) const noexcept
 ssg/FindReplace.h	func	ssg::FindMatch::operator==	bool (const FindMatch &) const noexcept
-ssg/FindReplace.h	func	ssg::FindMatcher::find	FindResult (std::string_view, const FindRequest &) const
 ssg/FindReplace.h	func	ssg::FindOptions::operator==	bool (const FindOptions &) const noexcept
 ssg/FindReplace.h	func	ssg::FindReplaceController::close	void ()
 ssg/FindReplace.h	func	ssg::FindReplaceController::next	void ()
@@ -1065,6 +1061,7 @@ ssg/FindReplace.h	func	ssg::WorkspaceFileReplacement::operator==	bool (const Wor
 ssg/FindReplace.h	func	ssg::WorkspacePreviewResult::accepted	bool () const noexcept
 ssg/FindReplace.h	func	ssg::WorkspaceReplaceArguments::operator==	bool (const WorkspaceReplaceArguments &) const
 ssg/FindReplace.h	func	ssg::WorkspaceReplacePreview::operator==	bool (const WorkspaceReplacePreview &) const
+ssg/FindReplace.h	func	ssg::findTextMatches	FindResult (std::string_view, const FindRequest &)
 ssg/FindReplace.h	func	ssg::operator==	bool (const FindQueryArguments &, const FindQueryArguments &)
 ssg/FindReplace.h	func	ssg::previewWorkspaceReplace	WorkspacePreviewResult (const WorkspaceSnapshot &, const FindRequest &, std::string)
 ssg/FindReplace.h	struct	ssg::ByteRange
@@ -1257,16 +1254,15 @@ ssg/GitMetadataWatcher.h	func	ssg::GitMetadataWatcher::healthy	bool () const noe
 ssg/GitMetadataWatcher.h	func	ssg::GitMetadataWatcher::poll	bool (std::chrono::milliseconds)
 ssg/GitMetadataWatcher.h	func	ssg::GitMetadataWatcher::replaceDirectories	void (std::vector<std::filesystem::path>)
 ssg/GitMetadataWatcher.h	func	ssg::makePlatformGitMetadataWatcher	std::unique_ptr<GitMetadataWatcher> (std::vector<std::filesystem::path>)
-ssg/GraphemeLayout.h	class	ssg::GraphemeLayout
 ssg/GraphemeLayout.h	enum	ssg::CellKind
 ssg/GraphemeLayout.h	enumerator	ssg::CellKind::Combining
 ssg/GraphemeLayout.h	enumerator	ssg::CellKind::Control
 ssg/GraphemeLayout.h	enumerator	ssg::CellKind::InvalidUtf8
 ssg/GraphemeLayout.h	enumerator	ssg::CellKind::Tab
 ssg/GraphemeLayout.h	enumerator	ssg::CellKind::Text
-ssg/GraphemeLayout.h	func	ssg::GraphemeLayout::cellRunCalls	std::uint64_t ()
-ssg/GraphemeLayout.h	func	ssg::GraphemeLayout::computeRun	CellRun (std::string_view, int) const
-ssg/GraphemeLayout.h	func	ssg::GraphemeLayout::resetCellRunCalls	void ()
+ssg/GraphemeLayout.h	func	ssg::cellRunCalls	std::uint64_t ()
+ssg/GraphemeLayout.h	func	ssg::computeCellRun	CellRun (std::string_view, int)
+ssg/GraphemeLayout.h	func	ssg::resetCellRunCalls	void ()
 ssg/GraphemeLayout.h	struct	ssg::CellRun
 ssg/GraphemeLayout.h	struct	ssg::CellSpan
 ssg/GraphemeLayout.h	var	ssg::CellRun::spans	std::vector<CellSpan>
@@ -1465,9 +1461,7 @@ ssg/KeyboardFocus.h	var	ssg::FocusCapture::node	UiNodeId
 ssg/Keymap.h	alias	ssg::KeySequence
 ssg/Keymap.h	alias	ssg::SemanticInputArguments
 ssg/Keymap.h	class	ssg::CommittedText
-ssg/Keymap.h	class	ssg::KeyCodec
 ssg/Keymap.h	class	ssg::KeymapMatcher
-ssg/Keymap.h	class	ssg::SemanticInputRouter
 ssg/Keymap.h	enum	ssg::KeymapErrorCode
 ssg/Keymap.h	enum	ssg::KeymapMatchKind
 ssg/Keymap.h	enum	ssg::TextRouting
@@ -1490,11 +1484,6 @@ ssg/Keymap.h	func	ssg::CommittedText::fromUtf8	std::optional<CommittedText> (std
 ssg/Keymap.h	func	ssg::CommittedText::operator==	bool (const CommittedText &) const
 ssg/Keymap.h	func	ssg::CommittedText::utf8	const std::string &() const noexcept
 ssg/Keymap.h	func	ssg::KeyBinding::operator==	bool (const KeyBinding &) const
-ssg/Keymap.h	func	ssg::KeyCodec::formatSequence	std::string (const KeySequence &) const
-ssg/Keymap.h	func	ssg::KeyCodec::formatStroke	std::string (const KeyStroke &) const
-ssg/Keymap.h	func	ssg::KeyCodec::parseSequence	std::optional<KeySequence> (std::initializer_list<std::string_view>) const
-ssg/Keymap.h	func	ssg::KeyCodec::parseSequenceString	std::optional<KeySequence> (std::string_view) const
-ssg/Keymap.h	func	ssg::KeyCodec::parseStroke	std::optional<KeyStroke> (std::string_view) const
 ssg/Keymap.h	func	ssg::KeyStroke::operator==	bool (const KeyStroke &) const
 ssg/Keymap.h	func	ssg::KeymapDelta::operator==	bool (const KeymapDelta &) const
 ssg/Keymap.h	func	ssg::KeymapError::operator==	bool (const KeymapError &) const
@@ -1512,14 +1501,19 @@ ssg/Keymap.h	func	ssg::ScrollFractionArguments::operator==	bool (const ScrollFra
 ssg/Keymap.h	func	ssg::ScrollLinesArguments::operator==	bool (const ScrollLinesArguments &) const
 ssg/Keymap.h	func	ssg::ScrollPagesArguments::operator==	bool (const ScrollPagesArguments &) const
 ssg/Keymap.h	func	ssg::SemanticCommand::operator==	bool (const SemanticCommand &) const
-ssg/Keymap.h	func	ssg::SemanticInputRouter::semanticInput	SemanticCommand (const CommittedText &) const
-ssg/Keymap.h	func	ssg::SemanticInputRouter::textRouting	TextRouting (std::string_view) const noexcept
 ssg/Keymap.h	func	ssg::applyKeymapBind	KeymapMutationResult (const KeymapViewState &, const KeymapBindArguments &) noexcept
 ssg/Keymap.h	func	ssg::applyKeymapUnbind	KeymapMutationResult (const KeymapViewState &, const KeymapUnbindArguments &) noexcept
 ssg/Keymap.h	func	ssg::defaultTerminalKeymap	KeymapViewState ()
+ssg/Keymap.h	func	ssg::formatKeySequence	std::string (const KeySequence &)
+ssg/Keymap.h	func	ssg::formatKeyStroke	std::string (const KeyStroke &)
 ssg/Keymap.h	func	ssg::operator==	bool (const KeymapBindArguments &, const KeymapBindArguments &)
 ssg/Keymap.h	func	ssg::operator==	bool (const KeymapMutationError &, const KeymapMutationError &)
 ssg/Keymap.h	func	ssg::operator==	bool (const KeymapUnbindArguments &, const KeymapUnbindArguments &)
+ssg/Keymap.h	func	ssg::parseKeySequence	std::optional<KeySequence> (std::initializer_list<std::string_view>)
+ssg/Keymap.h	func	ssg::parseKeySequenceString	std::optional<KeySequence> (std::string_view)
+ssg/Keymap.h	func	ssg::parseKeyStroke	std::optional<KeyStroke> (std::string_view)
+ssg/Keymap.h	func	ssg::semanticInputForText	SemanticCommand (const CommittedText &)
+ssg/Keymap.h	func	ssg::textRoutingForContext	TextRouting (std::string_view) noexcept
 ssg/Keymap.h	struct	ssg::KeyBinding
 ssg/Keymap.h	struct	ssg::KeyStroke
 ssg/Keymap.h	struct	ssg::KeymapBindArguments
@@ -2031,15 +2025,12 @@ ssg/OptionalSubsystemAudit.h	func	ssg::optionalSubsystemName	std::string_view (O
 ssg/OptionalSubsystemAudit.h	func	ssg::resetOptionalConstructionAudit	void () noexcept
 ssg/OptionalSubsystemAudit.h	var	ssg::kAllOptionalSubsystems	const array<remove_cv_t<ssg::OptionalSubsystem>, 4UL>
 ssg/OptionalSubsystemAudit.h	var	ssg::kOptionalSubsystemCount	const std::size_t
-ssg/PaletteSearcher.h	class	ssg::PaletteSearcher
 ssg/PaletteSearcher.h	enum	ssg::PalettePresenceOpKind
 ssg/PaletteSearcher.h	enumerator	ssg::PalettePresenceOpKind::Hide
 ssg/PaletteSearcher.h	enumerator	ssg::PalettePresenceOpKind::Show
-ssg/PaletteSearcher.h	func	ssg::PaletteSearcher::ghost	std::string (std::string_view, std::string_view) const
-ssg/PaletteSearcher.h	func	ssg::PaletteSearcher::rank	std::vector<std::size_t> (const std::vector<PaletteCandidate> &, std::string_view) const
-ssg/PaletteSearcher.h	func	ssg::PaletteSearcher::report	PaletteReport (const std::vector<PaletteCandidate> &, PaletteWindowState &) const
 ssg/PaletteSearcher.h	func	ssg::PaletteViewState::PaletteViewState	void ()
 ssg/PaletteSearcher.h	func	ssg::PaletteViewState::candidatesFor	const std::vector<PaletteCandidate> *(SearchMode) const noexcept
+ssg/PaletteSearcher.h	func	ssg::buildPaletteReport	PaletteReport (const std::vector<PaletteCandidate> &, PaletteWindowState &)
 ssg/PaletteSearcher.h	func	ssg::matcherParametersInDomain	bool (const MatcherParameters &)
 ssg/PaletteSearcher.h	func	ssg::operator==	bool (const MatcherParameters &, const MatcherParameters &)
 ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PaletteCandidate &, const PaletteCandidate &)
@@ -2049,6 +2040,8 @@ ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PalettePresenceOverlay &,
 ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PaletteReport &, const PaletteReport &)
 ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PaletteViewState &, const PaletteViewState &)
 ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PickerSubmitArguments &, const PickerSubmitArguments &)
+ssg/PaletteSearcher.h	func	ssg::paletteGhost	std::string (std::string_view, std::string_view)
+ssg/PaletteSearcher.h	func	ssg::rankPaletteCandidates	std::vector<std::size_t> (const std::vector<PaletteCandidate> &, std::string_view)
 ssg/PaletteSearcher.h	func	ssg::referenceRank	std::vector<std::size_t> (const PaletteViewState &, SearchMode, std::string_view)
 ssg/PaletteSearcher.h	struct	ssg::MatcherParameters
 ssg/PaletteSearcher.h	struct	ssg::PaletteCandidate
@@ -2386,17 +2379,12 @@ ssg/Renderer.h	var	ssg::CellHyperlink::uri	std::string
 ssg/Renderer.h	var	ssg::CellHyperlink::width	int
 ssg/Renderer.h	var	ssg::GridPosition::column	int
 ssg/Renderer.h	var	ssg::GridPosition::row	int
-ssg/ScratchJournal.h	class	ssg::JournalCodec
 ssg/ScratchJournal.h	class	ssg::JournalDocumentKey
 ssg/ScratchJournal.h	class	ssg::ScratchJournal
 ssg/ScratchJournal.h	class	ssg::UntitledDocumentId
 ssg/ScratchJournal.h	enum	ssg::JournalDocumentKeyKind
 ssg/ScratchJournal.h	enumerator	ssg::JournalDocumentKeyKind::Saved
 ssg/ScratchJournal.h	enumerator	ssg::JournalDocumentKeyKind::Untitled
-ssg/ScratchJournal.h	func	ssg::JournalCodec::encodeCheckpoint	std::vector<std::byte> (const JournalRecoverySet &) const
-ssg/ScratchJournal.h	func	ssg::JournalCodec::encodeDocument	std::vector<std::byte> (const JournalDocument &) const
-ssg/ScratchJournal.h	func	ssg::JournalCodec::encodeRemove	std::vector<std::byte> (const JournalDocumentKey &) const
-ssg/ScratchJournal.h	func	ssg::JournalCodec::replay	JournalReplayResult (std::span<const std::byte>) const
 ssg/ScratchJournal.h	func	ssg::JournalDocumentKey::kind	JournalDocumentKeyKind () const noexcept
 ssg/ScratchJournal.h	func	ssg::JournalDocumentKey::saved	JournalDocumentKey (std::string_view)
 ssg/ScratchJournal.h	func	ssg::JournalDocumentKey::savedPath	const std::string &() const
@@ -2411,12 +2399,16 @@ ssg/ScratchJournal.h	func	ssg::ScratchJournal::replay	JournalReplayResult () con
 ssg/ScratchJournal.h	func	ssg::UntitledDocumentId::UntitledDocumentId	void (std::array<std::byte, 16>) noexcept
 ssg/ScratchJournal.h	func	ssg::UntitledDocumentId::bytes	const std::array<std::byte, 16> &() const noexcept
 ssg/ScratchJournal.h	func	ssg::UntitledDocumentId::generate	UntitledDocumentId ()
+ssg/ScratchJournal.h	func	ssg::encodeJournalCheckpoint	std::vector<std::byte> (const JournalRecoverySet &)
+ssg/ScratchJournal.h	func	ssg::encodeJournalDocument	std::vector<std::byte> (const JournalDocument &)
+ssg/ScratchJournal.h	func	ssg::encodeJournalRemove	std::vector<std::byte> (const JournalDocumentKey &)
 ssg/ScratchJournal.h	func	ssg::fastContentHash	std::uint64_t (std::string_view) noexcept
 ssg/ScratchJournal.h	func	ssg::operator==	bool (const DraftBaseline &, const DraftBaseline &) noexcept
 ssg/ScratchJournal.h	func	ssg::operator==	bool (const JournalDocument &, const JournalDocument &)
 ssg/ScratchJournal.h	func	ssg::operator==	bool (const JournalDocumentKey &, const JournalDocumentKey &)
 ssg/ScratchJournal.h	func	ssg::operator==	bool (const JournalRecoverySet &, const JournalRecoverySet &)
 ssg/ScratchJournal.h	func	ssg::operator==	bool (const UntitledDocumentId &, const UntitledDocumentId &)
+ssg/ScratchJournal.h	func	ssg::replayJournal	JournalReplayResult (std::span<const std::byte>)
 ssg/ScratchJournal.h	struct	ssg::DraftBaseline
 ssg/ScratchJournal.h	struct	ssg::JournalDocument
 ssg/ScratchJournal.h	struct	ssg::JournalRecoverySet
@@ -2545,8 +2537,6 @@ ssg/Scrollbar.h	var	ssg::ScrollbarMetrics::viewportRows	uint32_t
 ssg/Search.h	class	ssg::NavigationHistory
 ssg/Search.h	class	ssg::SearchCancellationToken
 ssg/Search.h	class	ssg::SearchController
-ssg/Search.h	class	ssg::SearchNavigator
-ssg/Search.h	class	ssg::WorkspaceSearcher
 ssg/Search.h	enum	ssg::NavigationOrigin
 ssg/Search.h	enum	ssg::SearchMode
 ssg/Search.h	enum	ssg::SearchPublishResult
@@ -2583,11 +2573,7 @@ ssg/Search.h	func	ssg::SearchController::selectNext	void ()
 ssg/Search.h	func	ssg::SearchController::selectPrevious	void ()
 ssg/Search.h	func	ssg::SearchController::updatePaletteQuery	void (std::string, std::uint64_t)
 ssg/Search.h	func	ssg::SearchController::viewState	const SearchViewState &() const noexcept
-ssg/Search.h	func	ssg::SearchNavigator::gotoLine	std::optional<NavigationTarget> (std::string, const ParsedSearchQuery &) const
-ssg/Search.h	func	ssg::SearchNavigator::target	std::optional<NavigationTarget> (const SearchResult &) const
-ssg/Search.h	func	ssg::WorkspaceSearcher::evaluate	WorkspaceSearchBatch (const WorkspaceSnapshot &, const WorkspaceSearchRequest &) const
-ssg/Search.h	func	ssg::WorkspaceSearcher::parse	ParsedSearchQuery (std::string_view) const
-ssg/Search.h	func	ssg::WorkspaceSearcher::rank	std::vector<SearchResult> (const WorkspaceSnapshot &, const ParsedSearchQuery &, const SearchCancellationToken &) const
+ssg/Search.h	func	ssg::evaluateWorkspaceSearch	WorkspaceSearchBatch (const WorkspaceSnapshot &, const WorkspaceSearchRequest &)
 ssg/Search.h	func	ssg::operator==	bool (const NavigationTarget &, const NavigationTarget &) noexcept(false)
 ssg/Search.h	func	ssg::operator==	bool (const NavigationTransition &, const NavigationTransition &)
 ssg/Search.h	func	ssg::operator==	bool (const PaletteExecutionResult &, const PaletteExecutionResult &)
@@ -2598,6 +2584,10 @@ ssg/Search.h	func	ssg::operator==	bool (const SearchViewState &, const SearchVie
 ssg/Search.h	func	ssg::operator==	bool (const WorkspaceFile &, const WorkspaceFile &)
 ssg/Search.h	func	ssg::operator==	bool (const WorkspaceSnapshot &, const WorkspaceSnapshot &)
 ssg/Search.h	func	ssg::operator==	bool (const WorkspaceSymbol &, const WorkspaceSymbol &)
+ssg/Search.h	func	ssg::parseWorkspaceSearchQuery	ParsedSearchQuery (std::string_view)
+ssg/Search.h	func	ssg::rankWorkspaceSearch	std::vector<SearchResult> (const WorkspaceSnapshot &, const ParsedSearchQuery &, const SearchCancellationToken &)
+ssg/Search.h	func	ssg::searchGotoLine	std::optional<NavigationTarget> (std::string, const ParsedSearchQuery &)
+ssg/Search.h	func	ssg::searchNavigationTarget	std::optional<NavigationTarget> (const SearchResult &)
 ssg/Search.h	struct	ssg::NavigationTarget
 ssg/Search.h	struct	ssg::NavigationTransition
 ssg/Search.h	struct	ssg::PaletteExecutionResult
@@ -2660,7 +2650,6 @@ ssg/Search.h	var	ssg::WorkspaceSymbol::line	std::size_t
 ssg/Search.h	var	ssg::WorkspaceSymbol::name	std::string
 ssg/Search.h	var	ssg::WorkspaceSymbol::path	std::string
 ssg/Search.h	var	ssg::kAllSearchModes	const std::array<enable_if_t<is_same_v<ssg::SearchMode, ssg::SearchMode> && is_same_v<ssg::SearchMode, ssg::SearchMode> && is_same_v<ssg::SearchMode, ssg::SearchMode> && is_same_v<ssg::SearchMode, ssg::SearchMode>, ssg::SearchMode>, 1 + sizeof...(_Up)>
-ssg/Selection.h	class	ssg::SelectionNavigator
 ssg/Selection.h	class	ssg::SelectionSet
 ssg/Selection.h	enum	ssg::SelectionCommand
 ssg/Selection.h	enum	ssg::SelectionNavigationError
@@ -2714,14 +2703,14 @@ ssg/Selection.h	func	ssg::Selection::operator==	bool (const Selection &) const n
 ssg/Selection.h	func	ssg::Selection::upper	const DocumentPosition &() const noexcept
 ssg/Selection.h	func	ssg::Selection::wordOrCoveredText	std::string (std::string_view) const
 ssg/Selection.h	func	ssg::SelectionNavigationResult::accepted	bool () const noexcept
-ssg/Selection.h	func	ssg::SelectionNavigator::apply	SelectionNavigationResult (std::string_view, const SelectionViewState &, SelectionCommand, ViewportDimensions, SelectionCommandArguments, std::span<const BracketPair>, int, bool, const DiffFileView *) const
-ssg/Selection.h	func	ssg::SelectionNavigator::resolvePosition	std::optional<DocumentPosition> (std::string_view, ByteOffset, int)
 ssg/Selection.h	func	ssg::SelectionSet::SelectionSet	void (std::vector<Selection>)
 ssg/Selection.h	func	ssg::SelectionSet::items	const std::vector<Selection> &() const noexcept
 ssg/Selection.h	func	ssg::SelectionSet::operator==	bool (const SelectionSet &) const noexcept
 ssg/Selection.h	func	ssg::SelectionSet::primary	const Selection &() const noexcept
 ssg/Selection.h	func	ssg::SelectionViewDelta::operator==	bool (const SelectionViewDelta &) const noexcept
 ssg/Selection.h	func	ssg::SelectionViewState::operator==	bool (const SelectionViewState &) const noexcept
+ssg/Selection.h	func	ssg::navigateSelection	SelectionNavigationResult (std::string_view, const SelectionViewState &, SelectionCommand, ViewportDimensions, SelectionCommandArguments, std::span<const BracketPair>, int, bool, const DiffFileView *)
+ssg/Selection.h	func	ssg::resolveSelectionPosition	std::optional<DocumentPosition> (std::string_view, ByteOffset, int)
 ssg/Selection.h	struct	ssg::BracketPair
 ssg/Selection.h	struct	ssg::Selection
 ssg/Selection.h	struct	ssg::SelectionCommandArguments
@@ -3353,7 +3342,6 @@ ssg/TabManager.h	var	ssg::TabState::mode	DocumentMode
 ssg/TabManager.h	var	ssg::TabState::recovery	std::optional<ScratchDurability>
 ssg/TabManager.h	var	ssg::TabViewState::active	std::optional<TabId>
 ssg/TabManager.h	var	ssg::TabViewState::tabs	std::vector<TabState>
-ssg/TextCodec.h	class	ssg::TextCodec
 ssg/TextCodec.h	class	ssg::ValidatedUtf8
 ssg/TextCodec.h	enum	ssg::FinalNewlinePolicy
 ssg/TextCodec.h	enum	ssg::LineTerminator
@@ -3375,23 +3363,23 @@ ssg/TextCodec.h	func	ssg::ReopenWithEncodingArguments::operator==	bool (const Re
 ssg/TextCodec.h	func	ssg::SetEncodingArguments::operator==	bool (const SetEncodingArguments &) const
 ssg/TextCodec.h	func	ssg::SetFinalNewlineArguments::operator==	bool (const SetFinalNewlineArguments &) const
 ssg/TextCodec.h	func	ssg::SetLineEndingArguments::operator==	bool (const SetLineEndingArguments &) const
-ssg/TextCodec.h	func	ssg::TextCodec::decode	DecodeTextResult (std::span<const std::uint8_t>) const
-ssg/TextCodec.h	func	ssg::TextCodec::decode	DecodeTextResult (std::span<const std::uint8_t>, TextEncoding) const
-ssg/TextCodec.h	func	ssg::TextCodec::encode	EncodeTextResult (const DecodedText &) const
-ssg/TextCodec.h	func	ssg::TextCodec::encode	EncodeTextResult (const DecodedText &, EncodeTextOptions) const
-ssg/TextCodec.h	func	ssg::TextCodec::viewState	TextEncodingViewState (const DecodedText &) const noexcept
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::ValidatedUtf8	void (ValidatedUtf8 &&) noexcept
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::ValidatedUtf8	void (const ValidatedUtf8 &)
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::bytes	SharedBytes () const noexcept
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::operator=	ValidatedUtf8 &(ValidatedUtf8 &&) noexcept
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::operator=	ValidatedUtf8 &(const ValidatedUtf8 &)
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::view	std::string_view () const noexcept
+ssg/TextCodec.h	func	ssg::decodeText	DecodeTextResult (std::span<const std::uint8_t>)
+ssg/TextCodec.h	func	ssg::decodeText	DecodeTextResult (std::span<const std::uint8_t>, TextEncoding)
+ssg/TextCodec.h	func	ssg::encodeText	EncodeTextResult (const DecodedText &)
+ssg/TextCodec.h	func	ssg::encodeText	EncodeTextResult (const DecodedText &, EncodeTextOptions)
 ssg/TextCodec.h	func	ssg::noteUtf8Validation	void ()
 ssg/TextCodec.h	func	ssg::operator==	bool (const DecodedText &, const DecodedText &)
 ssg/TextCodec.h	func	ssg::operator==	bool (const TextEncodingError &, const TextEncodingError &)
 ssg/TextCodec.h	func	ssg::operator==	bool (const TextEncodingStatus &, const TextEncodingStatus &)
 ssg/TextCodec.h	func	ssg::operator==	bool (const TextEncodingViewState &, const TextEncodingViewState &)
 ssg/TextCodec.h	func	ssg::resetUtf8ValidationCalls	void ()
+ssg/TextCodec.h	func	ssg::textEncodingViewState	TextEncodingViewState (const DecodedText &) noexcept
 ssg/TextCodec.h	func	ssg::utf8ValidationCalls	std::uint64_t ()
 ssg/TextCodec.h	struct	ssg::DecodeTextResult
 ssg/TextCodec.h	struct	ssg::DecodedText
@@ -3426,7 +3414,6 @@ ssg/TextCodec.h	var	ssg::TextEncodingStatus::finalNewline	bool
 ssg/TextCodec.h	var	ssg::TextEncodingStatus::hadBom	bool
 ssg/TextCodec.h	var	ssg::TextEncodingStatus::lineEnding	LineEnding
 ssg/TextCodec.h	var	ssg::TextEncodingViewState::status	TextEncodingStatus
-ssg/TextInputCommands.h	class	ssg::TextInputInterpreter
 ssg/TextInputCommands.h	enum	ssg::TextInputCommand
 ssg/TextInputCommands.h	enum	ssg::TextInputError
 ssg/TextInputCommands.h	enumerator	ssg::TextInputCommand::DeleteBackward
@@ -3443,9 +3430,9 @@ ssg/TextInputCommands.h	enumerator	ssg::TextInputError::None
 ssg/TextInputCommands.h	enumerator	ssg::TextInputError::ReadOnly
 ssg/TextInputCommands.h	enumerator	ssg::TextInputError::UnknownCommand
 ssg/TextInputCommands.h	func	ssg::TextInputArguments::operator==	bool (const TextInputArguments &) const
-ssg/TextInputCommands.h	func	ssg::TextInputInterpreter::apply	TextInputResult (const DocumentSnapshot &, const SelectionSet &, TextInputSettings, TextInputCommand, TextInputArguments) const
 ssg/TextInputCommands.h	func	ssg::TextInputResult::accepted	bool () const noexcept
 ssg/TextInputCommands.h	func	ssg::TextInputSettings::operator==	bool (const TextInputSettings &) const noexcept
+ssg/TextInputCommands.h	func	ssg::applyTextInput	TextInputResult (const DocumentSnapshot &, const SelectionSet &, TextInputSettings, TextInputCommand, TextInputArguments)
 ssg/TextInputCommands.h	func	ssg::isWordByte	bool (unsigned char) noexcept
 ssg/TextInputCommands.h	struct	ssg::TextInputArguments
 ssg/TextInputCommands.h	struct	ssg::TextInputResult
@@ -4120,8 +4107,7 @@ ssg/Workspace.h	var	ssg::WorkspaceResult::failures	std::vector<WorkspaceFailure>
 ssg/Workspace.h	var	ssg::WorkspaceResult::message	std::string
 ssg/Workspace.h	var	ssg::WorkspaceResult::workspaceCompensation	std::optional<WorkspaceReplacementId>
 ssg/Workspace.h	var	ssg::kNewBufferLabel	const std::string_view
-ssg/WorkspaceFileIndex.h	class	ssg::WorkspaceFileIndex
-ssg/WorkspaceFileIndex.h	func	ssg::WorkspaceFileIndex::build	WorkspaceFileIndexResult (const std::filesystem::path &, const GitIgnoreMatcher &, const WorkspaceFileIndexOptions &) const
+ssg/WorkspaceFileIndex.h	func	ssg::buildWorkspaceFileIndex	WorkspaceFileIndexResult (const std::filesystem::path &, const GitIgnoreMatcher &, const WorkspaceFileIndexOptions &)
 ssg/WorkspaceFileIndex.h	struct	ssg::WorkspaceFileIndexOptions
 ssg/WorkspaceFileIndex.h	struct	ssg::WorkspaceFileIndexResult
 ssg/WorkspaceFileIndex.h	var	ssg::WorkspaceFileIndexOptions::maximumFiles	std::size_t

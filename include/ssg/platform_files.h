@@ -131,7 +131,7 @@ struct FileIoResult {
 
 struct FileReadResult {
     FileIoStatus status = FileIoStatus::IoError;
-    // Unsigned bytes rather than std::byte because TextCodec -- the consumer of
+    // Unsigned bytes rather than std::byte because text decoding -- the consumer of
     // very nearly every read here -- takes span<const std::uint8_t>. Matching it
     // keeps the large-file open path copy-free. The write side stays on
     // std::byte to match replaceFileAtomically; converting a span on write is

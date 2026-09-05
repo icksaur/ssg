@@ -94,9 +94,9 @@ struct Walk {
 
 }  // namespace
 
-WorkspaceFileIndexResult WorkspaceFileIndex::build(
+WorkspaceFileIndexResult buildWorkspaceFileIndex(
     const fs::path& workspaceRoot, const GitIgnoreMatcher& ignore,
-    const WorkspaceFileIndexOptions& options) const {
+    const WorkspaceFileIndexOptions& options) {
     Walk walk;
     walk.ignore = &ignore;
     walk.respectGitignore = options.respectGitignore;

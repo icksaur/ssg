@@ -156,7 +156,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, std::string_vie
                 if (text[i] == '\n' && ++seen == target) { start = i + 1; break; }
             }
         }
-        auto position = SelectionNavigator::resolvePosition(text, ByteOffset{start}, 4);
+        auto position = resolveSelectionPosition(text, ByteOffset{start}, 4);
         if (!position) return failure("goto.line could not resolve the target position");
         SelectionCommandArguments arguments;
         arguments.position = *position;

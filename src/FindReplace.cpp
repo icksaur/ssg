@@ -518,8 +518,7 @@ std::string replacedText(std::string_view original,
 
 }  // namespace
 
-FindResult FindMatcher::find(std::string_view text,
-                             const FindRequest& request) const {
+FindResult findTextMatches(std::string_view text, const FindRequest& request) {
     ScalarText decodedText;
     ScalarText decodedQuery;
     if (!decodeUtf8(text, decodedText) ||
@@ -690,7 +689,7 @@ void FindReplaceController::evaluate(const DocumentSnapshot& document) {
     state_.sourceRevision = document.revision;
     state_.query = request_.query;
     state_.options = request_.options;
-    auto result = FindMatcher{}.find(document.text, request_);
+    auto result = findTextMatches(document.text, request_);
     state_.matches = std::move(result.matches);
     state_.error = result.error;
     state_.message = std::move(result.message);
@@ -822,7 +821,7 @@ WorkspacePreviewResult previewWorkspaceReplace(
     for (const auto& file : snapshot.files) {
         auto fileRequest = request;
         fileRequest.workBudget = perFileBudget;
-        auto result = FindMatcher{}.find(file.text, fileRequest);
+        auto result = findTextMatches(file.text, fileRequest);
         if (!result.accepted()) {
             return {result.error, std::nullopt, std::move(result.message)};
         }

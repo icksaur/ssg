@@ -437,7 +437,7 @@ std::vector<std::byte> encodeManifest(const StoredRecord& stored) {
     if (stored.document) {
         writer.u8(1);
         const auto encoded =
-            JournalCodec{}.encodeCheckpoint({std::vector<JournalDocument>{
+            encodeJournalCheckpoint({std::vector<JournalDocument>{
                 *stored.document}});
         if (encoded.size() > std::numeric_limits<std::uint32_t>::max()) {
             throw std::length_error("recovery document is too large");
@@ -490,7 +490,7 @@ StoredRecord decodeManifest(const RecoveryRecordId& id,
             !reader.raw(documentSize, documentBytes)) {
             throw std::runtime_error("truncated recovery document");
         }
-        const auto replayed = JournalCodec{}.replay(documentBytes);
+        const auto replayed = replayJournal(documentBytes);
         if (replayed.discardedTail ||
             replayed.validBytes != documentBytes.size() ||
             replayed.recovery.documents.size() != 1) {

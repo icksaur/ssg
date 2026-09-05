@@ -94,7 +94,7 @@ Resolved resolveWidget(const WidgetDescriptor& w,
 }
 
 int displayCells(std::string_view text) {
-    return static_cast<int>(GraphemeLayout{}.computeRun(text).totalCells);
+    return static_cast<int>(computeCellRun(text).totalCells);
 }
 
 int widgetDesired(const WidgetDescriptor& w, const Resolved& resolved,

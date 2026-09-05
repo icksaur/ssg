@@ -81,7 +81,7 @@ RowFit packEnd(const std::vector<FitItem>& items, int extent) {
 
 int measureFieldCells(std::string_view value) {
     return std::max(1, static_cast<int>(
-                            GraphemeLayout{}.computeRun(value).totalCells) +
+                            computeCellRun(value).totalCells) +
                             2);
 }
 
@@ -100,7 +100,7 @@ std::string textInputText(std::string_view prefix, std::string_view separator,
 
 std::string visibleTail(std::string_view value, int cells) {
     if (cells <= 0) return {};
-    auto const run = GraphemeLayout{}.computeRun(value);
+    auto const run = computeCellRun(value);
     if (static_cast<int>(run.totalCells) <= cells) return std::string{value};
     // Walk backwards from the end, taking clusters while they fit.
     int used = 0;
@@ -121,11 +121,11 @@ TextInputLayout layoutTextInput(std::string_view sigil, std::string_view value,
     // column would leave the terminal cursor nowhere to sit.
     const int drawable = std::max(0, available - 1);
     const int sigilCells =
-        static_cast<int>(GraphemeLayout{}.computeRun(sigil).totalCells);
+        static_cast<int>(computeCellRun(sigil).totalCells);
     // The value scrolls against the room AFTER the pinned sigil.
     const int textRoom = std::max(0, drawable - sigilCells);
     std::string text = textInputText(sigil, {}, visibleTail(value, textRoom));
-    const int cells = static_cast<int>(GraphemeLayout{}.computeRun(text).totalCells);
+    const int cells = static_cast<int>(computeCellRun(text).totalCells);
     return {std::move(text), std::min(drawable, cells)};
 }
 
@@ -139,7 +139,7 @@ InputLineLayout layoutInputLine(std::string_view sigil, std::string_view query,
     const int remaining = available - input.width;
     if (!ghost.empty() && remaining > 0) {
         const int ghostCells =
-            static_cast<int>(GraphemeLayout{}.computeRun(ghost).totalCells);
+            static_cast<int>(computeCellRun(ghost).totalCells);
         line.ghostWidth = std::min(remaining, ghostCells);
         line.ghostText = std::string{ghost};
     }

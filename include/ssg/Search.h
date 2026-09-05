@@ -120,16 +120,13 @@ struct WorkspaceSearchBatch {
     bool cancelled = false;
 };
 
-class WorkspaceSearcher {
-public:
-    [[nodiscard]] ParsedSearchQuery parse(std::string_view query) const;
-    [[nodiscard]] std::vector<SearchResult> rank(
-        const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
-        const SearchCancellationToken& cancellation) const;
-    [[nodiscard]] WorkspaceSearchBatch evaluate(
-        const WorkspaceSnapshot& workspace,
-        const WorkspaceSearchRequest& request) const;
-};
+[[nodiscard]] ParsedSearchQuery parseWorkspaceSearchQuery(
+    std::string_view query);
+[[nodiscard]] std::vector<SearchResult> rankWorkspaceSearch(
+    const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
+    const SearchCancellationToken& cancellation);
+[[nodiscard]] WorkspaceSearchBatch evaluateWorkspaceSearch(
+    const WorkspaceSnapshot& workspace, const WorkspaceSearchRequest& request);
 
 enum class NavigationOrigin : std::uint8_t { User, Programmatic };
 
@@ -150,13 +147,10 @@ struct NavigationTransition {
                            const NavigationTransition&) = default;
 };
 
-class SearchNavigator {
-public:
-    [[nodiscard]] std::optional<NavigationTarget> target(
-        const SearchResult& result) const;
-    [[nodiscard]] std::optional<NavigationTarget> gotoLine(
-        std::string path, const ParsedSearchQuery& query) const;
-};
+[[nodiscard]] std::optional<NavigationTarget> searchNavigationTarget(
+    const SearchResult& result);
+[[nodiscard]] std::optional<NavigationTarget> searchGotoLine(
+    std::string path, const ParsedSearchQuery& query);
 
 class NavigationHistory {
 public:

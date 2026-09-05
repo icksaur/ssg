@@ -87,7 +87,7 @@ std::vector<std::size_t> graphemeBoundaries(std::string_view text,
             ++lineEnd;
         }
         const auto run =
-            GraphemeLayout{}.computeRun(text.substr(lineStart, lineEnd - lineStart),
+            computeCellRun(text.substr(lineStart, lineEnd - lineStart),
                              tabWidth);
         for (const auto& span : run.spans) {
             boundaries.push_back(lineStart + span.byteOffset + span.byteLen);
@@ -232,7 +232,7 @@ std::string indentationFor(std::string_view text, std::size_t offset,
 bool validPosition(std::string_view text, const DocumentPosition& position,
                     int tabWidth) {
     const auto resolved =
-        ssg::SelectionNavigator::resolvePosition(text, position.byteOffset, tabWidth);
+        ssg::resolveSelectionPosition(text, position.byteOffset, tabWidth);
     return resolved.has_value() && *resolved == position;
 }
 
@@ -266,10 +266,10 @@ void normalizeEdits(std::vector<PendingEdit>& edits) {
 
 }  // namespace
 
-TextInputResult TextInputInterpreter::apply(
+TextInputResult applyTextInput(
     const DocumentSnapshot& document, const SelectionSet& selections,
     TextInputSettings settings, TextInputCommand command,
-    TextInputArguments arguments) const {
+    TextInputArguments arguments) {
     if (document.mode == DocumentMode::ReadOnly) {
         return failure(TextInputError::ReadOnly,
                        "text input requires an editable document");
@@ -414,7 +414,7 @@ TextInputResult TextInputInterpreter::apply(
     for (std::size_t action = 0; action < actionTargets.size(); ++action) {
         const auto caret =
             ownCarets[action].value_or(mapTarget(actionTargets[action]));
-        const auto resolved = ssg::SelectionNavigator::resolvePosition(
+        const auto resolved = ssg::resolveSelectionPosition(
             resultingText, ByteOffset{caret}, tabWidth);
         if (!resolved.has_value()) {
             return failure(TextInputError::InvalidSelection,

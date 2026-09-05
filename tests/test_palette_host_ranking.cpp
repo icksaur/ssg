@@ -1,5 +1,5 @@
 // seam test — the web host ranks palette candidates through the library's
-// PaletteSearcher, never a second ranker. The client owns only the query text
+// rankPaletteCandidates, never a second ranker. The client owns only the query text
 // and selection index; this pins that a given query yields the LIBRARY ranker's
 // order, so the web path cannot drift into reimplementing ranking (which would be
 // a second behavior path).
@@ -29,7 +29,7 @@ TEST(theHostRanksAQueryThroughTheLibrarySearcherNotItsOwnOrder) {
     PaletteWindowState window;
     window.query = "save";
     window.paneRows = 12;
-    auto const report = PaletteSearcher{}.report(cands, window);
+    auto const report = buildPaletteReport(cands, window);
 
     // The report the host publishes is exactly the library ranker's order for
     // the client-owned query: both Save rows rank above the non-match.
@@ -38,7 +38,7 @@ TEST(theHostRanksAQueryThroughTheLibrarySearcherNotItsOwnOrder) {
     ASSERT_EQ(report.rows[1].label, std::string{"Save File As"});
 
     // Same order the raw ranker returns -- the host adds no ordering of its own.
-    auto const order = PaletteSearcher{}.rank(cands, "save");
+    auto const order = rankPaletteCandidates(cands, "save");
     ASSERT_TRUE(order.size() >= 2);
     ASSERT_EQ(cands[order[0]].label, report.rows[0].label);
     ASSERT_EQ(cands[order[1]].label, report.rows[1].label);

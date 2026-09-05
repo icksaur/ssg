@@ -64,11 +64,8 @@ struct FindResult {
     }
 };
 
-class FindMatcher {
-public:
-    [[nodiscard]] FindResult find(std::string_view text,
-                                  const FindRequest& request) const;
-};
+[[nodiscard]] FindResult findTextMatches(std::string_view text,
+                                     const FindRequest& request);
 
 enum class FindReplaceCommand : std::uint8_t {
     FindOpen,

@@ -57,7 +57,7 @@ TEST(indexListsEveryTrackedFileAndNoDirectories) {
     ASSERT_EQ(runStatus(root, "init -q"), 0);
 
     auto matcher = makePlatformGitIgnoreMatcher(root);
-    auto result = WorkspaceFileIndex{}.build(root, *matcher);
+    auto result = buildWorkspaceFileIndex(root, *matcher);
 
     // Independently enumerated: every file in the fixture that gitignore keeps.
     const std::vector<std::string> expected{
@@ -72,7 +72,7 @@ TEST(indexCandidateCarriesPathAsIdFilenameAsLabelAndParentAsDetail) {
     ASSERT_EQ(runStatus(root, "init -q"), 0);
 
     auto matcher = makePlatformGitIgnoreMatcher(root);
-    auto result = WorkspaceFileIndex{}.build(root, *matcher);
+    auto result = buildWorkspaceFileIndex(root, *matcher);
 
     const PaletteCandidate* nested = nullptr;
     const PaletteCandidate* top = nullptr;
@@ -99,7 +99,7 @@ TEST(indexWithoutGitignoreFilteringReappearsTheIgnoredSubtree) {
     ASSERT_EQ(runStatus(root, "init -q"), 0);
 
     auto matcher = makePlatformGitIgnoreMatcher(root);
-    auto result = WorkspaceFileIndex{}.build(root, *matcher,
+    auto result = buildWorkspaceFileIndex(root, *matcher,
                                              {/*respectGitignore=*/false, 20000});
 
     const std::vector<std::string> expected{
@@ -132,7 +132,7 @@ TEST(indexNeverDescendsIntoAnIgnoredDirectory) {
     auto matcher = makePlatformGitIgnoreMatcher(root);
 
     auto const start = std::chrono::steady_clock::now();
-    auto pruned = WorkspaceFileIndex{}.build(root, *matcher);
+    auto pruned = buildWorkspaceFileIndex(root, *matcher);
     auto const prunedMicros =
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - start)
@@ -144,7 +144,7 @@ TEST(indexNeverDescendsIntoAnIgnoredDirectory) {
     // The same tree walked WITHOUT pruning must visit the 2000 ignored files,
     // which is the cost a post-hoc filter would always pay.
     auto const unprunedStart = std::chrono::steady_clock::now();
-    auto full = WorkspaceFileIndex{}.build(root, *matcher,
+    auto full = buildWorkspaceFileIndex(root, *matcher,
                                            {/*respectGitignore=*/false, 20000});
     auto const unprunedMicros =
         std::chrono::duration_cast<std::chrono::microseconds>(
@@ -165,7 +165,7 @@ TEST(indexNeverOffersTheGitDirectory) {
     ASSERT_TRUE(fs::exists(root / ".git"));
 
     auto matcher = makePlatformGitIgnoreMatcher(root);
-    auto result = WorkspaceFileIndex{}.build(root, *matcher);
+    auto result = buildWorkspaceFileIndex(root, *matcher);
 
     for (const auto& id : ids(result)) {
         ASSERT_TRUE(id.rfind(".git/", 0) != 0);
@@ -185,7 +185,7 @@ TEST(indexTruncatesDeterministicallyAtTheCap) {
     }
 
     auto matcher = makePlatformGitIgnoreMatcher(root);
-    auto first = WorkspaceFileIndex{}.build(root, *matcher,
+    auto first = buildWorkspaceFileIndex(root, *matcher,
                                             {/*respectGitignore=*/true, 5});
     ASSERT_TRUE(first.truncated);
     ASSERT_EQ(first.candidates.size(), std::size_t{5});
@@ -194,7 +194,7 @@ TEST(indexTruncatesDeterministicallyAtTheCap) {
                                                     "file-04.txt"}));
 
     // Deterministic means repeatable: the same cap yields the same survivors.
-    auto second = WorkspaceFileIndex{}.build(root, *matcher,
+    auto second = buildWorkspaceFileIndex(root, *matcher,
                                              {/*respectGitignore=*/true, 5});
     ASSERT_EQ(ids(first), ids(second));
     fs::remove_all(root);
@@ -205,7 +205,7 @@ TEST(indexOutsideAGitRepositoryListsEverything) {
     auto matcher = makePlatformGitIgnoreMatcher(root);
     ASSERT_FALSE(matcher->usable());
 
-    auto result = WorkspaceFileIndex{}.build(root, *matcher);
+    auto result = buildWorkspaceFileIndex(root, *matcher);
     // No usable repository means no ignore rules apply, not an error.
     ASSERT_EQ(result.candidates.size(), std::size_t{7});
     fs::remove_all(root);
@@ -222,7 +222,7 @@ TEST(indexDoesNotDescendIntoSymlinkedDirectories) {
     }
 
     auto matcher = makePlatformGitIgnoreMatcher(root);
-    auto result = WorkspaceFileIndex{}.build(root, *matcher);
+    auto result = buildWorkspaceFileIndex(root, *matcher);
     ASSERT_EQ(ids(result), (std::vector<std::string>{"real/file.txt"}));
     fs::remove_all(root);
 }

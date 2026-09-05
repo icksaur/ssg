@@ -417,11 +417,10 @@ private:
                 lineStart = i + 1;
             }
         }
-        const auto cells =
-            GraphemeLayout{}
-                .computeRun(
-                    std::string_view{text_}.substr(lineStart, offset - lineStart))
-                .totalCells;
+        const auto cells = computeCellRun(
+                               std::string_view{text_}.substr(
+                                   lineStart, offset - lineStart))
+                               .totalCells;
         return {ByteOffset{offset}, LineIndex{line}, CellIndex{cells}};
     }
 

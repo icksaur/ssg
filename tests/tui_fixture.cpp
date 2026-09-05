@@ -32,7 +32,7 @@ bool startsWith(KeySequence const& sequence, KeySequence const& prefix) {
 std::optional<SemanticCommand> TerminalInputCapture::capture(
     CommittedText const& text, KeymapViewState const&, std::string_view) {
     reset();
-    return SemanticInputRouter{}.semanticInput(text);
+    return semanticInputForText(text);
 }
 
 std::optional<SemanticCommand> TerminalInputCapture::capture(

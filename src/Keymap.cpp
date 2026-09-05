@@ -110,7 +110,7 @@ bool selectionArgumentsEqual(const SelectionCommandArguments& left,
 
 } // namespace
 
-std::optional<KeyStroke> KeyCodec::parseStroke(std::string_view encoded) const {
+std::optional<KeyStroke> parseKeyStroke(std::string_view encoded) {
     if (encoded.empty()) {
         return std::nullopt;
     }
@@ -148,7 +148,7 @@ std::optional<KeyStroke> KeyCodec::parseStroke(std::string_view encoded) const {
     return result;
 }
 
-std::string KeyCodec::formatStroke(const KeyStroke& stroke) const {
+std::string formatKeyStroke(const KeyStroke& stroke) {
     if (!validStroke(stroke)) {
         return {};
     }
@@ -175,15 +175,15 @@ std::string KeyCodec::formatStroke(const KeyStroke& stroke) const {
     return result;
 }
 
-std::optional<KeySequence> KeyCodec::parseSequence(
-    std::initializer_list<std::string_view> encoded) const {
+std::optional<KeySequence> parseKeySequence(
+    std::initializer_list<std::string_view> encoded) {
     if (encoded.size() == 0) {
         return std::nullopt;
     }
     KeySequence result;
     result.reserve(encoded.size());
     for (const auto item : encoded) {
-        const auto stroke = parseStroke(item);
+        const auto stroke = parseKeyStroke(item);
         if (!stroke) {
             return std::nullopt;
         }
@@ -192,8 +192,8 @@ std::optional<KeySequence> KeyCodec::parseSequence(
     return result;
 }
 
-std::optional<KeySequence> KeyCodec::parseSequenceString(
-    std::string_view encoded) const {
+std::optional<KeySequence> parseKeySequenceString(
+    std::string_view encoded) {
     // A single stroke only: the multi-stroke chord model is gone, so an input
     // naming more than one stroke (space-separated) is rejected rather than
     // silently binding the first.
@@ -210,7 +210,7 @@ std::optional<KeySequence> KeyCodec::parseSequenceString(
                !std::isspace(static_cast<unsigned char>(encoded[end]))) {
             ++end;
         }
-        const auto stroke = parseStroke(encoded.substr(begin, end - begin));
+        const auto stroke = parseKeyStroke(encoded.substr(begin, end - begin));
         if (!stroke) {
             return std::nullopt;
         }
@@ -228,7 +228,7 @@ namespace {
 
 }  // namespace
 
-std::string KeyCodec::formatSequence(const KeySequence& sequence) const {
+std::string formatKeySequence(const KeySequence& sequence) {
     std::string result;
     for (const auto& stroke : sequence) {
         if (!result.empty()) result += ' ';
@@ -372,7 +372,7 @@ KeymapResolution KeymapMatcher::resolveSequence(
     return {KeymapMatchKind::None, {}};
 }
 
-TextRouting SemanticInputRouter::textRouting(std::string_view context) const noexcept {
+TextRouting textRoutingForContext(std::string_view context) noexcept {
     if (context == focusTargetName(FocusTarget::Editor)) {
         return TextRouting::Insert;
     }
@@ -410,11 +410,11 @@ std::optional<KeySequence> KeymapMatcher::preferredBinding(
         if (binding.commandId != commandId) continue;
         if (best == nullptr || binding.sequence.size() < best->size()) {
             best = &binding.sequence;
-            bestDisplay = KeyCodec{}.formatSequence(binding.sequence);
+            bestDisplay = formatKeySequence(binding.sequence);
             continue;
         }
         if (binding.sequence.size() == best->size()) {
-            auto display = KeyCodec{}.formatSequence(binding.sequence);
+            auto display = formatKeySequence(binding.sequence);
             if (display < bestDisplay) {
                 best = &binding.sequence;
                 bestDisplay = std::move(display);
@@ -431,7 +431,7 @@ KeymapMutationResult applyKeymapBind(
     if (arguments.command.empty()) {
         return {KeymapMutationError{"keymap.bind requires a command id"}, {}};
     }
-    const auto sequence = KeyCodec{}.parseSequenceString(arguments.sequence);
+    const auto sequence = parseKeySequenceString(arguments.sequence);
     if (!sequence) {
         return {KeymapMutationError{
                     "keymap.bind requires a valid space-separated key "
@@ -462,7 +462,7 @@ KeymapMutationResult applyKeymapBind(
 KeymapMutationResult applyKeymapUnbind(
     KeymapViewState const& current,
     KeymapUnbindArguments const& arguments) noexcept {
-    const auto sequence = KeyCodec{}.parseSequenceString(arguments.sequence);
+    const auto sequence = parseKeySequenceString(arguments.sequence);
     if (!sequence) {
         return {KeymapMutationError{
                     "keymap.unbind requires a valid space-separated key "
@@ -527,8 +527,7 @@ bool SemanticCommand::operator==(const SemanticCommand& other) const {
         arguments, other.arguments);
 }
 
-SemanticCommand SemanticInputRouter::semanticInput(
-    const CommittedText& committed) const {
+SemanticCommand semanticInputForText(const CommittedText& committed) {
     return {"text.insert", TextInputArguments{committed.utf8()}};
 }
 

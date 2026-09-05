@@ -915,7 +915,7 @@ TEST(encodingDispatchMatchesEncodeOracleAndSavedBytes) {
     }
 
     auto original = readBytes(root / "workspace" / "note.txt");
-    auto decoded = ssg::TextCodec{}.decode(original);
+    auto decoded = ssg::decodeText(original);
     ASSERT_TRUE(decoded.accepted());
     decoded.text->utf8 = "one\ntwo\n";
     decoded.text->lineTerminators = {ssg::LineTerminator::Crlf, ssg::LineTerminator::Crlf};
@@ -923,7 +923,7 @@ TEST(encodingDispatchMatchesEncodeOracleAndSavedBytes) {
     decoded.text->status.hadBom = true;
     decoded.text->status.lineEnding = ssg::LineEnding::Crlf;
     decoded.text->status.finalNewline = true;
-    auto expected = ssg::TextCodec{}.encode(*decoded.text);
+    auto expected = ssg::encodeText(*decoded.text);
     ASSERT_TRUE(expected.accepted());
 
     auto created = ssg::EditorSession::create(configFor(root));

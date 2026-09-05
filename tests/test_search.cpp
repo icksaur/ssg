@@ -95,21 +95,21 @@ TEST(queryModesAreUnambiguousAndLinesAreValidated) {
     const ParsedSearchQuery text{.mode = SearchMode::Text, .text = "needle"};
     const ParsedSearchQuery line{
         .mode = SearchMode::Line, .text = "42", .line = LineIndex{41}};
-    ASSERT_EQ(WorkspaceSearcher{}.parse("file"), file);
-    ASSERT_EQ(WorkspaceSearcher{}.parse("@Widget"), symbol);
-    ASSERT_EQ(WorkspaceSearcher{}.parse("#needle"), text);
-    ASSERT_EQ(WorkspaceSearcher{}.parse(":42"), line);
-    ASSERT_EQ(WorkspaceSearcher{}.parse(":0").error,
+    ASSERT_EQ(parseWorkspaceSearchQuery("file"), file);
+    ASSERT_EQ(parseWorkspaceSearchQuery("@Widget"), symbol);
+    ASSERT_EQ(parseWorkspaceSearchQuery("#needle"), text);
+    ASSERT_EQ(parseWorkspaceSearchQuery(":42"), line);
+    ASSERT_EQ(parseWorkspaceSearchQuery(":0").error,
               SearchQueryError::InvalidLine);
-    ASSERT_EQ(WorkspaceSearcher{}.parse(":no").error,
+    ASSERT_EQ(parseWorkspaceSearchQuery(":no").error,
               SearchQueryError::InvalidLine);
 
-    const auto target = SearchNavigator{}.gotoLine(
-        "src/search.cpp", WorkspaceSearcher{}.parse(":42"));
+    const auto target = searchGotoLine(
+        "src/search.cpp", parseWorkspaceSearchQuery(":42"));
     ASSERT_TRUE(target.has_value());
     ASSERT_EQ(target->line, LineIndex{41});
-    ASSERT_FALSE(SearchNavigator{}.gotoLine(
-                     {}, WorkspaceSearcher{}.parse(":42"))
+    ASSERT_FALSE(searchGotoLine(
+                     {}, parseWorkspaceSearchQuery(":42"))
                      .has_value());
 }
 
@@ -135,8 +135,8 @@ TEST(acceptedRankingGoldensMatch) {
         } else if (fields[0] == "text") {
             query.insert(query.begin(), '#');
         }
-        const auto results = WorkspaceSearcher{}.rank(
-            snapshot, WorkspaceSearcher{}.parse(query), SearchCancellationToken{});
+        const auto results = rankWorkspaceSearch(
+            snapshot, parseWorkspaceSearchQuery(query), SearchCancellationToken{});
         ASSERT_EQ(labels(results), split(fields[2], ','));
     }
 }

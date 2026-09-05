@@ -49,7 +49,7 @@ ssg::HistoryResult input(ssg::DocumentHistory& history, ssg::Document& document,
                          ssg::TextInputCommand command,
                          ssg::HistoryEditKind kind, std::uint64_t time,
                          std::string text = {}) {
-    const auto generated = ssg::TextInputInterpreter{}.apply(
+    const auto generated = ssg::applyTextInput(
         document.snapshot(), selections,
         ssg::TextInputSettings{ssg::IndentStyle::Spaces, 4, false,
                                ssg::LineEnding::Lf},

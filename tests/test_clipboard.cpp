@@ -10,7 +10,7 @@
 namespace {
 
 ssg::DocumentPosition position(std::string_view text, std::uint64_t offset) {
-    return *ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{offset}, 4);
+    return *ssg::resolveSelectionPosition(text, ssg::ByteOffset{offset}, 4);
 }
 
 ssg::Selection selection(std::string_view text, std::uint64_t anchor,

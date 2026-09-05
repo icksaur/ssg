@@ -229,7 +229,7 @@ std::vector<std::pair<VisualRow, ProjectedRow>> projectedWrappedRows(
         const auto logicalLine =
             lineCount == 0 ? 0 : std::min(insertion, lineCount - 1);
         for (const auto& removed : found->second) {
-            const auto run = GraphemeLayout{}.computeRun(removed.text);
+            const auto run = computeCellRun(removed.text);
             const std::array<CellRun, 1> line{run};
             const auto wrapped = wrapRows(line, columns);
             for (const auto& segment : wrapped) {
@@ -813,7 +813,7 @@ ViewportViewState computeUnwrappedViewport(
                                               firstRow + viewportRow}};
         if (const auto* phantom = std::get_if<PhantomRow>(&projected)) {
             const auto run =
-                GraphemeLayout{}.computeRun(phantom->text, tabWidth);
+                computeCellRun(phantom->text, tabWidth);
             const auto following = std::lower_bound(
                 lineStart.begin(), lineStart.end(),
                 static_cast<std::size_t>(phantom->followingByteOffset));
@@ -891,7 +891,7 @@ ViewportViewState computeUnwrappedViewport(
                 }
                 return bounds.back();
             };
-            const auto run = GraphemeLayout{}.computeRun(mergedText, tabWidth);
+            const auto run = computeCellRun(mergedText, tabWidth);
 
             uint32_t firstSpan = 0;
             uint32_t startCell = 0;
@@ -948,7 +948,7 @@ ViewportViewState computeUnwrappedViewport(
 
         const auto lineText = documentText.substr(start, end - start);
         const auto run = lineCache ? lineCache->run(lineText, tabWidth)
-                                   : GraphemeLayout{}.computeRun(lineText, tabWidth);
+                                   : computeCellRun(lineText, tabWidth);
 
         // Locate the first span at or past the requested horizontal offset; its
         // start cell is this row's visible origin.  A row shorter than the offset

@@ -92,7 +92,7 @@ std::string liveDiffDocumentText(const DiffFileView& file) {
 
 KeymapViewState defaultTerminalKeymap() {
     auto seq = [](std::initializer_list<std::string_view> strokes) {
-        auto parsed = KeyCodec{}.parseSequence(strokes);
+        auto parsed = parseKeySequence(strokes);
         if (!parsed) throw std::logic_error{"curated keymap has an invalid stroke"};
         return *parsed;
     };
@@ -1546,7 +1546,7 @@ void EditorSession::Impl::clampSelectionToActiveDocument() {
     auto const& text = activeText();
     auto offset = selection.selections.primary().active.byteOffset.value();
     if (offset > text.size()) offset = text.size();
-    auto position = ssg::SelectionNavigator::resolvePosition(text, ByteOffset{offset}).value_or(zeroPosition());
+    auto position = ssg::resolveSelectionPosition(text, ByteOffset{offset}).value_or(zeroPosition());
     selection.selections = SelectionSet{std::vector<Selection>{Selection{position, position}}};
 }
 
@@ -1560,7 +1560,7 @@ void EditorSession::Impl::clampSelectionsToActiveDocument() {
         // not for the edit paths this serves), snap DOWN to the nearest boundary
         // at or below it rather than teleporting to the document end.
         for (;;) {
-            if (auto at = ssg::SelectionNavigator::resolvePosition(
+            if (auto at = ssg::resolveSelectionPosition(
                     text, ByteOffset{offset})) {
                 return *at;
             }
@@ -1617,7 +1617,7 @@ void EditorSession::Impl::rebuildFileCandidates() {
     options.respectGitignore =
         boolSetting(settings, SettingKey::FileFinderRespectGitignore, true);
     fileCandidates =
-        std::move(WorkspaceFileIndex{}.build(root, *matcher, options).candidates);
+        std::move(buildWorkspaceFileIndex(root, *matcher, options).candidates);
 }
 
 void EditorSession::Impl::reconcileFindDocument() {
@@ -1785,7 +1785,7 @@ void EditorSession::Impl::reconcileDraftOnOpen(FileDocumentId document) {
     const DraftDiskState disk{std::move(*rawDisk), opened->snapshot().text};
 
     auto& runtimeState = documentRuntimeStates.at(document.value());
-    switch (DraftReopenClassifier{}.classify(draft->baseline,
+    switch (classifyDraftReopen(draft->baseline,
                                              draft->utf8Content, disk)) {
         case DraftReopenClass::Converged:
             // The edits equal disk (or were undone): nothing to recover. Drop the
@@ -2039,7 +2039,7 @@ bool EditorSession::Impl::revealCurrentDiffTarget(
     const auto& text = activeText();
     const auto offset = lineStartOffset(text, target.newestHunkLine);
     const auto position =
-        SelectionNavigator::resolvePosition(text, ByteOffset{offset});
+        resolveSelectionPosition(text, ByteOffset{offset});
     if (!position) {
         return false;
     }

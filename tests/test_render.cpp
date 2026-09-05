@@ -388,7 +388,7 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
     (void)runtime->dispatch({"file.open",  std::string{"n.txt"}});
     (void)runtime->dispatch({"view.toggle_line_numbers",  {}});
     // Put the caret on line 2 (0-indexed 1) so its number highlights.
-    auto atBeta = ssg::SelectionNavigator::resolvePosition("alpha\nbeta\ngamma\n",
+    auto atBeta = ssg::resolveSelectionPosition("alpha\nbeta\ngamma\n",
                                                            ssg::ByteOffset{6});
     ASSERT_TRUE(atBeta.has_value());
     (void)runtime->dispatch({"cursor.set_position",
@@ -2065,13 +2065,13 @@ TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
 
     ssg::Renderer renderer;
     auto warm = renderer.render(*snapshot);
-    ssg::GraphemeLayout::resetCellRunCalls();
+    ssg::resetCellRunCalls();
     auto cached = renderer.render(*snapshot);
-    auto const cachedCalls = ssg::GraphemeLayout::cellRunCalls();
-    ssg::GraphemeLayout::resetCellRunCalls();
+    auto const cachedCalls = ssg::cellRunCalls();
+    ssg::resetCellRunCalls();
     ssg::Renderer uncachedRenderer;
     auto uncached = uncachedRenderer.render(*snapshot);
-    auto const uncachedCalls = ssg::GraphemeLayout::cellRunCalls();
+    auto const uncachedCalls = ssg::cellRunCalls();
 
     // The cache reused the visible document lines: strictly fewer segmentations.
     ASSERT_TRUE(cachedCalls < uncachedCalls);

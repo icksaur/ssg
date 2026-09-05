@@ -456,8 +456,8 @@ UntitledDocumentId JournalDocumentKey::untitledId() const {
     return id_;
 }
 
-std::vector<std::byte> JournalCodec::encodeCheckpoint(
-    const JournalRecoverySet& recovery) const {
+std::vector<std::byte> encodeJournalCheckpoint(
+    const JournalRecoverySet& recovery) {
     if (recovery.documents.size() >
         std::numeric_limits<std::uint32_t>::max()) {
         throw std::length_error("too many documents in journal checkpoint");
@@ -477,21 +477,21 @@ std::vector<std::byte> JournalCodec::encodeCheckpoint(
     return frame(RecordKind::Checkpoint, std::move(body));
 }
 
-std::vector<std::byte> JournalCodec::encodeDocument(
-    const JournalDocument& document) const {
+std::vector<std::byte> encodeJournalDocument(
+    const JournalDocument& document) {
     Writer body;
     ::ssg::encodeDocument(body, document);
     return frame(RecordKind::Document, std::move(body));
 }
 
-std::vector<std::byte> JournalCodec::encodeRemove(
-    const JournalDocumentKey& key) const {
+std::vector<std::byte> encodeJournalRemove(
+    const JournalDocumentKey& key) {
     Writer body;
     encodeKey(body, key);
     return frame(RecordKind::Remove, std::move(body));
 }
 
-JournalReplayResult JournalCodec::replay(std::span<const std::byte> bytes) const {
+JournalReplayResult replayJournal(std::span<const std::byte> bytes) {
     JournalReplayResult result;
     std::size_t position = 0;
     while (position < bytes.size()) {
@@ -544,22 +544,22 @@ ScratchJournal::ScratchJournal(std::filesystem::path path)
 
 void ScratchJournal::appendCheckpoint(
     const JournalRecoverySet& recovery) const {
-    const auto record = JournalCodec{}.encodeCheckpoint(recovery);
+    const auto record = encodeJournalCheckpoint(recovery);
     append(record);
 }
 
 void ScratchJournal::appendDocument(const JournalDocument& document) const {
-    const auto record = JournalCodec{}.encodeDocument(document);
+    const auto record = encodeJournalDocument(document);
     append(record);
 }
 
 void ScratchJournal::appendRemove(const JournalDocumentKey& key) const {
-    const auto record = JournalCodec{}.encodeRemove(key);
+    const auto record = encodeJournalRemove(key);
     append(record);
 }
 
 JournalReplayResult ScratchJournal::replay() const {
-    return JournalCodec{}.replay(readJournalBytes(path_));
+    return replayJournal(readJournalBytes(path_));
 }
 
 void ScratchJournal::append(std::span<const std::byte> record) const {

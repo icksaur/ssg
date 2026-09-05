@@ -143,13 +143,13 @@ bool matcherParametersInDomain(const MatcherParameters& params) {
            ok(params.lengthCap, 0, m);
 }
 
-std::vector<std::size_t> PaletteSearcher::rank(
-    std::vector<PaletteCandidate> const& candidates, std::string_view query) const {
+std::vector<std::size_t> rankPaletteCandidates(
+    std::vector<PaletteCandidate> const& candidates, std::string_view query) {
     return rankWith(candidates, query, MatcherParameters{});
 }
 
-std::string PaletteSearcher::ghost(std::string_view topLabel,
-                                   std::string_view query) const {
+std::string paletteGhost(std::string_view topLabel,
+                         std::string_view query) {
     if (query.empty() || query.size() >= topLabel.size()) return {};
     for (std::size_t index = 0; index < query.size(); ++index) {
         if (folded(topLabel[index]) != folded(query[index])) return {};
@@ -157,13 +157,14 @@ std::string PaletteSearcher::ghost(std::string_view topLabel,
     return std::string{topLabel.substr(query.size())};
 }
 
-PaletteReport PaletteSearcher::report(
-    std::vector<PaletteCandidate> const& candidates, PaletteWindowState& window) const {
+PaletteReport buildPaletteReport(
+    std::vector<PaletteCandidate> const& candidates, PaletteWindowState& window) {
     PaletteReport report;
-    auto const order = rank(candidates, window.query);
+    auto const order = rankPaletteCandidates(candidates, window.query);
     report.query = window.query;
     if (!order.empty()) {
-        report.ghost = ghost(candidates[order.front()].label, window.query);
+        report.ghost =
+            paletteGhost(candidates[order.front()].label, window.query);
     }
     bool selectionClamped = false;
     if (window.selected >= order.size()) {

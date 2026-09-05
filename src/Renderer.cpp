@@ -166,7 +166,7 @@ std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
                 lines.emplace(index, LogicalLine{line, begin, cache->run(line, 4)});
             } else {
                 lines.emplace(index, LogicalLine{line, begin,
-                                                 GraphemeLayout{}.computeRun(line)});
+                                                 computeCellRun(line)});
             }
         }
         if (end == std::string::npos || index >= maxLine) break;
@@ -356,7 +356,7 @@ void paintText(CellGrid& grid, int x, int y, int right, std::string_view text,
                 std::uint8_t foreground, std::uint8_t background,
                 SemanticRole role, Style const& style) {
     if (right <= x) return;
-    auto run = GraphemeLayout{}.computeRun(text);
+    auto run = computeCellRun(text);
     int column = x;
     bool truncated = false;
     for (auto const& span : run.spans) {
@@ -569,7 +569,7 @@ void paintPalette(CellGrid& grid, PaletteReport const& palette,
         paintText(grid, rect.x, rect.y, rect.right(), row.label, foreground,
                    rowBackground, labelRole, style);
         if (!row.detail.empty()) {
-            auto const run = GraphemeLayout{}.computeRun(row.detail);
+            auto const run = computeCellRun(row.detail);
             int width = 0;
             for (auto const& span : run.spans) {
                 width += static_cast<int>(std::max<std::uint32_t>(span.cellWidth, 1));
@@ -701,7 +701,7 @@ void paintDocument(CellGrid& grid, GridPresentation const& snapshot,
         if (auto const* phantom = std::get_if<PhantomRow>(&projected)) {
            auto const foreground =
                semanticIndex(theme, SemanticRole::Text);
-           auto const cells = GraphemeLayout{}.computeRun(phantom->text);
+           auto const cells = computeCellRun(phantom->text);
            int column = content.x;
            std::size_t firstSpan = 0;
            std::uint32_t startCell = 0;
@@ -781,7 +781,7 @@ void paintDocument(CellGrid& grid, GridPresentation const& snapshot,
         // mapping for the ghost (Removed/Separator) segments this
         // introduces (see RealRow::mergedSegments); this branch only paints
         // the segments Viewport already computed, recomputing a
-        // GraphemeLayout run over the SAME merged text purely to know where
+        // computeCellRun over the SAME merged text purely to know where
         // to draw each cell -- not to decide layout or byte offsets.
         // Word wrap, selection, and find-match highlighting are not painted
         // on a merged row (selection/find BYTE ranges still resolve
@@ -803,7 +803,7 @@ void paintDocument(CellGrid& grid, GridPresentation const& snapshot,
                 bounds.push_back({start, mergedText.size(), segment.kind});
             }
             auto const foreground = semanticIndex(theme, SemanticRole::Text);
-            auto const cells = GraphemeLayout{}.computeRun(mergedText);
+            auto const cells = computeCellRun(mergedText);
             int column = content.x;
             std::size_t firstSpan = 0;
             std::uint32_t startCell = 0;
@@ -1096,15 +1096,13 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
                    text, promptFg, promptBg, SemanticRole::Prompt, style);
         if (schemaLeaf->widget.kind == WidgetKind::TextInput &&
             leaf.active.value_or(false) && !caret) {
-            auto const labelWidth =
-                static_cast<int>(GraphemeLayout{}
-                                     .computeRun(textInputText(
-                                         leaf.label,
-                                         style.promptLabelSeparator, {}))
-                                     .totalCells);
+            auto const labelWidth = static_cast<int>(
+                computeCellRun(textInputText(
+                                   leaf.label, style.promptLabelSeparator, {}))
+                    .totalCells);
             auto const valueWidth =
                 static_cast<int>(
-                    GraphemeLayout{}.computeRun(leaf.value).totalCells);
+                    computeCellRun(leaf.value).totalCells);
             auto const cursorColumn =
                 std::min(rect.x + labelWidth + valueWidth, rect.right() - 1);
             caret = GridPosition{cursorColumn, rect.y};
@@ -1135,7 +1133,7 @@ CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme,
     if (size.columns <= 0 || size.rows <= 0) return grid;
     std::string_view const message = "terminal too small";
     auto const messageCells =
-        static_cast<int>(GraphemeLayout{}.computeRun(message).totalCells);
+        static_cast<int>(computeCellRun(message).totalCells);
     int const row = size.rows / 2;
     int const start = std::max(0, (size.columns - messageCells) / 2);
     paintText(grid, start, row, size.columns, message, foreground, background,

@@ -95,7 +95,7 @@ SolvedNoticeSurface solveNoticeSurface(const NoticeView& notice, Rect rect) {
     for (auto it = notice.actions.rbegin(); it != notice.actions.rend(); ++it) {
         std::string text = "[" + it->label + "]";
         const auto width = static_cast<int>(
-            GraphemeLayout{}.computeRun(text).totalCells);
+            computeCellRun(text).totalCells);
         actionX -= width;
         if (actionX < rect.x) break;
         solved.actions.push_back(
@@ -161,7 +161,7 @@ SolvedExternalModificationSurface solveExternalModificationSurface(
              action != file.actions.rend(); ++action) {
             std::string text = "[" + action->label + "]";
             const int width = static_cast<int>(
-                GraphemeLayout{}.computeRun(text).totalCells);
+                computeCellRun(text).totalCells);
             actionX -= width;
             if (actionX < rect.x) break;
             row.actions.push_back(
@@ -212,10 +212,10 @@ SolvedTabBar solveTabBar(const TabViewState& tabs,
     const auto width = [&](const TabState& tab) {
         return std::max(
             1, static_cast<int>(
-                   GraphemeLayout{}.computeRun(display(tab)).totalCells));
+                   computeCellRun(display(tab)).totalCells));
     };
     const int separatorWidth = static_cast<int>(
-        GraphemeLayout{}.computeRun(glyphs.separator).totalCells);
+        computeCellRun(glyphs.separator).totalCells);
     std::size_t active = 0;
     if (tabs.active) {
         const auto found =
@@ -252,7 +252,7 @@ SolvedTabBar solveTabBar(const TabViewState& tabs,
         const int chipWidth = std::min(
             rect.right() - chipX,
             std::max(1, static_cast<int>(
-                            GraphemeLayout{}.computeRun(text).totalCells)));
+                            computeCellRun(text).totalCells)));
         if (chipWidth <= 0) break;
         if (separatorReserve > 0) {
             solved.separators.push_back(

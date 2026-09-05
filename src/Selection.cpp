@@ -466,7 +466,7 @@ private:
                                     ? lineStarts_[index + 1] - 1
                                     : text_.size();
         auto run =
-            GraphemeLayout{}.computeRun(text_.substr(start, end - start), tabWidth_);
+            computeCellRun(text_.substr(start, end - start), tabWidth_);
         std::vector<DocumentPosition> boundaries;
         boundaries.reserve(run.spans.size() + 1);
         std::uint64_t cell = 0;
@@ -822,7 +822,7 @@ const std::array<SelectionCommandDescriptor, 38> kSelectionCommands{{
     {"view.center_caret", SelectionCommand::ViewCenterCaret},
 }};
 
-std::optional<DocumentPosition> SelectionNavigator::resolvePosition(
+std::optional<DocumentPosition> resolveSelectionPosition(
     std::string_view text, ByteOffset byteOffset, int tabWidth) {
     if (tabWidth < 1 || tabWidth > 16) {
         return std::nullopt;
@@ -830,12 +830,12 @@ std::optional<DocumentPosition> SelectionNavigator::resolvePosition(
     return TextModel{text, tabWidth}.resolve(byteOffset);
 }
 
-SelectionNavigationResult SelectionNavigator::apply(
+SelectionNavigationResult navigateSelection(
     std::string_view text, const SelectionViewState& before,
     SelectionCommand command, ViewportDimensions viewport,
     SelectionCommandArguments arguments,
     std::span<const BracketPair> bracketPairs, int tabWidth,
-    bool wordWrap, const DiffFileView* diff) const {
+    bool wordWrap, const DiffFileView* diff) {
     if (tabWidth < 1 || tabWidth > 16) {
         return rejected(SelectionNavigationError::InvalidTabWidth,
                         "tab width must be between 1 and 16");

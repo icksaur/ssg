@@ -33,7 +33,7 @@ void validateConfig(const ScratchStoreConfig& config) {
 
 void replaceCheckpoint(const std::filesystem::path& path,
                        const JournalRecoverySet& recovery) {
-    const auto record = JournalCodec{}.encodeCheckpoint(recovery);
+    const auto record = encodeJournalCheckpoint(recovery);
     replaceFileAtomically(path, record);
     setOwnerOnlyPermissions(path);
 }

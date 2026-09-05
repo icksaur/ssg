@@ -42,17 +42,12 @@ struct DraftDiskState {
 // always hashes the disk bytes, which the caller has already read to open the
 // file); the baseline's `contentHash` is what a fresh disk-bytes hash is compared
 // to.
-class DraftReopenClassifier {
-public:
-    // `disk == nullopt` means the file is missing/unreadable. Decided in order:
-    // Missing, then Converged (draft == decoded disk — checked before any
-    // dirty-load so an undone draft is never briefly loaded dirty), then
-    // Unchanged (raw-disk hash == baseline hash), else Conflict. An ABSENT
-    // baseline is "unknown" and classifies as Conflict, never silently Unchanged.
-    [[nodiscard]] DraftReopenClass classify(
-        const std::optional<DraftBaseline>& baseline,
-        std::string_view draftContent,
-        const std::optional<DraftDiskState>& disk) const;
-};
+// `disk == nullopt` means the file is missing or unreadable. Convergence is
+// checked before the baseline hash so an undone draft is not loaded dirty.
+// An absent baseline is unknown and therefore a conflict.
+[[nodiscard]] DraftReopenClass classifyDraftReopen(
+    const std::optional<DraftBaseline>& baseline,
+    std::string_view draftContent,
+    const std::optional<DraftDiskState>& disk);
 
 } // namespace ssg

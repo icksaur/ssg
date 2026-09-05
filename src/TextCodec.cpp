@@ -492,7 +492,7 @@ std::vector<Scalar> outputScalars(const DecodedText& text,
 
 } // namespace
 
-DecodeTextResult TextCodec::decode(std::span<const std::uint8_t> bytes) const {
+DecodeTextResult decodeText(std::span<const std::uint8_t> bytes) {
     if (bytes.size() >= 3 && bytes[0] == 0xef &&
         bytes[1] == 0xbb && bytes[2] == 0xbf) {
         return decodeSelected(bytes, TextEncoding::Utf8Bom);
@@ -506,19 +506,19 @@ DecodeTextResult TextCodec::decode(std::span<const std::uint8_t> bytes) const {
     return decodeSelected(bytes, TextEncoding::Utf8);
 }
 
-DecodeTextResult TextCodec::decode(std::span<const std::uint8_t> bytes,
-                                   TextEncoding encoding) const {
+DecodeTextResult decodeText(std::span<const std::uint8_t> bytes,
+                                   TextEncoding encoding) {
     return decodeSelected(bytes, encoding);
 }
 
-EncodeTextResult TextCodec::encode(const DecodedText& text) const {
-    return encode(
+EncodeTextResult encodeText(const DecodedText& text) {
+    return encodeText(
         text, {text.status.encoding, LineEnding::Mixed,
                FinalNewlinePolicy::Preserve});
 }
 
-EncodeTextResult TextCodec::encode(const DecodedText& text,
-                                   EncodeTextOptions options) const {
+EncodeTextResult encodeText(const DecodedText& text,
+                                   EncodeTextOptions options) {
     TextEncodingError error;
     const auto scalars = outputScalars(text, options, error);
     if (!error.message.empty()) return {{}, std::move(error)};
@@ -564,8 +564,8 @@ EncodeTextResult TextCodec::encode(const DecodedText& text,
     return result;
 }
 
-TextEncodingViewState TextCodec::viewState(
-    const DecodedText& text) const noexcept {
+TextEncodingViewState textEncodingViewState(
+    const DecodedText& text) noexcept {
     return {text.status};
 }
 

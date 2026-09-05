@@ -48,23 +48,23 @@ TEST(commandLabelUsesAuthoredLabelsAndHumanizesTheRest) {
 TEST(formatKeySequenceIsCompactAndHuman) {
     // A letter with no Shift is lowercased, because in a terminal Alt+letter
     // transmits the lowercase character; Alt+S (uppercase) would need Shift.
-    ASSERT_EQ(ssg::KeyCodec{}.formatSequence(*ssg::KeyCodec{}.parseSequence({"Alt+KeyS"})),
+    ASSERT_EQ(ssg::formatKeySequence(*ssg::parseKeySequence({"Alt+KeyS"})),
               std::string{"Alt+s"});
-    ASSERT_EQ(ssg::KeyCodec{}.formatSequence(*ssg::KeyCodec{}.parseSequence({"ArrowDown"})),
+    ASSERT_EQ(ssg::formatKeySequence(*ssg::parseKeySequence({"ArrowDown"})),
               std::string{"Down"});
     // With Shift the letter stays uppercase.
-    ASSERT_EQ(ssg::KeyCodec{}.formatSequence(
-                  *ssg::KeyCodec{}.parseSequence({"Alt+Shift+KeyZ"})),
+    ASSERT_EQ(ssg::formatKeySequence(
+                  *ssg::parseKeySequence({"Alt+Shift+KeyZ"})),
               std::string{"Alt+Shift+Z"});
-    ASSERT_EQ(ssg::KeyCodec{}.formatSequence(
-                  *ssg::KeyCodec{}.parseSequence({"Alt+BracketRight"})),
+    ASSERT_EQ(ssg::formatKeySequence(
+                  *ssg::parseKeySequence({"Alt+BracketRight"})),
               std::string{"Alt+]"});
-    ASSERT_TRUE(ssg::KeyCodec{}.formatSequence({}).empty());
+    ASSERT_TRUE(ssg::formatKeySequence({}).empty());
 }
 
 TEST(preferredBindingIsDeterministic) {
-    const auto shortSeq = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyS"});
-    const auto longSeq = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyF", "KeyT"});
+    const auto shortSeq = *ssg::parseKeySequence({"Escape", "KeyS"});
+    const auto longSeq = *ssg::parseKeySequence({"Escape", "KeyF", "KeyT"});
     // Two bindings for one command: the shorter wins regardless of order.
     ssg::KeymapViewState a{"m", {{longSeq, "cmd", "*"}, {shortSeq, "cmd", "*"}}};
     ssg::KeymapViewState b{"m", {{shortSeq, "cmd", "*"}, {longSeq, "cmd", "*"}}};
@@ -76,8 +76,8 @@ TEST(preferredBindingIsDeterministic) {
     ASSERT_EQ(*bPref, shortSeq);
 
     // Equal length: the lexicographically least display form wins.
-    const auto escA = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyA"});
-    const auto escB = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyB"});
+    const auto escA = *ssg::parseKeySequence({"Escape", "KeyA"});
+    const auto escB = *ssg::parseKeySequence({"Escape", "KeyB"});
     ssg::KeymapViewState c{"m", {{escB, "cmd", "*"}, {escA, "cmd", "*"}}};
     auto cPref = ssg::KeymapMatcher{c}.preferredBinding("cmd");
     ASSERT_TRUE(cPref.has_value());

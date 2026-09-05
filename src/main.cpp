@@ -111,7 +111,7 @@ void installSignalTagHandler(int signo) {
 
 void popGrapheme(std::string& text) {
     if (text.empty()) return;
-    const auto run = ssg::GraphemeLayout{}.computeRun(text);
+    const auto run = ssg::computeCellRun(text);
     if (!run.spans.empty()) text.resize(run.spans.back().byteOffset);
 }
 
@@ -230,7 +230,7 @@ class PaletteView {
         }
     }
 
-    [[nodiscard]] PaletteReport report() { return open_ ? PaletteSearcher{}.report(candidates_, window_) : PaletteReport{}; }
+    [[nodiscard]] PaletteReport report() { return open_ ? buildPaletteReport(candidates_, window_) : PaletteReport{}; }
 
     void adopt(const GridPresentation& snapshot) {
         activation_ = snapshot.paletteView.activePicker;
@@ -261,7 +261,7 @@ class PaletteView {
     [[nodiscard]] std::optional<PickerActivation> activation() const { return activation_; }
 
   private:
-    [[nodiscard]] std::vector<std::size_t> ranked() const { return PaletteSearcher{}.rank(candidates_, window_.query); }
+    [[nodiscard]] std::vector<std::size_t> ranked() const { return rankPaletteCandidates(candidates_, window_.query); }
 
     [[nodiscard]] std::uint32_t candidateCount() const { return static_cast<std::uint32_t>(ranked().size()); }
 
@@ -418,7 +418,7 @@ void handlePointer(SsgContext& context, const Decoded& decoded, PointerState& po
         }
 
         if (hit.region == HitRegion::Editor) {
-            targets.document_position = SelectionNavigator::resolvePosition(context.activeSnapshot->documentText, ByteOffset{hit.byteOffset});
+            targets.document_position = resolveSelectionPosition(context.activeSnapshot->documentText, ByteOffset{hit.byteOffset});
         } else if (hit.region == HitRegion::Tab) {
             auto const& tabs = context.activeSnapshot->tabs.tabs;
             if (hit.tabIndex < tabs.size()) {

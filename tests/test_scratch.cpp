@@ -98,7 +98,7 @@ TEST(compactionPreservesReplayAndLeavesOneAtomicCheckpoint) {
     ASSERT_EQ(after.recovery, before.recovery);
     ASSERT_FALSE(after.discardedTail);
     ASSERT_EQ(after.validBytes,
-              ssg::JournalCodec{}.encodeCheckpoint(after.recovery).size());
+              ssg::encodeJournalCheckpoint(after.recovery).size());
 }
 
 TEST(startupImportsBeforeMarkingRemnantRestored) {

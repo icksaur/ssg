@@ -21,58 +21,53 @@ std::optional<ssg::DraftDiskState> plainDisk(std::string content) {
 }
 
 TEST(missingDiskContentClassifiesMissing) {
-    ssg::DraftReopenClassifier classifier;
-    ASSERT_TRUE(classifier.classify(baselineForRaw("base\n"), "draft\n",
-                                    std::nullopt) ==
+    ASSERT_TRUE(ssg::classifyDraftReopen(baselineForRaw("base\n"), "draft\n",
+                                         std::nullopt) ==
                 ssg::DraftReopenClass::Missing);
 }
 
 TEST(draftEqualToDiskClassifiesConverged) {
-    ssg::DraftReopenClassifier classifier;
-    ASSERT_TRUE(classifier.classify(baselineForRaw("old base\n"), "shared\n",
-                                    plainDisk("shared\n")) ==
+    ASSERT_TRUE(ssg::classifyDraftReopen(
+                    baselineForRaw("old base\n"), "shared\n",
+                    plainDisk("shared\n")) ==
                 ssg::DraftReopenClass::Converged);
 }
 
 TEST(diskMatchingBaselineHashClassifiesUnchanged) {
-    ssg::DraftReopenClassifier classifier;
     const std::string raw = "on disk\n";
-    ASSERT_TRUE(classifier.classify(baselineForRaw(raw, 999, 4242),
-                                    "unsaved edits\n", plainDisk(raw)) ==
+    ASSERT_TRUE(ssg::classifyDraftReopen(baselineForRaw(raw, 999, 4242),
+                                         "unsaved edits\n", plainDisk(raw)) ==
                 ssg::DraftReopenClass::Unchanged);
 }
 
 TEST(diskDifferingFromBaselineHashClassifiesConflict) {
-    ssg::DraftReopenClassifier classifier;
-    ASSERT_TRUE(classifier.classify(baselineForRaw("original\n"), "my edits\n",
-                                    plainDisk("changed externally\n")) ==
+    ASSERT_TRUE(ssg::classifyDraftReopen(
+                    baselineForRaw("original\n"), "my edits\n",
+                    plainDisk("changed externally\n")) ==
                 ssg::DraftReopenClass::Conflict);
 }
 
 TEST(sameSizeExternalRewriteClassifiesConflict) {
-    ssg::DraftReopenClassifier classifier;
-    ASSERT_TRUE(classifier.classify(baselineForRaw("aaaa\n", 111, 5),
-                                    "edits\n", plainDisk("bbbb\n")) ==
+    ASSERT_TRUE(ssg::classifyDraftReopen(
+                    baselineForRaw("aaaa\n", 111, 5), "edits\n",
+                    plainDisk("bbbb\n")) ==
                 ssg::DraftReopenClass::Conflict);
 }
 
 TEST(absentBaselineClassifiesConflictNotUnchanged) {
-    ssg::DraftReopenClassifier classifier;
-    ASSERT_TRUE(classifier.classify(std::nullopt, "draft\n",
-                                    plainDisk("disk\n")) ==
+    ASSERT_TRUE(ssg::classifyDraftReopen(
+                    std::nullopt, "draft\n", plainDisk("disk\n")) ==
                 ssg::DraftReopenClass::Conflict);
 }
 
 TEST(convergedTakesPrecedenceOverConflict) {
-    ssg::DraftReopenClassifier classifier;
-    ASSERT_TRUE(classifier.classify(baselineForRaw("different base\n"),
-                                    "converged\n",
-                                    plainDisk("converged\n")) ==
+    ASSERT_TRUE(ssg::classifyDraftReopen(
+                    baselineForRaw("different base\n"), "converged\n",
+                    plainDisk("converged\n")) ==
                 ssg::DraftReopenClass::Converged);
 }
 
 TEST(crlfFileUsesRawBytesForHashAndDecodedTextForConvergence) {
-    ssg::DraftReopenClassifier classifier;
     // A CRLF file: raw disk bytes carry \r\n; the decoded buffer text is \n. The
     // baseline hashed the RAW bytes.
     const std::string raw = "line one\r\nline two\r\n";
@@ -82,13 +77,14 @@ TEST(crlfFileUsesRawBytesForHashAndDecodedTextForConvergence) {
     // Unchanged: disk still the CRLF bytes -> raw hash matches baseline even
     // though the draft (decoded \n) differs textually. Hashing the DECODED text
     // would make every CRLF reopen a spurious Conflict.
-    ASSERT_TRUE(classifier.classify(baseline, "edited\n",
-                                    disk(raw, decoded)) ==
+    ASSERT_TRUE(ssg::classifyDraftReopen(
+                    baseline, "edited\n", disk(raw, decoded)) ==
                 ssg::DraftReopenClass::Unchanged);
 
     // Converged: the draft's decoded text equals the disk's decoded text, even
     // though draft (\n) never equals the raw disk bytes (\r\n).
-    ASSERT_TRUE(classifier.classify(baseline, decoded, disk(raw, decoded)) ==
+    ASSERT_TRUE(ssg::classifyDraftReopen(baseline, decoded,
+                                         disk(raw, decoded)) ==
                 ssg::DraftReopenClass::Converged);
 }
 
@@ -107,4 +103,3 @@ SSG_TEST_SUITE(test_draft_reopen) {
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
-

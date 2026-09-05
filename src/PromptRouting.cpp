@@ -18,7 +18,7 @@ std::string applyEdit(std::string_view value, PromptTextEdit const& change) {
         // The last cluster's start byte is where the trailing grapheme (with any
         // absorbed combining marks) begins, so truncating there deletes exactly
         // one user-perceived character.
-        CellRun run = GraphemeLayout{}.computeRun(value);
+        CellRun run = computeCellRun(value);
         if (run.spans.empty()) return std::string(value);
         return std::string(value.substr(0, run.spans.back().byteOffset));
     }
@@ -73,7 +73,7 @@ PromptTextRoute dispatchActiveInput(ActivePrompt prompt, std::size_t activeInput
 
 PromptTextRoute routePromptTextEdit(const PromptRoutingState& state,
                                     const PromptTextEdit& change) {
-    switch (SemanticInputRouter{}.textRouting(focusTargetName(state.focus))) {
+    switch (textRoutingForContext(focusTargetName(state.focus))) {
     case TextRouting::Insert:
         // A DeleteGraphemeBack/DeleteWordBack in the editor is not this seam's
         // job; only an append inserts text. The editor's own delete commands

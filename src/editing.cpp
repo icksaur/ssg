@@ -94,7 +94,7 @@ CommandHandlerResult bindText(EditorSession::Impl& runtime,
     // so there is no cast to fail here.
     if (command != TextInputCommand::Insert) arguments = {};
     std::string inserted = arguments.text;
-    auto result = TextInputInterpreter{}.apply(document->snapshot(), runtime.selection.selections,
+    auto result = applyTextInput(document->snapshot(), runtime.selection.selections,
                                    textInputSettings(runtime), command, std::move(arguments));
     if (!result.accepted() || !result.transaction || !result.selections) {
         return failure(result.message);
@@ -131,7 +131,7 @@ CommandHandlerResult bindSelection(EditorSession::Impl& runtime,
     }
     auto navigation = runtime.selection;
     const auto diffFile = runtime.activeDiffFile();
-    auto result = ssg::SelectionNavigator{}.apply(runtime.activeText(), navigation,
+    auto result = ssg::navigateSelection(runtime.activeText(), navigation,
                                              command, {1, 1},
                                              arguments, {}, 4,
                                              runtime.wordWrap,
@@ -167,7 +167,7 @@ CommandHandlerResult bindEdit(EditorSession::Impl& runtime,
     }
     auto const* document = runtime.activeDocument();
     if (document == nullptr) return failure("no active document");
-    auto result = EditInterpreter{}.apply(document->snapshot(), runtime.selection.selections,
+    auto result = applyEditCommand(document->snapshot(), runtime.selection.selections,
                                      editSettings(runtime), command);
     if (!result.accepted() || !result.transaction || !result.selections) {
         return failure(result.message);
@@ -240,8 +240,8 @@ void revealActiveFindMatch(EditorSession::Impl& runtime) {
     }
     auto const& match = state.matches[*state.activeMatch];
     auto const& text = runtime.activeText();
-    auto anchor = ssg::SelectionNavigator::resolvePosition(text, match.begin);
-    auto active = ssg::SelectionNavigator::resolvePosition(text, match.end);
+    auto anchor = ssg::resolveSelectionPosition(text, match.begin);
+    auto active = ssg::resolveSelectionPosition(text, match.end);
     if (!anchor || !active) return;
     runtime.selection.selections =
         SelectionSet{std::vector<Selection>{Selection{*anchor, *active}}};

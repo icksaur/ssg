@@ -36,7 +36,7 @@ std::string bytes(std::initializer_list<std::uint8_t> values) {
 
 TEST(autoDetectsUtf8AndPreservesLfAndFinalNewline) {
     const auto original = fixture("utf8-lf");
-    const auto decoded = ssg::TextCodec{}.decode(original);
+    const auto decoded = ssg::decodeText(original);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.text->utf8, bytes({
         0x61, 0x6c, 0x70, 0x68, 0x61, 0x0a, 0xce, 0xb2, 0x0a}));
@@ -46,12 +46,12 @@ TEST(autoDetectsUtf8AndPreservesLfAndFinalNewline) {
     ASSERT_TRUE(decoded.text->status.finalNewline);
     ASSERT_EQ(decoded.text->lineTerminators,
               (std::vector{LineTerminator::Lf, LineTerminator::Lf}));
-    ASSERT_EQ(ssg::TextCodec{}.encode(*decoded.text).bytes, original);
+    ASSERT_EQ(ssg::encodeText(*decoded.text).bytes, original);
 }
 
 TEST(autoDetectsUtf8BomAndPreservesCrlfWithoutFinalNewline) {
     const auto original = fixture("utf8-bom-crlf");
-    const auto decoded = ssg::TextCodec{}.decode(original);
+    const auto decoded = ssg::decodeText(original);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.text->utf8, bytes({
         0x63, 0x61, 0x66, 0xc3, 0xa9, 0x0a,
@@ -62,12 +62,12 @@ TEST(autoDetectsUtf8BomAndPreservesCrlfWithoutFinalNewline) {
     ASSERT_FALSE(decoded.text->status.finalNewline);
     ASSERT_EQ(decoded.text->lineTerminators,
               (std::vector{LineTerminator::Crlf, LineTerminator::None}));
-    ASSERT_EQ(ssg::TextCodec{}.encode(*decoded.text).bytes, original);
+    ASSERT_EQ(ssg::encodeText(*decoded.text).bytes, original);
 }
 
 TEST(roundTripsUtf16EndiannessBomAndMixedEndings) {
     const auto littleBytes = fixture("utf16le-mixed");
-    const auto little = ssg::TextCodec{}.decode(littleBytes);
+    const auto little = ssg::decodeText(littleBytes);
     ASSERT_TRUE(little.accepted());
     ASSERT_EQ(little.text->utf8, bytes({
         0x41, 0x0a, 0xe2, 0x82, 0xac, 0x0a, 0x5a, 0x0a}));
@@ -76,77 +76,77 @@ TEST(roundTripsUtf16EndiannessBomAndMixedEndings) {
     ASSERT_EQ(little.text->lineTerminators,
               (std::vector{LineTerminator::Crlf, LineTerminator::Cr,
                            LineTerminator::Lf}));
-    ASSERT_EQ(ssg::TextCodec{}.encode(*little.text).bytes, littleBytes);
+    ASSERT_EQ(ssg::encodeText(*little.text).bytes, littleBytes);
 
     const auto bigBytes = fixture("utf16be-cr");
-    const auto big = ssg::TextCodec{}.decode(bigBytes);
+    const auto big = ssg::decodeText(bigBytes);
     ASSERT_TRUE(big.accepted());
     ASSERT_EQ(big.text->utf8, bytes({0x41, 0x0a, 0xce, 0xa9, 0x0a}));
     ASSERT_EQ(big.text->status.encoding, TextEncoding::Utf16be);
     ASSERT_EQ(big.text->status.lineEnding, LineEnding::Cr);
     ASSERT_TRUE(big.text->status.finalNewline);
-    ASSERT_EQ(ssg::TextCodec{}.encode(*big.text).bytes, bigBytes);
+    ASSERT_EQ(ssg::encodeText(*big.text).bytes, bigBytes);
 }
 
 TEST(manualSingleByteDecodesAreByteExact) {
-    const auto windows = ssg::TextCodec{}.decode(
+    const auto windows = ssg::decodeText(
         fixture("windows1252"), TextEncoding::Windows1252);
     ASSERT_TRUE(windows.accepted());
     ASSERT_EQ(windows.text->utf8, bytes({
         0xe2, 0x82, 0xac, 0x20, 0xe2, 0x80, 0x9c, 0x78,
         0xe2, 0x80, 0x9d, 0x0a}));
     ASSERT_EQ(windows.text->status.lineEnding, LineEnding::Crlf);
-    ASSERT_EQ(ssg::TextCodec{}.encode(*windows.text).bytes, fixture("windows1252"));
+    ASSERT_EQ(ssg::encodeText(*windows.text).bytes, fixture("windows1252"));
 
-    const auto latin = ssg::TextCodec{}.decode(
+    const auto latin = ssg::decodeText(
         fixture("iso88591"), TextEncoding::Iso88591);
     ASSERT_TRUE(latin.accepted());
     ASSERT_EQ(latin.text->utf8, bytes({0xc3, 0xa9, 0x0a}));
     ASSERT_EQ(latin.text->status.lineEnding, LineEnding::Cr);
-    ASSERT_EQ(ssg::TextCodec{}.encode(*latin.text).bytes, fixture("iso88591"));
+    ASSERT_EQ(ssg::encodeText(*latin.text).bytes, fixture("iso88591"));
 }
 
 TEST(refusesInvalidInputWithoutReplacement) {
-    const auto invalidUtf8 = ssg::TextCodec{}.decode(fixture("invalid-utf8"));
+    const auto invalidUtf8 = ssg::decodeText(fixture("invalid-utf8"));
     ASSERT_FALSE(invalidUtf8.accepted());
     ASSERT_EQ(invalidUtf8.error->code, ssg::TextEncodingErrorCode::InvalidInput);
     ASSERT_EQ(invalidUtf8.error->utf8Offset, std::size_t{0});
 
-    const auto invalidUtf16 = ssg::TextCodec{}.decode(fixture("invalid-utf16le"));
+    const auto invalidUtf16 = ssg::decodeText(fixture("invalid-utf16le"));
     ASSERT_FALSE(invalidUtf16.accepted());
     ASSERT_EQ(invalidUtf16.error->code,
               ssg::TextEncodingErrorCode::InvalidInput);
 }
 
 TEST(refusesLossySingleByteEncodingAtTheOffendingOffset) {
-    const auto decoded = ssg::TextCodec{}.decode(fixture("lossy-utf8"));
+    const auto decoded = ssg::decodeText(fixture("lossy-utf8"));
     ASSERT_TRUE(decoded.accepted());
 
-    const auto windows = ssg::TextCodec{}.encode(
+    const auto windows = ssg::encodeText(
         *decoded.text, {TextEncoding::Windows1252, LineEnding::Mixed,
                         FinalNewlinePolicy::Preserve});
     ASSERT_FALSE(windows.accepted());
     ASSERT_EQ(windows.error->code, ssg::TextEncodingErrorCode::LossyConversion);
     ASSERT_EQ(windows.error->utf8Offset, std::size_t{0});
 
-    const auto latin = ssg::TextCodec{}.encode(
+    const auto latin = ssg::encodeText(
         *decoded.text, {TextEncoding::Iso88591, LineEnding::Mixed,
                         FinalNewlinePolicy::Preserve});
     ASSERT_FALSE(latin.accepted());
 }
 
 TEST(normalizesRequestedEndingsAndAppliesFinalNewlinePolicy) {
-    const auto decoded = ssg::TextCodec{}.decode(fixture("no-final-newline"));
+    const auto decoded = ssg::decodeText(fixture("no-final-newline"));
     ASSERT_TRUE(decoded.accepted());
 
-    const auto crlf = ssg::TextCodec{}.encode(
+    const auto crlf = ssg::encodeText(
         *decoded.text, {TextEncoding::Utf8, LineEnding::Crlf,
                         FinalNewlinePolicy::EnsurePresent});
     ASSERT_TRUE(crlf.accepted());
     ASSERT_EQ(crlf.bytes, (std::vector<std::uint8_t>{
         0x6f, 0x6e, 0x65, 0x0d, 0x0a, 0x74, 0x77, 0x6f, 0x0d, 0x0a}));
 
-    const auto absent = ssg::TextCodec{}.encode(
+    const auto absent = ssg::encodeText(
         *decoded.text, {TextEncoding::Utf8, LineEnding::Cr,
                         FinalNewlinePolicy::EnsureAbsent});
     ASSERT_TRUE(absent.accepted());
@@ -162,7 +162,7 @@ namespace {
 
 ssg::DecodeTextResult decode(std::initializer_list<std::uint8_t> values) {
     const std::vector<std::uint8_t> buffer{values};
-    return ssg::TextCodec{}.decode(buffer);
+    return ssg::decodeText(buffer);
 }
 
 TEST(fusedDecodeRecordsEveryLineTerminator) {

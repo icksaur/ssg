@@ -437,7 +437,7 @@ public:
                                FileContentKind::Binary, {}, std::move(bytes),
                                Document{"", DocumentMode::ReadOnly}, {}, {}});
         } else {
-            auto decoded = TextCodec{}.decode(asUnsignedBytes(bytes));
+            auto decoded = decodeText(asUnsignedBytes(bytes));
             if (!decoded.accepted()) {
                 entries.push_back(
                     {id, std::move(key), std::move(label),
@@ -474,7 +474,7 @@ public:
         }
         const auto current = entry.document.snapshot().text;
         auto decoded = textForSave(entry.decoded, current);
-        const auto encoded = TextCodec{}.encode(decoded);
+        const auto encoded = encodeText(decoded);
         if (!encoded.accepted()) {
             return failure(WorkspaceError::DecodeFailed,
                            encoded.error->message);
@@ -955,7 +955,7 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
             return failure(WorkspaceError::DecodeFailed,
                            "binary file cannot replace an editable document");
         }
-        auto decoded = TextCodec{}.decode(asUnsignedBytes(bytes));
+        auto decoded = decodeText(asUnsignedBytes(bytes));
         if (!decoded.accepted()) {
             return failure(WorkspaceError::DecodeFailed,
                            decoded.error->message);
@@ -1027,7 +1027,7 @@ WorkspaceResult Workspace::reloadWithContent(FileDocumentId id,
     // rejecting raw NUL would wrongly refuse valid content in its own encoding.
     const std::vector<std::uint8_t> bytes{content.begin(), content.end()};
     auto decoded =
-        TextCodec{}.decode(asUnsignedBytes(bytes), entry->decoded.status.encoding);
+        decodeText(asUnsignedBytes(bytes), entry->decoded.status.encoding);
     if (!decoded.accepted()) {
         return failure(WorkspaceError::DecodeFailed, decoded.error->message);
     }
@@ -1099,7 +1099,7 @@ WorkspaceResult Workspace::adoptExternalRename(FileDocumentId id,
     // wide-encoding document (UTF-16) whose disk bytes legitimately contain NUL is
     // not wrongly rejected as binary.
     const std::vector<std::uint8_t> baselineBytes{content.begin(), content.end()};
-    auto decoded = TextCodec{}.decode(asUnsignedBytes(baselineBytes),
+    auto decoded = decodeText(asUnsignedBytes(baselineBytes),
                                       entry->decoded.status.encoding);
     if (!decoded.accepted()) {
         return failure(WorkspaceError::DecodeFailed, decoded.error->message);
@@ -1167,7 +1167,7 @@ WorkspaceResult Workspace::reopenWithEncoding(FileDocumentId id,
         return failure(WorkspaceError::DecodeFailed,
                        "binary file cannot be reopened with encoding");
     }
-    auto decoded = TextCodec{}.decode(asUnsignedBytes(entry->rawBytes), encoding);
+    auto decoded = decodeText(asUnsignedBytes(entry->rawBytes), encoding);
     if (!decoded.accepted()) {
         return failure(WorkspaceError::DecodeFailed, decoded.error->message);
     }

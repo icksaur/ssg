@@ -87,8 +87,7 @@ dimensionSetters() {
 }  // namespace
 
 int Style::sigilWidth() const {
-    GraphemeLayout layout;
-    return static_cast<int>(layout.computeRun(inputLineSigil).totalCells);
+    return static_cast<int>(computeCellRun(inputLineSigil).totalCells);
 }
 
 int Style::inputLineReservation() const {
@@ -127,7 +126,7 @@ namespace {
 // Why a glyph is unacceptable, or nullopt if it is fine.
 //
 // Glyph strings are the one input that reaches a terminal cell WITHOUT passing
-// through GraphemeLayout on the way. Document text and file names are already
+// through computeCellRun on the way. Document text and file names are already
 // classified, so a control byte in either draws as a replacement glyph; a glyph
 // was copied verbatim, so scrollbar_track = "<ESC>(0" switched the terminal's
 // character set and every later byte drew as line art
@@ -141,8 +140,7 @@ std::optional<std::string> rejectVariableGlyph(std::string const& key,
         return "style.define value for '" + key +
                "' must not contain a line break";
     }
-    GraphemeLayout const layout;
-    auto const run = layout.computeRun(value);
+    auto const run = computeCellRun(value);
     for (auto const& span : run.spans) {
         if (span.kind == CellKind::Control) {
             return "style.define value for '" + key +
@@ -164,9 +162,8 @@ std::optional<std::string> rejectGlyph(std::string const& key,
     // replaces. Otherwise the columns the server described and the columns the
     // terminal draws disagree and the row shifts. The field's DEFAULT is the
     // width, so a newly added glyph brings its own rule with it.
-    GraphemeLayout const layout;
-    auto const width = layout.computeRun(value).totalCells;
-    auto const expected = layout.computeRun(defaultValue).totalCells;
+    auto const width = computeCellRun(value).totalCells;
+    auto const expected = computeCellRun(defaultValue).totalCells;
     if (width != expected) {
         return "style.define value for '" + key + "' must be " +
                std::to_string(expected) + " column(s) wide, but '" + value +

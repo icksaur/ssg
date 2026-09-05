@@ -32,12 +32,8 @@ struct WorkspaceFileIndexResult {
 // Traversal order is deterministic -- entries are sorted at each level, so both
 // the candidate order and WHICH candidates survive truncation are stable across
 // runs and filesystems.
-class WorkspaceFileIndex {
-public:
-    [[nodiscard]] WorkspaceFileIndexResult build(
-        const std::filesystem::path& workspaceRoot,
-        const GitIgnoreMatcher& ignore,
-        const WorkspaceFileIndexOptions& options = {}) const;
-};
+[[nodiscard]] WorkspaceFileIndexResult buildWorkspaceFileIndex(
+    const std::filesystem::path& workspaceRoot, const GitIgnoreMatcher& ignore,
+    const WorkspaceFileIndexOptions& options = {});
 
 }  // namespace ssg

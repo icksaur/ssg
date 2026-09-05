@@ -70,7 +70,7 @@ TEST(literalCaseWordAndSelectionMatchIndependentOracle) {
                     FindOptions options{caseSensitive, wholeWord, false, false};
                     FindRequest request{query, options, std::nullopt, 100000,
                                         nullptr};
-                    ASSERT_EQ(FindMatcher{}.find(text, request).matches,
+                    ASSERT_EQ(findTextMatches(text, request).matches,
                               referenceLiteral(text, query, options,
                                                 std::nullopt));
                     if (text.size() >= 2) {
@@ -78,7 +78,7 @@ TEST(literalCaseWordAndSelectionMatchIndependentOracle) {
                         request.selection =
                             ByteRange{ByteOffset{1},
                                       ByteOffset{text.size() - 1}};
-                        ASSERT_EQ(FindMatcher{}.find(text, request).matches,
+                        ASSERT_EQ(findTextMatches(text, request).matches,
                                   referenceLiteral(text, query, options,
                                                     request.selection));
                     }
@@ -91,57 +91,57 @@ TEST(literalCaseWordAndSelectionMatchIndependentOracle) {
 TEST(regexOracleCoversGrammarCaseWordAndInvalidPattern) {
     FindRequest request{"(ab|cd)+", FindOptions{true, false, true, false},
                         std::nullopt, 100000, nullptr};
-    ASSERT_EQ(FindMatcher{}.find("xxabcdcd yy ab", request).matches,
+    ASSERT_EQ(findTextMatches("xxabcdcd yy ab", request).matches,
               (std::vector<FindMatch>{{ByteOffset{2}, ByteOffset{8}},
                                       {ByteOffset{12}, ByteOffset{14}}}));
 
     request.query = "h[ae]llo";
     request.options.caseSensitive = false;
-    ASSERT_EQ(FindMatcher{}.find("HELLO hallo hxllo", request).matches,
+    ASSERT_EQ(findTextMatches("HELLO hallo hxllo", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{5}},
                                       {ByteOffset{6}, ByteOffset{11}}}));
 
     request.query = "cat";
     request.options.wholeWord = true;
-    ASSERT_EQ(FindMatcher{}.find("cat scatter cat", request).matches,
+    ASSERT_EQ(findTextMatches("cat scatter cat", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{3}},
                                       {ByteOffset{12}, ByteOffset{15}}}));
 
     request.query = "a-?";
-    ASSERT_EQ(FindMatcher{}.find("a-b", request).matches,
+    ASSERT_EQ(findTextMatches("a-b", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{1}}}));
 
     request.query.clear();
-    ASSERT_TRUE(FindMatcher{}.find("abc", request).matches.empty());
+    ASSERT_TRUE(findTextMatches("abc", request).matches.empty());
 
     request.query = "(unterminated";
-    ASSERT_EQ(FindMatcher{}.find("text", request).error,
+    ASSERT_EQ(findTextMatches("text", request).error,
               FindReplaceError::InvalidPattern);
 }
 
 TEST(zeroWidthAdvancesOneUnicodeScalarAndBudgetCancels) {
     FindRequest request{"a*", FindOptions{true, false, true, false},
                         std::nullopt, 100000, nullptr};
-    ASSERT_EQ(FindMatcher{}.find("a\xC3\xA9", request).matches,
+    ASSERT_EQ(findTextMatches("a\xC3\xA9", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{1}},
                                       {ByteOffset{1}, ByteOffset{1}},
                                       {ByteOffset{3}, ByteOffset{3}}}));
 
     request.query = "(a|aa)*b";
     request.workBudget = 1;
-    ASSERT_EQ(FindMatcher{}.find(std::string(200, 'a'), request).error,
+    ASSERT_EQ(findTextMatches(std::string(200, 'a'), request).error,
               FindReplaceError::BudgetExhausted);
 
     request.query = "z";
     request.options.regex = false;
     request.workBudget = 3;
-    ASSERT_EQ(FindMatcher{}.find("aaaaaaaa", request).error,
+    ASSERT_EQ(findTextMatches("aaaaaaaa", request).error,
               FindReplaceError::BudgetExhausted);
 
     std::atomic_bool cancelled{true};
     request.workBudget = 100000;
     request.cancelled = &cancelled;
-    ASSERT_EQ(FindMatcher{}.find("ab", request).error,
+    ASSERT_EQ(findTextMatches("ab", request).error,
               FindReplaceError::Cancelled);
 }
 

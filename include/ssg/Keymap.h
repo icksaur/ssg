@@ -30,23 +30,15 @@ struct KeyStroke {
 
 using KeySequence = std::vector<KeyStroke>;
 
-class KeyCodec {
-public:
-    [[nodiscard]] std::optional<KeyStroke> parseStroke(
-        std::string_view encoded) const;
-    [[nodiscard]] std::string formatStroke(const KeyStroke& stroke) const;
-    [[nodiscard]] std::optional<KeySequence> parseSequence(
-        std::initializer_list<std::string_view> encoded) const;
-    // Runtime counterpart to parseSequence's compile-time initializer_list:
-    // splits `encoded` on whitespace into stroke tokens (each in the SAME
-    // "Modifier+...+Code" syntax parseStroke accepts) and parses each one.
-    // Used to decode a Lua-supplied "Escape KeyF KeyT"-style sequence
-    // string without widening the flat string->string Lua argument bridge
-    // to carry arrays.
-    [[nodiscard]] std::optional<KeySequence> parseSequenceString(
-        std::string_view encoded) const;
-    [[nodiscard]] std::string formatSequence(const KeySequence& sequence) const;
-};
+[[nodiscard]] std::optional<KeyStroke> parseKeyStroke(std::string_view encoded);
+[[nodiscard]] std::string formatKeyStroke(const KeyStroke& stroke);
+[[nodiscard]] std::optional<KeySequence> parseKeySequence(
+    std::initializer_list<std::string_view> encoded);
+// Runtime counterpart to parseKeySequence's compile-time initializer_list, used
+// without widening the flat string-to-string Lua argument bridge to arrays.
+[[nodiscard]] std::optional<KeySequence> parseKeySequenceString(
+    std::string_view encoded);
+[[nodiscard]] std::string formatKeySequence(const KeySequence& sequence);
 
 struct KeyBinding {
     KeySequence sequence;
@@ -120,7 +112,7 @@ private:
 };
 
 // keymap.bind's argument: a single sequence string (space-separated
-// KeyCodec strokes, e.g. "Escape KeyF KeyT"), the command id it should
+// key strokes, e.g. "Escape KeyF KeyT"), the command id it should
 // invoke, and the context it applies in ("*"/"editor"/"panel"/"prompt";
 // empty defaults to "*"). This is the ONLY argument shape keymap.bind
 // accepts; one call binds exactly one sequence.
@@ -229,11 +221,7 @@ struct SemanticCommand {
     bool operator==(const SemanticCommand& other) const;
 };
 
-class SemanticInputRouter {
-public:
-    [[nodiscard]] TextRouting textRouting(std::string_view context) const noexcept;
-    [[nodiscard]] SemanticCommand semanticInput(
-        const CommittedText& committed) const;
-};
+[[nodiscard]] TextRouting textRoutingForContext(std::string_view context) noexcept;
+[[nodiscard]] SemanticCommand semanticInputForText(const CommittedText& committed);
 
 } // namespace ssg

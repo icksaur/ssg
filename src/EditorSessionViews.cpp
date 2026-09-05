@@ -22,7 +22,7 @@ struct UiTreeValues {
 std::string helpHintLabel(const KeymapViewState& keymap) {
     std::string keys;
     if (auto sequence = KeymapMatcher{keymap}.preferredBinding("help.open")) {
-        keys = KeyCodec{}.formatSequence(*sequence);
+        keys = formatKeySequence(*sequence);
     }
     return keys.empty() ? std::string{"help"} : keys + "  help";
 }
@@ -362,7 +362,7 @@ PaletteViewState EditorSession::Impl::paletteView() const {
             std::string detail;
             if (auto sequence =
                     KeymapMatcher{keymap}.preferredBinding(command->id)) {
-                detail = KeyCodec{}.formatSequence(*sequence);
+                detail = formatKeySequence(*sequence);
                 }
             commandCandidateCache.push_back(
                 {command->id, command->displayLabel(), std::move(detail)});

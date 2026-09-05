@@ -2,10 +2,10 @@
 
 namespace ssg {
 
-DraftReopenClass DraftReopenClassifier::classify(
+DraftReopenClass classifyDraftReopen(
     const std::optional<DraftBaseline>& baseline,
     std::string_view draftContent,
-    const std::optional<DraftDiskState>& disk) const {
+    const std::optional<DraftDiskState>& disk) {
     if (!disk) return DraftReopenClass::Missing;
     if (draftContent == disk->decodedText) return DraftReopenClass::Converged;
     if (baseline &&

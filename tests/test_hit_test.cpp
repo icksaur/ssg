@@ -98,7 +98,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
         ASSERT_EQ(hit.region, ssg::HitRegion::Editor);
         ASSERT_EQ(hit.byteOffset, target.byteOffset);
         auto position =
-            ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{hit.byteOffset});
+            ssg::resolveSelectionPosition(text, ssg::ByteOffset{hit.byteOffset});
         ASSERT_TRUE(position.has_value());
         if (position) {
             ASSERT_EQ(position->line.value(),
@@ -133,7 +133,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     ASSERT_EQ(pastEol.byteOffset, std::uint32_t{5});
     ASSERT_EQ(pastEol.byteLen, std::uint32_t{0});
     {
-        auto position = ssg::SelectionNavigator::resolvePosition(
+        auto position = ssg::resolveSelectionPosition(
             text, ssg::ByteOffset{pastEol.byteOffset});
         ASSERT_TRUE(position.has_value());
         if (position) ASSERT_EQ(position->line.value(), std::uint64_t{0});
@@ -292,7 +292,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     auto const content = frame->document->content;
 
     auto resolveLine = [&](std::uint32_t offset) -> std::uint64_t {
-        auto p = ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{offset});
+        auto p = ssg::resolveSelectionPosition(text, ssg::ByteOffset{offset});
         return p ? p->line.value() : 9999;
     };
 
@@ -329,7 +329,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     ASSERT_EQ(below.byteOffset, lastRowEnd);
     ASSERT_EQ(below.byteLen, std::uint32_t{0});
     auto belowPos =
-        ssg::SelectionNavigator::resolvePosition(
+        ssg::resolveSelectionPosition(
             text, ssg::ByteOffset{static_cast<std::uint64_t>(below.byteOffset)});
     ASSERT_TRUE(belowPos.has_value());
 }
@@ -353,7 +353,7 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
         auto const content = frame->document->content;
         auto hit = ssg::HitTester{*frame}.at(column, row);
         if (hit.region != ssg::HitRegion::Editor) return 9999;
-        auto pos = ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{hit.byteOffset});
+        auto pos = ssg::resolveSelectionPosition(text, ssg::ByteOffset{hit.byteOffset});
         if (!pos) return 9999;
         (void)runtime->dispatch({"cursor.set_position",
              ssg::SelectionCommandArguments{pos, std::nullopt}});
@@ -413,8 +413,8 @@ TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
     ASSERT_EQ(phantom.byteLen, std::uint32_t{0});
 
     const auto anchor =
-        ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{1});
-    const auto active = ssg::SelectionNavigator::resolvePosition(
+        ssg::resolveSelectionPosition(text, ssg::ByteOffset{1});
+    const auto active = ssg::resolveSelectionPosition(
         text, ssg::ByteOffset{phantom.byteOffset});
     ASSERT_TRUE(anchor.has_value());
     ASSERT_TRUE(active.has_value());
@@ -422,7 +422,7 @@ TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
     auto before = ssg::SelectionViewState{
         ssg::SelectionSet{{ssg::Selection{*anchor, *anchor}}}, 0, 0,
         std::nullopt};
-    auto result = ssg::SelectionNavigator{}.apply(
+    auto result = ssg::navigateSelection(
         text, before, ssg::SelectionCommand::SelectSetRange,
         ssg::ViewportDimensions{20, 4},
         ssg::SelectionCommandArguments{

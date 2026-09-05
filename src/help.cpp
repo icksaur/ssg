@@ -118,7 +118,7 @@ std::string renderKeybindings(KeymapViewState const& keymap,
     std::vector<std::pair<std::string, std::string>> rows;
     rows.reserve(keymap.bindings.size());
     for (auto const& binding : keymap.bindings) {
-        rows.emplace_back(KeyCodec{}.formatSequence(binding.sequence),
+        rows.emplace_back(formatKeySequence(binding.sequence),
                           humanBindingLabel(catalog, binding.commandId));
     }
     std::sort(rows.begin(), rows.end());

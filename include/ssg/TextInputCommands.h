@@ -66,12 +66,9 @@ struct TextInputResult {
 // returns the resulting edits/selections (a pure transform over the snapshot
 // value; it owns no document and mutates nothing). The runtime owns the Document
 // and applies the result.
-class TextInputInterpreter {
-public:
-    [[nodiscard]] TextInputResult apply(
-        const DocumentSnapshot& document, const SelectionSet& selections,
-        TextInputSettings settings, TextInputCommand command,
-        TextInputArguments arguments = {}) const;
-};
+[[nodiscard]] TextInputResult applyTextInput(
+    const DocumentSnapshot& document, const SelectionSet& selections,
+    TextInputSettings settings, TextInputCommand command,
+    TextInputArguments arguments = {});
 
 }  // namespace ssg

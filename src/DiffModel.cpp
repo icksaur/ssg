@@ -207,7 +207,7 @@ std::optional<WordDiff> computeWordDiff(std::string_view baseline,
     // building a phantom row's display text). That trailing newline byte
     // always lands in the LAST segment here; left in place it becomes an
     // embedded control character in the merged single-line render text,
-    // which GraphemeLayout replaces with a literal U+FFFD glyph. Only the
+    // which computeCellRun replaces with a literal U+FFFD glyph. Only the
     // final segment can ever contain it (it's the final byte of both input
     // strings), so trim it there rather than touching the tokenization/
     // byte-range logic above, which existing callers depend on unchanged.

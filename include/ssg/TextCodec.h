@@ -130,18 +130,14 @@ struct TextEncodingViewState {
                            const TextEncodingViewState&) = default;
 };
 
-class TextCodec {
-public:
-    [[nodiscard]] DecodeTextResult decode(
-        std::span<const std::uint8_t> bytes) const;
-    [[nodiscard]] DecodeTextResult decode(
-        std::span<const std::uint8_t> bytes, TextEncoding encoding) const;
-    [[nodiscard]] EncodeTextResult encode(const DecodedText& text) const;
-    [[nodiscard]] EncodeTextResult encode(
-        const DecodedText& text, EncodeTextOptions options) const;
-    [[nodiscard]] TextEncodingViewState viewState(
-        const DecodedText& text) const noexcept;
-};
+[[nodiscard]] DecodeTextResult decodeText(std::span<const std::uint8_t> bytes);
+[[nodiscard]] DecodeTextResult decodeText(
+    std::span<const std::uint8_t> bytes, TextEncoding encoding);
+[[nodiscard]] EncodeTextResult encodeText(const DecodedText& text);
+[[nodiscard]] EncodeTextResult encodeText(
+    const DecodedText& text, EncodeTextOptions options);
+[[nodiscard]] TextEncodingViewState textEncodingViewState(
+    const DecodedText& text) noexcept;
 
 struct ReopenWithEncodingArguments {
     TextEncoding encoding = TextEncoding::Utf8;

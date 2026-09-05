@@ -62,7 +62,7 @@ TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"edit.txt"}}).accepted());
 
-    auto setPosition = runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{3}), std::nullopt}});
+    auto setPosition = runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{3}), std::nullopt}});
     ASSERT_TRUE(setPosition.accepted());
     auto typed = runtime.dispatch({"text.insert",  ssg::TextInputArguments{"d"}});
     ASSERT_TRUE(typed.accepted());
@@ -83,7 +83,7 @@ TEST(typingUndoBreaksOnWordAndLineBoundaries) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"edit.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{3}), std::nullopt}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{3}), std::nullopt}}).accepted());
 
     const auto type = [&](char character) {
         return runtime.dispatch({"text.insert",  ssg::TextInputArguments{std::string{character}}}).accepted();
@@ -610,28 +610,28 @@ TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
     // to the editor.
     focusPanel();
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
-    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{1}), std::nullopt}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{1}), std::nullopt}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // A pointer drag (select.set_range) likewise focuses the editor.
     focusPanel();
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     ASSERT_TRUE(runtime.dispatch({"select.set_range",
-        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{0}).value(), ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{2}).value()}}}).accepted());
+        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{0}).value(), ssg::resolveSelectionPosition("abc", ssg::ByteOffset{2}).value()}}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // A pointer Alt+click add-caret (select.add_range) focuses the editor too.
     focusPanel();
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     ASSERT_TRUE(runtime.dispatch({"select.add_range",
-        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{1}).value(), ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{1}).value()}}}).accepted());
+        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{1}).value(), ssg::resolveSelectionPosition("abc", ssg::ByteOffset{1}).value()}}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // A pointer Alt+drag add-range (select.set_ranges) focuses the editor too.
     focusPanel();
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     ASSERT_TRUE(runtime.dispatch({"select.set_ranges",
-        ssg::SelectionCommandArguments{std::nullopt, std::nullopt, {ssg::Selection{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{0}).value(), ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{2}).value()}}}}).accepted());
+        ssg::SelectionCommandArguments{std::nullopt, std::nullopt, {ssg::Selection{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{0}).value(), ssg::resolveSelectionPosition("abc", ssg::ByteOffset{2}).value()}}}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // A KEYBOARD caret motion (a different SelectionCommand) does NOT change focus:
@@ -687,7 +687,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     // Move the caret to the last line (navigation reveals it to the bottom), then
     // free-scroll to the top so the caret is off-screen below.
     auto doc = runtime.activeDocumentText();
-    auto endPos = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size())});
+    auto endPos = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size())});
     ASSERT_TRUE(endPos.has_value());
     ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{endPos, std::nullopt}}).accepted());
     ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines",  ssg::ScrollLinesArguments{-200}}).accepted());
@@ -699,8 +699,8 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     // Two cursors: secondary near the top (line 0), PRIMARY near the bottom (the
     // back selection). select.add_range pushes the new range to the back.
     doc = runtime.activeDocumentText();
-    auto top = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{0});
-    auto bottomLineStart = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size()) - 2});
+    auto top = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{0});
+    auto bottomLineStart = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size()) - 2});
     ASSERT_TRUE(top.has_value());
     ASSERT_TRUE(bottomLineStart.has_value());
     ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{top, std::nullopt}}).accepted());
@@ -766,7 +766,7 @@ TEST(undoAndPasteRevealTheCaret) {
     // that correctly does not mutate or reveal.)
     ASSERT_TRUE(runtime.dispatch({"select.line_down",  {}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"clipboard.copy",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{0}), std::nullopt}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::resolveSelectionPosition(text, ssg::ByteOffset{0}), std::nullopt}}).accepted());
     ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines",  ssg::ScrollLinesArguments{40}}).accepted());
     ASSERT_EQ(firstRow(), 40U);
     ASSERT_TRUE(runtime.dispatch({"clipboard.paste",  {}}).accepted());
@@ -797,8 +797,8 @@ TEST(multiCursorPastePreservesAllCursors) {
     // Build two cursors (top of line 0 and top of line 1), copy, then paste. The
     // paste must not collapse the multi-cursor set to a single caret.
     auto doc = runtime.activeDocumentText();
-    auto p0 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{0});
-    auto p1 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{4});
+    auto p0 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{0});
+    auto p1 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{4});
     ASSERT_TRUE(p0.has_value() && p1.has_value());
     ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{p0, std::nullopt}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"select.add_range",  ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{*p1, *p1}}}).accepted());
@@ -835,10 +835,10 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
     // Two RANGE selections over "aaa" and "bbb" (as Alt+d would build over a
     // repeated word).
     auto doc = runtime.activeDocumentText();
-    auto p0 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{0});
-    auto p3 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{3});
-    auto p4 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{4});
-    auto p7 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{7});
+    auto p0 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{0});
+    auto p3 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{3});
+    auto p4 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{4});
+    auto p7 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{7});
     ASSERT_TRUE(p0 && p3 && p4 && p7);
     ASSERT_TRUE(runtime.dispatch({"select.set_range",
          ssg::SelectionCommandArguments{std::nullopt,
