@@ -732,7 +732,6 @@ WorkspaceApplyResult EditorSession::Impl::applyWorkspaceReplace(
         }
     }
     for (std::size_t index = 0; index < preview.changes.size(); ++index) {
-        auto const& change = preview.changes[index];
         for (auto const id : workspace.documents()) {
             auto state = workspace.state(id);
             if (!state || state->key.kind() != JournalDocumentKeyKind::Saved ||
@@ -980,7 +979,6 @@ void EditorSession::Impl::registerExternalSaveExpectation(
 void EditorSession::Impl::reconcileExternalWatchEvents(
     std::vector<WatchEvent> events, bool resync) {
     const auto flowRevisionBefore = external.viewState().revision;
-    const auto diffRevisionBefore = diff.viewState().revision;
     for (auto& event : events) {
         if (event.kind == WatchEventKind::Overflow) {
             continue;

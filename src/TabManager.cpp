@@ -22,44 +22,6 @@ bool sameIdentity(const TabState& left, const TabState& right) {
     return left.contentIdentity == right.contentIdentity;
 }
 
-std::optional<std::string> invalidState(const TabViewState& state) {
-    if (state.tabs.empty() != !state.active.has_value()) {
-        return "active tab must be present exactly when tabs are present";
-    }
-    for (std::size_t index = 0; index < state.tabs.size(); ++index) {
-        const auto& tab = state.tabs[index];
-        if (tab.id.value() == 0) {
-            return "tab id must be non-zero";
-        }
-        if (tab.label.empty()) {
-            return "tab label must be non-empty";
-        }
-        if (tab.kind == TabKind::Document) {
-            if (!tab.document || !tab.documentKey ||
-                tab.document->value() == 0 || !tab.contentIdentity.empty()) {
-                return "document tab identity is incomplete";
-            }
-        } else if (tab.document || tab.documentKey ||
-                   tab.contentIdentity.empty()) {
-            return "non-document tab identity is incomplete";
-        }
-        for (std::size_t other = 0; other < index; ++other) {
-            if (state.tabs[other].id == tab.id) {
-                return "tab ids must be unique";
-            }
-            if (sameIdentity(state.tabs[other], tab)) {
-                return "tab content identities must be unique";
-            }
-        }
-    }
-    if (state.active &&
-        std::none_of(state.tabs.begin(), state.tabs.end(),
-                     [&](const TabState& tab) { return tab.id == state.active; })) {
-        return "active tab id is not open";
-    }
-    return std::nullopt;
-}
-
 }  // namespace
 
 struct TabManager::Impl {

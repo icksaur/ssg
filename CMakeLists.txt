@@ -60,6 +60,7 @@ add_library(ssg::ssg ALIAS ssg)
 option(SSG_WERROR "Treat compiler warnings as errors in ssg's own sources"
        ${PROJECT_IS_TOP_LEVEL})
 function(ssg_configure_component target)
+    target_compile_options("${target}" PRIVATE -Wall -Wextra)
     if(SSG_SANITIZE)
         target_compile_options("${target}" PUBLIC
             -fsanitize=address,undefined

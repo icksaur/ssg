@@ -44,20 +44,6 @@ bool requiresContent(WatchEventKind kind) {
            kind == WatchEventKind::Rename;
 }
 
-auto findFile(std::vector<ExternalDocumentView>& files,
-               const DiffFileId& id) {
-    return std::find_if(files.begin(), files.end(), [&](const auto& file) {
-        return file.id == id;
-    });
-}
-
-auto findFile(const std::vector<ExternalDocumentView>& files,
-               const DiffFileId& id) {
-    return std::find_if(files.begin(), files.end(), [&](const auto& file) {
-        return file.id == id;
-    });
-}
-
 }  // namespace
 
 ExternalActionAffordance externalActionAffordance(ExternalAction action) {

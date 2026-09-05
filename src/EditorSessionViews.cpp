@@ -347,7 +347,7 @@ PaletteViewState EditorSession::Impl::paletteView() const {
     PaletteViewState view;
     view.presenceOverlay = screen.pickerPresenceOverlay();
     if (auto open = screen.openPicker()) {
-        if (auto const* descriptor = pickerCatalog().find(*open)) {
+        if (pickerCatalog().find(*open)) {
             view.activePicker = screen.openPickerActivation();
         }
     }

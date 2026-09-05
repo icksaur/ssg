@@ -516,7 +516,7 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
         .effect = CommandEffect::Mutation,
         .luaApi = true,
         .binding = bindWireHandler<PickerSubmitArguments>(
-            [&runtime](CommandContext& context,
+            [&runtime](CommandContext&,
                      PickerSubmitArguments const& arguments) {
                auto const palette = runtime.paletteView();
                auto const* candidates =

@@ -642,7 +642,7 @@ void registerShellLayoutCommands(CommandCatalog& catalog,
             .effect = CommandEffect::Mutation,
             .luaApi = true,
             .binding = bindNoArgumentHandler(
-                [&runtime, name](CommandContext& context) {
+                [&runtime, name](CommandContext&) {
                     return shellCommand(runtime, name);
                 }),
         };

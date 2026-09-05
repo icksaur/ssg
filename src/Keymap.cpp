@@ -1,42 +1,11 @@
 #include <ssg/Keymap.h>
 
 #include <algorithm>
-#include <array>
-#include <cctype>
 #include <stdexcept>
 #include <type_traits>
 
 namespace ssg {
 namespace {
-
-bool validCode(std::string_view code) {
-    if (code.size() == 4 && code.starts_with("Key") &&
-        code[3] >= 'A' && code[3] <= 'Z') {
-        return true;
-    }
-    if (code.size() == 6 && code.starts_with("Digit") &&
-        std::isdigit(static_cast<unsigned char>(code[5]))) {
-        return true;
-    }
-    if (code.size() >= 2 && code[0] == 'F') {
-        unsigned value = 0;
-        for (const char c : code.substr(1)) {
-            if (!std::isdigit(static_cast<unsigned char>(c))) {
-                return false;
-            }
-            value = value * 10 + static_cast<unsigned>(c - '0');
-        }
-        return value >= 1 && value <= 24;
-    }
-    static constexpr auto named = std::to_array<std::string_view>({
-        "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp", "Backquote",
-        "Backslash", "Backspace", "BracketLeft", "BracketRight", "Comma",
-        "Delete", "End", "Enter", "Equal", "Escape", "Home", "Minus",
-        "PageDown", "PageUp", "Period", "Quote", "Semicolon", "Slash",
-        "Space", "Tab",
-    });
-    return std::ranges::find(named, code) != named.end();
-}
 
 bool validUtf8WithoutNul(std::string_view text) {
     for (std::size_t i = 0; i < text.size();) {
@@ -89,12 +58,6 @@ bool validUtf8WithoutNul(std::string_view text) {
 
 bool validStroke(const KeyStroke& stroke) {
     return stroke.code != KeyCode::None;
-}
-
-bool startsWithSequence(const KeySequence& sequence,
-                          const KeySequence& prefix) {
-    return prefix.size() <= sequence.size() &&
-           std::equal(prefix.begin(), prefix.end(), sequence.begin());
 }
 
 bool knownContext(std::string_view context) {
