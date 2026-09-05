@@ -1236,7 +1236,6 @@ endif()
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(ssg_app
         ${SSG_SOURCE_DIR}/src/main.cpp
-        ${SSG_SOURCE_DIR}/src/application.cpp
         ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
         ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
         ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp

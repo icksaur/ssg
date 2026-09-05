@@ -4129,15 +4129,6 @@ ssg/WorkspaceFileIndex.h	var	ssg::WorkspaceFileIndexOptions::maximumFiles	std::s
 ssg/WorkspaceFileIndex.h	var	ssg::WorkspaceFileIndexOptions::respectGitignore	bool
 ssg/WorkspaceFileIndex.h	var	ssg::WorkspaceFileIndexResult::candidates	std::vector<PaletteCandidate>
 ssg/WorkspaceFileIndex.h	var	ssg::WorkspaceFileIndexResult::truncated	bool
-ssg/application.h	class	ssg::app::Application
-ssg/application.h	func	ssg::app::Application::Application	void (LaunchArguments)
-ssg/application.h	func	ssg::app::Application::Application	void (const Application &)
-ssg/application.h	func	ssg::app::Application::operator=	Application &(const Application &)
-ssg/application.h	func	ssg::app::Application::runEventLoop	int ()
-ssg/application.h	func	ssg::app::parseArguments	LaunchArguments (int, char **)
-ssg/application.h	func	ssg::app::recordStartupMark	void (const char *)
-ssg/application.h	struct	ssg::app::LaunchArguments
-ssg/application.h	var	ssg::app::LaunchArguments::argument	std::filesystem::path
 ssg/color.h	class	ssg::ColorResolver
 ssg/color.h	enum	ssg::ColorDepth
 ssg/color.h	enumerator	ssg::ColorDepth::Ansi16
