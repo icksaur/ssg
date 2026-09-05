@@ -34,7 +34,6 @@
 #include <functional>
 #include <memory>
 #include <optional>
-#include <shared_mutex>
 #include <span>
 #include <string>
 #include <string_view>
@@ -58,7 +57,7 @@ private:
     std::uint64_t value_;
 };
 
-class CommandExecutor;
+class CommandCatalog;
 struct CommandHandlerResult;
 
 class CommandContext {
@@ -66,7 +65,7 @@ public:
     void setActiveWorkspace(WorkspaceId workspace) noexcept;
 
 private:
-    friend class CommandExecutor;
+    friend class CommandCatalog;
 
     CommandContext() = default;
 
@@ -130,6 +129,21 @@ struct CommandResult {
         return viewAction ? Outcome::ViewActionRequired : Outcome::Completed;
     }
 };
+
+struct CatalogDispatchResult {
+    CommandError error;
+    std::string message;
+    std::optional<ViewAction> viewAction;
+    std::optional<WorkspaceId> activeWorkspace;
+
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == CommandError::None;
+    }
+};
+
+inline constexpr std::string_view kNestedDispatchRefusal =
+    "a command handler may not dispatch another command directly; ask for "
+    "it instead, so commands remain serialized";
 
 // How a command's argument is carried across the wire.  Registered with the
 // argument type rather than named by an enum, so a handler cannot disagree with
@@ -353,12 +367,10 @@ public:
     // owners) or when a required field is missing.
     CommandHandle add(CommandSpec spec);
 
-    // Swaps one set of commands for another, atomically.
+    // Swaps one set of commands for another as one all-or-nothing operation.
     //
-    // Retires every command in `retire` and registers everything in `add`,
-    // under a single exclusive lock, so no reader can observe the catalog with
-    // the old set gone and the new one not yet present -- which for a script
-    // reload would be a palette momentarily listing none of the user's commands
+    // Validates everything in `add` before retiring any command, so a script
+    // reload cannot leave the old set gone and the new one partly installed.
     //
     // ALL OR NOTHING.  Every addition is validated, and the batch checked
     // against the handle space, BEFORE anything is retired or added.  A batch
@@ -378,6 +390,8 @@ public:
         std::vector<CommandSpec> add);
 
     [[nodiscard]] CatalogRevision revision() const;
+    [[nodiscard]] bool dispatchInProgress() const noexcept;
+    [[nodiscard]] CatalogDispatchResult dispatch(ClientCommand const& command);
 
     // Stable for the life of the process; nullptr when unknown or retired.
     [[nodiscard]] CommandEntry const* find(std::string_view id) const;
@@ -395,7 +409,7 @@ private:
 
     // Everything that can refuse a registration.  Shared by add and
     // replaceGeneration so a check cannot be added to one and forgotten in the
-    // other.  Caller holds the lock.
+    // other.
     [[nodiscard]] ValidatedSpec validate(
         CommandSpec spec,
         std::unordered_set<std::string> const& alsoTaken,
@@ -408,7 +422,7 @@ private:
     std::deque<CommandEntry> entries_;
     std::unordered_map<std::string, std::size_t> byId_;
     CatalogRevision revision_ = 0;
-    mutable std::shared_mutex mutex_;
+    bool dispatching_ = false;
 };
 
 }  // namespace ssg

@@ -168,8 +168,8 @@ TEST(theGeneratedCommandReferenceIsCurrent) {
     auto created = ssg::EditorSession::create({root});
     ASSERT_TRUE(created.session != nullptr);
     if (!created.session) return;
-    auto const catalog = created.session->commandCatalog();
-    auto const rendered = renderCommandReference(*catalog);
+    auto const& catalog = created.session->commandCatalog();
+    auto const rendered = renderCommandReference(catalog);
     std::filesystem::remove_all(root);
 
     if (std::getenv("SSG_UPDATE_DOCS") != nullptr) {

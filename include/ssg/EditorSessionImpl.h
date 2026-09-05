@@ -45,8 +45,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include <ssg/CommandExecutor.h>
-
 namespace ssg {
 // Casts a command payload to the expected type, or null when it holds something
 // else. The one definition shared by every runtime handler file, which each
@@ -226,11 +224,10 @@ struct EditorSession::Impl final {
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
     std::uint64_t workspaceReplaceGeneration = 0;
     mutable std::mutex operationMutex;
-    std::shared_ptr<CommandCatalog> catalog =
-        std::make_shared<CommandCatalog>();
-    std::unique_ptr<CommandExecutor> session;
+    SessionTopology topology;
+    CommandCatalog catalog;
     // Commands a running handler asked to dispatch, run in order once the
-    // session lock releases.  The session mutex is not reentrant, so a handler
+    // operation lock releases. The operation mutex is not reentrant, so a handler
     // cannot dispatch; this is how it asks for one.
     //
     // ONE queue, drained inside the dispatch wrapper, rather than a field per

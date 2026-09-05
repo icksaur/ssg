@@ -1,7 +1,6 @@
 #include <ssg/CommandCatalog.h>
 
 #include <cctype>
-#include <mutex>
 #include <unordered_set>
 #include <stdexcept>
 #include <utility>
@@ -9,6 +8,23 @@
 namespace ssg {
 
 namespace {
+
+class DispatchMarker {
+public:
+    explicit DispatchMarker(bool& dispatching) : dispatching_{dispatching} {
+        dispatching_ = true;
+    }
+    ~DispatchMarker() { dispatching_ = false; }
+    DispatchMarker(DispatchMarker const&) = delete;
+    DispatchMarker& operator=(DispatchMarker const&) = delete;
+
+private:
+    bool& dispatching_;
+};
+
+CatalogDispatchResult rejected(CommandError error, std::string message) {
+    return {error, std::move(message), std::nullopt, std::nullopt};
+}
 
 // Title-case a lowercase segment: "line_down" -> "Line Down". Underscores become
 // spaces; each word's first letter is uppercased.
@@ -146,7 +162,6 @@ CommandHandle CommandCatalog::appendValidated(ValidatedSpec spec) {
 }
 
 CommandHandle CommandCatalog::add(CommandSpec spec) {
-    std::unique_lock lock{mutex_};
     // A handle is a 16-bit index, so a catalog cannot exceed that space.
     // Truncating would alias a new command onto an existing handle and
     // misdispatch silently, which is the one failure mode handles must not
@@ -158,8 +173,6 @@ CommandHandle CommandCatalog::add(CommandSpec spec) {
 std::vector<CommandHandle> CommandCatalog::replaceGeneration(
     std::span<CommandHandle const> retire,
     std::vector<CommandSpec> add) {
-    std::unique_lock lock{mutex_};
-
     // Validate phase.  A retired slot is not reclaimed, so the batch must fit
     // in what remains regardless of how much is being retired.
     requireCapacity(add.size());
@@ -209,12 +222,66 @@ void CommandCatalog::requireCapacity(std::size_t additional) const {
 }
 
 CatalogRevision CommandCatalog::revision() const {
-    std::shared_lock lock{mutex_};
     return revision_;
 }
 
+bool CommandCatalog::dispatchInProgress() const noexcept {
+    return dispatching_;
+}
+
+CatalogDispatchResult CommandCatalog::dispatch(ClientCommand const& command) {
+    if (dispatching_) {
+        return rejected(CommandError::HandlerFailed,
+                        std::string{kNestedDispatchRefusal});
+    }
+    DispatchMarker const marker{dispatching_};
+
+    const auto* registered =
+        command.id.handle().valid() ? find(command.id.handle())
+                                    : find(command.id.name());
+    if (registered == nullptr) {
+        return rejected(CommandError::UnknownCommand,
+                        "command is not registered: " +
+                            std::string{command.id.name()});
+    }
+
+    CommandContext context{};
+    CommandHandlerResult handlerResult;
+    try {
+        handlerResult = registered->handler(context, command.payload);
+    } catch (std::exception const& exception) {
+        return rejected(CommandError::HandlerFailed,
+                        "command handler threw: " +
+                            std::string{exception.what()});
+    } catch (...) {
+        return rejected(CommandError::HandlerFailed,
+                        "command handler threw an unknown exception");
+    }
+
+    if (!handlerResult.accepted) {
+        return rejected(CommandError::HandlerFailed,
+                        std::move(handlerResult.message));
+    }
+    const bool viewOwned = registered->effect == CommandEffect::ViewAction;
+    if (handlerResult.viewAction && !viewOwned) {
+        return rejected(CommandError::HandlerFailed,
+                        "only a view-action command may require a view action");
+    }
+    if (viewOwned && !handlerResult.viewAction) {
+        return rejected(CommandError::HandlerFailed,
+                        "a view-action command did not return a view action");
+    }
+
+    const auto activeWorkspace =
+        registered->effect == CommandEffect::Mutation &&
+                context.workspaceChanged_
+            ? std::optional{context.activeWorkspace_}
+            : std::nullopt;
+    return {CommandError::None, {}, std::move(handlerResult.viewAction),
+            activeWorkspace};
+}
+
 CommandEntry const* CommandCatalog::find(std::string_view id) const {
-    std::shared_lock lock{mutex_};
     auto const found = byId_.find(std::string{id});
     if (found == byId_.end()) return nullptr;
     auto const* entry = &entries_[found->second];
@@ -223,14 +290,12 @@ CommandEntry const* CommandCatalog::find(std::string_view id) const {
 
 CommandEntry const* CommandCatalog::find(CommandHandle command) const {
     if (!command.valid()) return nullptr;
-    std::shared_lock lock{mutex_};
     if (command.index() >= entries_.size()) return nullptr;
     auto const* entry = &entries_[command.index()];
     return entry->retired ? nullptr : entry;
 }
 
 CommandHandle CommandCatalog::handleFor(std::string_view id) const {
-    std::shared_lock lock{mutex_};
     auto const found = byId_.find(std::string{id});
     if (found == byId_.end()) return {};
     if (entries_[found->second].retired) return {};
@@ -238,7 +303,6 @@ CommandHandle CommandCatalog::handleFor(std::string_view id) const {
 }
 
 std::vector<CommandEntry const*> CommandCatalog::commands() const {
-    std::shared_lock lock{mutex_};
     std::vector<CommandEntry const*> live;
     live.reserve(entries_.size());
     for (auto const& entry : entries_) {
@@ -249,7 +313,6 @@ std::vector<CommandEntry const*> CommandCatalog::commands() const {
 
 std::vector<CommandEntry const*> CommandCatalog::ownedBy(
     std::string_view owner) const {
-    std::shared_lock lock{mutex_};
     std::vector<CommandEntry const*> owned;
     for (auto const& entry : entries_) {
         if (!entry.retired && entry.owner == owner) owned.push_back(&entry);
@@ -258,7 +321,6 @@ std::vector<CommandEntry const*> CommandCatalog::ownedBy(
 }
 
 std::size_t CommandCatalog::size() const {
-    std::shared_lock lock{mutex_};
     std::size_t live = 0;
     for (auto const& entry : entries_) {
         if (!entry.retired) ++live;

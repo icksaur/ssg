@@ -167,13 +167,12 @@ std::string renderCommandList(CommandCatalog const& catalog) {
 // Reassembled on every help.open so the generated sections always reflect the
 // current keymap and catalog.
 std::string buildHelpDocument(EditorSession::Impl const& runtime) {
-    auto const& catalog = *runtime.session->catalog();
     std::string document{kHelpPreamble};
-    document += renderKeybindings(runtime.keymap, catalog);
+    document += renderKeybindings(runtime.keymap, runtime.catalog);
     document += kHelpConfigSection;
     document += renderGlyphList(runtime.style);
     document += "\n## All commands\n";
-    document += renderCommandList(catalog);
+    document += renderCommandList(runtime.catalog);
     return document;
 }
 

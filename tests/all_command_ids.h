@@ -54,7 +54,7 @@ inline std::vector<CommandFacts> const& allCommandFacts() {
         auto created = ssg::EditorSession::create({root});
         if (created.session) {
             for (auto const* command :
-                 created.session->commandCatalog()->commands()) {
+                 created.session->commandCatalog().commands()) {
                 collected.push_back(
                     {command->id, command->owner, command->luaApi,
                      command->initScript,

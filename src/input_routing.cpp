@@ -80,12 +80,12 @@ ClientInputResult inputKeyLocked(EditorSession::Impl& impl_,
         return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
     };
 
-    auto const catalogRevision = impl_.catalog->revision();
+    auto const catalogRevision = impl_.catalog.revision();
     if (!impl_.inputKeymap ||
         impl_.inputKeymapGeneration != impl_.keymapGeneration ||
         impl_.inputCatalogRevision != catalogRevision) {
         impl_.inputKeymap =
-            std::make_unique<CompiledKeymap>(impl_.keymap, *impl_.catalog);
+            std::make_unique<CompiledKeymap>(impl_.keymap, impl_.catalog);
         impl_.inputKeymapGeneration = impl_.keymapGeneration;
         impl_.inputCatalogRevision = catalogRevision;
     }

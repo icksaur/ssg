@@ -155,25 +155,6 @@ ssg::ScratchStoreConfig scratchConfig() {
     return result;
 }
 
-class FailingScratchStorage final : public ssg::ScratchStorage {
-public:
-    void appendDocument(const std::filesystem::path&,
-                         const ssg::JournalDocument&) override {
-        throw std::runtime_error("injected scratch append failure");
-    }
-
-    void appendRemove(const std::filesystem::path&,
-                       const ssg::JournalDocumentKey&) override {
-        throw std::runtime_error("injected scratch remove failure");
-    }
-
-    void replaceCheckpoint(
-        const std::filesystem::path&,
-        const ssg::JournalRecoverySet&) override {
-        throw std::runtime_error("injected scratch checkpoint failure");
-    }
-};
-
 class InjectedRecoveryFailures final : public ssg::RecoveryFaultInjector {
 public:
     struct Rule {
@@ -257,10 +238,9 @@ TEST(dirtyCloseDurabilityFailurePreservesDocumentAndPublishesNothing) {
     const auto workspace =
         std::filesystem::absolute(temporary.path() / "workspace");
     std::filesystem::create_directories(workspace);
-    FailingScratchStorage scratchStorage;
     auto scratch = ssg::ScratchStore::create(
-        temporary.path() / "scratch", workspace, scratchConfig(),
-        scratchStorage);
+        temporary.path() / "scratch", workspace, scratchConfig());
+    std::filesystem::create_directory(scratch.journalPath());
     auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
     const auto expected = savedDocument("draft.txt", "not durable");

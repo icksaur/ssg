@@ -34,7 +34,7 @@ CommandHandlerResult activateUiNode(
             return failure("UI activation target is not actionable");
         }
         const CommandEntry* command =
-            runtime.catalog->find(*node->resolved->command);
+            runtime.catalog.find(*node->resolved->command);
         if (!command || command->argument.type ||
             command->effect == CommandEffect::Routing) {
             return failure(

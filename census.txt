@@ -136,7 +136,6 @@ ssg/CommandCatalog.h	alias	ssg::CatalogRevision
 ssg/CommandCatalog.h	alias	ssg::CommandHandler
 ssg/CommandCatalog.h	class	ssg::CommandCatalog
 ssg/CommandCatalog.h	class	ssg::CommandContext
-ssg/CommandCatalog.h	class	ssg::CommandExecutor
 ssg/CommandCatalog.h	enum	ssg::CommandEffect
 ssg/CommandCatalog.h	enum	ssg::CommandError
 ssg/CommandCatalog.h	enum	ssg::CommandResult::Outcome
@@ -150,10 +149,13 @@ ssg/CommandCatalog.h	enumerator	ssg::CommandError::UnknownCommand
 ssg/CommandCatalog.h	enumerator	ssg::CommandResult::Outcome::Completed
 ssg/CommandCatalog.h	enumerator	ssg::CommandResult::Outcome::Rejected
 ssg/CommandCatalog.h	enumerator	ssg::CommandResult::Outcome::ViewActionRequired
+ssg/CommandCatalog.h	func	ssg::CatalogDispatchResult::accepted	bool () const noexcept
 ssg/CommandCatalog.h	func	ssg::CommandCatalog::CommandCatalog	void ()
 ssg/CommandCatalog.h	func	ssg::CommandCatalog::CommandCatalog	void (const CommandCatalog &)
 ssg/CommandCatalog.h	func	ssg::CommandCatalog::add	CommandHandle (CommandSpec)
 ssg/CommandCatalog.h	func	ssg::CommandCatalog::commands	std::vector<const CommandEntry *> () const
+ssg/CommandCatalog.h	func	ssg::CommandCatalog::dispatch	CatalogDispatchResult (const ClientCommand &)
+ssg/CommandCatalog.h	func	ssg::CommandCatalog::dispatchInProgress	bool () const noexcept
 ssg/CommandCatalog.h	func	ssg::CommandCatalog::find	const CommandEntry *(CommandHandle) const
 ssg/CommandCatalog.h	func	ssg::CommandCatalog::find	const CommandEntry *(std::string_view) const
 ssg/CommandCatalog.h	func	ssg::CommandCatalog::handleFor	CommandHandle (std::string_view) const
@@ -179,6 +181,7 @@ ssg/CommandCatalog.h	func	ssg::bindOptionalInProcessHandler	CommandHandlerBindin
 ssg/CommandCatalog.h	func	ssg::bindOptionalWireHandler	CommandHandlerBinding (Fn &&)
 ssg/CommandCatalog.h	func	ssg::bindUntypedHandler	CommandHandlerBinding (CommandHandler, std::optional<std::type_index>)
 ssg/CommandCatalog.h	func	ssg::bindWireHandler	CommandHandlerBinding (Fn &&)
+ssg/CommandCatalog.h	struct	ssg::CatalogDispatchResult
 ssg/CommandCatalog.h	struct	ssg::ClientCommand
 ssg/CommandCatalog.h	struct	ssg::CommandArgumentType
 ssg/CommandCatalog.h	struct	ssg::CommandEntry
@@ -187,6 +190,10 @@ ssg/CommandCatalog.h	struct	ssg::CommandHandlerResult
 ssg/CommandCatalog.h	struct	ssg::CommandResult
 ssg/CommandCatalog.h	struct	ssg::CommandSpec
 ssg/CommandCatalog.h	struct	ssg::WorkspaceId
+ssg/CommandCatalog.h	var	ssg::CatalogDispatchResult::activeWorkspace	std::optional<WorkspaceId>
+ssg/CommandCatalog.h	var	ssg::CatalogDispatchResult::error	CommandError
+ssg/CommandCatalog.h	var	ssg::CatalogDispatchResult::message	std::string
+ssg/CommandCatalog.h	var	ssg::CatalogDispatchResult::viewAction	std::optional<ViewAction>
 ssg/CommandCatalog.h	var	ssg::ClientCommand::id	CommandName
 ssg/CommandCatalog.h	var	ssg::ClientCommand::payload	std::any
 ssg/CommandCatalog.h	var	ssg::CommandArgumentType::type	std::optional<std::type_index>
@@ -218,23 +225,7 @@ ssg/CommandCatalog.h	var	ssg::CommandSpec::label	std::string
 ssg/CommandCatalog.h	var	ssg::CommandSpec::luaApi	bool
 ssg/CommandCatalog.h	var	ssg::CommandSpec::owner	std::string
 ssg/CommandCatalog.h	var	ssg::CommandSpec::summary	std::string
-ssg/CommandExecutor.h	class	ssg::CommandCatalog
-ssg/CommandExecutor.h	class	ssg::CommandExecutor
-ssg/CommandExecutor.h	func	ssg::CommandExecutor::CommandExecutor	void (CommandExecutor &&)
-ssg/CommandExecutor.h	func	ssg::CommandExecutor::CommandExecutor	void (const CommandExecutor &)
-ssg/CommandExecutor.h	func	ssg::CommandExecutor::CommandExecutor	void (std::shared_ptr<CommandCatalog>)
-ssg/CommandExecutor.h	func	ssg::CommandExecutor::catalog	const std::shared_ptr<CommandCatalog> &() const
-ssg/CommandExecutor.h	func	ssg::CommandExecutor::dispatch	ExecutorResult (const ClientCommand &)
-ssg/CommandExecutor.h	func	ssg::CommandExecutor::dispatchInProgress	bool () const noexcept
-ssg/CommandExecutor.h	func	ssg::CommandExecutor::operator=	CommandExecutor &(CommandExecutor &&)
-ssg/CommandExecutor.h	func	ssg::CommandExecutor::operator=	CommandExecutor &(const CommandExecutor &)
-ssg/CommandExecutor.h	func	ssg::CommandExecutor::topology	SessionTopology () const
-ssg/CommandExecutor.h	func	ssg::ExecutorResult::accepted	bool () const noexcept
-ssg/CommandExecutor.h	struct	ssg::ExecutorResult
-ssg/CommandExecutor.h	var	ssg::ExecutorResult::error	CommandError
-ssg/CommandExecutor.h	var	ssg::ExecutorResult::message	std::string
-ssg/CommandExecutor.h	var	ssg::ExecutorResult::viewAction	std::optional<ViewAction>
-ssg/CommandExecutor.h	var	ssg::kNestedDispatchRefusal	const std::string_view
+ssg/CommandCatalog.h	var	ssg::kNestedDispatchRefusal	const std::string_view
 ssg/CommandHandle.h	class	ssg::CommandHandle
 ssg/CommandHandle.h	class	ssg::CommandName
 ssg/CommandHandle.h	func	ssg::CommandHandle::CommandHandle	void () noexcept
@@ -573,7 +564,7 @@ ssg/EditorSession.h	func	ssg::EditorSession::activeDocumentText	std::string () c
 ssg/EditorSession.h	func	ssg::EditorSession::activeDraftReopenNotice	DraftReopenNotice () const
 ssg/EditorSession.h	func	ssg::EditorSession::applyExternalDiffBurst	DiffIngressResult (std::vector<ExternalDiffRevision>)
 ssg/EditorSession.h	func	ssg::EditorSession::applyGitDiffScan	DiffIngressResult (GitDiffScan)
-ssg/EditorSession.h	func	ssg::EditorSession::commandCatalog	std::shared_ptr<const CommandCatalog> () const
+ssg/EditorSession.h	func	ssg::EditorSession::commandCatalog	const CommandCatalog &() const
 ssg/EditorSession.h	func	ssg::EditorSession::create	EditorSessionCreateResult (EditorSessionConfig)
 ssg/EditorSession.h	func	ssg::EditorSession::deferDispatch	bool (ClientCommand)
 ssg/EditorSession.h	func	ssg::EditorSession::deferredWorkCounts	DeferredWorkCounts () const
@@ -598,6 +589,7 @@ ssg/EditorSession.h	func	ssg::EditorSession::replaceCommandGeneration	std::vecto
 ssg/EditorSession.h	func	ssg::EditorSession::reportWatcherAvailabilityForTest	void (bool)
 ssg/EditorSession.h	func	ssg::EditorSession::resetKeymapToDefault	void ()
 ssg/EditorSession.h	func	ssg::EditorSession::setAutosaveDraftByteCapForTests	void (std::uint64_t)
+ssg/EditorSession.h	func	ssg::EditorSession::topology	SessionTopology () const
 ssg/EditorSession.h	func	ssg::EditorSession::workspaceRoot	const std::filesystem::path &() const noexcept
 ssg/EditorSession.h	func	ssg::EditorSessionCreateResult::accepted	bool () const noexcept
 ssg/EditorSession.h	func	ssg::operator==	bool (const NoticeView &, const NoticeView &)
@@ -729,6 +721,7 @@ ssg/EditorSessionImpl.h	func	ssg::executeFindReplaceCommand	CommandHandlerResult
 ssg/EditorSessionImpl.h	func	ssg::failure	CommandHandlerResult (std::string)
 ssg/EditorSessionImpl.h	func	ssg::inputLocked	ClientInputResult (EditorSession::Impl &, const ClientInput &)
 ssg/EditorSessionImpl.h	func	ssg::payloadAs	const T *(const std::any &)
+ssg/EditorSessionImpl.h	func	ssg::registerAllCommands	void (CommandCatalog &, EditorSession::Impl &)
 ssg/EditorSessionImpl.h	func	ssg::success	CommandHandlerResult ()
 ssg/EditorSessionImpl.h	func	ssg::tabMessage	std::string (const TabResult &)
 ssg/EditorSessionImpl.h	func	ssg::uint32Setting	std::uint32_t (const SettingsModel &, SettingKey, std::uint32_t)
@@ -759,7 +752,7 @@ ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::activeTextRevision	std::op
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::archiveRoot	std::filesystem::path
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::autosave	DraftAutosaveScheduler
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::autosaveDraftByteCap	std::uintmax_t
-ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::catalog	std::shared_ptr<CommandCatalog>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::catalog	CommandCatalog
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::clipboard	ClipboardRegister
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::commandCandidateCache	std::vector<PaletteCandidate>
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::commandCandidateCacheValid	bool
@@ -806,7 +799,6 @@ ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::scratch	ScratchStore
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::scratchRoot	std::filesystem::path
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::search	SearchController
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::selection	SelectionViewState
-ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::session	std::unique_ptr<CommandExecutor>
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::settings	SettingsModel
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::status	StatusBar
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::style	Style
@@ -814,6 +806,7 @@ ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::syntaxParser	std::shared_p
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::syntaxRunCount	std::uint64_t
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::tabs	TabManager
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::theme	ThemeSnapshot
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::topology	SessionTopology
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::tree	TreeModel
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::treeScanCount	std::uint64_t
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::wordWrap	bool
@@ -2445,7 +2438,6 @@ ssg/ScratchJournal.h	var	ssg::JournalReplayResult::validBytes	std::size_t
 ssg/ScratchStore.h	class	ssg::ScratchRemnantClaim
 ssg/ScratchStore.h	class	ssg::ScratchSession
 ssg/ScratchStore.h	class	ssg::ScratchSessionId
-ssg/ScratchStore.h	class	ssg::ScratchStorage
 ssg/ScratchStore.h	class	ssg::ScratchStore
 ssg/ScratchStore.h	enum	ssg::ScratchDurability
 ssg/ScratchStore.h	enumerator	ssg::ScratchDurability::Durable
@@ -2470,15 +2462,11 @@ ssg/ScratchStore.h	func	ssg::ScratchSession::operator=	ScratchSession &(ScratchS
 ssg/ScratchStore.h	func	ssg::ScratchSession::operator=	ScratchSession &(const ScratchSession &)
 ssg/ScratchStore.h	func	ssg::ScratchSession::path	const std::filesystem::path &() const noexcept
 ssg/ScratchStore.h	func	ssg::ScratchSessionId::value	std::string_view () const noexcept
-ssg/ScratchStore.h	func	ssg::ScratchStorage::appendDocument	void (const std::filesystem::path &, const JournalDocument &)
-ssg/ScratchStore.h	func	ssg::ScratchStorage::appendRemove	void (const std::filesystem::path &, const JournalDocumentKey &)
-ssg/ScratchStore.h	func	ssg::ScratchStorage::replaceCheckpoint	void (const std::filesystem::path &, const JournalRecoverySet &)
 ssg/ScratchStore.h	func	ssg::ScratchStore::ScratchStore	void (ScratchStore &&) noexcept
 ssg/ScratchStore.h	func	ssg::ScratchStore::ScratchStore	void (const ScratchStore &)
 ssg/ScratchStore.h	func	ssg::ScratchStore::applyQuotas	ScratchQuotaResult ()
 ssg/ScratchStore.h	func	ssg::ScratchStore::compact	void ()
 ssg/ScratchStore.h	func	ssg::ScratchStore::create	ScratchStore (const std::filesystem::path &, const std::filesystem::path &, ScratchStoreConfig)
-ssg/ScratchStore.h	func	ssg::ScratchStore::create	ScratchStore (const std::filesystem::path &, const std::filesystem::path &, ScratchStoreConfig, ScratchStorage &)
 ssg/ScratchStore.h	func	ssg::ScratchStore::durabilityState	ScratchDurabilityState () const
 ssg/ScratchStore.h	func	ssg::ScratchStore::journalPath	std::filesystem::path () const
 ssg/ScratchStore.h	func	ssg::ScratchStore::operator=	ScratchStore &(ScratchStore &&) noexcept

@@ -125,30 +125,12 @@ struct ScratchQuotaResult {
     bool withinByteQuota = true;
 };
 
-class ScratchStorage {
-public:
-    virtual ~ScratchStorage() = default;
-
-    virtual void appendDocument(const std::filesystem::path& path,
-                                 const JournalDocument& document) = 0;
-    virtual void appendRemove(const std::filesystem::path& path,
-                               const JournalDocumentKey& key) = 0;
-    virtual void replaceCheckpoint(
-        const std::filesystem::path& path,
-        const JournalRecoverySet& recovery) = 0;
-};
-
 class ScratchStore {
 public:
     [[nodiscard]] static ScratchStore create(
         const std::filesystem::path& scratchRoot,
         const std::filesystem::path& canonicalWorkspace,
         ScratchStoreConfig config = {});
-    [[nodiscard]] static ScratchStore create(
-        const std::filesystem::path& scratchRoot,
-        const std::filesystem::path& canonicalWorkspace,
-        ScratchStoreConfig config,
-        ScratchStorage& storage);
 
     ~ScratchStore();
     ScratchStore(ScratchStore&&) noexcept;
@@ -176,12 +158,6 @@ public:
 private:
     class Impl;
     explicit ScratchStore(std::unique_ptr<Impl> implementation) noexcept;
-    [[nodiscard]] static ScratchStore createWithStorage(
-        const std::filesystem::path& scratchRoot,
-        const std::filesystem::path& canonicalWorkspace,
-        ScratchStoreConfig config,
-        std::unique_ptr<ScratchStorage> ownedStorage,
-        ScratchStorage& storage);
 
     std::unique_ptr<Impl> impl_;
 };

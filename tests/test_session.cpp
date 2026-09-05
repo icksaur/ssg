@@ -1,8 +1,6 @@
 #include "test_helpers.h"
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/CommandExecutor.h>
-
 #include <algorithm>
 #include <any>
 #include <cstdint>
@@ -57,7 +55,7 @@ TEST(registeredDispatchRunsInOrder) {
             ++calls;
             return ssg::CommandHandlerResult::success();
         })});
-    ssg::CommandExecutor session{catalog};
+    auto& session = *catalog;
 
     auto first = session.dispatch(request("state.advance"));
     auto second = session.dispatch(request("state.advance"));
@@ -89,7 +87,7 @@ TEST(viewActionsRemainExplicit) {
                         ssg::CenterSelection{});
                 }),
     });
-    ssg::CommandExecutor session{catalog};
+    auto& session = *catalog;
 
     auto result =
         session.dispatch(request("view.scroll"));
@@ -111,7 +109,7 @@ TEST(viewActionsRemainExplicit) {
               ssg::CommandError::HandlerFailed);
 }
 
-TEST(handlerFailureIsAtomic) {
+TEST(workspaceChangeIsReportedOnlyAfterSuccess) {
     auto catalog = catalogOf({
         command("topology.fail", ssg::CommandEffect::Mutation,
                 [](ssg::CommandContext& context, std::any const&) {
@@ -130,25 +128,22 @@ TEST(handlerFailureIsAtomic) {
                     return ssg::CommandHandlerResult::success();
                 }),
     });
-    ssg::CommandExecutor session{catalog};
+    auto& session = *catalog;
 
     auto rejectedResult =
         session.dispatch(request("topology.fail"));
     ASSERT_EQ(rejectedResult.error, ssg::CommandError::HandlerFailed);
-    auto topology = session.topology();
-    ASSERT_FALSE(topology.activeWorkspace.has_value());
+    ASSERT_FALSE(rejectedResult.activeWorkspace.has_value());
 
     auto threw =
         session.dispatch(request("topology.throw"));
     ASSERT_EQ(threw.error, ssg::CommandError::HandlerFailed);
-    topology = session.topology();
-    ASSERT_FALSE(topology.activeWorkspace.has_value());
+    ASSERT_FALSE(threw.activeWorkspace.has_value());
 
     auto committed =
         session.dispatch(request("topology.commit"));
     ASSERT_TRUE(committed.accepted());
-    topology = session.topology();
-    ASSERT_EQ(topology.activeWorkspace,
+    ASSERT_EQ(committed.activeWorkspace,
               std::optional<ssg::WorkspaceId>{ssg::WorkspaceId{2}});
 }
 
@@ -163,7 +158,7 @@ TEST(handlerFailureIsAtomic) {
 SSG_TEST_SUITE(test_session) {
     RUN(registeredDispatchRunsInOrder);
     RUN(viewActionsRemainExplicit);
-    RUN(handlerFailureIsAtomic);
+    RUN(workspaceChangeIsReportedOnlyAfterSuccess);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

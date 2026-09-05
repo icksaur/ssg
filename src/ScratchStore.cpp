@@ -16,27 +16,6 @@
 namespace ssg {
 namespace {
 
-class FilesystemScratchStorage final : public ScratchStorage {
-public:
-    void appendDocument(const std::filesystem::path& path,
-                         const JournalDocument& document) override {
-        ScratchJournal{path}.appendDocument(document);
-    }
-
-    void appendRemove(const std::filesystem::path& path,
-                       const JournalDocumentKey& key) override {
-        ScratchJournal{path}.appendRemove(key);
-    }
-
-    void replaceCheckpoint(
-        const std::filesystem::path& path,
-        const JournalRecoverySet& recovery) override {
-        const auto record = JournalCodec{}.encodeCheckpoint(recovery);
-        replaceFileAtomically(path, record);
-        setOwnerOnlyPermissions(path);
-    }
-};
-
 void validateConfig(const ScratchStoreConfig& config) {
     if (config.maximumAge < std::chrono::seconds::zero()) {
         throw std::invalid_argument(
@@ -50,6 +29,13 @@ void validateConfig(const ScratchStoreConfig& config) {
         throw std::invalid_argument(
             "scratch durability target must be greater than zero");
     }
+}
+
+void replaceCheckpoint(const std::filesystem::path& path,
+                       const JournalRecoverySet& recovery) {
+    const auto record = JournalCodec{}.encodeCheckpoint(recovery);
+    replaceFileAtomically(path, record);
+    setOwnerOnlyPermissions(path);
 }
 
 void applyDocument(JournalRecoverySet& recovery,
@@ -192,15 +178,11 @@ public:
     Impl(std::filesystem::path scratchRoot,
          ScratchStoreConfig config,
          ScratchSession session,
-         JournalRecoverySet recovery,
-         std::unique_ptr<ScratchStorage> ownedStorage,
-         ScratchStorage& storage)
+         JournalRecoverySet recovery)
         : scratchRoot_(std::move(scratchRoot)),
           config_(config),
           session_(std::move(session)),
           recovery_(std::move(recovery)),
-          ownedStorage_(std::move(ownedStorage)),
-          storage_(storage),
           worker_([this] { run(); }) {}
 
     ~Impl() { shutdown(); }
@@ -351,15 +333,15 @@ private:
             try {
                 switch (job.kind) {
                 case JobKind::Document:
-                    storage_.appendDocument(session_.journalPath(),
-                                             *job.document);
+                    ScratchJournal{session_.journalPath()}.appendDocument(
+                        *job.document);
                     break;
                 case JobKind::Remove:
-                    storage_.appendRemove(session_.journalPath(), *job.key);
+                    ScratchJournal{session_.journalPath()}.appendRemove(
+                        *job.key);
                     break;
                 case JobKind::Checkpoint:
-                    storage_.replaceCheckpoint(session_.journalPath(),
-                                                job.snapshot);
+                    replaceCheckpoint(session_.journalPath(), job.snapshot);
                     break;
                 }
                 if (job.kind != JobKind::Checkpoint) {
@@ -369,8 +351,7 @@ private:
                                                    error);
                     if (!error &&
                         bytes >= config_.compactionThresholdBytes) {
-                        storage_.replaceCheckpoint(session_.journalPath(),
-                                                    job.snapshot);
+                        replaceCheckpoint(session_.journalPath(), job.snapshot);
                     }
                 }
             } catch (const std::exception& error) {
@@ -409,48 +390,23 @@ private:
     std::string failure_;
     bool accepting_ = true;
     bool stopping_ = false;
-    std::unique_ptr<ScratchStorage> ownedStorage_;
-    ScratchStorage& storage_;
     std::thread worker_;
 };
-
-ScratchStore ScratchStore::createWithStorage(
-    const std::filesystem::path& scratchRoot,
-    const std::filesystem::path& canonicalWorkspace,
-    ScratchStoreConfig config,
-    std::unique_ptr<ScratchStorage> ownedStorage,
-    ScratchStorage& storage) {
-    validateConfig(config);
-    auto session = ScratchSession::create(scratchRoot, canonicalWorkspace);
-    JournalRecoverySet recovery;
-    if (auto remnant = session.claimNewestRestorable()) {
-        recovery = remnant->replay().recovery;
-        storage.replaceCheckpoint(session.journalPath(), recovery);
-        setOwnerOnlyPermissions(session.journalPath());
-        remnant->markRestored();
-    }
-    return ScratchStore{std::make_unique<ScratchStore::Impl>(
-        scratchRoot, config, std::move(session), std::move(recovery),
-        std::move(ownedStorage), storage)};
-}
 
 ScratchStore ScratchStore::create(
     const std::filesystem::path& scratchRoot,
     const std::filesystem::path& canonicalWorkspace,
     ScratchStoreConfig config) {
-    auto storage = std::make_unique<FilesystemScratchStorage>();
-    auto& reference = *storage;
-    return createWithStorage(scratchRoot, canonicalWorkspace, config,
-                               std::move(storage), reference);
-}
-
-ScratchStore ScratchStore::create(
-    const std::filesystem::path& scratchRoot,
-    const std::filesystem::path& canonicalWorkspace,
-    ScratchStoreConfig config,
-    ScratchStorage& storage) {
-    return createWithStorage(scratchRoot, canonicalWorkspace, config,
-                               nullptr, storage);
+    validateConfig(config);
+    auto session = ScratchSession::create(scratchRoot, canonicalWorkspace);
+    JournalRecoverySet recovery;
+    if (auto remnant = session.claimNewestRestorable()) {
+        recovery = remnant->replay().recovery;
+        replaceCheckpoint(session.journalPath(), recovery);
+        remnant->markRestored();
+    }
+    return ScratchStore{std::make_unique<ScratchStore::Impl>(
+        scratchRoot, config, std::move(session), std::move(recovery))};
 }
 
 ScratchStore::ScratchStore(std::unique_ptr<Impl> implementation) noexcept

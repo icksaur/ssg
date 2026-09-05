@@ -395,14 +395,14 @@ EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
       search{SearchCommands{
           .descriptors = [this] {
               std::vector<SearchCommandDescriptor> result;
-              for (auto const* command : catalog->commands()) {
+              for (auto const* command : catalog.commands()) {
                   result.push_back({command->id, command->id});
               }
               return result;
           },
           .execute = [this](std::string_view commandId) {
               return PaletteExecutionResult{
-                  catalog->find(commandId) != nullptr, {}};
+                  catalog.find(commandId) != nullptr, {}};
           },
       }},
       theme{defaultTheme()},
@@ -2143,9 +2143,7 @@ EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
             return {nullptr,
                     "default keymap lacks a global settings.open escape hatch"};
         }
-        registerAllCommands(*impl->catalog, *impl);
-        impl->session =
-            std::make_unique<CommandExecutor>(impl->catalog);
+        registerAllCommands(impl->catalog, *impl);
         return {std::unique_ptr<EditorSession>{new EditorSession{std::move(impl)}}, {}};
     } catch (std::exception const& exception) {
         return {nullptr, exception.what()};
@@ -2153,7 +2151,7 @@ EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
 }
 
 PumpResult EditorSession::pump() {
-    if (impl_->session->dispatchInProgress()) {
+    if (impl_->catalog.dispatchInProgress()) {
         throw std::logic_error{"worker results cannot be pumped during dispatch"};
     }
     std::lock_guard operationLock{impl_->operationMutex};
@@ -2226,11 +2224,11 @@ void EditorSession::refreshFilesystemForTest() {
 }
 
 bool EditorSession::dispatchInProgress() const noexcept {
-    return impl_->session->dispatchInProgress();
+    return impl_->catalog.dispatchInProgress();
 }
 
 bool EditorSession::Impl::defer(ClientCommand command) {
-    if (!session->dispatchInProgress()) return false;
+    if (!catalog.dispatchInProgress()) return false;
     return deferredCommands.enqueue({std::move(command)});
 }
 
@@ -2244,7 +2242,10 @@ CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) 
     // follow pause.
     const auto dispatchAs = [&](const ClientCommand& dispatched) {
         const auto revisionsBefore = documentRevisions(workspace);
-        auto result = session->dispatch(dispatched);
+        auto result = catalog.dispatch(dispatched);
+        if (result.activeWorkspace) {
+            topology.activeWorkspace = result.activeWorkspace;
+        }
         reconcileFindDocument();
         // The draft-conflict notice's presence lives in per-document runtime state,
         // outside the prompt/panel transitions, so reconcile it into the interaction
@@ -2270,8 +2271,8 @@ CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) 
     // Requests run once the session lock has released, in the order asked for.
     const auto dispatchAndDrain = [&](const ClientCommand& dispatched) {
         const auto* requested = dispatched.id.handle().valid()
-                                    ? catalog->find(dispatched.id.handle())
-                                    : catalog->find(dispatched.id.name());
+                                    ? catalog.find(dispatched.id.handle())
+                                    : catalog.find(dispatched.id.name());
         const bool routing =
             requested && requested->effect == CommandEffect::Routing;
         auto outcome = dispatchAs(dispatched);
@@ -2285,14 +2286,14 @@ CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) 
         }
         if (routing && deferredCommands.size() != 1) {
             deferredCommands.clear();
-            return ExecutorResult{
+            return CatalogDispatchResult{
                 CommandError::HandlerFailed,
                 "a routing command must queue exactly one target",
                 std::nullopt};
         }
         if (outcome.viewAction && !deferredCommands.empty()) {
             deferredCommands.clear();
-            return ExecutorResult{
+            return CatalogDispatchResult{
                 CommandError::HandlerFailed,
                 "a view-action command cannot defer another command",
                 std::nullopt};
@@ -2302,13 +2303,13 @@ CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) 
             auto deferred = deferredCommands.takeFront();
             if (directRoutingTarget) {
                 const auto* target = deferred.command.id.handle().valid()
-                                         ? catalog->find(
+                                         ? catalog.find(
                                                deferred.command.id.handle())
-                                         : catalog->find(
+                                         : catalog.find(
                                                deferred.command.id.name());
                 if (target && target->effect == CommandEffect::Routing) {
                     deferredCommands.clear();
-                    return ExecutorResult{
+                    return CatalogDispatchResult{
                         CommandError::HandlerFailed,
                         "a routing command cannot target another routing "
                         "command",
@@ -2322,7 +2323,7 @@ CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) 
             // a sequence whose earlier step did not happen.
             if (!deferredResult.accepted()) {
                 deferredCommands.clear();
-                return ExecutorResult{
+                return CatalogDispatchResult{
                     deferredResult.error,
                     std::string{deferred.command.id.name()} + ": " +
                         deferredResult.message, std::nullopt};
@@ -2330,7 +2331,7 @@ CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) 
             if (deferredResult.viewAction &&
                 !deferredCommands.empty()) {
                 deferredCommands.clear();
-                return ExecutorResult{
+                return CatalogDispatchResult{
                     CommandError::HandlerFailed,
                     "a deferred view-action command cannot precede another "
                     "command",
@@ -2355,7 +2356,7 @@ CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) 
 }
 
 ClientInputResult EditorSession::input(ClientInput const& input) {
-    if (impl_->session->dispatchInProgress()) {
+    if (impl_->catalog.dispatchInProgress()) {
         return {ClientInputOutcome::Rejected, std::nullopt,
                 CommandResult{CommandError::HandlerFailed,
                               std::string{kNestedDispatchRefusal},
@@ -2367,7 +2368,7 @@ ClientInputResult EditorSession::input(ClientInput const& input) {
 
 CommandResult EditorSession::dispatch(ClientCommand const& command) {
     // A handler must be refused before taking the non-recursive aggregate lock.
-    if (impl_->session->dispatchInProgress()) {
+    if (impl_->catalog.dispatchInProgress()) {
         return {CommandError::HandlerFailed,
                 std::string{kNestedDispatchRefusal}};
     }
@@ -2375,7 +2376,12 @@ CommandResult EditorSession::dispatch(ClientCommand const& command) {
     return impl_->dispatchLocked(command);
 }
 
-std::shared_ptr<CommandCatalog const> EditorSession::commandCatalog() const {
+SessionTopology EditorSession::topology() const {
+    std::lock_guard operationLock{impl_->operationMutex};
+    return impl_->topology;
+}
+
+CommandCatalog const& EditorSession::commandCatalog() const {
     return impl_->catalog;
 }
 
@@ -2384,7 +2390,7 @@ CommandHandle EditorSession::registerCommand(CommandSpec command) {
         throw std::logic_error{"commands cannot be registered during dispatch"};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->catalog->add(std::move(command));
+    return impl_->catalog.add(std::move(command));
 }
 
 std::vector<CommandHandle> EditorSession::replaceCommandGeneration(
@@ -2395,7 +2401,7 @@ std::vector<CommandHandle> EditorSession::replaceCommandGeneration(
             "command generations cannot be replaced during dispatch"};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->catalog->replaceGeneration(retire, std::move(commands));
+    return impl_->catalog.replaceGeneration(retire, std::move(commands));
 }
 
 std::uint64_t EditorSession::gitFullRefreshCountForTest() const {

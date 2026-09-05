@@ -353,12 +353,12 @@ PaletteViewState EditorSession::Impl::paletteView() const {
     }
     // Every registered command is published continuously. Resolving each key hint
     // is O(bindings x commands), so cache until the catalog or keymap changes.
-    auto const catalogRevision = session->catalog()->revision();
+    auto const catalogRevision = catalog.revision();
     if (!commandCandidateCacheValid ||
         catalogRevision != commandCandidateCatalogRevision ||
         keymap != commandCandidateKeymap) {
         commandCandidateCache.clear();
-        for (auto const* command : session->catalog()->commands()) {
+        for (auto const* command : catalog.commands()) {
             std::string detail;
             if (auto sequence =
                     KeymapMatcher{keymap}.preferredBinding(command->id)) {

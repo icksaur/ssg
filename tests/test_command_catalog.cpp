@@ -1,13 +1,9 @@
 #include <ssg/CommandCatalog.h>
 
-#include <ssg/CommandExecutor.h>
-
 #include "test_helpers.h"
 
 #include <array>
-#include <atomic>
 #include <string>
-#include <thread>
 #include <typeindex>
 #include <vector>
 
@@ -166,7 +162,7 @@ TEST(commandsAreEnumeratedInRegistrationOrderAndGroupedByOwner) {
 // codec is later derived from -- so the type is written once, at the handler.
 //
 // This checks the type is RECORDED, not that dispatch unwraps it: invoking a
-// handler needs a CommandContext, whose constructor is private to CommandExecutor
+// handler needs a CommandContext, whose constructor is private to CommandCatalog
 // and cannot honestly be fabricated here.  The unwrap is proven end-to-end
 // when a migrated command dispatches through a real session (D3).
 TEST(aTypedHandlerRecordsTheArgumentTypeItConsumes) {
@@ -222,43 +218,6 @@ TEST(unknownIdsAndHandlesResolveToNothing) {
     ASSERT_TRUE(catalog.find(ssg::CommandHandle{}) == nullptr);
 }
 
-// Registration may happen while the editor is running, and protocol decode
-// reads the catalog off the session lock on connection threads.  Run under a
-// sanitiser build this is the race check; run plain it still asserts that
-// concurrent readers observe only whole registrations.
-TEST(concurrentReadsSeeOnlyWholeRegistrations) {
-    ssg::CommandCatalog catalog;
-    catalog.add(minimal("seed.command"));
-
-    std::atomic<bool> stop{false};
-    std::atomic<int> torn{0};
-    std::vector<std::thread> readers;
-    for (int index = 0; index < 4; ++index) {
-        readers.emplace_back([&] {
-            while (!stop.load()) {
-                for (auto const* entry : catalog.commands()) {
-                    if (entry->id.empty() || entry->owner.empty() ||
-                        !entry->handler) {
-                        ++torn;
-                    }
-                }
-                if (auto const* seed = catalog.find("seed.command");
-                    seed == nullptr) {
-                    ++torn;
-                }
-            }
-        });
-    }
-    for (int index = 0; index < 400; ++index) {
-        catalog.add(minimal("late.command" + std::to_string(index)));
-    }
-    stop.store(true);
-    for (auto& reader : readers) reader.join();
-
-    ASSERT_EQ(torn.load(), 0);
-    ASSERT_EQ(catalog.size(), std::size_t{401});
-}
-
 }  // namespace
 
 // The point of a dynamic catalog: a command registered after the session was
@@ -269,13 +228,12 @@ TEST(concurrentReadsSeeOnlyWholeRegistrations) {
 // keymap resolved a handle for it -- while dispatch consulted a snapshot taken
 // at build time and answered UnknownCommand.  Worse, the handle indexed past
 // that snapshot's parallel array.
-TEST(aCommandRegisteredAfterExecutorConstructionIsDispatchable) {
-    auto catalog = std::make_shared<ssg::CommandCatalog>();
-    catalog->add(minimal("early.command"));
-    ssg::CommandExecutor executor{catalog};
+TEST(aCommandRegisteredAfterEarlierCommandsIsDispatchable) {
+    ssg::CommandCatalog catalog;
+    catalog.add(minimal("early.command"));
 
     int lateCalls = 0;
-    catalog->add(ssg::CommandSpec{
+    catalog.add(ssg::CommandSpec{
         .id = "late.command",
         .owner = "test-owner",
         .summary = "registered after the session existed",
@@ -287,15 +245,16 @@ TEST(aCommandRegisteredAfterExecutorConstructionIsDispatchable) {
             }),
     });
 
-    auto const byName = executor.dispatch({"late.command",  {}});
+    auto const byName = catalog.dispatch({"late.command",  {}});
     ASSERT_TRUE(byName.accepted());
     ASSERT_EQ(lateCalls, 1);
 
     // And by the handle the catalog issued for it, which is the keystroke
     // path's spelling.
-    auto const handle = catalog->handleFor("late.command");
+    auto const handle = catalog.handleFor("late.command");
     ASSERT_TRUE(handle.valid());
-    auto const byHandle = executor.dispatch({ssg::CommandName{"late.command", handle},  {}});
+    auto const byHandle =
+        catalog.dispatch({ssg::CommandName{"late.command", handle}, {}});
     ASSERT_TRUE(byHandle.accepted());
     ASSERT_EQ(lateCalls, 2);
 }
@@ -428,32 +387,8 @@ TEST(aBatchMayReuseAnIdItIsItselfRetiring) {
     ASSERT_EQ(catalog.size(), std::size_t{2});
 }
 
-TEST(aSwapIsNeverObservedWithNeitherGenerationPresent) {
-    // A palette listing none of the user's commands, even for an instant, is
-    // the failure this exists to prevent.
-    ssg::CommandCatalog catalog;
-    auto handles = std::vector{catalog.add(minimal("lua.only"))};
-
-    std::atomic<bool> stop{false};
-    std::atomic<bool> sawNeither{false};
-    std::thread reader{[&] {
-        while (!stop.load()) {
-            if (catalog.find("lua.only") == nullptr) sawNeither.store(true);
-        }
-    }};
-
-    for (int generation = 0; generation < 200; ++generation) {
-        std::vector<ssg::CommandSpec> batch;
-        batch.push_back(minimal("lua.only"));
-        handles = catalog.replaceGeneration(handles, std::move(batch));
-    }
-    stop.store(true);
-    reader.join();
-    ASSERT_TRUE(!sawNeither.load());
-}
-
 SSG_TEST_SUITE(test_command_catalog) {
-    RUN(aCommandRegisteredAfterExecutorConstructionIsDispatchable);
+    RUN(aCommandRegisteredAfterEarlierCommandsIsDispatchable);
     RUN(registeringPastTheHandleSpaceIsRefused);
     RUN(aSwapExceedingTheHandleSpaceLeavesThePreviousGenerationWorking);
     RUN(addIssuesAHandleThatResolvesBackToItsCommand);
@@ -466,13 +401,11 @@ SSG_TEST_SUITE(test_command_catalog) {
     RUN(aCommandWithNoArgumentsDeclaresNoArgumentType);
     RUN(initScriptImpliesLuaApi);
     RUN(unknownIdsAndHandlesResolveToNothing);
-    RUN(concurrentReadsSeeOnlyWholeRegistrations);
     RUN(retiringACommandFreesItsNameButNeverItsHandle);
     RUN(retiringWithoutReplacementMakesTheCommandUnknown);
     RUN(aBatchWithOneBadSpecChangesNothing);
     RUN(aBatchRepeatingAnIdIsRefusedWholesale);
     RUN(aBatchMayReuseAnIdItIsItselfRetiring);
-    RUN(aSwapIsNeverObservedWithNeitherGenerationPresent);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

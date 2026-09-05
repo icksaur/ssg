@@ -174,7 +174,7 @@ ScriptHost::ScriptHost(EditorSession& runtime) : ScriptHost(runtime, {}) {}
 
 ScriptHost::ScriptHost(EditorSession& runtime, ViewActionSink viewActionSink) {
     LuaCommandHostOptions options;
-    options.commands = scriptCommandCatalog(*runtime.commandCatalog());
+    options.commands = scriptCommandCatalog(runtime.commandCatalog());
     options.publishGate = [this](std::vector<std::string> const& ids) {
         return offerGeneration(ids);
     };

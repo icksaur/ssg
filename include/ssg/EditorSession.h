@@ -132,6 +132,7 @@ public:
     [[nodiscard]] PumpResult pump();
     [[nodiscard]] CommandResult dispatch(ClientCommand const& command);
     [[nodiscard]] ClientInputResult input(ClientInput const& input);
+    [[nodiscard]] SessionTopology topology() const;
 
     // Asks for `command` to be dispatched once the dispatch in progress
     // finishes, and reports whether the request was taken.
@@ -150,9 +151,8 @@ public:
     // `deferDispatch` is the way to reach another command.
     [[nodiscard]] bool dispatchInProgress() const noexcept;
 
-    // The commands this runtime offers.  Held, not copied: a command
-    // registered later is visible through the same pointer.
-    [[nodiscard]] std::shared_ptr<CommandCatalog const> commandCatalog() const;
+    // The commands this runtime offers.
+    [[nodiscard]] CommandCatalog const& commandCatalog() const;
     // CONTRACT
     // Command registration is host orchestration on the session thread. It must
     // not run concurrently with input, dispatch, or another registration, and a

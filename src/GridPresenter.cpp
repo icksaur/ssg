@@ -224,7 +224,7 @@ GridPresenter& GridPresenter::operator=(GridPresenter&&) noexcept = default;
 
 std::optional<GridPresentation> GridPresenter::project(
     EditorSession& session, GridPresentationRequest request) {
-    if (session.impl_->session->dispatchInProgress()) {
+    if (session.impl_->catalog.dispatchInProgress()) {
         throw std::logic_error{"a view cannot be presented during dispatch"};
     }
     std::lock_guard operationLock{session.impl_->operationMutex};

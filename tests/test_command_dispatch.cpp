@@ -1,8 +1,6 @@
 #include <ssg/EditorSession.h>
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/CommandExecutor.h>
-
 #include "test_helpers.h"
 
 #include <algorithm>
@@ -102,17 +100,15 @@ TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
 // session revision advanced by exactly that many steps.
 //
 // This is the property that decides whether a handler may dispatch
-// synchronously. It cannot: CommandExecutor::dispatch computes the new revision
-// from a value captured BEFORE the handler ran, so a nested mutation advances
-// the revision and the outer then writes its own value over it.  Two accepted
+// synchronously. It cannot: the outer mutation may commit state computed before
+// the nested mutation ran, overwriting its result. Two accepted
 // mutations, one revision step -- and a client replaying deltas against a base
 // revision silently misses an edit (I3).
 //
 // Deferral satisfies the property because each deferred command is its own
 // dispatch with its own revision step.
 //
-// To perturb: make CommandExecutor::Impl::mutex a std::recursive_mutex, delete
-// the nested-dispatch guards in CommandExecutor::dispatch and
+// To perturb: delete the nested-dispatch guards in CommandCatalog::dispatch and
 // EditorSession::dispatch, have the outer handler dispatch instead of defer,
 // and REBUILD THE LIBRARY (a probe linked against a stale libssg.a still
 // contains the guards and reports a false pass).  The counts then diverge.
@@ -294,8 +290,31 @@ TEST(aHandlerCannotMutateTheCommandCatalogReentrantly) {
                     .accepted());
     ASSERT_TRUE(registrationRefused);
     ASSERT_TRUE(replacementRefused);
-    ASSERT_TRUE(runtime->commandCatalog()->find("oracle.illegal") == nullptr);
+    ASSERT_TRUE(runtime->commandCatalog().find("oracle.illegal") == nullptr);
 
+    fs::remove_all(root);
+}
+
+TEST(editorSessionAbsorbsSuccessfulWorkspaceChanges) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+
+    (void)runtime->registerCommand(ssg::CommandSpec{
+        .id = "oracle.workspace",
+        .owner = "test-oracle",
+        .summary = "changes the active workspace",
+        .effect = ssg::CommandEffect::Mutation,
+        .binding = ssg::bindNoArgumentHandler([](ssg::CommandContext& context) {
+            context.setActiveWorkspace(ssg::WorkspaceId{7});
+            return ssg::CommandHandlerResult::success();
+        }),
+    });
+
+    ASSERT_TRUE(runtime->dispatch({"oracle.workspace", {}}).accepted());
+    ASSERT_EQ(runtime->topology().activeWorkspace,
+              std::optional<ssg::WorkspaceId>{ssg::WorkspaceId{7}});
     fs::remove_all(root);
 }
 
@@ -306,6 +325,7 @@ SSG_TEST_SUITE(test_command_dispatch) {
     RUN(aHandlerThatDispatchesIsToldToDeferInstead);
     RUN(routingCommandsQueueExactlyOneDirectOrdinaryTarget);
     RUN(aHandlerCannotMutateTheCommandCatalogReentrantly);
+    RUN(editorSessionAbsorbsSuccessfulWorkspaceChanges);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

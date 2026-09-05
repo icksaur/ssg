@@ -155,7 +155,7 @@ TEST(aCommandAScriptRegistersIsAnOrdinaryCatalogCommand) {
                               "end)")
                     .accepted());
 
-    auto const* entry = runtime->commandCatalog()->find("user.count");
+    auto const* entry = runtime->commandCatalog().find("user.count");
     ASSERT_TRUE(entry != nullptr);
     if (entry) ASSERT_EQ(entry->owner, std::string{"lua"});
 
@@ -176,14 +176,14 @@ TEST(reloadingRetiresThePreviousGenerationsCommands) {
     ASSERT_TRUE(
         scripts.evaluate("ssg.register_command('user.first', function() end)")
             .accepted());
-    auto const* first = runtime->commandCatalog()->find("user.first");
+    auto const* first = runtime->commandCatalog().find("user.first");
     ASSERT_TRUE(first != nullptr);
 
     ASSERT_TRUE(
         scripts.evaluate("ssg.register_command('user.second', function() end)")
             .accepted());
-    ASSERT_TRUE(runtime->commandCatalog()->find("user.first") == nullptr);
-    ASSERT_TRUE(runtime->commandCatalog()->find("user.second") != nullptr);
+    ASSERT_TRUE(runtime->commandCatalog().find("user.first") == nullptr);
+    ASSERT_TRUE(runtime->commandCatalog().find("user.second") != nullptr);
     fs::remove_all(root);
 }
 
@@ -201,7 +201,7 @@ TEST(reloadingAnUnchangedScriptSucceeds) {
         auto const result = scripts.evaluate(script);
         if (!result.accepted()) std::cout << "  msg: " << result.message << "\n";
         ASSERT_TRUE(result.accepted());
-        ASSERT_TRUE(runtime->commandCatalog()->find("user.same") != nullptr);
+        ASSERT_TRUE(runtime->commandCatalog().find("user.same") != nullptr);
     }
     fs::remove_all(root);
 }
@@ -217,7 +217,7 @@ TEST(aFailedReloadKeepsThePreviousGenerationDispatchable) {
             .accepted());
     ASSERT_TRUE(!scripts.evaluate("this is not lua").accepted());
 
-    ASSERT_TRUE(runtime->commandCatalog()->find("user.kept") != nullptr);
+    ASSERT_TRUE(runtime->commandCatalog().find("user.kept") != nullptr);
     ASSERT_TRUE(runtime
                     ->dispatch({"user.kept",  {}})
                     .accepted());
@@ -251,7 +251,7 @@ TEST(aScriptCommandCollidingWithABuiltInIsRefusedWithoutLosingTheEditor) {
              .accepted());
     // The built-in is untouched: the catalog refused the batch before applying
     // any of it.
-    auto const* builtIn = runtime->commandCatalog()->find("file.save");
+    auto const* builtIn = runtime->commandCatalog().find("file.save");
     ASSERT_TRUE(builtIn != nullptr);
     if (builtIn) ASSERT_TRUE(builtIn->owner != std::string{"lua"});
     fs::remove_all(root);
@@ -272,7 +272,7 @@ TEST(aRefusedGenerationLeavesThePreviousOneWhollyIntact) {
     ASSERT_TRUE(
         scripts.evaluate("ssg.register_command('user.old', function() end)")
             .accepted());
-    ASSERT_TRUE(runtime->commandCatalog()->find("user.old") != nullptr);
+    ASSERT_TRUE(runtime->commandCatalog().find("user.old") != nullptr);
 
     // Collides with a built-in, so the catalog refuses the whole batch.
     ASSERT_TRUE(
@@ -281,13 +281,13 @@ TEST(aRefusedGenerationLeavesThePreviousOneWhollyIntact) {
                        "ssg.register_command('file.save', function() end)")
              .accepted());
 
-    ASSERT_TRUE(runtime->commandCatalog()->find("user.new") == nullptr);
+    ASSERT_TRUE(runtime->commandCatalog().find("user.new") == nullptr);
     // Still registered, and still backed by a live Lua function.
-    ASSERT_TRUE(runtime->commandCatalog()->find("user.old") != nullptr);
+    ASSERT_TRUE(runtime->commandCatalog().find("user.old") != nullptr);
     ASSERT_TRUE(runtime
                     ->dispatch({"user.old",  {}})
                     .accepted());
-    auto const* builtIn = runtime->commandCatalog()->find("file.save");
+    auto const* builtIn = runtime->commandCatalog().find("file.save");
     ASSERT_TRUE(builtIn != nullptr);
     if (builtIn) ASSERT_TRUE(builtIn->owner != std::string{"lua"});
     fs::remove_all(root);

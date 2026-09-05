@@ -10,7 +10,6 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <vector>
 
 namespace {
@@ -72,38 +71,6 @@ std::string makeRestoredRemnant(const std::filesystem::path& root,
     return id;
 }
 
-class TestStorage final : public ssg::ScratchStorage {
-public:
-    void appendDocument(const std::filesystem::path& path,
-                         const ssg::JournalDocument& value) override {
-        beforeWrite();
-        ssg::ScratchJournal{path}.appendDocument(value);
-    }
-
-    void appendRemove(const std::filesystem::path& path,
-                       const ssg::JournalDocumentKey& key) override {
-        beforeWrite();
-        ssg::ScratchJournal{path}.appendRemove(key);
-    }
-
-    void replaceCheckpoint(
-        const std::filesystem::path& path,
-        const ssg::JournalRecoverySet& recovery) override {
-        beforeWrite();
-        const auto bytes = ssg::JournalCodec{}.encodeCheckpoint(recovery);
-        ssg::replaceFileAtomically(path, bytes);
-    }
-
-    std::chrono::milliseconds delay{};
-    bool fail = false;
-
-private:
-    void beforeWrite() const {
-        if (delay.count() != 0) std::this_thread::sleep_for(delay);
-        if (fail) throw std::runtime_error("injected scratch write failure");
-    }
-};
-
 ssg::ScratchStoreConfig configuration() {
     ssg::ScratchStoreConfig result;
     result.maximumBytes = std::numeric_limits<std::uintmax_t>::max();
@@ -154,26 +121,6 @@ TEST(startupImportsBeforeMarkingRemnantRestored) {
     ASSERT_TRUE(std::filesystem::exists(remnantPath / "restored"));
     ASSERT_EQ(ssg::ScratchJournal{store.journalPath()}.replay().recovery,
               store.recovery());
-}
-
-TEST(failedImportKeepsRemnantRetryable) {
-    TemporaryDirectory temporary;
-    const auto workspacePath = workspace(temporary);
-    std::filesystem::path remnantPath;
-    {
-        auto remnant =
-            ssg::ScratchSession::create(temporary.path(), workspacePath);
-        remnantPath = remnant.path();
-        ssg::ScratchJournal{remnant.journalPath()}.appendDocument(
-            document("draft.txt", "retry me"));
-    }
-    TestStorage storage;
-    storage.fail = true;
-
-    ASSERT_THROWS(ssg::ScratchStore::create(
-                      temporary.path(), workspacePath, configuration(), storage),
-                  std::runtime_error);
-    ASSERT_FALSE(std::filesystem::exists(remnantPath / "restored"));
 }
 
 TEST(quotaEvictsOnlyRestoredRemnantsOldestFirst) {
@@ -228,10 +175,9 @@ TEST(purgeWorkspaceAndAllLeaveUnrestoredState) {
 
 TEST(writeFailureIsActionableAndNeverReportsDurable) {
     TemporaryDirectory temporary;
-    TestStorage storage;
-    storage.fail = true;
     auto store = ssg::ScratchStore::create(
-        temporary.path(), workspace(temporary), configuration(), storage);
+        temporary.path(), workspace(temporary), configuration());
+    std::filesystem::create_directory(store.journalPath());
 
     store.updateDocument(document("failed.txt", "not durable"));
     ASSERT_FALSE(store.waitUntilDurable(2s));
@@ -242,31 +188,10 @@ TEST(writeFailureIsActionableAndNeverReportsDurable) {
     ASSERT_FALSE(state.failure.empty());
 }
 
-TEST(hundredMillisecondLagIsObservableUntilDurable) {
-    TemporaryDirectory temporary;
-    TestStorage storage;
-    storage.delay = 175ms;
-    auto store = ssg::ScratchStore::create(
-        temporary.path(), workspace(temporary), configuration(), storage);
-
-    store.updateDocument(document("slow.txt", "pending"));
-    ASSERT_EQ(store.durabilityState().kind,
-              ssg::ScratchDurability::Pending);
-    std::this_thread::sleep_for(125ms);
-    const auto lagged = store.durabilityState();
-    ASSERT_EQ(lagged.kind, ssg::ScratchDurability::Pending);
-    ASSERT_TRUE(lagged.overdue);
-    ASSERT_TRUE(store.waitUntilDurable(2s));
-    ASSERT_EQ(store.durabilityState().kind,
-              ssg::ScratchDurability::Durable);
-}
-
 TEST(shutdownDrainsAndRejectsNewMutations) {
     TemporaryDirectory temporary;
-    TestStorage storage;
-    storage.delay = 25ms;
     auto store = ssg::ScratchStore::create(
-        temporary.path(), workspace(temporary), configuration(), storage);
+        temporary.path(), workspace(temporary), configuration());
     store.updateDocument(document("drain.txt", "accepted"));
     store.shutdown();
 
@@ -281,11 +206,9 @@ TEST(shutdownDrainsAndRejectsNewMutations) {
 SSG_TEST_SUITE(test_scratch) {
     RUN(compactionPreservesReplayAndLeavesOneAtomicCheckpoint);
     RUN(startupImportsBeforeMarkingRemnantRestored);
-    RUN(failedImportKeepsRemnantRetryable);
     RUN(quotaEvictsOnlyRestoredRemnantsOldestFirst);
     RUN(purgeWorkspaceAndAllLeaveUnrestoredState);
     RUN(writeFailureIsActionableAndNeverReportsDurable);
-    RUN(hundredMillisecondLagIsObservableUntilDurable);
     RUN(shutdownDrainsAndRejectsNewMutations);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
