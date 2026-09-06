@@ -64,7 +64,9 @@ middle-click a tab to close it. `Alt`+click adds or removes a cursor.
 - **Syntax highlighting** via Tree-sitter for C, C++, JavaScript, TypeScript,
   C#, Lua, and Markdown — on by default.
 - **Workspaces** rooted at a directory: Git diff views with live follow-editing,
-  a line-number gutter, and word wrap.
+  a line-number gutter, and word wrap. Symlinked files are searchable;
+  symlinked directories appear in the file tree but are not searched or
+  descended into.
 - **Safe files** — atomic saves, encoding and line-ending preservation, and
   crash-safe scratch recovery, so an interrupted session doesn't lose work.
 - **Unicode 15** — correct grapheme and wide/combining-character layout.

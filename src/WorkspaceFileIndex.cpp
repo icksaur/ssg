@@ -24,9 +24,21 @@ std::vector<Entry> sortedEntries(const fs::path& directory) {
     if (!listed.ok()) return entries;
     for (const auto& entry : listed.entries) {
         const auto status = statFile(entry.path());
-        if (!status || status->kind == FileKind::Symlink) continue;
-        const bool directoryEntry = status->kind == FileKind::Directory;
-        if (!directoryEntry && status->kind != FileKind::Regular) continue;
+        if (!status) continue;
+        auto kind = status->kind;
+        if (status->kind == FileKind::Symlink) {
+            std::error_code error;
+            const auto target = fs::canonical(entry.path(), error);
+            const auto targetStatus =
+                error ? std::optional<FileStat>{} : statFile(target);
+            // Directory links may leave the workspace that file.open contains.
+            if (!targetStatus || targetStatus->kind != FileKind::Regular) {
+                continue;
+            }
+            kind = targetStatus->kind;
+        }
+        const bool directoryEntry = kind == FileKind::Directory;
+        if (!directoryEntry && kind != FileKind::Regular) continue;
         entries.push_back({entry.path(), entry.path().filename().string(),
                            directoryEntry});
     }

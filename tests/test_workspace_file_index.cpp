@@ -1,4 +1,5 @@
 #include <ssg/WorkspaceFileIndex.h>
+#include <ssg/Editor.h>
 
 #include "test_helpers.h"
 
@@ -227,6 +228,37 @@ TEST(indexDoesNotDescendIntoSymlinkedDirectories) {
     fs::remove_all(root);
 }
 
+TEST(indexOffersSymlinkedFilesThatTheEditorCanOpen) {
+    auto root = makeUniqueRoot("index-symlink-file");
+    auto workspace = root / "workspace";
+    writeFile(workspace / "real.txt", "linked\n");
+    std::error_code error;
+    fs::create_symlink(workspace / "real.txt", workspace / "linked.txt", error);
+    if (error) {
+        fs::remove_all(root);
+        return;
+    }
+
+    auto matcher = makePlatformGitIgnoreMatcher(workspace);
+    auto result = buildWorkspaceFileIndex(workspace, *matcher);
+    const auto linked = std::find_if(
+        result.candidates.begin(), result.candidates.end(),
+        [](const PaletteCandidate& candidate) {
+            return candidate.id == "linked.txt";
+        });
+    ASSERT_TRUE(linked != result.candidates.end());
+
+    auto created = createEditor(
+        {workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (created.accepted() && linked != result.candidates.end()) {
+        ASSERT_TRUE(
+            created.session->dispatch({"file.open", linked->id}).accepted());
+        ASSERT_EQ(created.session->activeDocumentText(), std::string{"linked\n"});
+    }
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 SSG_TEST_SUITE(test_workspace_file_index) {
@@ -238,6 +270,7 @@ SSG_TEST_SUITE(test_workspace_file_index) {
     RUN(indexTruncatesDeterministicallyAtTheCap);
     RUN(indexOutsideAGitRepositoryListsEverything);
     RUN(indexDoesNotDescendIntoSymlinkedDirectories);
+    RUN(indexOffersSymlinkedFilesThatTheEditorCanOpen);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }
