@@ -845,7 +845,7 @@ ViewportViewState computeUnwrappedViewport(
         if (!real.mergedSegments.empty()) {
             // A Modified line rendered as ONE merged inline row (git
             // --word-diff style). This is the SOLE place the merged text is
-            // built and turned into cells/hit-targets -- Renderer paints
+            // built and turned into cells/hit-targets -- renderFrame paints
             // RealRow::mergedSegments verbatim and does not recompute this.
             // Unchanged/Added segments are REAL: concatenated in order they
             // reconstruct the target line's bytes exactly, so their byte

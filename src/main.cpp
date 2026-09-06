@@ -192,7 +192,7 @@ struct PointerState {
 };
 
 void drainSignals(SsgContext& context);
-std::optional<GridPresentation> renderFrame(SsgContext& context);
+std::optional<GridPresentation> projectFrame(SsgContext& context);
 ClientInputOutcome handleInputResult(SsgContext& context, ClientInputResult result);
 ClientInputOutcome routeInput(SsgContext& context, KeyStroke stroke, std::string text);
 void handleTerminalReply(SsgContext& context, const Decoded& decoded);
@@ -331,7 +331,7 @@ void drainSignals(SsgContext& context) {
     }
 }
 
-std::optional<GridPresentation> renderFrame(SsgContext& context) {
+std::optional<GridPresentation> projectFrame(SsgContext& context) {
     auto snapshot = context.presenter.project(context.runtime, {terminalSize(), context.palette->report()});
     if (!snapshot) return std::nullopt;
 
@@ -349,7 +349,7 @@ ClientInputOutcome handleInputResult(SsgContext& context, ClientInputResult resu
     if (result.outcome != ClientInputOutcome::ViewOwned || !result.command || !result.command->viewAction) {
         return result.outcome;
     }
-    if (!context.activeSnapshot) context.activeSnapshot = renderFrame(context);
+    if (!context.activeSnapshot) context.activeSnapshot = projectFrame(context);
     if (!context.activeSnapshot) return ClientInputOutcome::Rejected;
     auto applied = context.presenter.apply(*result.command->viewAction, *context.activeSnapshot);
     if (!applied.accepted()) return ClientInputOutcome::Rejected;
@@ -531,7 +531,7 @@ void dispatchBufferedInput(SsgContext& context, std::string& buffer, PointerStat
             }
         }
 
-        context.activeSnapshot = renderFrame(context);
+        context.activeSnapshot = projectFrame(context);
         switch (decoded.status) {
         case DecodeStatus::pointer:
             handlePointer(context, decoded, pointer);
@@ -654,7 +654,7 @@ int main(int argc, char** argv) {
     // Once inside main, exception unwinding does not portably restore the terminal.
     bool firstFrameMarked = false;
     auto lastFrameAt = std::chrono::steady_clock::time_point{};
-    ssg::Renderer renderer;
+    ssg::LineLayoutCache renderLineCache;
     try {
         while (!quit) {
             // Motion floods can otherwise render every event and pin a core.
@@ -665,10 +665,10 @@ int main(int argc, char** argv) {
                 }
             }
             lastFrameAt = std::chrono::steady_clock::now();
-            context.activeSnapshot = renderFrame(context);
+            context.activeSnapshot = projectFrame(context);
             auto& snapshot = context.activeSnapshot;
             if (snapshot) {
-                auto grid = renderer.render(*snapshot);
+                auto grid = ssg::renderFrame(*snapshot, renderLineCache);
                 std::string frame =
                     ssg::encodeFrame(grid, colorDepth,
                                      !pointer.gutterDrag.has_value());

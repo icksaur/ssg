@@ -2315,7 +2315,6 @@ ssg/RecoveryManager.h	var	ssg::RecoveryRecord::id	RecoveryRecordId
 ssg/RecoveryManager.h	var	ssg::RecoveryRecord::kind	RecoveryRecordKind
 ssg/RecoveryManager.h	var	ssg::RecoveryRecord::storedBytes	std::uintmax_t
 ssg/RecoveryManager.h	var	ssg::RecoveryRestoreResult::error	std::optional<RecoveryError>
-ssg/Renderer.h	class	ssg::Renderer
 ssg/Renderer.h	enum	ssg::CellUnderline
 ssg/Renderer.h	enum	ssg::DiffTint
 ssg/Renderer.h	enumerator	ssg::CellUnderline::Error
@@ -2334,9 +2333,9 @@ ssg/Renderer.h	func	ssg::CellGrid::canonical	std::string () const
 ssg/Renderer.h	func	ssg::CellGridCell::operator==	bool (const CellGridCell &) const
 ssg/Renderer.h	func	ssg::CellHyperlink::operator==	bool (const CellHyperlink &) const
 ssg/Renderer.h	func	ssg::GridPosition::operator==	bool (const GridPosition &) const
-ssg/Renderer.h	func	ssg::Renderer::render	CellGrid (const GridPresentation &)
-ssg/Renderer.h	func	ssg::Renderer::renderSegmentationCalls	std::uint64_t ()
-ssg/Renderer.h	func	ssg::Renderer::resetRenderSegmentationCalls	void ()
+ssg/Renderer.h	func	ssg::renderFrame	CellGrid (const GridPresentation &, LineLayoutCache &)
+ssg/Renderer.h	func	ssg::renderSegmentationCalls	std::uint64_t ()
+ssg/Renderer.h	func	ssg::resetRenderSegmentationCalls	void ()
 ssg/Renderer.h	struct	ssg::CellGrid
 ssg/Renderer.h	struct	ssg::CellGridCell
 ssg/Renderer.h	struct	ssg::CellHyperlink

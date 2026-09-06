@@ -175,6 +175,7 @@ TEST(paletteReportIsAPureFunctionOfCandidatesAndQuery) {
 }
 
 TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot("derived-render");
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -190,7 +191,7 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto grid = ssg::Renderer{}.render(*frame);
+    auto grid = ssg::renderFrame(*frame, lineCache);
 
     // Every rendered candidate row's label text traces to a published candidate:
     // for each reported row there is a grid line beginning with its label, and
@@ -215,6 +216,7 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
 }
 
 TEST(productionRuntimeNormalScreenSatisfiesTheScreenContract) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot("normal");
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -225,17 +227,18 @@ TEST(productionRuntimeNormalScreenSatisfiesTheScreenContract) {
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto grid = ssg::Renderer{}.render(*frame);
+    auto grid = ssg::renderFrame(*frame, lineCache);
     assertScreenInvariants(grid, 80, 24);
     // The opened document's content and name reach the screen.
     ASSERT_TRUE(screenContains(grid, "first line"));
     ASSERT_TRUE(screenContains(grid, "alpha.txt"));
     // The screen is a pure function of the snapshot: a second render is identical.
-    ASSERT_EQ(ssg::Renderer{}.render(*frame).canonical(), grid.canonical());
+    ASSERT_EQ(ssg::renderFrame(*frame, lineCache).canonical(), grid.canonical());
     fs::remove_all(root);
 }
 
 TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot("palette");
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -256,17 +259,18 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto grid = ssg::Renderer{}.render(*frame);
+    auto grid = ssg::renderFrame(*frame, lineCache);
     assertScreenInvariants(grid, 80, 24);
     // The reported query and candidate rows are projected onto the screen.
     ASSERT_TRUE(screenContains(grid, "sa"));
     ASSERT_TRUE(screenContains(grid, "Save File"));
     ASSERT_TRUE(screenContains(grid, "Save As"));
-    ASSERT_EQ(ssg::Renderer{}.render(*frame).canonical(), grid.canonical());
+    ASSERT_EQ(ssg::renderFrame(*frame, lineCache).canonical(), grid.canonical());
     fs::remove_all(root);
 }
 
 TEST(productionRuntimeTooSmallScreenSatisfiesTheScreenContract) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot("small");
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -277,7 +281,7 @@ TEST(productionRuntimeTooSmallScreenSatisfiesTheScreenContract) {
     auto frame = ssg::test::projectGridFrame(*runtime, {24, 3});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto grid = ssg::Renderer{}.render(*frame);
+    auto grid = ssg::renderFrame(*frame, lineCache);
     // Below the supported minimum the library still emits a well-formed grid at
     // the terminal's real size, carrying the typed too-small state.
     assertScreenInvariants(grid, 24, 3);

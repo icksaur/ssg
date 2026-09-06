@@ -179,6 +179,7 @@ ssg::PaletteReport paletteReport(
 }  // namespace
 
 TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
+    ssg::LineLayoutCache lineCache;
     // The chrome color model: the header, footer, and tab bar each carry their
     // OWN background shade -- distinct greyscale bands, so the regions read apart
     // -- and every band is distinct from the document. The active tab uses the
@@ -201,7 +202,7 @@ TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
     ASSERT_TRUE(snapshot->footer.has_value());
     ASSERT_TRUE(tabBar != nullptr);
     if (!snapshot->header || !snapshot->footer || !tabBar) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
 
     const auto& theme = snapshot->theme;
     const auto headerBand =
@@ -246,6 +247,7 @@ TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
 }
 
 TEST(headerAndFooterCellsAndHitsUseTheSolvedTree) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "doc.txt"} << "one\n";
     auto runtime = makeRuntime(root);
@@ -268,7 +270,7 @@ TEST(headerAndFooterCellsAndHitsUseTheSolvedTree) {
     ASSERT_EQ(header->rect, (ssg::Rect{0, 0, 80, 1}));
     ASSERT_EQ(footer->rect, (ssg::Rect{0, 23, 80, 1}));
 
-    const auto grid = ssg::Renderer{}.render(frame);
+    const auto grid = ssg::renderFrame(frame, lineCache);
     const auto headerCell = grid.at(79, header->rect.y);
     const auto footerCell = grid.at(40, footer->rect.y);
     ASSERT_EQ(headerCell.role, ssg::SemanticRole::HeaderBackground);
@@ -280,6 +282,7 @@ TEST(headerAndFooterCellsAndHitsUseTheSolvedTree) {
 }
 
 TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "alpha.txt"} << "one\n";
     std::ofstream{root / "beta.txt"} << "two\n";
@@ -304,7 +307,7 @@ TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
          {ssg::kDocumentNodeId, ssg::SemanticRole::FooterBackground}});
     styled = withUiForeground(styled, ssg::kHeaderNodeId,
                              ssg::SemanticRole::CurrentLineNumber);
-    const auto grid = ssg::Renderer{}.render(styled);
+    const auto grid = ssg::renderFrame(styled, lineCache);
     const auto* header = styled.layout.find(
         ssg::UiNodeId{std::string{ssg::kHeaderNodeId}});
     const auto* footer = styled.layout.find(
@@ -345,7 +348,7 @@ TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
         const auto overridden =
             withUiWidgetRole(styled, headerGlyph->id, "header");
         const auto overriddenGrid =
-            ssg::Renderer{}.render(overridden);
+            ssg::renderFrame(overridden, lineCache);
         ASSERT_EQ(overriddenGrid.colors[
                       overriddenGrid
                           .at(headerGlyph->rect.x, headerGlyph->rect.y)
@@ -361,6 +364,7 @@ TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
 }
 
 TEST(renderPaintsContentNotAccessibilityLabels) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\nbeta\n";
     auto runtime = makeRuntime(root);
@@ -370,7 +374,7 @@ TEST(renderPaintsContentNotAccessibilityLabels) {
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
     // Container accessibility labels must never be painted.
     ASSERT_FALSE(gridContains(grid, "Status header"));
     ASSERT_FALSE(gridContains(grid, "Open tabs"));
@@ -380,6 +384,7 @@ TEST(renderPaintsContentNotAccessibilityLabels) {
 }
 
 TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "n.txt"} << "alpha\nbeta\ngamma\n";
     auto runtime = makeRuntime(root);
@@ -401,7 +406,7 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
     ASSERT_TRUE(frame.document.has_value());
     if (!frame.document) return;
     auto const& document = *frame.document;
-    auto grid = ssg::Renderer{}.render(frame);
+    auto grid = ssg::renderFrame(frame, lineCache);
     ASSERT_EQ(grid.at(document.content.x, document.content.y).text,
               std::string{"a"});
     ASSERT_TRUE(grid.caret.has_value());
@@ -442,6 +447,7 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
 }
 
 TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "m.txt"} << "one\ntwo\nthree\nfour\n";
     auto runtime = makeRuntime(root);
@@ -460,7 +466,7 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
     ASSERT_TRUE(snapshot->document.has_value());
     if (!snapshot->document) return;
     auto const& pane = *snapshot->document;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
     int const gx = pane.lineNumbers.x;
     auto roleAt = [&](int row) {
         return grid.at(gx, pane.lineNumbers.y + row).role;
@@ -473,6 +479,7 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
 }
 
 TEST(renderSegmentsOnlyVisibleLinesNotWholeDocument) {
+    ssg::LineLayoutCache lineCache;
     // INV-render-projection (M12): render() runs compute_cell_run only for the
     // logical lines the viewport shows (<= rows), independent of document length.
     auto root = uniqueRoot();
@@ -494,10 +501,10 @@ TEST(renderSegmentsOnlyVisibleLinesNotWholeDocument) {
         auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return 0;
-        ssg::Renderer::resetRenderSegmentationCalls();
-        auto grid = ssg::Renderer{}.render(*snapshot);
+        ssg::resetRenderSegmentationCalls();
+        auto grid = ssg::renderFrame(*snapshot, lineCache);
         (void)grid;
-        return ssg::Renderer::renderSegmentationCalls();
+        return ssg::renderSegmentationCalls();
     };
 
     auto const smallCalls = segmentCountFor("small.txt");
@@ -513,6 +520,7 @@ TEST(renderSegmentsOnlyVisibleLinesNotWholeDocument) {
 
 
 TEST(wordWrapOffRendersHorizontallyScrolledContent) {
+    ssg::LineLayoutCache lineCache;
     // M12 VP-H: with the caret at the end of a long line (word wrap off), the
     // editor paints the horizontally-scrolled window — the line's END is visible
     // and its START has scrolled off — proving render honors first_visual_column.
@@ -534,7 +542,7 @@ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_TRUE(snapshot->viewport.firstVisualColumn > 0);
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
 
     // The end of the line is on screen; the start has scrolled off.
     ASSERT_TRUE(gridContains(grid, "ENDmarker"));
@@ -543,8 +551,9 @@ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
 
 
 TEST(renderColorsAreInBoundsColorSlots) {
+    ssg::LineLayoutCache lineCache;
     auto snapshot = ssg::test::GridPresentationBuilder{}.viewport(80, 24).build();
-    auto grid = ssg::Renderer{}.render(snapshot);
+    auto grid = ssg::renderFrame(snapshot, lineCache);
     bool allInBounds = true;
     for (auto const& cell : grid.cells) {
         if (cell.foreground >= ssg::kThemeColorSlotCount ||
@@ -556,13 +565,15 @@ TEST(renderColorsAreInBoundsColorSlots) {
 }
 
 TEST(renderIsDeterministic) {
+    ssg::LineLayoutCache lineCache;
     auto snapshot =
         ssg::test::GridPresentationBuilder{}.document("content\n").viewport(80, 24).build();
-    ASSERT_EQ(ssg::Renderer{}.render(snapshot).canonical(),
-              ssg::Renderer{}.render(snapshot).canonical());
+    ASSERT_EQ(ssg::renderFrame(snapshot, lineCache).canonical(),
+              ssg::renderFrame(snapshot, lineCache).canonical());
 }
 
 TEST(renderProjectsPaletteResultsIntoActivePane) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\nbeta\n";
     auto runtime = makeRuntime(root);
@@ -575,7 +586,7 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
 
     // Without a palette projection the document content is painted.
     ASSERT_TRUE(gridContains(
-        ssg::Renderer{}.render(*snapshot), "alpha"));
+        ssg::renderFrame(*snapshot, lineCache), "alpha"));
 
     PaletteProjection projection;
     ASSERT_TRUE(snapshot->document.has_value());
@@ -602,7 +613,7 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
         frame.style.dimensions.scrollbarGutterWidth);
     ASSERT_EQ(solved.visibleRows.size(), std::size_t{2});
     if (solved.visibleRows.size() < 2) return;
-    auto grid = ssg::Renderer{}.render(frame);
+    auto grid = ssg::renderFrame(frame, lineCache);
 
     // Results replace the document text in the pane.
     ASSERT_TRUE(gridContains(grid, "file.save"));
@@ -633,6 +644,7 @@ TEST(activePaletteWithoutSolvedFindResultsIsRejected) {
 }
 
 TEST(renderShowsPaletteQueryAndGhostInHeader) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\n";
     auto runtime = makeRuntime(root);
@@ -649,7 +661,7 @@ TEST(renderShowsPaletteQueryAndGhostInHeader) {
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
 
     // The header shows the query (prompt role) and the dim ghost completion.
     ASSERT_TRUE(gridContains(grid, "> sa"));
@@ -671,6 +683,7 @@ TEST(renderShowsPaletteQueryAndGhostInHeader) {
 }
 
 TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "sel.txt"} << "alpha\nbeta\n";
     auto runtime = makeRuntime(root);
@@ -683,7 +696,7 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
         auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
-        auto grid = ssg::Renderer{}.render(*snapshot);
+        auto grid = ssg::renderFrame(*snapshot, lineCache);
         bool anySelection = false;
         for (int row = 0; row < grid.size.rows; ++row) {
             for (int col = 0; col < grid.size.columns; ++col) {
@@ -700,7 +713,7 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
 
     int alphaRow = -1;
     for (int row = 0; row < grid.size.rows; ++row) {
@@ -735,6 +748,7 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
 }
 
 TEST(renderFillsEndOfLineForMultilineSelection) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "ml.txt"} << "alpha\nbeta\n";
     auto runtime = makeRuntime(root);
@@ -749,7 +763,7 @@ TEST(renderFillsEndOfLineForMultilineSelection) {
     auto snapshot = presenter.present(*runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
 
     int alphaRow = -1, alphaCol = -1;
     for (int row = 0; row < grid.size.rows && alphaRow < 0; ++row) {
@@ -769,6 +783,7 @@ TEST(renderFillsEndOfLineForMultilineSelection) {
 }
 
 TEST(renderHighlightsWideGlyphCells) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     // A CJK wide glyph occupies two cells; selecting it must highlight both.
     std::ofstream{root / "w.txt"} << "a\xe4\xb8\x80""b\n";  // "a一b"
@@ -780,7 +795,7 @@ TEST(renderHighlightsWideGlyphCells) {
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
 
     int row = -1, col = -1;
     for (int r = 0; r < grid.size.rows && row < 0; ++r) {
@@ -797,6 +812,7 @@ TEST(renderHighlightsWideGlyphCells) {
 }
 
 TEST(renderPaintsSecondaryRangedSelectionCaret) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "rc.txt"} << "cat cat\n";
     auto runtime = makeRuntime(root);
@@ -816,7 +832,7 @@ TEST(renderPaintsSecondaryRangedSelectionCaret) {
     bool allRanged = true;
     for (auto const& item : items) if (item.isCaret()) allRanged = false;
     ASSERT_TRUE(allRanged);
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
     int paintedSecondary = 0;
     for (int row = 0; row < grid.size.rows; ++row) {
         for (int col = 0; col < grid.size.columns; ++col) {
@@ -832,6 +848,7 @@ TEST(renderPaintsSecondaryRangedSelectionCaret) {
 }
 
 TEST(renderPaintsSecondaryCaretAsACell) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "car.txt"} << "alpha\nbeta\n";
     auto runtime = makeRuntime(root);
@@ -847,7 +864,7 @@ TEST(renderPaintsSecondaryCaretAsACell) {
     if (!snapshot) return;
     ASSERT_EQ(snapshot->selections.items().size(),
               std::size_t{2});
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
     ASSERT_TRUE(grid.caret.has_value());
 
     int paintedSecondary = 0;
@@ -865,6 +882,7 @@ TEST(renderPaintsSecondaryCaretAsACell) {
 }
 
 TEST(renderPaintsFindMatchesAndActiveMatch) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "find.txt"} << "cat cat cat\n";
     auto runtime = makeRuntime(root);
@@ -878,7 +896,7 @@ TEST(renderPaintsFindMatchesAndActiveMatch) {
     if (!snapshot) return;
     ASSERT_EQ(snapshot->findReplace.matches.size(),
               std::size_t{3});
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
 
     int row = -1;
     for (int r = 0; r < grid.size.rows; ++r) {
@@ -909,6 +927,7 @@ TEST(renderPaintsFindMatchesAndActiveMatch) {
 }
 
 TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "stale.txt"} << "cat cat cat\n";
     auto runtime = makeRuntime(root);
@@ -925,7 +944,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_FALSE(snapshot->findReplace.open);
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
     bool anyMatch = false;
     for (int row = 0; row < grid.size.rows; ++row) {
         for (int col = 0; col < grid.size.columns; ++col) {
@@ -938,6 +957,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
 }
 
 TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "rep.txt"} << "cat cat cat\n";
     auto runtime = makeRuntime(root);
@@ -950,7 +970,7 @@ TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
 
     // The reserved replace rows show the query and the replacement.
     ASSERT_TRUE(gridContains(grid, "cat"));
@@ -963,6 +983,7 @@ TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
 }
 
 TEST(renderFindPromptShowsOptionIndicators) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "opt.txt"} << "Cat cat CAT\n";
     auto runtime = makeRuntime(root);
@@ -985,7 +1006,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
         ASSERT_TRUE(input != nullptr);
         ASSERT_TRUE(toggle != nullptr);
         if (!input || !toggle) return;
-        auto grid = ssg::Renderer{}.render(frame);
+        auto grid = ssg::renderFrame(frame, lineCache);
         ASSERT_EQ(grid.at(input->rect.x, input->rect.y).text,
                   std::string{"f"});
         ASSERT_EQ(grid.at(toggle->rect.x, toggle->rect.y).text,
@@ -1003,12 +1024,13 @@ TEST(renderFindPromptShowsOptionIndicators) {
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
     ASSERT_TRUE(gridContains(grid, "[x] case"));
     ASSERT_TRUE(gridContains(grid, "[ ] word"));
 }
 
 TEST(renderPromptControlLabelsAreLowercaseChrome) {
+    ssg::LineLayoutCache lineCache;
     // Every prompt's rendered control captions are lowercase chrome, across the
     // settings, goto-line, and open-file path prompts.
     auto root = uniqueRoot();
@@ -1030,7 +1052,7 @@ TEST(renderPromptControlLabelsAreLowercaseChrome) {
         auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) continue;
-        auto grid = ssg::Renderer{}.render(*snapshot);
+        auto grid = ssg::renderFrame(*snapshot, lineCache);
         ASSERT_TRUE(gridContains(grid, c.lower));
         ASSERT_FALSE(gridContains(grid, c.title));
         (void)runtime->dispatch({"prompt.cancel",  {}});
@@ -1038,6 +1060,7 @@ TEST(renderPromptControlLabelsAreLowercaseChrome) {
 }
 
 TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     for (int i = 0; i < 40; ++i) {
         char name[32];
@@ -1063,7 +1086,7 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
     ASSERT_TRUE(snapshot->panel.has_value());
     if (!snapshot->panel || !snapshot->panel->scrollbarGutter) return;
     const auto& panel = *snapshot->panel;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
 
     // A thumb (the default thumb glyph) is drawn in the reserved gutter column.
     int const gx = panel.scrollbarGutter->x;
@@ -1084,6 +1107,7 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
 }
 
 TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "a.txt"} << "x";
     std::ofstream{root / "b.txt"} << "x";
@@ -1099,7 +1123,7 @@ TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
     if (!snapshot) return;
     ASSERT_TRUE(snapshot->panel.has_value());
     if (!snapshot->panel || !snapshot->panel->scrollbarGutter) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
     // The gutter is reserved (column exists) but blank: no thumb or track glyphs,
     // so the tree's content width never changes as items are added or removed.
     auto const gutter = *snapshot->panel->scrollbarGutter;
@@ -1112,6 +1136,7 @@ TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
 }
 
 TEST(renderPanelUsesSolvedPanelGeometryAndWindow) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "visible.txt"} << "x";
     auto runtime = makeRuntime(root);
@@ -1127,7 +1152,7 @@ TEST(renderPanelUsesSolvedPanelGeometryAndWindow) {
     ASSERT_TRUE(frame.panel.has_value());
     if (!frame.panel) return;
 
-    auto grid = ssg::Renderer{}.render(frame);
+    auto grid = ssg::renderFrame(frame, lineCache);
     auto const& panel = *frame.panel;
     ASSERT_EQ(rowText(grid, panel.providerLabel.y).substr(
                   static_cast<std::size_t>(panel.providerLabel.x),
@@ -1137,6 +1162,7 @@ TEST(renderPanelUsesSolvedPanelGeometryAndWindow) {
 }
 
 TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\nbeta\n";
     auto runtime = makeRuntime(root);
@@ -1166,7 +1192,7 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     auto sections = *snapshot;
     showPicker(sections);
     auto frame = ssg::test::copyGridFrame(*snapshot, std::move(sections), *snapshot, paletteReport(projection));
-    auto grid = ssg::Renderer{}.render(frame);
+    auto grid = ssg::renderFrame(frame, lineCache);
 
     // The window shows cmd-20.. (not cmd-00), and the absolute-25 selection lands
     // at window row 5.
@@ -1190,6 +1216,7 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
 }
 
 TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\n";
     auto runtime = makeRuntime(root);
@@ -1213,7 +1240,7 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     auto sections = *snapshot;
     showPicker(sections);
     auto frame = ssg::test::copyGridFrame(*snapshot, std::move(sections), *snapshot, paletteReport(projection));
-    auto grid = ssg::Renderer{}.render(frame);
+    auto grid = ssg::renderFrame(frame, lineCache);
     // The gutter is reserved (column exists) but blank: no thumb/track glyphs.
     for (int y = projection.scrollbarRect.y;
          y < projection.scrollbarRect.y + projection.scrollbarRect.height; ++y) {
@@ -1223,13 +1250,14 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
 }
 
 TEST(renderTooSmallViewportProducesLibraryPlaceholder) {
+    ssg::LineLayoutCache lineCache;
     // M11-L: below the 20x4 minimum the library (not the app) renders the
     // placeholder screen, sized to the terminal, so no app code authors cells.
     auto snapshot = ssg::test::GridPresentationBuilder{}.viewport(10, 5).build();
     ASSERT_TRUE(snapshot.layout.find(
                     ssg::UiNodeId{std::string{ssg::kRootNodeId}}) == nullptr);
     ssg::CellGrid grid;
-    ASSERT_NO_THROW(grid = ssg::Renderer{}.render(snapshot));
+    ASSERT_NO_THROW(grid = ssg::renderFrame(snapshot, lineCache));
     ASSERT_EQ(grid.size.columns, 10);
     ASSERT_EQ(grid.size.rows, 5);
     ASSERT_EQ(grid.cells.size(), std::size_t{50});
@@ -1240,6 +1268,7 @@ TEST(renderTooSmallViewportProducesLibraryPlaceholder) {
 }
 
 TEST(renderTooSmallMatchesHandAuthoredGolden) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -1248,7 +1277,7 @@ TEST(renderTooSmallMatchesHandAuthoredGolden) {
     auto snapshot = ssg::test::projectGridFrame(*runtime, {24, 3});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
     ASSERT_EQ(grid.size.columns, 24);
     ASSERT_EQ(grid.size.rows, 3);
     // 18-cell message centered in 24 columns -> start column (24-18)/2 = 3, on
@@ -1258,17 +1287,17 @@ TEST(renderTooSmallMatchesHandAuthoredGolden) {
               std::string("   terminal too small   "));
     ASSERT_EQ(rowText(grid, 2), std::string(24, ' '));
     // Determinism.
-    ASSERT_EQ(ssg::Renderer{}
-                  .render(*snapshot)
+    ASSERT_EQ(ssg::renderFrame(*snapshot, lineCache)
                   .canonical(),
               grid.canonical());
     std::filesystem::remove_all(root);
 }
 
 TEST(renderTooSmallIsSafeAtOneByOne) {
+    ssg::LineLayoutCache lineCache;
     auto snapshot = ssg::test::GridPresentationBuilder{}.viewport(1, 1).build();
     ssg::CellGrid grid;
-    ASSERT_NO_THROW(grid = ssg::Renderer{}.render(snapshot));
+    ASSERT_NO_THROW(grid = ssg::renderFrame(snapshot, lineCache));
     ASSERT_EQ(grid.size.columns, 1);
     ASSERT_EQ(grid.size.rows, 1);
     ASSERT_EQ(grid.cells.size(), std::size_t{1});
@@ -1279,6 +1308,7 @@ TEST(renderTooSmallIsSafeAtOneByOne) {
 // Prompt focus while reserving ZERO prompt rows -- so paintPrompt yields no
 // caret and the cursor was previously left wherever painting finished
 TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -1293,7 +1323,7 @@ TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
 
     ASSERT_TRUE(grid.caret.has_value());
     if (!grid.caret) return;
@@ -1315,6 +1345,7 @@ TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
 // Display width, not byte count: a multi-byte query would otherwise place the
 // caret several columns short of the text.
 TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -1327,7 +1358,7 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
     ASSERT_TRUE(grid.caret.has_value());
     if (!grid.caret) return;
 
@@ -1345,6 +1376,7 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
 // With a scrolled query the caret must sit at the end of the VISIBLE text --
 // still inside the header, still marking where the next keystroke lands.
 TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -1357,7 +1389,7 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
 
     ASSERT_TRUE(grid.caret.has_value());
     if (!grid.caret) return;
@@ -1379,6 +1411,7 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
 
 TEST(inputLineCaretUsesTheLoweredPromptInputGeometry) {
     const auto assertCaret = [](int width, std::string query) {
+        ssg::LineLayoutCache lineCache;
         auto snapshot = ssg::test::GridPresentationBuilder{}
                             .viewport(width, 8)
                             .promptInput(true, std::move(query))
@@ -1397,7 +1430,7 @@ TEST(inputLineCaretUsesTheLoweredPromptInputGeometry) {
                                 : nullptr;
         ASSERT_TRUE(input != nullptr);
 
-        auto grid = ssg::Renderer{}.render(snapshot);
+        auto grid = ssg::renderFrame(snapshot, lineCache);
         ASSERT_TRUE(grid.caret.has_value());
         if (!input || !grid.caret) return;
         ASSERT_EQ(grid.caret->row, input->caret.y);
@@ -1411,6 +1444,7 @@ TEST(inputLineCaretUsesTheLoweredPromptInputGeometry) {
 }
 
 TEST(emptyEditorMessageUsesSolvedDocumentGeometryWithoutLegacyNode) {
+    ssg::LineLayoutCache lineCache;
     auto frame =
         ssg::test::GridPresentationBuilder{}
             .viewport(40, 8)
@@ -1418,7 +1452,7 @@ TEST(emptyEditorMessageUsesSolvedDocumentGeometryWithoutLegacyNode) {
             .build();
     ASSERT_TRUE(frame.document.has_value());
     if (!frame.document) return;
-    const auto grid = ssg::Renderer{}.render(frame);
+    const auto grid = ssg::renderFrame(frame, lineCache);
     ASSERT_EQ(grid.at(frame.document->content.x,
                       frame.document->content.y)
                   .text,
@@ -1432,6 +1466,7 @@ TEST(emptyEditorMessageUsesSolvedDocumentGeometryWithoutLegacyNode) {
 // the old glyphs exactly.  So: restyle the published section, and require the
 // screen to follow -- which also proves the runtime and renderer share it.
 TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     for (int i = 0; i < 40; ++i) {
         std::ofstream{root / ("file-" + std::to_string(i) + ".txt")} << "x";
@@ -1457,7 +1492,7 @@ TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
     style.tree.collapsed = "+ ";
     style.tree.expanded = "- ";
     style.cwdPrefix = "cwd: ";
-    auto const grid = ssg::Renderer{}.render(withStyle(*snapshot, style));
+    auto const grid = ssg::renderFrame(withStyle(*snapshot, style), lineCache);
 
     auto const gutter = *snapshot->panel->scrollbarGutter;
     int const gx = gutter.x;
@@ -1482,22 +1517,23 @@ TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
 // rendered with a restyled `unrenderable`, must show the restyled glyph -- proof
 // paintDocument reads the snapshot's Style rather than holding the literal.
 TEST(theDocumentReplacementGlyphComesFromStyle) {
+    ssg::LineLayoutCache lineCache;
     ssg::Style restyled;
     restyled.unrenderable = "?";
 
-    auto const shipped = ssg::Renderer{}.render(
+    auto const shipped = ssg::renderFrame(
         ssg::test::GridPresentationBuilder{}
             .document("a\x01" "b\n")  // \x01 has no glyph
             .viewport(80, 24)
-            .build());
+            .build(), lineCache);
     ASSERT_TRUE(gridContains(shipped, "\xef\xbf\xbd"));  // U+FFFD by default
 
-    auto const grid = ssg::Renderer{}.render(
+    auto const grid = ssg::renderFrame(
         ssg::test::GridPresentationBuilder{}
             .document("a\x01" "b\n")
             .viewport(80, 24)
             .style(restyled)
-            .build());
+            .build(), lineCache);
     ASSERT_TRUE(gridContains(grid, "a?b"));
     ASSERT_FALSE(gridContains(grid, "\xef\xbf\xbd"));
 }
@@ -1507,6 +1543,7 @@ TEST(theDocumentReplacementGlyphComesFromStyle) {
 // rendered chrome to follow -- proof the command mutates the one shared instance
 // the renderer reads.
 TEST(styleDefineRestylesTheLiveSessionChrome) {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     for (int i = 0; i < 40; ++i) {
         std::ofstream{root / ("file-" + std::to_string(i) + ".txt")} << "x";
@@ -1561,7 +1598,7 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
     }
 
     // And the rendered screen shows them, with the shipped glyphs gone.
-    auto const grid = ssg::Renderer{}.render(*snapshot);
+    auto const grid = ssg::renderFrame(*snapshot, lineCache);
     ASSERT_TRUE(snapshot->panel.has_value());
     if (!snapshot->panel || !snapshot->panel->scrollbarGutter) return;
     auto const gutter = *snapshot->panel->scrollbarGutter;
@@ -1604,6 +1641,7 @@ TEST(styleDefineRejectionLeavesTheLiveStyleUnchanged) {
 // squiggle land under the right text rather than shifted by every non-ASCII
 // character earlier on the line.
 TEST(lspDiagnosticsUnderlineExactlyTheirRange) {
+    ssg::LineLayoutCache lineCache;
     ssg::test::GridPresentationBuilder builder;
     auto snapshot =
         builder.document("alpha bravo\ncharlie\n")
@@ -1623,7 +1661,7 @@ TEST(lspDiagnosticsUnderlineExactlyTheirRange) {
                 sections.lspSync.documents.push_back(std::move(file));
             })
             .build();
-    auto const grid = ssg::Renderer{}.render(snapshot);
+    auto const grid = ssg::renderFrame(snapshot, lineCache);
 
     // Find the row carrying "alpha bravo" and check exactly its last five cells
     // are underlined as an error.
@@ -1660,6 +1698,7 @@ TEST(lspDiagnosticsUnderlineExactlyTheirRange) {
 // server produced for an older revision underlines whatever text has since moved
 // into those positions, which is worse than showing nothing.
 TEST(staleDiagnosticsAreNotPainted) {
+    ssg::LineLayoutCache lineCache;
     ssg::test::GridPresentationBuilder builder;
     auto snapshot =
         builder.document("alpha bravo\n")
@@ -1675,7 +1714,7 @@ TEST(staleDiagnosticsAreNotPainted) {
                 sections.lspSync.documents.push_back(std::move(file));
             })
             .build();
-    auto const grid = ssg::Renderer{}.render(snapshot);
+    auto const grid = ssg::renderFrame(snapshot, lineCache);
     for (auto const& cell : grid.cells) {
         ASSERT_TRUE(cell.underline == ssg::CellUnderline::None);
     }
@@ -1686,11 +1725,12 @@ TEST(staleDiagnosticsAreNotPainted) {
 // grammar's captures.  Coupling it to syntax would make it work in markdown and
 // nowhere else.
 TEST(urlsInTheDocumentBecomeClickableRuns) {
+    ssg::LineLayoutCache lineCache;
     ssg::test::GridPresentationBuilder builder;
     auto snapshot = builder.document("see https://example.com/a for more\n")
                         .viewport(60, 8)
                         .build();
-    auto const grid = ssg::Renderer{}.render(snapshot);
+    auto const grid = ssg::renderFrame(snapshot, lineCache);
     ASSERT_EQ(grid.hyperlinks.size(), std::size_t{1});
     if (grid.hyperlinks.empty()) return;
     auto const& link = grid.hyperlinks.front();
@@ -1708,9 +1748,10 @@ TEST(urlsInTheDocumentBecomeClickableRuns) {
 // middle of a word is not a link at all.
 TEST(urlDetectionStopsAtSentenceAndBracketBoundaries) {
     auto linksFor = [](std::string text) {
+        ssg::LineLayoutCache lineCache;
         ssg::test::GridPresentationBuilder builder;
         auto snapshot = builder.document(std::move(text)).viewport(80, 8).build();
-        return ssg::Renderer{}.render(snapshot).hyperlinks;
+        return ssg::renderFrame(snapshot, lineCache).hyperlinks;
     };
 
     auto const sentence = linksFor("go to https://example.com.\n");
@@ -1735,6 +1776,7 @@ TEST(urlDetectionStopsAtSentenceAndBracketBoundaries) {
 }
 
 TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
+    ssg::LineLayoutCache lineCache;
     auto snapshot =
         ssg::test::GridPresentationBuilder{}
             .document("content\n")
@@ -1780,7 +1822,7 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
     ASSERT_EQ(externalSurface.rows.size(), std::size_t{2});
     if (externalSurface.rows.size() < 2) return;
 
-    auto const grid = ssg::Renderer{}.render(snapshot);
+    auto const grid = ssg::renderFrame(snapshot, lineCache);
     ASSERT_EQ(grid.at(solvedNotice->rect.x, solvedNotice->rect.y).text,
               std::string{"D"});
     ASSERT_EQ(grid.at(solvedNotice->rect.x, solvedNotice->rect.y).role,
@@ -1800,6 +1842,7 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
 }
 
 TEST(tabRenderingUsesSemanticTabsAndSolvedGeometry) {
+    ssg::LineLayoutCache lineCache;
     auto frame =
         ssg::test::GridPresentationBuilder{}
             .viewport(50, 10)
@@ -1814,7 +1857,7 @@ TEST(tabRenderingUsesSemanticTabsAndSolvedGeometry) {
         frame.tabs, frame.style.tab, node->rect);
     ASSERT_EQ(solved.tabs.size(), std::size_t{2});
     if (solved.tabs.size() < 2) return;
-    const auto grid = ssg::Renderer{}.render(frame);
+    const auto grid = ssg::renderFrame(frame, lineCache);
     ASSERT_EQ(grid.at(solved.tabs[0].rect.x,
                       solved.tabs[0].rect.y).text,
               std::string{"a"});
@@ -1830,6 +1873,7 @@ TEST(tabRenderingUsesSemanticTabsAndSolvedGeometry) {
 }
 
 TEST(externalIntrinsicShrinksToPreserveAnEditorRow) {
+    ssg::LineLayoutCache lineCache;
     auto snapshot =
         ssg::test::GridPresentationBuilder{}
             .document("content\n")
@@ -1867,7 +1911,7 @@ TEST(externalIntrinsicShrinksToPreserveAnEditorRow) {
                     snapshot.externalModification)
                     .rows);
     ASSERT_TRUE(external->rect.bottom() < footer->rect.y);
-    const auto grid = ssg::Renderer{}.render(snapshot);
+    const auto grid = ssg::renderFrame(snapshot, lineCache);
     ASSERT_EQ(grid.at(external->rect.x, external->rect.y).text,
               std::string{"F"});
 }
@@ -1880,6 +1924,7 @@ TEST(externalIntrinsicShrinksToPreserveAnEditorRow) {
 // output. A future role that accepts a color but paints nothing, or a surface
 // that stops consuming its role, fails here.
 TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
+    ssg::LineLayoutCache lineCache;
     using ssg::SemanticRole;
     // A sentinel theme: each role's color is unique, so an observed color names
     // exactly one role. Roles are reds (index in the red channel), scopes are
@@ -1986,8 +2031,8 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     // the input-line Prompt role only with it OPEN -- mutually exclusive states.
     // Union both renders so every role has a frame that paints it.
     auto snapshot = makeSnapshot(true);
-    auto grid = ssg::Renderer{}.render(snapshot);
-    auto documentGrid = ssg::Renderer{}.render(makeSnapshot(false));
+    auto grid = ssg::renderFrame(snapshot, lineCache);
+    auto documentGrid = ssg::renderFrame(makeSnapshot(false), lineCache);
 
     // Cell-level evidence that the selection and diff surfaces actually paint,
     // so treating Selection/Diff* colors (carried on grid.selectionFill/
@@ -2026,7 +2071,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     // The tab bar is hidden while the picker is open, so render a picker-CLOSED
     // frame too and union its colors -- that is the frame in which the tab roles
     // paint.
-    auto tabGrid = ssg::Renderer{}.render(makeSnapshot(false));
+    auto tabGrid = ssg::renderFrame(makeSnapshot(false), lineCache);
     for (auto const& cell : tabGrid.cells) {
         emitted.insert(encode(tabGrid.colors[cell.foreground]));
         emitted.insert(encode(tabGrid.colors[cell.background]));
@@ -2049,7 +2094,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
 }
 
 // Lever 2 (visible-line cache): a renderer reuses visible document lines across
-// frames while a fresh renderer shapes them again.
+// frames while a fresh cache shapes them again.
 TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
     auto root = uniqueRoot();
     std::string doc;
@@ -2063,14 +2108,14 @@ TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
-    ssg::Renderer renderer;
-    auto warm = renderer.render(*snapshot);
+    ssg::LineLayoutCache cache;
+    auto warm = ssg::renderFrame(*snapshot, cache);
     ssg::resetCellRunCalls();
-    auto cached = renderer.render(*snapshot);
+    auto cached = ssg::renderFrame(*snapshot, cache);
     auto const cachedCalls = ssg::cellRunCalls();
     ssg::resetCellRunCalls();
-    ssg::Renderer uncachedRenderer;
-    auto uncached = uncachedRenderer.render(*snapshot);
+    ssg::LineLayoutCache uncachedLineCache;
+    auto uncached = ssg::renderFrame(*snapshot, uncachedLineCache);
     auto const uncachedCalls = ssg::cellRunCalls();
 
     // The cache reused the visible document lines: strictly fewer segmentations.

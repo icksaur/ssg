@@ -99,6 +99,7 @@ ssg::GridPresentation snapshotWith(
 }
 
 TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
+    ssg::LineLayoutCache lineCache;
     const std::string baseline = "int value = 1;\n";
     const std::string working = "int value = 42;\n";
     auto fixture = makeFixture(working);
@@ -144,7 +145,7 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
               std::optional<std::string>{"overlay-id"});
     ASSERT_TRUE(snapshot->document.has_value());
     if (!snapshot->document) return;
-    const auto grid = ssg::Renderer{}.render(*snapshot);
+    const auto grid = ssg::renderFrame(*snapshot, lineCache);
     const auto paneContent = snapshot->document->content;
     ASSERT_TRUE(hasDiffTintInPane(grid, paneContent));
 
@@ -153,11 +154,12 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
         std::uint64_t{sections.documentRevision + 1};
     auto mismatched = snapshotWith(
         *snapshot, std::move(sections), *snapshot);
-    const auto mismatchGrid = ssg::Renderer{}.render(mismatched);
+    const auto mismatchGrid = ssg::renderFrame(mismatched, lineCache);
     ASSERT_TRUE(hasDiffTintInPane(mismatchGrid, paneContent));
 }
 
 TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
+    ssg::LineLayoutCache lineCache;
     const std::string text = "added search search\nint new foo = 42;\nplain\n";
     auto fixture = makeFixture(text);
     ASSERT_TRUE(fixture.runtime != nullptr);
@@ -192,7 +194,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     const auto content = base->document->content;
     auto overlay =
         snapshotWith(*base, std::move(sections), std::move(presentation));
-    const auto grid = ssg::Renderer{}.render(overlay);
+    const auto grid = ssg::renderFrame(overlay, lineCache);
 
     const auto [addedColumn, addedRow] =
         findText(grid, "added search search");
@@ -244,7 +246,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     auto scrolled = snapshotWith(
         overlay, std::move(scrolledSections), std::move(scrolledPresentation));
     const auto scrolledGrid =
-        ssg::Renderer{}.render(scrolled);
+        ssg::renderFrame(scrolled, lineCache);
     const auto [scrolledRemovedColumn, scrolledRemovedRow] =
         findText(scrolledGrid, "baseline");
     ASSERT_EQ(scrolledRemovedColumn, content.x);
@@ -273,7 +275,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     auto precedence = snapshotWith(
         overlay, std::move(precedenceSections), overlay);
     const auto precedenceGrid =
-        ssg::Renderer{}.render(precedence);
+        ssg::renderFrame(precedence, lineCache);
     ASSERT_EQ(precedenceGrid.at(addedColumn, addedRow).role,
               ssg::SemanticRole::Selection);
     ASSERT_EQ(precedenceGrid.at(addedColumn, addedRow).tint,
@@ -298,7 +300,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
         snapshotWith(overlay, std::move(wordSelectionSections),
                      overlay);
     const auto wordSelectionGrid =
-        ssg::Renderer{}.render(wordSelection);
+        ssg::renderFrame(wordSelection, lineCache);
     ASSERT_EQ(wordSelectionGrid.at(modifiedColumn + 14, modifiedRow).role,
               ssg::SemanticRole::Selection);
     ASSERT_EQ(wordSelectionGrid.at(modifiedColumn + 14, modifiedRow).tint,
@@ -313,7 +315,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     auto noDiff = snapshotWith(
         overlay, std::move(noDiffSections), std::move(noDiffPresentation));
     const auto noDiffGrid =
-        ssg::Renderer{}.render(noDiff);
+        ssg::renderFrame(noDiff, lineCache);
     for (const auto& cell : noDiffGrid.cells) {
         ASSERT_EQ(cell.tint, ssg::DiffTint::None);
     }
@@ -329,8 +331,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     unidentifiedSections.diff = overlay.diff;
     auto unidentified = snapshotWith(
         noDiff, std::move(unidentifiedSections), noDiff);
-    ASSERT_EQ(ssg::Renderer{}
-                 .render(unidentified)
+    ASSERT_EQ(ssg::renderFrame(unidentified, lineCache)
                  .canonical(),
               noDiffGrid.canonical());
 }

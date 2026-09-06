@@ -94,6 +94,7 @@ const std::vector<UiState>& uiStates() {
 }
 
 void runState(const UiState& state) {
+    ssg::LineLayoutCache lineCache;
     auto root = makeRoot(state.name);
     auto created = ssg::createEditor(
         {root / "workspace", root / "scratch", root / "recovery"});
@@ -111,8 +112,8 @@ void runState(const UiState& state) {
         auto frame = ssg::test::projectGridFrame(runtime, dims);
         ASSERT_TRUE(frame.has_value());
         if (!frame) continue;
-        ASSERT_NO_THROW(ssg::Renderer{}.render(*frame));
-        auto grid = ssg::Renderer{}.render(*frame);
+        ASSERT_NO_THROW(ssg::renderFrame(*frame, lineCache));
+        auto grid = ssg::renderFrame(*frame, lineCache);
         ASSERT_EQ(grid.size.columns, static_cast<int>(dims.columns));
         ASSERT_EQ(grid.size.rows, static_cast<int>(dims.rows));
         ASSERT_EQ(grid.cells.size(),

@@ -89,22 +89,10 @@ struct CellGrid {
     [[nodiscard]] std::string canonical() const;
 };
 
-class Renderer {
-public:
-    [[nodiscard]] CellGrid render(GridPresentation const& snapshot);
+[[nodiscard]] CellGrid renderFrame(const GridPresentation& snapshot,
+                                   LineLayoutCache& lineCache);
 
-    // Style is no longer a renderer member: it is read from the snapshot's
-    // published Style section, so the runtime and the
-    // renderer share the one instance the runtime owns rather than two that can
-    // drift.
-
-    // Test instrumentation for the number of visible logical lines render()
-    // requests from its shaping cache.
-    [[nodiscard]] static std::uint64_t renderSegmentationCalls();
-    static void resetRenderSegmentationCalls();
-
-private:
-    LineLayoutCache lineCache_;
-};
+[[nodiscard]] std::uint64_t renderSegmentationCalls();
+void resetRenderSegmentationCalls();
 
 }  // namespace ssg

@@ -89,6 +89,9 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/src/GridPresenter.cpp
         ${SSG_SOURCE_DIR}/src/HitTester.cpp
         ${SSG_SOURCE_DIR}/src/Layout.cpp
+        ${SSG_SOURCE_DIR}/src/PaintChrome.cpp
+        ${SSG_SOURCE_DIR}/src/PaintDocument.cpp
+        ${SSG_SOURCE_DIR}/src/PaintOverlays.cpp
         ${SSG_SOURCE_DIR}/src/Renderer.cpp
         ${SSG_SOURCE_DIR}/src/StatusFieldGrid.cpp
         ${SSG_SOURCE_DIR}/src/UiRegionProjection.cpp

@@ -57,7 +57,7 @@ struct DiffWordRange {
 // Separator are GHOST: they contribute display-only text with no
 // corresponding real document byte. Viewport turns this sequence into ghost
 // spans (see RealRow::mergedSegments) for hit-testing/caret/selection;
-// Renderer paints it without recomputing the segmentation.
+// renderFrame paints it without recomputing the segmentation.
 struct InlineWordSegment {
     enum class Kind { Unchanged, Removed, Added, Separator };
     Kind kind = Kind::Unchanged;

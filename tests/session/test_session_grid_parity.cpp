@@ -43,6 +43,7 @@ std::string readGolden(const std::string& path) {
 // Drive a runtime through representative interaction states and serialize the rendered grid
 // of each, so the golden covers editor-only, panel-shown, palette-open, and find-open.
 std::string captureGridMatrix() {
+    ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     auto created = ssg::createEditor(
         {root / "workspace", root / "scratch", root / "recovery"});
@@ -64,7 +65,7 @@ std::string captureGridMatrix() {
             return;
         }
         std::istringstream lines{
-            ssg::Renderer{}.render(*frame).canonical()};
+            ssg::renderFrame(*frame, lineCache).canonical()};
         std::string line;
         while (std::getline(lines, line)) {
             // Drop "cell <col> 0 ..." (row 0 = header); keep sizes and every other row.

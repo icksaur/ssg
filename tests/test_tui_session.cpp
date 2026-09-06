@@ -50,6 +50,7 @@ TEST(terminalEventsResolveThroughRuntimeInput) {
 }
 
 TEST(realRuntimeSnapshotRendersDeterministicallyWithinTheme) {
+    ssg::LineLayoutCache lineCache;
     RuntimeFixture fixture;
     ssg::tui::TuiClient client{
         *fixture.runtime,
@@ -60,13 +61,13 @@ TEST(realRuntimeSnapshotRendersDeterministicallyWithinTheme) {
                             ssg::TextInputArguments{"rendered text"})
                     .accepted());
 
-    auto screen = ssg::Renderer{}.render(client.snapshot());
+    auto screen = ssg::renderFrame(client.snapshot(), lineCache);
     ASSERT_EQ(screen.colors.size(), ssg::kThemeColorSlotCount);
     for (auto const& cell : screen.cells) {
         ASSERT_TRUE(cell.foreground < ssg::kThemeColorSlotCount);
         ASSERT_TRUE(cell.background < ssg::kThemeColorSlotCount);
     }
-    ASSERT_EQ(ssg::Renderer{}.render(client.snapshot()).canonical(),
+    ASSERT_EQ(ssg::renderFrame(client.snapshot(), lineCache).canonical(),
               screen.canonical());
 }
 

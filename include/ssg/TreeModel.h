@@ -247,7 +247,7 @@ public:
     // (cache misses) performed since the last reset. A navigation that changes
     // neither a provider's tree revision nor its expanded set must recompute
     // nothing; this counter is what lets a test assert that, without timing.
-    // Per-thread, like Renderer::renderSegmentationCalls.
+    // Per-thread, like renderSegmentationCalls.
     [[nodiscard]] static std::uint64_t visibleNodesRecomputeCount();
     static void resetVisibleNodesRecomputeCount();
 

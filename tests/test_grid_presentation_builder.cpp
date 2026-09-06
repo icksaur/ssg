@@ -55,6 +55,7 @@ std::vector<std::string> documentRows(ssg::CellGrid const& grid) {
 }
 
 TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
+    ssg::LineLayoutCache lineCache;
     std::string const text = "alpha beta\nsecond line\nthird\n";
 
     auto root = uniqueRoot();
@@ -78,8 +79,8 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
                      .viewport(80, 24)
                      .build();
 
-    auto const realGrid = ssg::Renderer{}.render(*realFrame);
-    auto const builtGrid = ssg::Renderer{}.render(built);
+    auto const realGrid = ssg::renderFrame(*realFrame, lineCache);
+    auto const builtGrid = ssg::renderFrame(built, lineCache);
 
     ASSERT_EQ(realGrid.size.columns, builtGrid.size.columns);
     ASSERT_EQ(realGrid.size.rows, builtGrid.size.rows);
@@ -113,12 +114,13 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
 }
 
 TEST(theBuilderProducesARenderableScreenWithoutAnyFilesystem) {
+    ssg::LineLayoutCache lineCache;
     // The whole point: no temp directory, no runtime, no disk.
     auto snapshot = ssg::test::GridPresentationBuilder{}
                         .document("hello\n")
                         .viewport(40, 10)
                         .build();
-    auto const grid = ssg::Renderer{}.render(snapshot);
+    auto const grid = ssg::renderFrame(snapshot, lineCache);
     ASSERT_EQ(grid.size.columns, 40);
     ASSERT_EQ(grid.size.rows, 10);
 

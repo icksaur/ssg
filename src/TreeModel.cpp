@@ -176,7 +176,7 @@ std::vector<TreeNodeView> computeVisibleNodes(
     return result;
 }
 
-// Per-thread, like Renderer's segmentation counter: tests run single-threaded,
+// Per-thread, like the render segmentation counter: tests run single-threaded,
 // and a per-thread counter needs no synchronization on the hot path.
 thread_local std::uint64_t g_visibleNodesRecomputes = 0;
 

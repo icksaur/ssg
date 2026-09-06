@@ -179,6 +179,7 @@ TEST(encodeAnsiFrameSkipsWideGlyphContinuation) {
 }
 
 TEST(unicodeEndToEndGridAndEncoding) {
+    ssg::LineLayoutCache lineCache;
     // text -> snapshot -> render -> encode, locking the client Unicode path:
     // a wide CJG glyph occupies a cell + continuation, a combining mark folds
     // into its base grapheme (width 1), a ZWJ emoji sequence is one wide cluster,
@@ -206,7 +207,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
     auto gridFrame = ssg::test::projectGridFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(gridFrame.has_value());
     if (!gridFrame) return;
-    auto grid = ssg::Renderer{}.render(*gridFrame);
+    auto grid = ssg::renderFrame(*gridFrame, lineCache);
 
     // Locate the content row: the first cell run "a","b".
     int row = -1, startx = -1;
@@ -248,7 +249,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
                                 ssg::SelectionCommandArguments{pos, std::nullopt}});
         auto frame = ssg::test::projectGridFrame(runtime, ssg::ViewportDimensions{80, 24});
         if (!frame) return -1;
-        auto g = ssg::Renderer{}.render(*frame);
+        auto g = ssg::renderFrame(*frame, lineCache);
         return g.caret ? g.caret->column : -1;
     };
     int const columnBefore = caretColumnAt(before);

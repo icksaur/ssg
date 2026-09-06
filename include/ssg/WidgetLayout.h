@@ -110,7 +110,7 @@ struct RowFit {
 // cursor always has a real cell to sit on when the value fills the width.
 //
 // The caret's screen column is NOT produced here: it is derived from the
-// published node geometry at paint time (Renderer `inputLineCaret`) so the text
+// published node geometry at paint time by renderFrame so the text
 // and the caret are measured once and cannot drift. `layoutTextInput` owns only
 // the text composition and the field width.
 struct TextInputLayout {
@@ -135,7 +135,7 @@ struct TextInputLayout {
 // its own display width. This bundles the query field and the ghost into one
 // widget computation so the reserve/grow + ghost geometry lives in the widget
 // layer, not stitched inline by the shell. The caret column and the node rects/
-// roles stay with the caller (for example Renderer `inputLineCaret`);
+// roles stay with the renderFrame caller;
 // this owns only text + widths. `ghostWidth` is 0 when there is no ghost or the
 // query consumed the row; `ghostText` is the whole ghost (the renderer clips it
 // to `ghostWidth`).
