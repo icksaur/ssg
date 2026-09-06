@@ -240,15 +240,13 @@ void bindExternalModificationCommands(CommandCatalog& catalog,
 }
 
 ExternalModificationFlow::ExternalModificationFlow(Workspace& workspace,
-                                                   RecoveryManager& recovery,
                                                    DiffModel& diff)
-    : workspace_{&workspace}, recovery_{&recovery}, diff_{&diff} {}
+    : workspace_{&workspace}, diff_{&diff} {}
 
 ExternalModificationFlow::ExternalModificationFlow(
     ExternalModificationFlow&& other) noexcept {
     std::lock_guard lock(other.saveExpectationMutex_);
     workspace_ = other.workspace_;
-    recovery_ = other.recovery_;
     diff_ = other.diff_;
     lastWatcherSequence_ = other.lastWatcherSequence_;
     revision_ = other.revision_;
@@ -262,7 +260,6 @@ ExternalModificationFlow& ExternalModificationFlow::operator=(
     if (this == &other) return *this;
     std::scoped_lock lock(saveExpectationMutex_, other.saveExpectationMutex_);
     workspace_ = other.workspace_;
-    recovery_ = other.recovery_;
     diff_ = other.diff_;
     lastWatcherSequence_ = other.lastWatcherSequence_;
     revision_ = other.revision_;
@@ -560,7 +557,7 @@ ExternalModificationFlow::processEvent(ExternalEventInput input,
     }
     advanceRevision();
     return {ExternalModificationError::None, publishStatus,
-            diffResult.accepted(), std::nullopt};
+            diffResult.accepted()};
 }
 
 ExternalModificationResult
@@ -580,16 +577,12 @@ ExternalModificationFlow::reload(const DiffFileId& id,
     JournalDocument replacement{
         JournalDocumentKey::saved(pending->view.path.generic_string()),
         document->mode, false, *pending->diskContent};
-    auto result = recovery_->reloadDocument(document, std::move(replacement));
-    if (!result.accepted()) {
-        return failure(ExternalModificationError::RecoveryFailed);
-    }
+    document = std::move(replacement);
     const auto idx = static_cast<std::size_t>(pending - pending_.begin());
     pending_.erase(pending);
     reconcileSelection(idx);
     advanceRevision();
-    return {ExternalModificationError::None, false, true,
-            std::move(result.compensation)};
+    return {ExternalModificationError::None, false, true};
 }
 
 ExternalModificationResult
@@ -614,8 +607,7 @@ ExternalModificationFlow::resolveReload(const DiffFileId& id) {
     pending_.erase(pending);
     reconcileSelection(idx);
     advanceRevision();
-    return {ExternalModificationError::None, false, true,
-            committed.compensation};
+    return {ExternalModificationError::None, false, true};
 }
 
 ExternalModificationResult
@@ -685,7 +677,7 @@ bool ExternalModificationFlow::selectPrevious() { return moveSelection(-1); }
 
 ExternalModificationResult
 ExternalModificationFlow::failure(ExternalModificationError error) {
-    return {error, false, false, std::nullopt};
+    return {error, false, false};
 }
 
 std::optional<FileDocumentId> ExternalModificationFlow::resolveDocument(

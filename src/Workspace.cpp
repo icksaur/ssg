@@ -1,7 +1,5 @@
 #include <ssg/Workspace.h>
 
-#include <ssg/SharedBytes.h>
-
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -69,16 +67,6 @@ std::span<const std::byte> asBytes(
 std::span<const std::uint8_t> asUnsignedBytes(
     const std::vector<std::uint8_t>& bytes) noexcept {
     return {bytes.data(), bytes.size()};
-}
-
-std::vector<std::byte> toBytes(
-    const std::vector<std::uint8_t>& bytes) {
-    std::vector<std::byte> result(bytes.size());
-    std::transform(bytes.begin(), bytes.end(), result.begin(),
-                   [](std::uint8_t byte) {
-                       return static_cast<std::byte>(byte);
-                   });
-    return result;
 }
 
 bool containsNul(std::span<const std::uint8_t> bytes) {
@@ -170,16 +158,16 @@ DecodedText textForSave(const DecodedText& original,
     return result;
 }
 
-void applyTerminatorEdits(DecodedText& decoded,
-                            const EditTransaction& transaction) {
+void applyTerminatorEdits(DecodedText& decoded, std::string_view preEditText,
+                          const EditTransaction& transaction) {
     struct AnnotatedByte {
         char value;
         LineTerminator terminator = LineTerminator::None;
     };
     std::vector<AnnotatedByte> bytes;
-    bytes.reserve(decoded.utf8.size());
+    bytes.reserve(preEditText.size());
     std::size_t terminatorIndex = 0;
-    for (const char value : decoded.utf8) {
+    for (const char value : preEditText) {
         auto terminator = LineTerminator::None;
         if (value == '\n') {
             terminator = decoded.lineTerminators[terminatorIndex++];
@@ -213,20 +201,17 @@ void applyTerminatorEdits(DecodedText& decoded,
         bytes.insert(bytes.begin() + static_cast<std::ptrdiff_t>(begin),
                      inserted.begin(), inserted.end());
     }
-    decoded.utf8.clear();
     decoded.lineTerminators.clear();
-    decoded.utf8.reserve(bytes.size());
     for (const auto byte : bytes) {
-        decoded.utf8.push_back(byte.value);
         if (byte.value == '\n') {
             decoded.lineTerminators.push_back(byte.terminator);
         }
     }
-    if (!decoded.utf8.empty() && decoded.utf8.back() != '\n') {
+    if (!bytes.empty() && bytes.back().value != '\n') {
         decoded.lineTerminators.push_back(LineTerminator::None);
     }
     decoded.status.finalNewline =
-        !decoded.utf8.empty() && decoded.utf8.back() == '\n';
+        !bytes.empty() && bytes.back().value == '\n';
     std::optional<LineTerminator> uniform;
     bool mixed = false;
     for (const auto terminator : decoded.lineTerminators) {
@@ -302,10 +287,10 @@ public:
         JournalDocumentKey key;
         std::string displayLabel;
         FileContentKind contentKind;
+        // utf8 is the disk baseline; lineTerminators follow the live document.
         DecodedText decoded;
         std::vector<std::uint8_t> rawBytes;
         Document document;
-        SharedBytes persistedText;
         TextEncodingStatus persistedStatus;
         ExternalBaseline baseline;
     };
@@ -314,21 +299,7 @@ public:
         FileDocumentId id;
         JournalDocumentKey priorKey;
         std::string priorLabel;
-        bool wasDeleted = false;
-        bool restoresDocument = false;
-        bool markDirtyOnRestore = false;
-        std::optional<Entry> deletedEntry;
-        std::optional<DecodedText> priorDecoded;
-        SharedBytes priorPersistedText;
-        TextEncodingStatus priorPersistedStatus;
-        ExternalBaseline priorBaseline;
-    };
-
-    struct ReplacedWorkspace {
-        WorkspaceReplacementId id;
-        std::filesystem::path root;
-        std::vector<Entry> entries;
-        std::vector<std::string> recent;
+        std::optional<std::filesystem::path> archivedPath;
     };
 
     Impl(std::filesystem::path canonicalRoot, RecoveryManager& actions,
@@ -343,11 +314,9 @@ public:
     // is a bounded evicting undo ring (see FileArchive.h).
     FileArchive archive;
     std::uint64_t nextDocument = 1;
-    std::uint64_t nextWorkspaceReplacement = 1;
     std::vector<Entry> entries;
     std::vector<std::string> recent;
     std::unordered_map<std::string, CompensationState> compensations;
-    std::optional<ReplacedWorkspace> replacedWorkspace;
     // Notified with the relative path each time saveTo writes a file, so the
     // runtime can correlate SSG's own writes against watcher events. Installed by
     // the runtime; nullptr in isolation (Workspace tests do not observe saves).
@@ -425,35 +394,44 @@ public:
         }
     }
 
+    void rememberCompensation(const RecoveryRecordId& id,
+                              CompensationState state) {
+        compensations.insert_or_assign(std::string{id.value()},
+                                       std::move(state));
+        const auto retained = recovery.records();
+        std::erase_if(compensations, [&](const auto& item) {
+            return std::none_of(
+                retained.begin(), retained.end(), [&](const RecoveryRecord& record) {
+                    return record.id.value() == item.first;
+                });
+        });
+    }
+
     WorkspaceResult addBytes(std::vector<std::uint8_t> bytes,
                               JournalDocumentKey key,
                               std::string label,
-                              bool dirty,
                               DocumentMode mode = DocumentMode::Edit) {
         const auto id = FileDocumentId{nextDocument++};
         const bool hasNul = containsNul(asUnsignedBytes(bytes));
         if (hasNul) {
             entries.push_back({id, std::move(key), std::move(label),
                                FileContentKind::Binary, {}, std::move(bytes),
-                               Document{"", DocumentMode::ReadOnly}, {}, {}});
+                               Document{"", DocumentMode::ReadOnly}, {}});
         } else {
             auto decoded = decodeText(asUnsignedBytes(bytes));
             if (!decoded.accepted()) {
                 entries.push_back(
                     {id, std::move(key), std::move(label),
                      FileContentKind::DecodeFailure, {}, std::move(bytes),
-                     Document{"", DocumentMode::ReadOnly}, {}, {}});
+                     Document{"", DocumentMode::ReadOnly}, {}});
             } else {
                 auto proof = decoded.validated();
-                const SharedBytes persisted =
-                    dirty ? SharedBytes{} : proof.bytes();
                 const auto persistedStatus = decoded.text->status;
                 Document document{std::move(proof), mode};
                 entries.push_back(
                     {id, std::move(key), std::move(label),
                      FileContentKind::Text, std::move(*decoded.text),
-                     std::move(bytes), std::move(document), persisted,
-                     persistedStatus});
+                     std::move(bytes), std::move(document), persistedStatus});
             }
         }
         WorkspaceResult result;
@@ -480,7 +458,6 @@ public:
                            encoded.error->message);
         }
         try {
-            WorkspaceResult result;
             if (!mayOverwrite) {
                 // The filesystem decides whether the name was taken, so a file
                 // created between here and the write cannot be destroyed. An
@@ -498,28 +475,7 @@ public:
                             : created.message);
                 }
             } else if (std::filesystem::exists(absolute)) {
-                const auto priorPersisted = entry.persistedText;
-                const auto replacement = toBytes(encoded.bytes);
-                const auto action =
-                    recovery.overwriteFile(absolute, replacement);
-                if (!action.accepted()) {
-                    return failure(WorkspaceError::RecoveryFailed,
-                                   action.error->message);
-                }
-                result.compensation = action.compensation;
-                if (action.compensation) {
-                    CompensationState state{entry.id, entry.key,
-                                            entry.displayLabel};
-                    state.markDirtyOnRestore = true;
-                    state.priorPersistedText = priorPersisted;
-                    state.priorPersistedStatus = entry.persistedStatus;
-                    // Undoing this save must restore the baseline the prior edits
-                    // branched from, not leave it at the just-written state.
-                    state.priorBaseline = entry.baseline;
-                    compensations.emplace(
-                        std::string{action.compensation->value()},
-                        std::move(state));
-                }
+                replaceFileAtomically(absolute, asBytes(encoded.bytes));
             } else {
                 // Own path, but nothing there: the file was removed under us.
                 // Recreating it is the right outcome for a save.
@@ -530,7 +486,6 @@ public:
                 std::filesystem::path{path}.filename().string();
             entry.decoded = std::move(decoded);
             entry.rawBytes = encoded.bytes;
-            entry.persistedText = SharedBytes::owning(current);
             entry.persistedStatus = entry.decoded.status;
             // The just-written disk bytes become the new branched-from baseline,
             // so a draft made after this save is compared against what we wrote.
@@ -542,6 +497,7 @@ public:
                 saveObserver(std::filesystem::path{path});
             }
             touchRecent(std::move(path));
+            WorkspaceResult result;
             result.document = entry.id;
             return result;
         } catch (const std::exception& exception) {
@@ -611,7 +567,7 @@ std::optional<WorkspaceDocumentState> Workspace::state(
     // An untitled buffer is unsaved exactly when it holds something to lose.
     const bool dirty =
         untitled ? !text.empty()
-                 : (text != entry->persistedText.view() ||
+                 : (text != entry->decoded.utf8 ||
                     entry->decoded.status != entry->persistedStatus);
     return WorkspaceDocumentState{
         entry->id,
@@ -683,19 +639,14 @@ bool Workspace::restoreDraft(FileDocumentId documentId,
         return false;
     }
     if (entry->contentKind != FileContentKind::Text) return false;
-    // Keep persistedText / persistedStatus / baseline (the disk state) so
+    // Keep decoded.utf8 / persistedStatus / baseline (the disk state) so
     // state() derives dirty from draft-vs-disk; only the live buffer changes.
     std::string text{draftContent};
     entry->document = Document{text, entry->document.mode()};
-    // Rebuild decoded to match the draft buffer while preserving the disk file's
-    // encoding/line-ending convention. `decoded.utf8` MUST equal the buffer text:
-    // later edits run applyTerminatorEdits over `decoded`, indexing it by buffer
-    // offset, so a stale disk `decoded` would corrupt terminators or erase out of
-    // range. Per-line terminators are re-derived as the disk default (the draft
-    // record carries only content, not terminators) so a save reproduces the
-    // file's format.
+    // decoded.utf8 remains the disk baseline used by the dirty check.
+    // lineTerminators follows the live buffer because applyTerminatorEdits indexes
+    // it against the pre-edit buffer text.
     const auto terminator = defaultTerminator(entry->decoded.status);
-    entry->decoded.utf8 = text;
     entry->decoded.lineTerminators.clear();
     for (const char value : text) {
         if (value == '\n') entry->decoded.lineTerminators.push_back(terminator);
@@ -727,9 +678,10 @@ TransactionResult Workspace::apply(
         return {DocumentError::InvalidRange, std::uint64_t{0},
                 "workspace document does not exist"};
     }
+    const auto currentText = entry->document.snapshot().text;
     const auto result = entry->document.apply(transaction);
     if (result.accepted()) {
-        applyTerminatorEdits(entry->decoded, transaction);
+        applyTerminatorEdits(entry->decoded, currentText, transaction);
     }
     return result;
 }
@@ -746,37 +698,17 @@ WorkspaceResult Workspace::openDirectory(
         return failure(WorkspaceError::InvalidWorkspace,
                        "workspace path must be an existing directory");
     }
-    const auto replacement =
-        WorkspaceReplacementId{impl_->nextWorkspaceReplacement++};
-    impl_->replacedWorkspace = Impl::ReplacedWorkspace{
-        replacement, impl_->root, std::move(impl_->entries),
-        std::move(impl_->recent)};
     impl_->root = canonical;
     impl_->entries.clear();
     impl_->recent.clear();
-    WorkspaceResult result;
-    result.workspaceCompensation = replacement;
-    return result;
-}
-
-WorkspaceResult Workspace::restoreWorkspace(
-    WorkspaceReplacementId replacement) {
-    if (!impl_->replacedWorkspace ||
-        impl_->replacedWorkspace->id != replacement) {
-        return failure(WorkspaceError::NotFound,
-                       "workspace compensation does not exist");
-    }
-    impl_->root = std::move(impl_->replacedWorkspace->root);
-    impl_->entries = std::move(impl_->replacedWorkspace->entries);
-    impl_->recent = std::move(impl_->replacedWorkspace->recent);
-    impl_->replacedWorkspace.reset();
+    impl_->compensations.clear();
     return {};
 }
 
 WorkspaceResult Workspace::newDocument(std::string_view suggestedLabel) {
     return impl_->addBytes(
         {}, JournalDocumentKey::untitled(UntitledDocumentId::generate()),
-        suggestedLabel.empty() ? std::string{kNewBufferLabel} : sanitizeLabel(suggestedLabel), true,
+        suggestedLabel.empty() ? std::string{kNewBufferLabel} : sanitizeLabel(suggestedLabel),
         DocumentMode::Edit);
 }
 
@@ -787,7 +719,7 @@ WorkspaceResult Workspace::openVirtualDocument(std::string_view suggestedLabel,
         std::vector<std::uint8_t>{initialText.begin(), initialText.end()},
         JournalDocumentKey::untitled(UntitledDocumentId::generate()),
         suggestedLabel.empty() ? std::string{kNewBufferLabel} : sanitizeLabel(suggestedLabel),
-        false, mode);
+        mode);
 }
 
 WorkspaceResult Workspace::openFile(std::string_view rawPath) {
@@ -812,7 +744,7 @@ WorkspaceResult Workspace::openFile(std::string_view rawPath) {
         auto baseline = captureDiskBaseline(*absolute, bytes);
         auto result = impl_->addBytes(
             std::move(bytes), JournalDocumentKey::saved(path),
-            absolute->filename().string(), false);
+            absolute->filename().string());
         if (result.accepted() && result.document) {
             if (auto* entry = impl_->find(*result.document)) {
                 entry->baseline = baseline;
@@ -847,7 +779,7 @@ WorkspaceResult Workspace::openDroppedContent(
     return impl_->addBytes(
         {bytes.begin(), bytes.end()},
         JournalDocumentKey::untitled(UntitledDocumentId::generate()),
-        sanitizeLabel(suggestedLabel), true, DocumentMode::Edit);
+        sanitizeLabel(suggestedLabel), DocumentMode::Edit);
 }
 
 WorkspaceResult Workspace::save(FileDocumentId id) {
@@ -940,42 +872,15 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
             return failure(WorkspaceError::DecodeFailed,
                            decoded.error->message);
         }
-        std::optional<JournalDocument> documentBefore{
-            JournalDocument{entry->key, entry->document.mode(),
-                            state(id)->dirty, entry->document.snapshot().text}};
-        const JournalDocument replacement{
-            entry->key, entry->document.mode(), false, decoded.text->utf8};
-        const auto action =
-            impl_->recovery.reloadDocument(documentBefore, replacement);
-        if (!action.accepted()) {
-            return failure(WorkspaceError::RecoveryFailed,
-                           action.error->message);
-        }
-        if (action.compensation) {
-            Impl::CompensationState state{id, entry->key,
-                                          entry->displayLabel};
-            state.restoresDocument = true;
-            state.priorDecoded = entry->decoded;
-            state.priorPersistedText = entry->persistedText;
-            state.priorPersistedStatus = entry->persistedStatus;
-            // Undoing the reload must restore the baseline the pre-reload edits
-            // branched from, not the reloaded disk state.
-            state.priorBaseline = entry->baseline;
-            impl_->compensations.emplace(
-                std::string{action.compensation->value()}, std::move(state));
-        }
         entry->document = Document{decoded.text->utf8};
         entry->decoded = std::move(*decoded.text);
         entry->rawBytes = bytes;
-        entry->persistedText =
-            SharedBytes::owning(entry->document.snapshot().text);
         entry->persistedStatus = entry->decoded.status;
         // Reload re-reads disk, so the baseline now branches from the reloaded
         // disk content.
         entry->baseline = captureDiskBaseline(*absolute, bytes);
         WorkspaceResult result;
         result.document = id;
-        result.compensation = action.compensation;
         return result;
     } catch (const std::exception& exception) {
         return failure(WorkspaceError::IoFailed, exception.what());
@@ -1015,35 +920,13 @@ WorkspaceResult Workspace::reloadWithContent(FileDocumentId id,
         return failure(WorkspaceError::DecodeFailed,
                        "binary file cannot replace an editable document");
     }
-    std::optional<JournalDocument> documentBefore{
-        JournalDocument{entry->key, entry->document.mode(),
-                        state(id)->dirty, entry->document.snapshot().text}};
-    const JournalDocument replacement{entry->key, entry->document.mode(), false,
-                                      decoded.text->utf8};
-    const auto action =
-        impl_->recovery.reloadDocument(documentBefore, replacement);
-    if (!action.accepted()) {
-        return failure(WorkspaceError::RecoveryFailed, action.error->message);
-    }
-    if (action.compensation) {
-        Impl::CompensationState comp{id, entry->key, entry->displayLabel};
-        comp.restoresDocument = true;
-        comp.priorDecoded = entry->decoded;
-        comp.priorPersistedText = entry->persistedText;
-        comp.priorPersistedStatus = entry->persistedStatus;
-        comp.priorBaseline = entry->baseline;
-        impl_->compensations.emplace(
-            std::string{action.compensation->value()}, std::move(comp));
-    }
     entry->document = Document{decoded.text->utf8, entry->document.mode()};
     entry->decoded = std::move(*decoded.text);
     entry->rawBytes = bytes;
-    entry->persistedText = SharedBytes::owning(entry->document.snapshot().text);
     entry->persistedStatus = entry->decoded.status;
     entry->baseline = captureDiskBaseline(*absolute, entry->rawBytes);
     WorkspaceResult result;
     result.document = id;
-    result.compensation = action.compensation;
     return result;
 }
 
@@ -1068,11 +951,6 @@ WorkspaceResult Workspace::adoptExternalRename(FileDocumentId id,
         return failure(WorkspaceError::AlreadyOpen,
                        "destination is already open");
     }
-    // No filesystem move: the file already moved on disk. The recovery record
-    // captures the pre-adoption content so undo restores it; the key and label are
-    // restored from the compensation state (see Workspace::restore) without ever
-    // touching the filesystem.
-    //
     // `content` is the RAW new-path disk bytes: decode them through the document's
     // existing encoding so a non-UTF-8 file adopts as text, not corrupted bytes.
     // The binary guard is applied to the DECODED text, never the raw bytes, so a
@@ -1091,44 +969,23 @@ WorkspaceResult Workspace::adoptExternalRename(FileDocumentId id,
     const std::string diskText = decoded.text->utf8;
     const std::string bufferContent =
         replaceBuffer ? diskText : entry->document.snapshot().text;
-    std::optional<JournalDocument> documentBefore{
-        JournalDocument{entry->key, entry->document.mode(), state(id)->dirty,
-                        entry->document.snapshot().text}};
-    const auto action = impl_->recovery.reloadDocument(
-        documentBefore,
-        JournalDocument{JournalDocumentKey::saved(path),
-                        entry->document.mode(), bufferContent != diskText,
-                        bufferContent});
-    if (!action.accepted()) {
-        return failure(WorkspaceError::RecoveryFailed, action.error->message);
-    }
-    if (action.compensation) {
-        Impl::CompensationState comp{id, entry->key, entry->displayLabel};
-        comp.restoresDocument = true;
-        comp.priorDecoded = entry->decoded;
-        comp.priorPersistedText = entry->persistedText;
-        comp.priorPersistedStatus = entry->persistedStatus;
-        comp.priorBaseline = entry->baseline;
-        impl_->compensations.emplace(
-            std::string{action.compensation->value()}, std::move(comp));
-    }
     entry->key = JournalDocumentKey::saved(path);
     entry->displayLabel = destination->filename().string();
     if (replaceBuffer) {
         entry->document = Document{diskText, entry->document.mode()};
         entry->decoded = *decoded.text;
+    } else {
+        entry->decoded.utf8 = diskText;
     }
     // The baseline is always the new-path disk content, so dirtiness is derived
     // from buffer-vs-disk regardless of whether the buffer followed. Persisted
     // status reflects the decoded disk bytes.
     entry->rawBytes = baselineBytes;
-    entry->persistedText = SharedBytes::owning(diskText);
     entry->persistedStatus = decoded.text->status;
     entry->baseline = captureDiskBaseline(*destination, entry->rawBytes);
     impl_->touchRecent(path);
     WorkspaceResult result;
     result.document = id;
-    result.compensation = action.compensation;
     return result;
 }
 
@@ -1154,7 +1011,6 @@ WorkspaceResult Workspace::reopenWithEncoding(FileDocumentId id,
     entry->contentKind = FileContentKind::Text;
     entry->decoded = std::move(*decoded.text);
     entry->document = Document{entry->decoded.utf8};
-    entry->persistedText = SharedBytes::owning(entry->decoded.utf8);
     entry->persistedStatus = entry->decoded.status;
     WorkspaceResult result;
     result.document = id;
@@ -1287,8 +1143,8 @@ WorkspaceResult Workspace::renameFile(FileDocumentId id,
                        action.error->message);
     }
     if (action.compensation) {
-        impl_->compensations.emplace(
-            std::string{action.compensation->value()},
+        impl_->rememberCompensation(
+            *action.compensation,
             Impl::CompensationState{id, entry->key, entry->displayLabel});
     }
     entry->key = JournalDocumentKey::saved(path);
@@ -1316,8 +1172,8 @@ WorkspaceResult Workspace::deleteFile(FileDocumentId id) {
     // delete fails and the file is untouched: a delete must never reduce the
     // number of copies below one, and this command deliberately asks for no
     // confirmation, so the archive is what makes that safe.
-    if (const auto archived = impl_->archive.archive(impl_->root, *path);
-        !archived.ok()) {
+    const auto archived = impl_->archive.archive(impl_->root, *path);
+    if (!archived.ok()) {
         return failure(WorkspaceError::IoFailed,
                        "could not archive the file before deleting it: " +
                            archived.message);
@@ -1334,11 +1190,10 @@ WorkspaceResult Workspace::deleteFile(FileDocumentId id) {
         impl_->entries.begin(), impl_->entries.end(),
         [id](const Impl::Entry& candidate) { return candidate.id == id; });
     if (action.compensation) {
-        Impl::CompensationState state{id, removed->key, removed->displayLabel};
-        state.wasDeleted = true;
-        state.deletedEntry = std::move(*removed);
-        impl_->compensations.emplace(
-            std::string{action.compensation->value()}, std::move(state));
+        impl_->rememberCompensation(
+            *action.compensation,
+            Impl::CompensationState{id, removed->key, removed->displayLabel,
+                                    archived.archivedPath});
     }
     impl_->entries.erase(removed);
     return result;
@@ -1374,63 +1229,50 @@ WorkspaceResult Workspace::newDirectory(std::string_view rawPath) {
 
 WorkspaceResult Workspace::restore(
     const RecoveryRecordId& compensation) {
-    const auto found =
+    auto found =
         impl_->compensations.find(std::string{compensation.value()});
+    std::vector<std::uint8_t> archivedBytes;
     if (found != impl_->compensations.end() &&
-        found->second.restoresDocument) {
-        auto* entry = impl_->find(found->second.id);
-        if (!entry) {
-            return failure(WorkspaceError::NotFound,
-                           "document compensation target does not exist");
+        found->second.archivedPath) {
+        try {
+            archivedBytes = readFileBytes(*found->second.archivedPath);
+        } catch (const std::exception& exception) {
+            return failure(WorkspaceError::IoFailed, exception.what());
         }
-        std::optional<JournalDocument> restoredDocument{
-            JournalDocument{entry->key, entry->document.mode(), false,
-                            entry->document.snapshot().text}};
-        const auto restored = impl_->recovery.restoreDocument(
-            compensation, restoredDocument);
-        if (!restored.accepted()) {
-            return failure(WorkspaceError::RecoveryFailed,
-                           restored.error->message);
-        }
-        entry->document = Document{restoredDocument->utf8Content,
-                                   restoredDocument->mode};
-        if (found->second.priorDecoded) {
-            entry->decoded = *found->second.priorDecoded;
-        }
-        entry->persistedText =
-            restoredDocument->dirty
-                ? found->second.priorPersistedText
-                : SharedBytes::owning(restoredDocument->utf8Content);
-        entry->persistedStatus = found->second.priorPersistedStatus;
-        entry->baseline = found->second.priorBaseline;
-        // Restore the key and label too, so an adopted external rename is
-        // reversible; a no-op for reload/reloadWithContent, where they are
-        // unchanged.
-        entry->key = found->second.priorKey;
-        entry->displayLabel = found->second.priorLabel;
-        impl_->compensations.erase(found);
-        return {};
     }
     const auto restored = impl_->recovery.restoreFilesystem(compensation);
     if (!restored.accepted()) {
+        if (found != impl_->compensations.end() && restored.error->code ==
+                                                        RecoveryErrorCode::
+                                                            RecordNotFound) {
+            impl_->compensations.erase(found);
+        }
         return failure(WorkspaceError::RecoveryFailed,
                        restored.error->message);
     }
     if (found != impl_->compensations.end()) {
-        if (found->second.wasDeleted && found->second.deletedEntry) {
-            impl_->entries.push_back(
-                std::move(*found->second.deletedEntry));
+        WorkspaceResult result;
+        if (found->second.archivedPath) {
+            const auto prior = found->second;
+            auto added = impl_->addBytes(
+                std::move(archivedBytes), prior.priorKey, prior.priorLabel);
+            auto* entry = impl_->find(*added.document);
+            entry->id = prior.id;
+            WorkspaceResult pathError;
+            const auto path =
+                impl_->resolve(prior.priorKey.savedPath(), true, pathError);
+            if (path) {
+                entry->baseline =
+                    captureDiskBaseline(*path, entry->rawBytes);
+            }
+            result.document = prior.id;
         } else if (auto* entry = impl_->find(found->second.id)) {
             entry->key = found->second.priorKey;
             entry->displayLabel = found->second.priorLabel;
-            if (found->second.markDirtyOnRestore) {
-                entry->persistedText = found->second.priorPersistedText;
-                entry->persistedStatus =
-                    found->second.priorPersistedStatus;
-                entry->baseline = found->second.priorBaseline;
-            }
+            result.document = entry->id;
         }
         impl_->compensations.erase(found);
+        return result;
     }
     return {};
 }

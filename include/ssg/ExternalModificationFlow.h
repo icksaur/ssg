@@ -2,7 +2,6 @@
 
 #include <ssg/DiffModel.h>
 #include <ssg/FilesystemWatcher.h>
-#include <ssg/RecoveryManager.h>
 #include <ssg/Workspace.h>
 
 #include <cstdint>
@@ -103,7 +102,6 @@ struct ExternalModificationResult {
     ExternalModificationError error = ExternalModificationError::None;
     bool statusPublished = false;
     bool diffRouted = true;
-    std::optional<RecoveryRecordId> compensation;
     [[nodiscard]] bool accepted() const noexcept {
         return error == ExternalModificationError::None;
     }
@@ -119,8 +117,7 @@ struct ExternalOpenDiffResult {
 
 class ExternalModificationFlow {
   public:
-    ExternalModificationFlow(Workspace& workspace, RecoveryManager& recovery,
-                             DiffModel& diff);
+    ExternalModificationFlow(Workspace& workspace, DiffModel& diff);
     ~ExternalModificationFlow() = default;
     ExternalModificationFlow(ExternalModificationFlow&& other) noexcept;
     ExternalModificationFlow&
@@ -180,7 +177,6 @@ class ExternalModificationFlow {
     [[nodiscard]] bool moveSelection(int direction);
 
     Workspace* workspace_;
-    RecoveryManager* recovery_;
     DiffModel* diff_;
     std::uint64_t lastWatcherSequence_ = 0;
     std::uint64_t revision_{0};

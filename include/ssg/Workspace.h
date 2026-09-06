@@ -34,21 +34,6 @@ private:
     std::uint64_t value_;
 };
 
-class WorkspaceReplacementId {
-public:
-    explicit constexpr WorkspaceReplacementId(
-        std::uint64_t value = 0) noexcept
-        : value_{value} {}
-    [[nodiscard]] constexpr std::uint64_t value() const noexcept {
-        return value_;
-    }
-    constexpr auto operator<=>(const WorkspaceReplacementId&) const noexcept =
-        default;
-
-private:
-    std::uint64_t value_;
-};
-
 enum class FileContentKind : std::uint8_t {
     Text,
     Binary,
@@ -82,7 +67,6 @@ struct WorkspaceResult {
     std::string message;
     std::optional<FileDocumentId> document;
     std::optional<RecoveryRecordId> compensation;
-    std::optional<WorkspaceReplacementId> workspaceCompensation;
     std::vector<WorkspaceFailure> failures;
 
     [[nodiscard]] bool accepted() const noexcept {
@@ -173,8 +157,6 @@ public:
 
     [[nodiscard]] WorkspaceResult openDirectory(
         const std::filesystem::path& path);
-    [[nodiscard]] WorkspaceResult restoreWorkspace(
-        WorkspaceReplacementId replacement);
 
     [[nodiscard]] WorkspaceResult newDocument(
         std::string_view suggestedLabel = {});
@@ -192,17 +174,14 @@ public:
     [[nodiscard]] WorkspaceResult saveAs(FileDocumentId document,
                                           std::string_view path);
     [[nodiscard]] WorkspaceResult reload(FileDocumentId document);
-    // Reversibly replaces an open saved document's buffer with the GIVEN content
-    // (never a fresh disk read), rebaselining to those bytes and recording a
-    // compensation, so the external-modification reload commits exactly the bytes
-    // the conflict was raised about. Unlike reload(), which re-reads disk and could
-    // commit different bytes if disk changed again between raise and reload.
+    // Uses the observed bytes rather than re-reading a path that may have
+    // changed again since the external modification was reported.
     [[nodiscard]] WorkspaceResult reloadWithContent(FileDocumentId document,
                                                     std::string content);
     // Adopts an externally observed rename of an ALREADY-MOVED file: rekeys the
     // open document to `newPath`, relabels it, and rebaselines it to the new path's
-    // disk `content`, recording a compensation. It performs NO filesystem move (the
-    // file already moved on disk) -- unlike renameFile(), which moves the file.
+    // disk `content`. It performs no filesystem move because the file already
+    // moved on disk, unlike renameFile().
     // `replaceBuffer` replaces the visible buffer with `content` (a clean document
     // that simply follows its file); when false the buffer is left untouched (a
     // dirty document whose unsaved edits are preserved while its baseline follows

@@ -22,12 +22,9 @@ struct RecoveryConfig {
 };
 
 enum class RecoveryRecordKind : std::uint8_t {
-    DocumentClose,
-    DocumentReload,
-    FileOverwrite,
-    PathRename,
-    PathDelete,
-    WorkspaceReplace,
+    DocumentClose = 0,
+    PathRename = 3,
+    PathDelete = 4,
 };
 
 class RecoveryRecordId {
@@ -133,12 +130,6 @@ public:
         std::optional<JournalDocument>& document,
         ScratchStore& scratch,
         std::chrono::milliseconds durabilityTimeout);
-    [[nodiscard]] RecoveryActionResult reloadDocument(
-        std::optional<JournalDocument>& document,
-        JournalDocument replacement);
-    [[nodiscard]] RecoveryActionResult overwriteFile(
-        const std::filesystem::path& path,
-        std::span<const std::byte> replacement);
     [[nodiscard]] RecoveryActionResult renamePath(
         const std::filesystem::path& source,
         const std::filesystem::path& destination);
@@ -154,11 +145,6 @@ public:
     [[nodiscard]] RecoveryActionResult deletePath(
         const std::filesystem::path& path);
 
-    // Replaces the workspace with a copy of replacement while leaving
-    // replacement itself unchanged.
-    [[nodiscard]] RecoveryActionResult replaceWorkspace(
-        const std::filesystem::path& workspace,
-        const std::filesystem::path& replacement);
 
     [[nodiscard]] RecoveryRestoreResult restoreDocument(
         const RecoveryRecordId& record,

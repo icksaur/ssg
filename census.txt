@@ -801,7 +801,7 @@ ssg/ExternalModificationFlow.h	enumerator	ssg::ExternalModificationError::Recove
 ssg/ExternalModificationFlow.h	enumerator	ssg::ExternalModificationError::StaleEvent
 ssg/ExternalModificationFlow.h	enumerator	ssg::ExternalModificationError::UnsupportedEvent
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::ExternalModificationFlow	void (ExternalModificationFlow &&) noexcept
-ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::ExternalModificationFlow	void (Workspace &, RecoveryManager &, DiffModel &)
+ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::ExternalModificationFlow	void (Workspace &, DiffModel &)
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::ExternalModificationFlow	void (const ExternalModificationFlow &)
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::hasFile	bool (const DiffFileId &)
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::ingest	bool (std::vector<WatchEvent>, bool)
@@ -850,7 +850,6 @@ ssg/ExternalModificationFlow.h	var	ssg::ExternalEventInput::diskContent	std::opt
 ssg/ExternalModificationFlow.h	var	ssg::ExternalEventInput::event	WatchEvent
 ssg/ExternalModificationFlow.h	var	ssg::ExternalEventInput::id	DiffFileId
 ssg/ExternalModificationFlow.h	var	ssg::ExternalEventInput::previousId	std::optional<DiffFileId>
-ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationResult::compensation	std::optional<RecoveryRecordId>
 ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationResult::diffRouted	bool
 ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationResult::error	ExternalModificationError
 ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationResult::statusPublished	bool
@@ -2258,11 +2257,8 @@ ssg/RecoveryManager.h	enumerator	ssg::RecoveryErrorCode::RecordKindMismatch
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryErrorCode::RecordNotFound
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryErrorCode::RestorationFailed
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryRecordKind::DocumentClose
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryRecordKind::DocumentReload
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryRecordKind::FileOverwrite
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryRecordKind::PathDelete
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryRecordKind::PathRename
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryRecordKind::WorkspaceReplace
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::CleanupRecord
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::InstallRecord
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::MutateDocument
@@ -2283,12 +2279,9 @@ ssg/RecoveryManager.h	func	ssg::RecoveryManager::create	RecoveryManager (const s
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::deletePath	RecoveryActionResult (const std::filesystem::path &)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::operator=	RecoveryManager &(RecoveryManager &&) noexcept
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::operator=	RecoveryManager &(const RecoveryManager &)
-ssg/RecoveryManager.h	func	ssg::RecoveryManager::overwriteFile	RecoveryActionResult (const std::filesystem::path &, std::span<const std::byte>)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::records	std::vector<RecoveryRecord> () const
-ssg/RecoveryManager.h	func	ssg::RecoveryManager::reloadDocument	RecoveryActionResult (std::optional<JournalDocument> &, JournalDocument)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::renamePath	RecoveryActionResult (const std::filesystem::path &, const std::filesystem::path &)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::renamePathNoClobber	RecoveryActionResult (const std::filesystem::path &, const std::filesystem::path &)
-ssg/RecoveryManager.h	func	ssg::RecoveryManager::replaceWorkspace	RecoveryActionResult (const std::filesystem::path &, const std::filesystem::path &)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::restoreDocument	RecoveryRestoreResult (const RecoveryRecordId &, std::optional<JournalDocument> &)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::restoreFilesystem	RecoveryRestoreResult (const RecoveryRecordId &)
 ssg/RecoveryManager.h	func	ssg::RecoveryRecordId::RecoveryRecordId	void (std::string)
@@ -4100,7 +4093,6 @@ ssg/WidgetLayout.h	var	ssg::TextInputLayout::text	std::string
 ssg/WidgetLayout.h	var	ssg::TextInputLayout::width	int
 ssg/Workspace.h	class	ssg::FileDocumentId
 ssg/Workspace.h	class	ssg::Workspace
-ssg/Workspace.h	class	ssg::WorkspaceReplacementId
 ssg/Workspace.h	enum	ssg::FileContentKind
 ssg/Workspace.h	enum	ssg::WorkspaceError
 ssg/Workspace.h	enumerator	ssg::FileContentKind::Binary
@@ -4150,7 +4142,6 @@ ssg/Workspace.h	func	ssg::Workspace::renameFile	WorkspaceResult (FileDocumentId,
 ssg/Workspace.h	func	ssg::Workspace::reopenWithEncoding	WorkspaceResult (FileDocumentId, TextEncoding)
 ssg/Workspace.h	func	ssg::Workspace::restore	WorkspaceResult (const RecoveryRecordId &)
 ssg/Workspace.h	func	ssg::Workspace::restoreDraft	bool (FileDocumentId, std::string_view)
-ssg/Workspace.h	func	ssg::Workspace::restoreWorkspace	WorkspaceResult (WorkspaceReplacementId)
 ssg/Workspace.h	func	ssg::Workspace::root	const std::filesystem::path &() const noexcept
 ssg/Workspace.h	func	ssg::Workspace::save	WorkspaceResult (FileDocumentId)
 ssg/Workspace.h	func	ssg::Workspace::saveAll	WorkspaceResult ()
@@ -4161,9 +4152,6 @@ ssg/Workspace.h	func	ssg::Workspace::setLineEnding	WorkspaceResult (FileDocument
 ssg/Workspace.h	func	ssg::Workspace::setSaveObserver	void (std::function<void (const std::filesystem::path &)>)
 ssg/Workspace.h	func	ssg::Workspace::state	std::optional<WorkspaceDocumentState> (FileDocumentId) const
 ssg/Workspace.h	func	ssg::Workspace::tryDocument	const Document *(FileDocumentId) const noexcept
-ssg/Workspace.h	func	ssg::WorkspaceReplacementId::WorkspaceReplacementId	void (std::uint64_t) noexcept
-ssg/Workspace.h	func	ssg::WorkspaceReplacementId::operator<=>	std::strong_ordering (const WorkspaceReplacementId &) const noexcept
-ssg/Workspace.h	func	ssg::WorkspaceReplacementId::value	std::uint64_t () const noexcept
 ssg/Workspace.h	func	ssg::WorkspaceResult::accepted	bool () const noexcept
 ssg/Workspace.h	func	ssg::operator==	bool (const WorkspaceDocumentState &, const WorkspaceDocumentState &)
 ssg/Workspace.h	func	ssg::operator==	bool (const WorkspaceFailure &, const WorkspaceFailure &)
@@ -4184,7 +4172,6 @@ ssg/Workspace.h	var	ssg::WorkspaceResult::document	std::optional<FileDocumentId>
 ssg/Workspace.h	var	ssg::WorkspaceResult::error	WorkspaceError
 ssg/Workspace.h	var	ssg::WorkspaceResult::failures	std::vector<WorkspaceFailure>
 ssg/Workspace.h	var	ssg::WorkspaceResult::message	std::string
-ssg/Workspace.h	var	ssg::WorkspaceResult::workspaceCompensation	std::optional<WorkspaceReplacementId>
 ssg/Workspace.h	var	ssg::kNewBufferLabel	const std::string_view
 ssg/WorkspaceFileIndex.h	func	ssg::buildWorkspaceFileIndex	WorkspaceFileIndexResult (const std::filesystem::path &, const GitIgnoreMatcher &, const WorkspaceFileIndexOptions &)
 ssg/WorkspaceFileIndex.h	struct	ssg::WorkspaceFileIndexOptions

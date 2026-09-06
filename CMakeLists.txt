@@ -945,10 +945,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/test_recovery.cpp
         SYMBOL test_recovery_failures)
     ssg_add_test_suite(
-        NAME test_recovery_rollback
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_recovery.cpp
-        SYMBOL test_recovery_rollback)
-    ssg_add_test_suite(
         NAME test_recovery_reconstruction
         ENTRY ${SSG_SOURCE_DIR}/tests/test_recovery.cpp
         SYMBOL test_recovery_reconstruction)

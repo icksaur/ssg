@@ -406,13 +406,16 @@ RecoveryError error(RecoveryErrorCode code,
 }
 
 bool documentKind(RecoveryRecordKind kind) {
-    return kind == RecoveryRecordKind::DocumentClose ||
-           kind == RecoveryRecordKind::DocumentReload;
+    return kind == RecoveryRecordKind::DocumentClose;
 }
 
 bool validRecordKind(std::uint8_t kind) {
-    return kind <=
-           static_cast<std::uint8_t>(RecoveryRecordKind::WorkspaceReplace);
+    switch (static_cast<RecoveryRecordKind>(kind)) {
+    case RecoveryRecordKind::DocumentClose:
+    case RecoveryRecordKind::PathRename:
+    case RecoveryRecordKind::PathDelete: return true;
+    }
+    return false;
 }
 
 bool validSnapshotKind(std::uint8_t kind) {
@@ -423,7 +426,6 @@ struct StoredRecord {
     RecoveryRecord record;
     std::optional<JournalDocument> document;
     std::vector<SnapshotKind> snapshots;
-    SnapshotKind replacement = SnapshotKind::Missing;
     std::filesystem::path directory;
     bool restoredInMemory = false;
 };
@@ -459,7 +461,6 @@ std::vector<std::byte> encodeManifest(const StoredRecord& stored) {
         writer.string(pathToUtf8(stored.record.affectedPaths[index]));
         writer.u8(static_cast<std::uint8_t>(stored.snapshots[index]));
     }
-    writer.u8(static_cast<std::uint8_t>(stored.replacement));
     return writer.take();
 }
 
@@ -518,10 +519,14 @@ StoredRecord decodeManifest(const RecoveryRecordId& id,
         snapshots.push_back(static_cast<SnapshotKind>(kind));
     }
 
-    std::uint8_t replacement = 0;
-    if (!reader.u8(replacement) || !validSnapshotKind(replacement) ||
-        !reader.empty()) {
-        throw std::runtime_error("invalid recovery manifest tail");
+    if (!reader.empty()) {
+        // Manifests written before workspace replacement was removed carry one
+        // unused replacement-kind byte for every record.
+        std::uint8_t legacyReplacement = 0;
+        if (!reader.u8(legacyReplacement) ||
+            !validSnapshotKind(legacyReplacement) || !reader.empty()) {
+            throw std::runtime_error("invalid recovery manifest tail");
+        }
     }
 
     const auto kind = static_cast<RecoveryRecordKind>(encodedKind);
@@ -536,7 +541,6 @@ StoredRecord decodeManifest(const RecoveryRecordId& id,
              std::move(paths)},
             std::move(document),
             std::move(snapshots),
-            static_cast<SnapshotKind>(replacement),
             directory,
             false};
 }
@@ -619,7 +623,7 @@ public:
 
         const auto previous = *document;
         return prepareAndPerform(
-            RecoveryRecordKind::DocumentClose, previous, {}, std::nullopt,
+            RecoveryRecordKind::DocumentClose, previous, {},
             [&] {
                 before(RecoveryStep::MutateDocument);
                 document.reset();
@@ -627,46 +631,6 @@ public:
             [&](const StoredRecord&) {
                 before(RecoveryStep::RollbackDocument);
                 document = previous;
-            });
-    }
-
-    RecoveryActionResult reloadDocument(
-        std::optional<JournalDocument>& document,
-        JournalDocument replacement) {
-        if (!document) {
-            return {{},
-                    error(RecoveryErrorCode::PreparationFailed,
-                          "cannot reload an absent document")};
-        }
-        const auto previous = *document;
-        return prepareAndPerform(
-            RecoveryRecordKind::DocumentReload, previous, {}, std::nullopt,
-            [&] {
-                before(RecoveryStep::MutateDocument);
-                document = std::move(replacement);
-            },
-            [&](const StoredRecord&) {
-                before(RecoveryStep::RollbackDocument);
-                document = previous;
-            });
-    }
-
-    RecoveryActionResult overwriteFile(
-        const std::filesystem::path& path,
-        std::span<const std::byte> replacement) {
-        const std::vector<std::byte> ownedReplacement(replacement.begin(),
-                                                       replacement.end());
-        return prepareAndPerform(
-            RecoveryRecordKind::FileOverwrite, std::nullopt, {path},
-            std::nullopt,
-            [&] {
-                before(RecoveryStep::MutateFilesystem);
-                replaceFileAtomically(path, ownedReplacement);
-            },
-            [&](const StoredRecord& stored) {
-                before(RecoveryStep::RollbackFilesystem);
-                restoreSnapshot(path, artifactPath(stored, 0),
-                                 stored.snapshots[0]);
             });
     }
 
@@ -693,7 +657,7 @@ public:
 
         return prepareAndPerform(
             RecoveryRecordKind::PathRename, std::nullopt,
-            {source, destination}, std::nullopt,
+            {source, destination},
             [&] {
                 before(RecoveryStep::MutateFilesystem);
                 removeNode(destination);
@@ -741,7 +705,7 @@ public:
 
         return prepareAndPerform(
             RecoveryRecordKind::PathRename, std::nullopt,
-            {source, destination}, std::nullopt,
+            {source, destination},
             [&] {
                 before(RecoveryStep::MutateFilesystem);
                 std::filesystem::create_directories(destination.parent_path());
@@ -781,7 +745,6 @@ public:
         }
         return prepareAndPerform(
             RecoveryRecordKind::PathDelete, std::nullopt, {path},
-            std::nullopt,
             [&] {
                 before(RecoveryStep::MutateFilesystem);
                 removeNode(path);
@@ -789,49 +752,6 @@ public:
             [&](const StoredRecord& stored) {
                 before(RecoveryStep::RollbackFilesystem);
                 restoreSnapshot(path, artifactPath(stored, 0),
-                                 stored.snapshots[0]);
-            });
-    }
-
-    RecoveryActionResult replaceWorkspace(
-        const std::filesystem::path& workspace,
-        const std::filesystem::path& replacement) {
-        try {
-            if (snapshotKind(replacement) == SnapshotKind::Missing) {
-                return {{},
-                        error(RecoveryErrorCode::PreparationFailed,
-                              "replacement workspace does not exist")};
-            }
-            if (pathContains(workspace, replacement) ||
-                pathContains(replacement, workspace)) {
-                return {{},
-                        error(RecoveryErrorCode::PreparationFailed,
-                              "workspace and replacement must not overlap")};
-            }
-        } catch (...) {
-            return {{},
-                    error(RecoveryErrorCode::PreparationFailed,
-                          exceptionMessage(std::current_exception()))};
-        }
-
-        return prepareAndPerform(
-            RecoveryRecordKind::WorkspaceReplace, std::nullopt, {workspace},
-            replacement,
-            [&] {
-                before(RecoveryStep::MutateFilesystem);
-                removeNode(workspace);
-                before(RecoveryStep::MutateFilesystem);
-                const auto installed = recordsUnderPreparation_;
-                if (installed == nullptr) {
-                    throw std::logic_error(
-                        "workspace replacement record is unavailable");
-                }
-                copyNode(installed->directory / "replacement", workspace,
-                          installed->replacement);
-            },
-            [&](const StoredRecord& stored) {
-                before(RecoveryStep::RollbackFilesystem);
-                restoreSnapshot(workspace, artifactPath(stored, 0),
                                  stored.snapshots[0]);
             });
     }
@@ -981,8 +901,7 @@ private:
     }
 
     void validateRecoverySeparation(
-        const std::vector<std::filesystem::path>& paths,
-        const std::optional<std::filesystem::path>& replacement) const {
+        const std::vector<std::filesystem::path>& paths) const {
         for (const auto& path : paths) {
             if (pathContains(path, recoveryRoot_) ||
                 pathContains(recoveryRoot_, path)) {
@@ -990,20 +909,13 @@ private:
                     "recovery root and action path must not overlap");
             }
         }
-        if (replacement &&
-            (pathContains(*replacement, recoveryRoot_) ||
-             pathContains(recoveryRoot_, *replacement))) {
-            throw std::invalid_argument(
-                "recovery root and replacement path must not overlap");
-        }
     }
 
     StoredRecord prepareRecord(
         RecoveryRecordKind kind,
         std::optional<JournalDocument> document,
-        std::vector<std::filesystem::path> paths,
-        const std::optional<std::filesystem::path>& replacement) {
-        validateRecoverySeparation(paths, replacement);
+        std::vector<std::filesystem::path> paths) {
+        validateRecoverySeparation(paths);
         before(RecoveryStep::PrepareArtifact);
 
         const auto id = makeId();
@@ -1023,7 +935,6 @@ private:
              std::move(paths)},
             std::move(document),
             {},
-            SnapshotKind::Missing,
             installed,
             false};
 
@@ -1036,12 +947,6 @@ private:
                 copyNode(stored.record.affectedPaths[index],
                           staging / "artifacts" / std::to_string(index), kind);
             }
-            if (replacement) {
-                stored.replacement = snapshotKind(*replacement);
-                copyNode(*replacement, staging / "replacement",
-                          stored.replacement);
-            }
-
             auto manifest = encodeManifest(stored);
             writeBytes(staging / "manifest.bin", manifest);
             const auto payloadBytes = storedTreeBytes(staging);
@@ -1079,13 +984,12 @@ private:
         RecoveryRecordKind kind,
         std::optional<JournalDocument> document,
         std::vector<std::filesystem::path> paths,
-        std::optional<std::filesystem::path> replacement,
         Mutation&& mutation,
         Rollback&& rollback) {
         std::optional<StoredRecord> prepared;
         try {
             prepared.emplace(prepareRecord(kind, std::move(document),
-                                            std::move(paths), replacement));
+                                            std::move(paths)));
         } catch (const BudgetExceeded& failure) {
             return {{},
                     error(RecoveryErrorCode::BudgetExceeded, failure.what())};
@@ -1107,7 +1011,7 @@ private:
                               exceptionMessage(std::current_exception()))};
         }
 
-        recordsUnderPreparation_ = &*prepared;
+
         std::exception_ptr actionFailure;
         try {
             mutation();
@@ -1120,7 +1024,7 @@ private:
         } catch (...) {
             actionFailure = std::current_exception();
         }
-        recordsUnderPreparation_ = nullptr;
+
 
         if (!actionFailure) {
             const auto id = prepared->record.id;
@@ -1287,9 +1191,7 @@ private:
 
     void restoreFilesystemState(const StoredRecord& stored) {
         switch (stored.record.kind) {
-        case RecoveryRecordKind::FileOverwrite:
         case RecoveryRecordKind::PathDelete:
-        case RecoveryRecordKind::WorkspaceReplace:
             restoreSnapshot(stored.record.affectedPaths[0],
                              artifactPath(stored, 0), stored.snapshots[0]);
             return;
@@ -1297,7 +1199,6 @@ private:
             restoreRename(stored);
             return;
         case RecoveryRecordKind::DocumentClose:
-        case RecoveryRecordKind::DocumentReload:
             throw std::logic_error(
                 "document recovery record used for filesystem restoration");
         }
@@ -1342,7 +1243,6 @@ private:
     std::uint64_t nextId_ = 0;
     std::array<std::byte, 16> instanceId_ =
         UntitledDocumentId::generate().bytes();
-    StoredRecord* recordsUnderPreparation_ = nullptr;
 };
 
 RecoveryManager RecoveryManager::create(
@@ -1380,18 +1280,6 @@ RecoveryActionResult RecoveryManager::closeDocument(
     return impl_->closeDocument(document, scratch, durabilityTimeout);
 }
 
-RecoveryActionResult RecoveryManager::reloadDocument(
-    std::optional<JournalDocument>& document,
-    JournalDocument replacement) {
-    return impl_->reloadDocument(document, std::move(replacement));
-}
-
-RecoveryActionResult RecoveryManager::overwriteFile(
-    const std::filesystem::path& path,
-    std::span<const std::byte> replacement) {
-    return impl_->overwriteFile(path, replacement);
-}
-
 RecoveryActionResult RecoveryManager::renamePath(
     const std::filesystem::path& source,
     const std::filesystem::path& destination) {
@@ -1407,12 +1295,6 @@ RecoveryActionResult RecoveryManager::renamePathNoClobber(
 RecoveryActionResult RecoveryManager::deletePath(
     const std::filesystem::path& path) {
     return impl_->deletePath(path);
-}
-
-RecoveryActionResult RecoveryManager::replaceWorkspace(
-    const std::filesystem::path& workspace,
-    const std::filesystem::path& replacement) {
-    return impl_->replaceWorkspace(workspace, replacement);
 }
 
 RecoveryRestoreResult RecoveryManager::restoreDocument(

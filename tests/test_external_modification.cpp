@@ -51,7 +51,7 @@ struct Fixture {
     ssg::Workspace workspace =
         ssg::Workspace::create(temporary.path(), recovery);
     ssg::DiffModel diff;
-    ssg::ExternalModificationFlow flow{workspace, recovery, diff};
+    ssg::ExternalModificationFlow flow{workspace, diff};
     ssg::FileDocumentId documentId;
 
     explicit Fixture(bool seedDiff = true) {
@@ -120,7 +120,7 @@ TEST(cleanExternalEditAutoReloadsWithoutRecoveryStatus) {
     ASSERT_FALSE(result.statusPublished);
     ASSERT_EQ(fixture.snapshot().text, "disk\n");
     ASSERT_FALSE(fixture.snapshot().dirty);
-    ASSERT_EQ(fixture.recovery.records().size(), 1U);
+    ASSERT_TRUE(fixture.recovery.records().empty());
     ASSERT_TRUE(fixture.flow.viewState().files.empty());
 }
 
@@ -178,7 +178,7 @@ TEST(openDiffIsObservationalAndKeepBufferAcknowledgesDisk) {
     ASSERT_TRUE(fixture.recovery.records().empty());
 }
 
-TEST(reloadIsReversibleAndRecordPrecedesBufferReplacement) {
+TEST(reloadReplacesBufferWithoutRecoveryRecord) {
     Fixture fixture;
     fixture.setContent("buffer\n");
     ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2})
@@ -189,17 +189,10 @@ TEST(reloadIsReversibleAndRecordPrecedesBufferReplacement) {
         fixture.flow.reload(ssg::DiffFileId{"note"}, open);
 
     ASSERT_TRUE(reloaded.accepted());
-    ASSERT_TRUE(reloaded.compensation.has_value());
     ASSERT_EQ(open->utf8Content, "disk\n");
     ASSERT_FALSE(open->dirty);
     ASSERT_TRUE(fixture.flow.viewState().files.empty());
-    ASSERT_EQ(fixture.recovery.records().size(), 1U);
-
-    const auto restored =
-        fixture.recovery.restoreDocument(*reloaded.compensation, open);
-    ASSERT_TRUE(restored.accepted());
-    ASSERT_EQ(open->utf8Content, "buffer\n");
-    ASSERT_TRUE(open->dirty);
+    ASSERT_TRUE(fixture.recovery.records().empty());
 }
 
 TEST(ssgSaveAdvancesBaselineWithoutDuplicateStatus) {
@@ -352,7 +345,7 @@ TEST(theExternalModSelectionFollowsTheListAndSurvivesResolves) {
                                  {ssg::DiffFileId{"b"}, "b.txt", "base\n"}},
                                 std::uint64_t{1})
                     .accepted());
-    ssg::ExternalModificationFlow flow{workspace, recovery, diff};
+    ssg::ExternalModificationFlow flow{workspace, diff};
 
     auto raise = [&](const char* id, const char* path, std::uint64_t sequence,
                      std::uint64_t revision) {
@@ -410,7 +403,7 @@ SSG_TEST_SUITE(test_external_modification) {
     RUN(aRenameRetiresPendingKeyedByThePreviousId);
     RUN(dirtyExternalEditPreservesBufferAndPublishesActions);
     RUN(openDiffIsObservationalAndKeepBufferAcknowledgesDisk);
-    RUN(reloadIsReversibleAndRecordPrecedesBufferReplacement);
+    RUN(reloadReplacesBufferWithoutRecoveryRecord);
     RUN(ssgSaveAdvancesBaselineWithoutDuplicateStatus);
     RUN(genuineExternalEditIsNotConsumedBySaveCorrelation);
     RUN(staleEventIsFailureAtomic);
