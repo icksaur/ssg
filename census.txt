@@ -308,6 +308,7 @@ ssg/DiffModel.h	func	ssg::DiffMutationResult::accepted	bool () const noexcept
 ssg/DiffModel.h	func	ssg::DiffViewState::fileForIdentity	std::optional<std::reference_wrapper<const DiffFileView>> (const std::optional<std::string> &) const
 ssg/DiffModel.h	func	ssg::GitDiffFile::status	DiffFileStatus () const noexcept
 ssg/DiffModel.h	func	ssg::diffOpenFile	DiffOpenTarget (const DiffFileView &)
+ssg/DiffModel.h	func	ssg::externalDiffFileId	DiffFileId (std::string_view)
 ssg/DiffModel.h	func	ssg::nextDiffHunk	std::optional<std::size_t> (const DiffFileView &, std::optional<std::size_t>)
 ssg/DiffModel.h	func	ssg::operator==	bool (const DiffFileView &, const DiffFileView &)
 ssg/DiffModel.h	func	ssg::operator==	bool (const DiffHunk &, const DiffHunk &)
@@ -491,13 +492,17 @@ ssg/DraftAutosaveScheduler.h	class	ssg::DraftAutosaveScheduler
 ssg/DraftAutosaveScheduler.h	func	ssg::DraftAutosaveScheduler::DraftAutosaveScheduler	void (std::chrono::milliseconds)
 ssg/DraftAutosaveScheduler.h	func	ssg::DraftAutosaveScheduler::due	std::vector<FileDocumentId> (std::chrono::steady_clock::time_point, std::span<const AutosaveCandidate>)
 ssg/DraftAutosaveScheduler.h	func	ssg::DraftAutosaveScheduler::flushAll	std::vector<FileDocumentId> (std::chrono::steady_clock::time_point, std::span<const AutosaveCandidate>)
+ssg/DraftAutosaveScheduler.h	func	ssg::DraftAutosaveScheduler::flushAllDrafts	std::size_t (Editor &)
+ssg/DraftAutosaveScheduler.h	func	ssg::DraftAutosaveScheduler::flushDueDrafts	std::size_t (Editor &)
 ssg/DraftAutosaveScheduler.h	func	ssg::DraftAutosaveScheduler::forget	void (FileDocumentId) noexcept
 ssg/DraftAutosaveScheduler.h	func	ssg::DraftAutosaveScheduler::interval	std::chrono::milliseconds () const noexcept
 ssg/DraftAutosaveScheduler.h	func	ssg::DraftAutosaveScheduler::setInterval	void (std::chrono::milliseconds) noexcept
 ssg/DraftAutosaveScheduler.h	struct	ssg::AutosaveCandidate
+ssg/DraftAutosaveScheduler.h	struct	ssg::Editor
 ssg/DraftAutosaveScheduler.h	var	ssg::AutosaveCandidate::contentHash	std::uint64_t
 ssg/DraftAutosaveScheduler.h	var	ssg::AutosaveCandidate::dirty	bool
 ssg/DraftAutosaveScheduler.h	var	ssg::AutosaveCandidate::id	FileDocumentId
+ssg/DraftAutosaveScheduler.h	var	ssg::DraftAutosaveScheduler::draftByteCap	std::uintmax_t
 ssg/DraftReopenClassifier.h	enum	ssg::DraftReopenClass
 ssg/DraftReopenClassifier.h	enumerator	ssg::DraftReopenClass::Conflict
 ssg/DraftReopenClassifier.h	enumerator	ssg::DraftReopenClass::Converged
@@ -585,7 +590,6 @@ ssg/Editor.h	func	ssg::Editor::activeText	const std::string &() const
 ssg/Editor.h	func	ssg::Editor::activeWorkspaceState	std::optional<WorkspaceDocumentState> () const
 ssg/Editor.h	func	ssg::Editor::applyExternalDiffBurst	DiffIngressResult (std::vector<ExternalDiffRevision>)
 ssg/Editor.h	func	ssg::Editor::applyGitDiffScan	DiffIngressResult (GitDiffScan)
-ssg/Editor.h	func	ssg::Editor::applyGitDiffScanLocked	DiffIngressResult (GitDiffScan)
 ssg/Editor.h	func	ssg::Editor::applyWorkspaceReplace	WorkspaceApplyResult (const WorkspaceReplacePreview &)
 ssg/Editor.h	func	ssg::Editor::archiveDiscardedDraft	bool (std::string_view, std::string_view)
 ssg/Editor.h	func	ssg::Editor::clampSelectionToActiveDocument	void ()
@@ -593,11 +597,9 @@ ssg/Editor.h	func	ssg::Editor::clampSelectionsToActiveDocument	void ()
 ssg/Editor.h	func	ssg::Editor::closePane	CommandHandlerResult ()
 ssg/Editor.h	func	ssg::Editor::closeTab	TabLifecycleResult (const TabState &, std::chrono::milliseconds, std::span<const TabId>)
 ssg/Editor.h	func	ssg::Editor::commandCatalog	const CommandCatalog &() const
-ssg/Editor.h	func	ssg::Editor::commitExternalDismissal	bool (FileDocumentId, bool, const std::optional<std::string> &)
 ssg/Editor.h	func	ssg::Editor::cyclePane	CommandHandlerResult (CycleDirection)
 ssg/Editor.h	func	ssg::Editor::deferDispatch	bool (ClientCommand)
 ssg/Editor.h	func	ssg::Editor::deferredWorkCounts	DeferredWorkCounts () const
-ssg/Editor.h	func	ssg::Editor::diffModelHasFileForTest	bool (const DiffFileId &) const
 ssg/Editor.h	func	ssg::Editor::discardDocumentRuntimeState	void (FileDocumentId)
 ssg/Editor.h	func	ssg::Editor::discardDraft	CommandHandlerResult ()
 ssg/Editor.h	func	ssg::Editor::dismissDraftNotice	CommandHandlerResult ()
@@ -605,17 +607,14 @@ ssg/Editor.h	func	ssg::Editor::dispatch	CommandResult (const ClientCommand &)
 ssg/Editor.h	func	ssg::Editor::dispatchInProgress	bool () const noexcept
 ssg/Editor.h	func	ssg::Editor::dispatchLocked	CommandResult (const ClientCommand &)
 ssg/Editor.h	func	ssg::Editor::draftNotice	std::optional<NoticeView> () const
-ssg/Editor.h	func	ssg::Editor::drainGitDiffWorker	bool ()
 ssg/Editor.h	func	ssg::Editor::enqueueStatus	void (StatusPriority, std::string)
 ssg/Editor.h	func	ssg::Editor::ensureDocumentRuntimeState	void (FileDocumentId)
-ssg/Editor.h	func	ssg::Editor::externalDiffFileId	DiffFileId (std::string_view)
 ssg/Editor.h	func	ssg::Editor::externalModificationPresent	bool () const
 ssg/Editor.h	func	ssg::Editor::flushAllAutosaveDrafts	std::size_t ()
 ssg/Editor.h	func	ssg::Editor::flushDueAutosaveDrafts	std::size_t ()
 ssg/Editor.h	func	ssg::Editor::focusEditor	void ()
 ssg/Editor.h	func	ssg::Editor::focusPane	bool (PaneId)
 ssg/Editor.h	func	ssg::Editor::gitDiffWakeDescriptor	int () const
-ssg/Editor.h	func	ssg::Editor::gitFullRefreshCountForTest	std::uint64_t () const
 ssg/Editor.h	func	ssg::Editor::historyFor	DocumentHistory &(FileDocumentId)
 ssg/Editor.h	func	ssg::Editor::input	ClientInputResult (const ClientInput &)
 ssg/Editor.h	func	ssg::Editor::liveDocumentRuntimeStateCountForTests	std::uint64_t ()
@@ -629,38 +628,25 @@ ssg/Editor.h	func	ssg::Editor::openReadOnlyTab	CommandHandlerResult (TabKind, st
 ssg/Editor.h	func	ssg::Editor::operator=	Editor &(Editor &&)
 ssg/Editor.h	func	ssg::Editor::operator=	Editor &(const Editor &)
 ssg/Editor.h	func	ssg::Editor::paletteView	PaletteViewState () const
-ssg/Editor.h	func	ssg::Editor::persistAutosaveDraft	std::size_t (FileDocumentId)
 ssg/Editor.h	func	ssg::Editor::primeDeferred	void ()
 ssg/Editor.h	func	ssg::Editor::projectedUiTree	UiSchema () const
 ssg/Editor.h	func	ssg::Editor::promptStatusView	PromptStatusViewState () const
 ssg/Editor.h	func	ssg::Editor::pump	PumpResult ()
 ssg/Editor.h	func	ssg::Editor::rebuildFileCandidates	void ()
 ssg/Editor.h	func	ssg::Editor::rebuildInteractionSchema	void (const StyleDimensions &, std::string_view)
-ssg/Editor.h	func	ssg::Editor::reconcileAllOpenDocumentsAgainstDisk	void ()
 ssg/Editor.h	func	ssg::Editor::reconcileDraftOnOpen	void (FileDocumentId)
-ssg/Editor.h	func	ssg::Editor::reconcileExternalWatchEvents	void (std::vector<WatchEvent>, bool)
-ssg/Editor.h	func	ssg::Editor::reconcileExternalWatchEventsForTest	void (std::vector<WatchEvent>)
 ssg/Editor.h	func	ssg::Editor::reconcileFindDocument	void ()
 ssg/Editor.h	func	ssg::Editor::recordNavigation	void (NavigationClass)
-ssg/Editor.h	func	ssg::Editor::refreshFilesystemForTest	void ()
-ssg/Editor.h	func	ssg::Editor::refreshLiveDiffDocuments	void (const DiffViewState &)
 ssg/Editor.h	func	ssg::Editor::refreshSyntax	void (std::vector<SyntaxEdit>)
 ssg/Editor.h	func	ssg::Editor::refreshTree	bool ()
 ssg/Editor.h	func	ssg::Editor::refreshTreeForPublication	void ()
 ssg/Editor.h	func	ssg::Editor::registerCommand	CommandHandle (CommandSpec)
-ssg/Editor.h	func	ssg::Editor::registerExternalSaveExpectation	void (const std::filesystem::path &)
 ssg/Editor.h	func	ssg::Editor::reopenTab	TabLifecycleResult (const TabState &, const RecoveryRecordId &)
 ssg/Editor.h	func	ssg::Editor::replaceCommandGeneration	std::vector<CommandHandle> (std::span<const CommandHandle>, std::vector<CommandSpec>)
-ssg/Editor.h	func	ssg::Editor::reportWatcherAvailabilityForTest	void (bool)
 ssg/Editor.h	func	ssg::Editor::resetKeymapToDefault	void ()
 ssg/Editor.h	func	ssg::Editor::resetSelectionForActiveDocument	void ()
-ssg/Editor.h	func	ssg::Editor::resolveExternalDocument	std::optional<FileDocumentId> (const DiffFileId &) const
-ssg/Editor.h	func	ssg::Editor::resolveOpenSavedDocumentByPath	std::optional<FileDocumentId> (const std::filesystem::path &) const
 ssg/Editor.h	func	ssg::Editor::resolvedPromptControls	std::optional<ResolvedPromptControls> () const
-ssg/Editor.h	func	ssg::Editor::revealCurrentDiffTarget	bool (const FollowTarget &, NavigationClass)
 ssg/Editor.h	func	ssg::Editor::revealDiffTarget	bool (const FollowTarget &, NavigationClass)
-ssg/Editor.h	func	ssg::Editor::savedPathFromExternalDiffId	std::optional<std::string> (const DiffFileId &)
-ssg/Editor.h	func	ssg::Editor::setAutosaveDraftByteCapForTests	void (std::uint64_t)
 ssg/Editor.h	func	ssg::Editor::snapshot	WorkspaceSnapshot (std::uint64_t) const
 ssg/Editor.h	func	ssg::Editor::splitPane	CommandHandlerResult (SplitAxis)
 ssg/Editor.h	func	ssg::Editor::syntaxFor	SyntaxModel &(FileDocumentId)
@@ -702,7 +688,6 @@ ssg/Editor.h	struct	ssg::ExternalDiffRevision
 ssg/Editor.h	struct	ssg::NoticeView
 ssg/Editor.h	struct	ssg::PumpResult
 ssg/Editor.h	var	ssg::DiffIngressResult::error	DiffIngressError
-ssg/Editor.h	var	ssg::DocumentRuntimeState::autosaveOversizeReported	bool
 ssg/Editor.h	var	ssg::DocumentRuntimeState::history	DocumentHistory
 ssg/Editor.h	var	ssg::DocumentRuntimeState::reopen	DraftReopenOutcome
 ssg/Editor.h	var	ssg::DocumentRuntimeState::syntax	SyntaxModel
@@ -723,14 +708,12 @@ ssg/Editor.h	var	ssg::Editor::activeTextDocument	std::optional<FileDocumentId>
 ssg/Editor.h	var	ssg::Editor::activeTextRevision	std::optional<std::uint64_t>
 ssg/Editor.h	var	ssg::Editor::archiveRoot	std::filesystem::path
 ssg/Editor.h	var	ssg::Editor::autosave	DraftAutosaveScheduler
-ssg/Editor.h	var	ssg::Editor::autosaveDraftByteCap	std::uintmax_t
 ssg/Editor.h	var	ssg::Editor::catalog	CommandCatalog
 ssg/Editor.h	var	ssg::Editor::clipboard	ClipboardRegister
 ssg/Editor.h	var	ssg::Editor::commandCandidateCache	std::vector<PaletteCandidate>
 ssg/Editor.h	var	ssg::Editor::commandCandidateCacheValid	bool
 ssg/Editor.h	var	ssg::Editor::commandCandidateCatalogRevision	CatalogRevision
 ssg/Editor.h	var	ssg::Editor::commandCandidateKeymap	KeymapViewState
-ssg/Editor.h	var	ssg::Editor::currentGitBranch	std::optional<std::string>
 ssg/Editor.h	var	ssg::Editor::deferredCommands	DeferredCommandQueue
 ssg/Editor.h	var	ssg::Editor::deferringEnrichment	bool
 ssg/Editor.h	var	ssg::Editor::diff	DiffModel
@@ -738,19 +721,17 @@ ssg/Editor.h	var	ssg::Editor::documentLanguageOverrides	std::unordered_map<std::
 ssg/Editor.h	var	ssg::Editor::documentPointerGesture	std::optional<DocumentPointerGesture>
 ssg/Editor.h	var	ssg::Editor::documentRuntimeStates	std::map<std::uint64_t, DocumentRuntimeState>
 ssg/Editor.h	var	ssg::Editor::external	ExternalModificationFlow
-ssg/Editor.h	var	ssg::Editor::externalSaveMutex	std::mutex
 ssg/Editor.h	var	ssg::Editor::fileCandidates	std::vector<PaletteCandidate>
 ssg/Editor.h	var	ssg::Editor::findDocumentId	std::optional<FileDocumentId>
 ssg/Editor.h	var	ssg::Editor::findReplace	FindReplaceController
 ssg/Editor.h	var	ssg::Editor::follow	FollowEditsModel
-ssg/Editor.h	var	ssg::Editor::gitDiffWorker	GitDiffWorker
+ssg/Editor.h	var	ssg::Editor::gitDiffIngress	GitDiffIngress
 ssg/Editor.h	var	ssg::Editor::homeDirectory	std::string
 ssg/Editor.h	var	ssg::Editor::inputCatalogRevision	std::optional<CatalogRevision>
 ssg/Editor.h	var	ssg::Editor::inputKeymap	std::unique_ptr<CompiledKeymap>
 ssg/Editor.h	var	ssg::Editor::inputKeymapGeneration	std::optional<std::uint64_t>
 ssg/Editor.h	var	ssg::Editor::keymap	KeymapViewState
 ssg/Editor.h	var	ssg::Editor::keymapGeneration	std::uint64_t
-ssg/Editor.h	var	ssg::Editor::lastGitScanRevision	std::uint64_t
 ssg/Editor.h	var	ssg::Editor::lineNumbers	bool
 ssg/Editor.h	var	ssg::Editor::liveDiffDocuments	std::unordered_map<std::string, FileDocumentId>
 ssg/Editor.h	var	ssg::Editor::lspFeatures	LspFeatureViewState
@@ -759,7 +740,6 @@ ssg/Editor.h	var	ssg::Editor::navigation	NavigationHistory
 ssg/Editor.h	var	ssg::Editor::nextStatusId	std::uint64_t
 ssg/Editor.h	var	ssg::Editor::operationMutex	std::mutex
 ssg/Editor.h	var	ssg::Editor::paneTopology	PaneTopology
-ssg/Editor.h	var	ssg::Editor::pendingSaveExpectations	std::deque<SaveExpectation>
 ssg/Editor.h	var	ssg::Editor::pendingSyntaxRefresh	bool
 ssg/Editor.h	var	ssg::Editor::pendingTreeRefresh	bool
 ssg/Editor.h	var	ssg::Editor::readOnlyTabDocuments	std::unordered_map<std::string, FileDocumentId>
@@ -801,8 +781,7 @@ ssg/Editor.h	var	ssg::ExternalDiffRevision::revision	std::uint64_t
 ssg/Editor.h	var	ssg::NoticeView::actions	std::vector<UiAction>
 ssg/Editor.h	var	ssg::NoticeView::text	std::string
 ssg/Editor.h	var	ssg::PumpResult::advanced	bool
-ssg/ExternalModificationFlow.h	alias	ssg::ExternalKeepBufferCommit
-ssg/ExternalModificationFlow.h	alias	ssg::ExternalReloadCommit
+ssg/ExternalModificationFlow.h	class	ssg::CommandCatalog
 ssg/ExternalModificationFlow.h	class	ssg::ExternalModificationFlow
 ssg/ExternalModificationFlow.h	enum	ssg::ExternalAction
 ssg/ExternalModificationFlow.h	enum	ssg::ExternalDocumentStatus
@@ -822,28 +801,32 @@ ssg/ExternalModificationFlow.h	enumerator	ssg::ExternalModificationError::Recove
 ssg/ExternalModificationFlow.h	enumerator	ssg::ExternalModificationError::StaleEvent
 ssg/ExternalModificationFlow.h	enumerator	ssg::ExternalModificationError::UnsupportedEvent
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::ExternalModificationFlow	void (ExternalModificationFlow &&) noexcept
-ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::ExternalModificationFlow	void (RecoveryManager &, DiffModel &)
+ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::ExternalModificationFlow	void (Workspace &, RecoveryManager &, DiffModel &)
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::ExternalModificationFlow	void (const ExternalModificationFlow &)
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::hasFile	bool (const DiffFileId &)
-ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::keepBuffer	ExternalModificationResult (const DiffFileId &, const ExternalKeepBufferCommit &)
+ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::ingest	bool (std::vector<WatchEvent>, bool)
+ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::keepBuffer	ExternalModificationResult (const DiffFileId &)
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::openDiff	ExternalOpenDiffResult (const DiffFileId &) const
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::operator=	ExternalModificationFlow &(ExternalModificationFlow &&) noexcept
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::operator=	ExternalModificationFlow &(const ExternalModificationFlow &)
-ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::processEvent	ExternalModificationResult (ExternalEventInput, std::uint64_t, std::optional<JournalDocument> &, std::function<bool ()>, std::function<bool ()>)
-ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::processResyncEvent	ExternalModificationResult (ExternalEventInput, std::uint64_t, std::optional<JournalDocument> &, std::function<bool ()>, std::function<bool ()>)
+ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::processEvent	ExternalModificationResult (ExternalEventInput, std::uint64_t, bool)
+ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::reconcileAllOpenDocumentsAgainstDisk	bool ()
+ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::registerSaveExpectation	void (const std::filesystem::path &)
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::reload	ExternalModificationResult (const DiffFileId &, std::optional<JournalDocument> &)
-ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::resolveReload	ExternalModificationResult (const DiffFileId &, const ExternalReloadCommit &)
+ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::resolveReload	ExternalModificationResult (const DiffFileId &)
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::selectFile	bool (const DiffFileId &)
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::selectNext	bool ()
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::selectPrevious	bool ()
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::viewState	ExternalModificationViewState () const
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationResult::accepted	bool () const noexcept
 ssg/ExternalModificationFlow.h	func	ssg::ExternalOpenDiffResult::accepted	bool () const noexcept
+ssg/ExternalModificationFlow.h	func	ssg::bindExternalModificationCommands	void (CommandCatalog &, Editor &)
 ssg/ExternalModificationFlow.h	func	ssg::externalActionAffordance	ExternalActionAffordance (ExternalAction)
 ssg/ExternalModificationFlow.h	func	ssg::operator==	bool (const ExternalActionAffordance &, const ExternalActionAffordance &)
 ssg/ExternalModificationFlow.h	func	ssg::operator==	bool (const ExternalActionInvocation &, const ExternalActionInvocation &)
 ssg/ExternalModificationFlow.h	func	ssg::operator==	bool (const ExternalDocumentView &, const ExternalDocumentView &)
 ssg/ExternalModificationFlow.h	func	ssg::operator==	bool (const ExternalModificationViewState &, const ExternalModificationViewState &)
+ssg/ExternalModificationFlow.h	struct	ssg::Editor
 ssg/ExternalModificationFlow.h	struct	ssg::ExternalActionAffordance
 ssg/ExternalModificationFlow.h	struct	ssg::ExternalActionInvocation
 ssg/ExternalModificationFlow.h	struct	ssg::ExternalDocumentView
@@ -851,7 +834,6 @@ ssg/ExternalModificationFlow.h	struct	ssg::ExternalEventInput
 ssg/ExternalModificationFlow.h	struct	ssg::ExternalModificationResult
 ssg/ExternalModificationFlow.h	struct	ssg::ExternalModificationViewState
 ssg/ExternalModificationFlow.h	struct	ssg::ExternalOpenDiffResult
-ssg/ExternalModificationFlow.h	struct	ssg::ExternalReloadCommitResult
 ssg/ExternalModificationFlow.h	var	ssg::ExternalActionAffordance::action	ExternalAction
 ssg/ExternalModificationFlow.h	var	ssg::ExternalActionAffordance::command	std::string
 ssg/ExternalModificationFlow.h	var	ssg::ExternalActionAffordance::label	std::string
@@ -878,8 +860,6 @@ ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationViewState::revision	
 ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationViewState::selected	std::optional<DiffFileId>
 ssg/ExternalModificationFlow.h	var	ssg::ExternalOpenDiffResult::error	ExternalModificationError
 ssg/ExternalModificationFlow.h	var	ssg::ExternalOpenDiffResult::target	std::optional<DiffOpenTarget>
-ssg/ExternalModificationFlow.h	var	ssg::ExternalReloadCommitResult::committed	bool
-ssg/ExternalModificationFlow.h	var	ssg::ExternalReloadCommitResult::compensation	std::optional<RecoveryRecordId>
 ssg/FileArchive.h	class	ssg::FileArchive
 ssg/FileArchive.h	func	ssg::FileArchive::FileArchive	void (std::filesystem::path)
 ssg/FileArchive.h	func	ssg::FileArchive::archive	FileArchiveResult (const std::filesystem::path &, const std::filesystem::path &)
@@ -1178,6 +1158,19 @@ ssg/Geometry.h	var	ssg::Rect::height	int
 ssg/Geometry.h	var	ssg::Rect::width	int
 ssg/Geometry.h	var	ssg::Rect::x	int
 ssg/Geometry.h	var	ssg::Rect::y	int
+ssg/GitDiffIngress.h	func	ssg::GitDiffIngress::GitDiffIngress	void (Editor &, const std::filesystem::path &, bool, bool)
+ssg/GitDiffIngress.h	func	ssg::GitDiffIngress::applyGitDiffScanLocked	DiffIngressResult (GitDiffScan)
+ssg/GitDiffIngress.h	func	ssg::GitDiffIngress::drainGitDiffWorker	bool ()
+ssg/GitDiffIngress.h	func	ssg::GitDiffIngress::refreshLiveDiffDocuments	void (const DiffViewState &)
+ssg/GitDiffIngress.h	func	ssg::GitDiffIngress::revealCurrentDiffTarget	bool (const FollowTarget &, NavigationClass)
+ssg/GitDiffIngress.h	func	ssg::GitDiffIngress::savedPathFromExternalDiffId	std::optional<std::string> (const DiffFileId &)
+ssg/GitDiffIngress.h	struct	ssg::DiffIngressResult
+ssg/GitDiffIngress.h	struct	ssg::Editor
+ssg/GitDiffIngress.h	struct	ssg::GitDiffIngress
+ssg/GitDiffIngress.h	var	ssg::GitDiffIngress::currentGitBranch	std::optional<std::string>
+ssg/GitDiffIngress.h	var	ssg::GitDiffIngress::editor	Editor &
+ssg/GitDiffIngress.h	var	ssg::GitDiffIngress::lastGitScanRevision	std::uint64_t
+ssg/GitDiffIngress.h	var	ssg::GitDiffIngress::worker	GitDiffWorker
 ssg/GitDiffSource.h	class	ssg::GitDiffSource
 ssg/GitDiffSource.h	class	ssg::GitIgnoreMatcher
 ssg/GitDiffSource.h	class	ssg::GitRepository
@@ -4035,7 +4028,7 @@ ssg/Workspace.h	func	ssg::Workspace::Workspace	void (const Workspace &)
 ssg/Workspace.h	func	ssg::Workspace::adoptExternalRename	WorkspaceResult (FileDocumentId, std::string_view, std::string, bool)
 ssg/Workspace.h	func	ssg::Workspace::apply	TransactionResult (FileDocumentId, const EditTransaction &)
 ssg/Workspace.h	func	ssg::Workspace::baselineFor	std::optional<DraftBaseline> (FileDocumentId) const
-ssg/Workspace.h	func	ssg::Workspace::commitExternalDismissal	bool (FileDocumentId, bool, const std::optional<std::string> &, const std::function<bool (const std::optional<DraftBaseline> &)> &)
+ssg/Workspace.h	func	ssg::Workspace::commitExternalDismissal	bool (FileDocumentId, bool, const std::optional<std::string> &)
 ssg/Workspace.h	func	ssg::Workspace::create	Workspace (const std::filesystem::path &, RecoveryManager &, std::optional<std::filesystem::path>)
 ssg/Workspace.h	func	ssg::Workspace::deleteFile	WorkspaceResult (FileDocumentId)
 ssg/Workspace.h	func	ssg::Workspace::document	const Document &(FileDocumentId) const

@@ -22,20 +22,13 @@
 namespace ssg {
 namespace {
 
-// First-frame syntax should be ready when it's cheap: parsing a small file is
-// comfortably within startup budget, while multi-MB input can exceed it and is
-// deferred until primeDeferred().
-constexpr std::size_t kEagerSyntaxMaxBytes = 2 * 1024 * 1024;
+constexpr std::size_t kFirstFrameSyntaxMaxBytes = 2 * 1024 * 1024;
 
 std::string liveDiffTabLabelForPath(const std::filesystem::path& path) {
     const auto filename = path.filename().string();
     return filename.empty() ? path.generic_string() : filename;
 }
 
-// The user's home directory for the header path field's "~" abbreviation.
-// HOME first (POSIX), then USERPROFILE (Windows); trailing separators are
-// stripped so a home value like "/home/user/" still matches "/home/user/repo".
-// Empty when unknown, which disables the abbreviation.
 std::string resolveHomeDirectory() {
     std::string home;
     if (const char* value = std::getenv("HOME"); value != nullptr) {
@@ -47,33 +40,28 @@ std::string resolveHomeDirectory() {
     while (!home.empty() && (home.back() == '/' || home.back() == '\\')) {
         home.pop_back();
     }
-    // The path field compares against workspaceRoot.generic_string() ('/'
-    // separators on every platform), so normalize a Windows USERPROFILE's
-    // backslashes to match.
     for (auto& ch : home) {
         if (ch == '\\') ch = '/';
     }
     return home;
 }
 
-std::string liveDiffDocumentText(const DiffFileView& file) {
-    // A deleted file's whole content is represented as Removed phantom rows
-    // (see Viewport.cpp's removedBlocks/phantom-row projection), never as
-    // real document text -- currentContent is already empty for a deleted
-    // file (DiffModel::updateGitFile sets it from workingContent, which is
-    // absent when deleted). Synthesizing baseline content as the "current"
-    // text here would duplicate every removed line: once as a real row from
-    // this text, and again as the phantom row the viewport already inserts
-    // for the same baseline line.
+std::string liveDiffTextWithoutRemovedRows(const DiffFileView& file) {
     return file.currentContent;
 }
 
-// The curated terminal runtime keymap: a small set of
-// argument-free bindings the TUI drives, plus the context-divergent navigation
-// keys.  Only argument-free-usable commands are bound (a bare stroke dispatches
-// with no payload); exhaustive reachability is the palette's job.  Every
-// binding is a single stroke: global (*) actions are Alt chords, navigation
-// differs per focus, and Escape is a plain cancel.
+std::string uniqueDiscardedDraftArchiveName(std::string_view savedPath) {
+    std::string basename =
+        std::filesystem::path{std::string{savedPath}}.filename().string();
+    if (basename.empty()) basename = "draft";
+    if (basename.size() > 64) basename.resize(64);
+    const auto stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                           std::chrono::system_clock::now().time_since_epoch())
+                           .count();
+    return basename + "." + std::to_string(fastContentHash(savedPath)) + "." +
+           std::to_string(stamp) + ".draft";
+}
+
 } // namespace
 
 KeymapViewState defaultTerminalKeymap() {
@@ -89,16 +77,10 @@ KeymapViewState defaultTerminalKeymap() {
             {std::move(sequence), std::move(command), std::move(context)});
     };
 
-    // Frequent actions are single Alt+<key> chords.  In a terminal Alt+X
-    // transmits as the bytes ESC X, which decode_input coalesces into one
-    // alt=true stroke, so these are the same keys the user already presses --
-    // the former Escape leader is gone, and Escape is now a plain cancel key.
     bind(seq({"Alt+KeyS"}), "file.save", "*");
     bind(seq({"Alt+KeyN"}), "file.new", "*");
     bind(seq({"Alt+KeyZ"}), "edit.undo", "*");
     bind(seq({"Alt+Shift+KeyZ"}), "edit.redo", "*");
-    // Alt+p opens the file picker (the frequent action) and Alt+Shift+P the
-    // command palette, matching the convention users arrive with.
     bind(seq({"Alt+KeyP"}), "file_finder.open", "*");
     bind(seq({"Alt+Shift+KeyP"}), "palette.open", "*");
     bind(seq({"Alt+KeyB"}), "panel.toggle", "*");
@@ -110,8 +92,6 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Alt+Period"}), "tab.next", "*");
     bind(seq({"Alt+Comma"}), "tab.previous", "*");
     bind(seq({"Alt+KeyW"}), "tab.close", "*");
-    // The Settings escape hatch (protected: a settings.open binding must always
-    // exist) moves from the former three-stroke chord to a single Alt+Shift+T.
     bind(seq({"Alt+Shift+KeyT"}), "settings.open", "*");
     bind(seq({"Alt+KeyA"}), "select.all", "*");
     bind(seq({"Alt+KeyD"}), "select.add_next_occurrence", "*");
@@ -119,25 +99,14 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Alt+KeyK"}), "select.add_cursor_up", "*");
     bind(seq({"Alt+KeyJ"}), "select.add_cursor_down", "*");
     bind(seq({"Alt+Slash"}), "find.open", "*");
-    // Alt+8 seeds find with the word under the caret.  Editor-context: it acts
-    // on the caret and document.
     bind(seq({"Alt+Digit8"}), "find.word_under_cursor", "editor");
     bind(seq({"Alt+KeyR"}), "replace.open", "*");
-    // Draft recovery's "Use disk": discard unsaved edits back to the disk
-    // version (the draft is archived first, so this is reversible).
     bind(seq({"Alt+Shift+KeyD"}), "draft.discard", "editor");
 
-    // Cut/copy/paste act on the editor's selection, so they are bound in the
-    // editor context; paste is additionally bound in the prompt so a prompt's
-    // value can be pasted into.
     bind(seq({"Alt+KeyX"}), "clipboard.cut", "editor");
     bind(seq({"Alt+KeyC"}), "clipboard.copy", "editor");
     bind(seq({"Alt+KeyV"}), "clipboard.paste", "editor");
-    // Paste also works while a prompt owns the keyboard -- find, replace, a
-    // path, the palette query.  The client fulfils it against the prompt's own
-    // text rather than the document, the same way typing into a prompt is
-    // routed. Cut and copy are deliberately absent: a prompt's value is
-    // client-owned and there is no selection within it to take.
+    // Prompts have no selection to cut or copy.
     bind(seq({"Alt+KeyV"}), "clipboard.paste", "prompt");
 
     bind(seq({"ArrowDown"}), "cursor.line_down", "editor");
@@ -154,12 +123,8 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Shift+End"}), "select.line_end", "editor");
     bind(seq({"Ctrl+Home"}), "cursor.document_start", "editor");
     bind(seq({"Ctrl+End"}), "cursor.document_end", "editor");
-    // Alt+Home/End also jump to the document extremes: the physical Home/End
-    // keys are natural for "top/bottom of file", and Alt is the modifier the
-    // rest of the editor uses.
     bind(seq({"Alt+Home"}), "cursor.document_start", "editor");
     bind(seq({"Alt+End"}), "cursor.document_end", "editor");
-    // Alt+Shift+G opens a prompt for a line number and jumps there (clamped).
     bind(seq({"Alt+Shift+KeyG"}), "goto.line", "editor");
     bind(seq({"Ctrl+Shift+Home"}), "select.document_start", "editor");
     bind(seq({"Ctrl+Shift+End"}), "select.document_end", "editor");
@@ -170,13 +135,7 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Enter"}), "text.newline", "editor");
     bind(seq({"Backspace"}), "text.delete_backward", "editor");
     bind(seq({"Delete"}), "text.delete_forward", "editor");
-    // Alt+Backspace deletes the word to the left.  Alt+Backspace transmits as
-    // the bytes ESC 0x7f, which decode_input coalesces into one Alt+Backspace
-    // stroke.
     bind(seq({"Alt+Backspace"}), "text.delete_word_backward", "editor");
-    // Word navigation: Alt+Left/Right (and Shift to extend).  Arrow keys use
-    // the CSI modifier-parameter form, which decode_input parses into a single
-    // alt=true stroke.
     bind(seq({"Alt+ArrowLeft"}), "cursor.word_left", "editor");
     bind(seq({"Alt+ArrowRight"}), "cursor.word_right", "editor");
     bind(seq({"Alt+Shift+ArrowLeft"}), "select.word_left", "editor");
@@ -187,24 +146,10 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Enter"}), "tree.activate", "panel");
 
     bind(seq({"Enter"}), "prompt.submit", "prompt");
-    // A single Escape cancels a focused prompt (find, replace, path, palette).
-    // With the leader gone Escape is no longer a chord prefix, so one press is
-    // unambiguous.
     bind(seq({"Escape"}), "prompt.cancel", "prompt");
     bind(seq({"ArrowDown"}), "prompt.next", "prompt");
     bind(seq({"ArrowUp"}), "prompt.previous", "prompt");
-    // Tab advances the keyboard among a multi-input prompt's inputs (replace's
-    // query and replacement); a single-input prompt stays put.
     bind(seq({"Tab"}), "prompt.focus_next_control", "prompt");
-    // The find/replace option toggles (find.toggle_case/whole_word/regex,
-    // replace.all) are reachable through the command palette; they do not earn
-    // a dedicated key and are left unbound.
-
-    // The external-modification bar. Alt+E focuses it from any state (global,
-    // present-gated by the command); within the external context the arrows
-    // move the selection and Enter/K/D run the offered action on it, mirroring
-    // the panel's navigation, and Escape returns focus without touching prompt
-    // lifecycle.
     bind(seq({"Alt+KeyE"}), "external.focus", "*");
     bind(seq({"ArrowDown"}), "external.select_next", "external");
     bind(seq({"ArrowUp"}), "external.select_previous", "external");
@@ -396,11 +341,7 @@ TabLifecycleResult Editor::closeTab(
     std::span<const TabId> alreadyClosed) {
     if (!tab.document) {
         if (tab.kind == TabKind::ReadOnlyOutput) {
-            // A read-only output tab (help, generated content) is ephemeral and
-            // regenerable: it is never journaled for reopen and never persists.
-            // Drop its backing document and map entry directly, skipping the
-            // recovery/scratch path entirely, and signal ephemeral so closeAt
-            // accepts the missing compensation record.
+            // Read-only output tabs have no recovery record.
             const auto mapped = readOnlyTabDocuments.find(tab.contentIdentity);
             if (mapped != readOnlyTabDocuments.end()) {
                 const auto document = mapped->second;
@@ -641,9 +582,6 @@ WorkspaceApplyResult Editor::applyWorkspaceReplace(
         }
         if (!foundOpenDocument) {
             auto content = readFileText(*path);
-            // Unreadable is not "unchanged": refusing here is what stops a
-            // replacement being applied to a file whose current state is
-            // unknown.
             if (!content) {
                 return {FindReplaceError::StaleRevision, preview.sourceRevision,
                         "workspace replacement target cannot be read"};
@@ -659,10 +597,6 @@ WorkspaceApplyResult Editor::applyWorkspaceReplace(
     }
     for (std::size_t index = 0; index < preview.changes.size(); ++index) {
         auto const& change = preview.changes[index];
-        // Atomic replace, not truncate-then-stream: a replace-across-files run
-        // interrupted part way through must leave each file either wholly old
-        // or wholly new. A truncating write turns an interruption into a
-        // truncated source file.
         try {
             replaceFileAtomically(paths[index], asByteSpan(change.after));
         } catch (const std::exception&) {
@@ -689,10 +623,6 @@ WorkspaceApplyResult Editor::applyWorkspaceReplace(
 }
 
 std::optional<FileDocumentId> Editor::activeDocumentId() const {
-    // The active tab is the single source of truth for the active editor
-    // document.  With no active tab (e.g. the last tab was closed) there is no
-    // active document and the shell renders its empty state; the editor view
-    // never shows a document that has no tab.
     auto const& view = tabs.viewState();
     if (!view.active) return std::nullopt;
     auto found = std::find_if(view.tabs.begin(), view.tabs.end(), [&](TabState const& tab) {
@@ -729,7 +659,7 @@ const TabState* Editor::activeTabState() const {
 CommandHandlerResult Editor::openOrFocusLiveDiffTab(
     const DiffFileView& file, NavigationClass classification) {
     const auto target = diffOpenFile(file);
-    const auto diffText = liveDiffDocumentText(file);
+    const auto diffText = liveDiffTextWithoutRemovedRows(file);
     std::optional<FileDocumentId> document;
     auto mapped = liveDiffDocuments.find(target.id.value());
     if (mapped != liveDiffDocuments.end()) {
@@ -774,18 +704,13 @@ CommandHandlerResult Editor::openOrFocusLiveDiffTab(
 CommandHandlerResult Editor::openReadOnlyTab(
     TabKind kind, std::string contentIdentity, std::string label,
     std::string text, LanguageId language) {
-    // Build the replacement document FIRST, then swap: a ReadOnly document
-    // rejects Document::apply, so content is refreshed by remove+recreate
-    // (never an in-place edit) -- and creating before removing keeps a refresh
-    // failure non-destructive, so a failed rebuild leaves the existing tab
-    // intact.
-    auto created =
+    auto replacement =
         workspace.openVirtualDocument(label, text, DocumentMode::ReadOnly);
-    if (!created.accepted() || !created.document) {
-        return failure(workspaceMessage(created));
+    if (!replacement.accepted() || !replacement.document) {
+        return failure(workspaceMessage(replacement));
     }
-    ensureDocumentRuntimeState(*created.document);
-    documentLanguageOverrides.insert_or_assign(created.document->value(),
+    ensureDocumentRuntimeState(*replacement.document);
+    documentLanguageOverrides.insert_or_assign(replacement.document->value(),
                                                 std::move(language));
     auto mapped = readOnlyTabDocuments.find(contentIdentity);
     if (mapped != readOnlyTabDocuments.end()) {
@@ -794,15 +719,13 @@ CommandHandlerResult Editor::openReadOnlyTab(
         documentLanguageOverrides.erase(previous.value());
         (void)workspace.removeDocument(previous);
     }
-    readOnlyTabDocuments[contentIdentity] = *created.document;
+    readOnlyTabDocuments[contentIdentity] = *replacement.document;
     auto opened =
         tabs.openContent(kind, contentIdentity, label, DocumentMode::ReadOnly);
     if (!opened.accepted()) {
         return failure(tabMessage(opened));
     }
     screen.focusEditor();
-    // Untitled documents get no language from a path, so highlight the override
-    // language (e.g. Markdown) now that this tab is active.
     refreshSyntax();
     return success();
 }
@@ -812,18 +735,12 @@ CommandHandlerResult Editor::openDraftDiff() {
     if (!id) return failure("no active document");
     const auto state = workspace.state(*id);
     if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
-        // A live diff tab's document (and an untitled buffer) is not a saved
-        // file, so it has no on-disk side to diff the draft against.
         return failure("draft.diff needs a saved file");
     }
     const auto* opened = workspace.tryDocument(*id);
     if (opened == nullptr) return failure("no active document");
     const std::string draft = opened->snapshot().text;
 
-    // The baseline is the file's CURRENT disk content, read now (not the
-    // open-time bytes) so the diff reflects any external change. A missing or
-    // unreadable file diffs the draft against empty, matching a deleted-file
-    // conflict where the draft would recreate the file on save.
     const auto absolute =
         workspace.root() / std::filesystem::path{state->key.savedPath()};
     std::string disk;
@@ -833,10 +750,6 @@ CommandHandlerResult Editor::openDraftDiff() {
     }
 
     const DiffFileId diffId{"draft:" + state->key.savedPath()};
-    // Non-git entries share the DiffModel's monotonic revision line; one past
-    // the current revision is always fresh. Create both seeds and updates the
-    // entry (an existing non-git entry is updated in place), so re-running
-    // draft.diff on the same file refreshes its tab.
     const std::uint64_t revision{diff.viewState().revision + 1};
     const auto applied = diff.applyNonGitEvent(
         NonGitDiffEvent{NonGitDiffEventKind::Create, diffId,
@@ -852,30 +765,13 @@ CommandHandlerResult Editor::openDraftDiff() {
 
 bool Editor::archiveDiscardedDraft(std::string_view savedPath,
                                                 std::string_view content) {
-    // Beside the scratch store (not the workspace deleted-file archive, which
-    // the housekeeping pruner owns), so a discarded draft is never pruned as a
-    // stale deleted file.
     const auto archiveDir = scratchRoot.parent_path() / "draft-archive";
     std::error_code code;
     std::filesystem::create_directories(archiveDir, code);
     if (code) return false;
 
-    // Name by a HASH of the workspace-relative path rather than the flattened
-    // path itself: a legal deep path can exceed a filesystem's per-component
-    // name limit (255 bytes on Linux), which would make discard fail for a
-    // valid file. A short basename prefix stays for humans browsing the
-    // archive; the hash disambiguates two files sharing a basename, and the
-    // nanosecond stamp keeps repeated discards of one file distinct.
-    std::string basename =
-        std::filesystem::path{std::string{savedPath}}.filename().string();
-    if (basename.empty()) basename = "draft";
-    if (basename.size() > 64) basename.resize(64);
-    const auto stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                           std::chrono::system_clock::now().time_since_epoch())
-                           .count();
     const auto target =
-        archiveDir / (basename + "." + std::to_string(fastContentHash(savedPath)) +
-                      "." + std::to_string(stamp) + ".draft");
+        archiveDir / uniqueDiscardedDraftArchiveName(savedPath);
     const std::span<const std::byte> bytes{
         reinterpret_cast<const std::byte*>(content.data()), content.size()};
     return createFileExclusively(target, bytes).ok();
@@ -893,24 +789,14 @@ CommandHandlerResult Editor::discardDraft() {
     if (opened == nullptr) return failure("no active document");
     const std::string draftText = opened->snapshot().text;
 
-    // Archive the discarded edits FIRST, before anything is removed or the
-    // buffer is reloaded: even if the reload fails, the draft survives here and
-    // in the scratch store, so a mis-click is always recoverable.
     if (!archiveDiscardedDraft(state->key.savedPath(), draftText)) {
         return failure("could not archive the draft before discarding");
     }
 
-    // Reload the on-disk content, which refreshes the baseline and clears
-    // dirty. A missing or unreadable file leaves the draft untouched.
     const auto reloaded = workspace.reload(*id);
     if (!reloaded.accepted()) return failure("could not load the file from disk");
 
     scratch.removeDocument(state->key);
-    // "Use disk" is meant to be final. removeDocument is queued to the async
-    // durability thread, so wait briefly (as tab close does) to shrink the
-    // window where a crash could replay the just-discarded draft on next
-    // launch. Best-effort: the archived copy already makes a lost race
-    // recoverable.
     (void)scratch.waitUntilDurable(std::chrono::milliseconds{100});
     if (const auto found = documentRuntimeStates.find(id->value());
         found != documentRuntimeStates.end()) {
@@ -927,8 +813,6 @@ CommandHandlerResult Editor::dismissDraftNotice() {
     const auto found = documentRuntimeStates.find(id->value());
     if (found == documentRuntimeStates.end() ||
         found->second.reopen != DraftReopenOutcome::Conflict) {
-        // Only a Conflict raises the notice; Restored/None show nothing to
-        // dismiss, so dismissing them would silently mutate non-notice state.
         return failure("no draft notice to dismiss");
     }
     found->second.reopen = DraftReopenOutcome::None;
@@ -971,14 +855,11 @@ void Editor::discardDocumentRuntimeState(FileDocumentId document) {
     documentRuntimeStates.erase(document.value());
     documentLanguageOverrides.erase(document.value());
     autosave.forget(document);
-    // A find that was scoped to this document no longer has a subject.
     if (findDocumentId == document) findDocumentId.reset();
-    // Any live diff tab mapped to it is equally orphaned.
     for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
         it = it->second == document ? liveDiffDocuments.erase(it)
                                     : std::next(it);
     }
-    // Same for a read-only output (help) tab mapped to it.
     for (auto it = readOnlyTabDocuments.begin();
          it != readOnlyTabDocuments.end();) {
         it = it->second == document ? readOnlyTabDocuments.erase(it)
@@ -1062,13 +943,9 @@ void Editor::clampSelectionToActiveDocument() {
 
 void Editor::clampSelectionsToActiveDocument() {
     auto const& text = activeText();
-    auto clampPosition = [&](DocumentPosition const& p) {
-        auto offset = p.byteOffset.value();
+    auto snapDownToGraphemeBoundary = [&](DocumentPosition const& position) {
+        auto offset = position.byteOffset.value();
         if (offset > text.size()) offset = text.size();
-        // Prefer the exact offset; if it is not a grapheme boundary (only
-        // possible for a selection carried from a differently-shaped document,
-        // not for the edit paths this serves), snap DOWN to the nearest
-        // boundary at or below it rather than teleporting to the document end.
         for (;;) {
             if (auto at = ssg::resolveSelectionPosition(
                     text, ByteOffset{offset})) {
@@ -1082,8 +959,9 @@ void Editor::clampSelectionsToActiveDocument() {
     std::vector<Selection> clamped;
     clamped.reserve(selection.selections.items().size());
     for (auto const& sel : selection.selections.items()) {
-        clamped.push_back(
-            Selection{clampPosition(sel.anchor), clampPosition(sel.active)});
+        clamped.push_back(Selection{
+            snapDownToGraphemeBoundary(sel.anchor),
+            snapDownToGraphemeBoundary(sel.active)});
     }
     if (clamped.empty()) {
         clamped.push_back(Selection{zeroPosition(), zeroPosition()});
@@ -1141,9 +1019,6 @@ void Editor::reconcileFindDocument() {
         !active || active != findDocumentId || document == nullptr ||
         document->snapshot().revision != findReplace.viewState().sourceRevision;
     if (!stale) return;
-    // The document the find evaluated against is gone, changed, or was edited:
-    // close the controller and dismiss its prompt so no stale match is
-    // navigable.
     findReplace.close();
     if (auto const& request = screen.prompt().request();
         request && (request->kind == PromptKind::Find ||
@@ -1171,7 +1046,7 @@ void Editor::refreshSyntax(std::vector<SyntaxEdit> edits) {
     if (deferringEnrichment) {
         const bool canEagerlyParse =
             document != nullptr && model.hasGrammar(language) &&
-            text.size() <= kEagerSyntaxMaxBytes;
+            text.size() <= kFirstFrameSyntaxMaxBytes;
         if (!canEagerlyParse) {
             pendingSyntaxRefresh = true;
             return;
@@ -1187,8 +1062,6 @@ void Editor::primeDeferred() {
     std::lock_guard operationLock{operationMutex};
     if (!deferringEnrichment) return;
     deferringEnrichment = false;
-    // Run whichever scans were requested while deferring, now that the first
-    // frame is drawn. Order: tree then syntax.
     bool ran = false;
     if (pendingTreeRefresh) {
         pendingTreeRefresh = false;
@@ -1232,17 +1105,10 @@ void Editor::reconcileDraftOnOpen(FileDocumentId document) {
     switch (classifyDraftReopen(draft->baseline,
                                              draft->utf8Content, disk)) {
         case DraftReopenClass::Converged:
-            // The edits equal disk (or were undone): nothing to recover. Drop the
-            // draft and keep the clean disk buffer already open.
             scratch.removeDocument(draft->key);
             runtimeState.reopen = DraftReopenOutcome::None;
             return;
         case DraftReopenClass::Unchanged:
-            // Disk is unchanged since the edits branched: load the draft dirty.
-            // If it cannot be loaded (disk is now binary/undecodable, so the
-            // buffer is read-only), do NOT drop it silently -- keep it in scratch
-            // and raise the conflict notice so the user is warned, never falsely
-            // reassured that nothing needs attention.
             if (workspace.restoreDraft(document, draft->utf8Content)) {
                 runtimeState.reopen = DraftReopenOutcome::Restored;
             } else {
@@ -1250,10 +1116,6 @@ void Editor::reconcileDraftOnOpen(FileDocumentId document) {
             }
             return;
         case DraftReopenClass::Conflict:
-            // Best-effort load; the draft stays in scratch whether or not the
-            // buffer can hold it (a binary/undecodable disk file yields a
-            // read-only buffer). Either way the conflict notice is raised, so the
-            // draft is never silently lost.
             (void)workspace.restoreDraft(document, draft->utf8Content);
             runtimeState.reopen = DraftReopenOutcome::Conflict;
             return;
@@ -1367,9 +1229,6 @@ bool Editor::focusPane(PaneId pane) {
 
 void Editor::resetKeymapToDefault() {
     std::lock_guard operationLock{operationMutex};
-    // defaultTerminalKeymap() is a fixed, already-construction-time-
-    // validated value (see create() above), so no re-validation is needed
-    // here -- resetting to it can never fail.
     keymap = defaultTerminalKeymap();
     ++keymapGeneration;
 }
@@ -1387,18 +1246,10 @@ EditorCreateResult createEditor(EditorConfig config) {
         if (config.archiveRoot.empty()) config.archiveRoot = cwd / ".ssg" / "archive";
         std::filesystem::create_directories(config.scratchRoot);
         std::filesystem::create_directories(config.recoveryRoot);
-        // The archive root is deliberately NOT created here. Creating it
-        // eagerly would materialise a `.ssg/` directory inside every workspace
-        // merely for being opened -- visible in the file tree, and pointless
-        // for a session that never deletes anything. FileArchive creates it on
-        // the first delete instead.
         auto editor = std::unique_ptr<Editor>{new Editor{
             cwd, config.scratchRoot, config.recoveryRoot, config.archiveRoot,
             config.deferEnrichment, std::move(config.syntaxParser),
             config.enableGitDiffWorker, config.enableFilesystemWatcher}};
-        // Housekeeping at workspace open rather than on a timer, so it is
-        // deterministic and testable. Its result is deliberately ignored: a
-        // corrupt archive entry must never stop a user opening their workspace.
         (void)editor->workspace.pruneArchive();
         editor->keymap = defaultTerminalKeymap();
         if (auto errors = KeymapMatcher{editor->keymap}.validate(); !errors.empty()) {
@@ -1442,10 +1293,7 @@ bool Editor::deferDispatch(ClientCommand command) {
 }
 
 CommandResult Editor::dispatchLocked(ClientCommand const& command) {
-    // Every direct dispatch -- keystroke, palette, or script -- is local: there
-    // is one trusted caller, so a mutation always counts toward the local-edit
-    // follow pause.
-    const auto dispatchAs = [&](const ClientCommand& dispatched) {
+    const auto dispatchAndReconcile = [&](const ClientCommand& dispatched) {
         const auto revisionsBefore = documentRevisions(workspace);
         screen.refreshExternalModificationPresence(
             externalModificationPresent());
@@ -1454,11 +1302,6 @@ CommandResult Editor::dispatchLocked(ClientCommand const& command) {
             sessionTopology.activeWorkspace = result.activeWorkspace;
         }
         reconcileFindDocument();
-        // The draft-conflict notice's presence lives in per-document runtime
-        // state, outside the prompt/panel transitions, so reconcile it into the
-        // screen here where every state change (open, reopen, tab switch,
-        // discard, dismiss) has settled -- the notice region then shows/hides
-        // in the presence section this dispatch publishes.
         screen.refreshNoticePresence(noticePresent());
         screen.refreshExternalModificationPresence(
             externalModificationPresent());
@@ -1469,24 +1312,13 @@ CommandResult Editor::dispatchLocked(ClientCommand const& command) {
         }
         return result;
     };
-    // Dispatches a command AND runs whatever its handler asked to invoke,
-    // before returning.  The drain lives here rather than at the end of this
-    // function so that no path can reach a `return` with requests still
-    // queued: the palette and prompt paths below return early, and a command
-    // run through either of them may queue just as any other can.
-    //
-    // Requests run once the session lock has released, in the order asked for.
     const auto dispatchAndDrain = [&](const ClientCommand& dispatched) {
         const auto* requested = dispatched.id.handle().valid()
                                     ? catalog.find(dispatched.id.handle())
                                     : catalog.find(dispatched.id.name());
         const bool routing =
             requested && requested->effect == CommandEffect::Routing;
-        auto outcome = dispatchAs(dispatched);
-        // A handler that FAILED does not get its requests performed: it may
-        // have queued half a sequence before giving up, and running that half
-        // is worse than running none of it.  Its success would also overwrite
-        // the failure being reported.
+        auto outcome = dispatchAndReconcile(dispatched);
         if (!outcome.accepted()) {
             deferredCommands.clear();
             return outcome;
@@ -1524,10 +1356,8 @@ CommandResult Editor::dispatchLocked(ClientCommand const& command) {
                 }
             }
             directRoutingTarget = false;
-            auto const deferredResult = dispatchAs(deferred.command);
-            // The first failure is reported, naming the command that failed,
-            // and the rest are abandoned: continuing would run the remainder of
-            // a sequence whose earlier step did not happen.
+            auto const deferredResult =
+                dispatchAndReconcile(deferred.command);
             if (!deferredResult.accepted()) {
                 deferredCommands.clear();
                 return CatalogDispatchResult{
@@ -1549,11 +1379,6 @@ CommandResult Editor::dispatchLocked(ClientCommand const& command) {
         return outcome;
     };
     auto result = dispatchAndDrain(command);
-    // The file picker's submit is file.open, which (unlike palette.execute) has
-    // no prompt side effects of its own.  Closing it here rather than in the
-    // client keeps close-on-success semantics identical for keyboard and
-    // pointer submits: a rejected open -- the file was removed between the walk
-    // and the submit -- leaves the picker open with its query intact.
     if (result.accepted() && screen.openPicker() == PickerKind::File &&
         command.id == "file.open") {
         (void)screen.prompt().cancel();
