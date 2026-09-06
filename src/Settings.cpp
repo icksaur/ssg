@@ -341,8 +341,8 @@ std::optional<std::string> readIfPresent(const std::filesystem::path& path,
 }
 
 void writeDocument(const std::filesystem::path& path, std::string_view document) {
-    const auto created = createDirectoriesDurably(path.parent_path());
-    if (!created.ok() && created.status != FileIoStatus::AlreadyExists) {
+    const auto created = ensureDirectory(path.parent_path());
+    if (!created.ok()) {
         throw std::runtime_error(created.message);
     }
     const auto bytes = std::as_bytes(std::span{document.data(), document.size()});

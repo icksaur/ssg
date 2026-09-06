@@ -225,9 +225,17 @@ struct DirectoryListResult {
 [[nodiscard]] FileIoResult createDirectoriesDurably(
     const std::filesystem::path& path);
 
+// Creates a durable directory chain, treating an existing directory as success.
+[[nodiscard]] FileIoResult ensureDirectory(
+    const std::filesystem::path& path);
+
 // Removes a file or directory tree without following directory symlinks.
 // NotFound means there was nothing to remove.
 [[nodiscard]] FileIoResult removeTree(const std::filesystem::path& path);
+
+// Removes a file or directory tree, treating an absent path as success.
+[[nodiscard]] FileIoResult removeTreeIfPresent(
+    const std::filesystem::path& path);
 
 // Recursive listings do not follow directory symlinks. A successful result
 // with complete == false is a bounded or partially inaccessible traversal.

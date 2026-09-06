@@ -44,7 +44,11 @@ static_assert(std::same_as<decltype(&ssg::removeFile),
                            ssg::FileIoResult (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::createDirectoriesDurably),
                            ssg::FileIoResult (*)(const Path&)>);
+static_assert(std::same_as<decltype(&ssg::ensureDirectory),
+                           ssg::FileIoResult (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::removeTree),
+                           ssg::FileIoResult (*)(const Path&)>);
+static_assert(std::same_as<decltype(&ssg::removeTreeIfPresent),
                            ssg::FileIoResult (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::listDirectory),
                            ssg::DirectoryListResult (*)(
@@ -85,7 +89,9 @@ SSG_TEST_SUITE(test_platform_interface) {
     [[maybe_unused]] auto removeFile = &ssg::removeFile;
     [[maybe_unused]] auto createDirectoriesDurably =
         &ssg::createDirectoriesDurably;
+    [[maybe_unused]] auto ensureDirectory = &ssg::ensureDirectory;
     [[maybe_unused]] auto removeTree = &ssg::removeTree;
+    [[maybe_unused]] auto removeTreeIfPresent = &ssg::removeTreeIfPresent;
     [[maybe_unused]] auto listDirectory = &ssg::listDirectory;
     [[maybe_unused]] auto syncDirectory = &ssg::syncDirectory;
     [[maybe_unused]] auto copyFileDurably = &ssg::copyFileDurably;

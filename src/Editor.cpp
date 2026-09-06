@@ -777,8 +777,8 @@ CommandHandlerResult Editor::openDraftDiff() {
 bool Editor::archiveDiscardedDraft(std::string_view savedPath,
                                                 std::string_view content) {
     const auto archiveDir = scratchRoot.parent_path() / "draft-archive";
-    const auto created = createDirectoriesDurably(archiveDir);
-    if (!created.ok() && created.status != FileIoStatus::AlreadyExists) {
+    const auto created = ensureDirectory(archiveDir);
+    if (!created.ok()) {
         return false;
     }
 
@@ -1256,16 +1256,12 @@ EditorCreateResult createEditor(EditorConfig config) {
         if (config.scratchRoot.empty()) config.scratchRoot = cwd / ".ssg" / "scratch";
         if (config.recoveryRoot.empty()) config.recoveryRoot = cwd / ".ssg" / "recovery";
         if (config.archiveRoot.empty()) config.archiveRoot = cwd / ".ssg" / "archive";
-        const auto scratchCreated =
-            createDirectoriesDurably(config.scratchRoot);
-        if (!scratchCreated.ok() &&
-            scratchCreated.status != FileIoStatus::AlreadyExists) {
+        const auto scratchCreated = ensureDirectory(config.scratchRoot);
+        if (!scratchCreated.ok()) {
             throw std::runtime_error(scratchCreated.message);
         }
-        const auto recoveryCreated =
-            createDirectoriesDurably(config.recoveryRoot);
-        if (!recoveryCreated.ok() &&
-            recoveryCreated.status != FileIoStatus::AlreadyExists) {
+        const auto recoveryCreated = ensureDirectory(config.recoveryRoot);
+        if (!recoveryCreated.ok()) {
             throw std::runtime_error(recoveryCreated.message);
         }
         auto editor = std::unique_ptr<Editor>{new Editor{

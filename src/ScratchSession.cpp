@@ -135,8 +135,8 @@ void requireCanonicalAbsolute(
 }
 
 void makePrivateDirectory(const std::filesystem::path& path) {
-    const auto created = createDirectoriesDurably(path);
-    if (!created.ok() && created.status != FileIoStatus::AlreadyExists) {
+    const auto created = ensureDirectory(path);
+    if (!created.ok()) {
         throw std::runtime_error("create scratch directory: " +
                                  created.message);
     }

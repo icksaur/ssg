@@ -404,6 +404,7 @@ TEST(directorySeamCreatesListsBoundsAndRemovesTrees) {
               ssg::FileIoStatus::Ok);
     ASSERT_EQ(ssg::createDirectoriesDurably(nested).status,
               ssg::FileIoStatus::AlreadyExists);
+    ASSERT_EQ(ssg::ensureDirectory(nested).status, ssg::FileIoStatus::Ok);
     writeText(tree / "root.txt", "root");
     writeText(nested / "nested.txt", "nested");
 
@@ -420,6 +421,7 @@ TEST(directorySeamCreatesListsBoundsAndRemovesTrees) {
 
     ASSERT_EQ(ssg::removeTree(tree).status, ssg::FileIoStatus::Ok);
     ASSERT_EQ(ssg::removeTree(tree).status, ssg::FileIoStatus::NotFound);
+    ASSERT_EQ(ssg::removeTreeIfPresent(tree).status, ssg::FileIoStatus::Ok);
 }
 
 TEST(directoryCreationHasOneLeafWinner) {

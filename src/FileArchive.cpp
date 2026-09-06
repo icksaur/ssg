@@ -94,9 +94,8 @@ FileArchiveResult FileArchive::archive(
         return {false, {}, "archive source is not a regular file"};
     }
 
-    const auto rootCreated = createDirectoriesDurably(root_);
-    if (!rootCreated.ok() &&
-        rootCreated.status != FileIoStatus::AlreadyExists) {
+    const auto rootCreated = ensureDirectory(root_);
+    if (!rootCreated.ok()) {
         return {false, {}, "could not create the archive root: " +
                                rootCreated.message};
     }
@@ -124,11 +123,9 @@ FileArchiveResult FileArchive::archive(
     }
 
     const auto destination = entry / *relative;
-    const auto destinationCreated =
-        createDirectoriesDurably(destination.parent_path());
-    if (!destinationCreated.ok() &&
-        destinationCreated.status != FileIoStatus::AlreadyExists) {
-        (void)removeTree(entry);
+    const auto destinationCreated = ensureDirectory(destination.parent_path());
+    if (!destinationCreated.ok()) {
+        (void)removeTreeIfPresent(entry);
         return {false, {}, "could not create archive directory: " +
                                destinationCreated.message};
     }
@@ -139,7 +136,7 @@ FileArchiveResult FileArchive::archive(
     if (!copied.ok()) {
         // Safe because `entry` is one WE created above and no other process can
         // be using it.
-        (void)removeTree(entry);
+        (void)removeTreeIfPresent(entry);
         return {false, {}, "could not write archive copy: " + copied.message};
     }
 
@@ -152,7 +149,7 @@ FileArchiveResult FileArchive::archive(
          directory != root_.parent_path() && !directory.empty();
          directory = directory.parent_path()) {
         if (const auto synced = syncDirectory(directory); !synced.ok()) {
-            (void)removeTree(entry);
+            (void)removeTreeIfPresent(entry);
             return {false, {}, "could not flush the archive to disk: " +
                                    synced.message};
         }
@@ -204,8 +201,8 @@ FileArchivePruneReport FileArchive::prune(
     }
 
     for (const auto& entry : expired) {
-        const auto removed = removeTree(entry);
-        if (!removed.ok() && removed.status != FileIoStatus::NotFound) {
+        const auto removed = removeTreeIfPresent(entry);
+        if (!removed.ok()) {
             report.message = "could not remove an expired archive entry: " +
                              removed.message;
             continue;

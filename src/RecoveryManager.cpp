@@ -251,28 +251,24 @@ SnapshotKind snapshotKind(const std::filesystem::path& path) {
                              path.string());
 }
 
-void createDirectories(const std::filesystem::path& path) {
-    const auto created = createDirectoriesDurably(path);
-    if (!created.ok() && created.status != FileIoStatus::AlreadyExists) {
-        throw std::runtime_error(created.message);
-    }
-}
-
 void copyNode(const std::filesystem::path& source,
                const std::filesystem::path& destination,
                SnapshotKind kind) {
     switch (kind) {
     case SnapshotKind::Missing:
         return;
-    case SnapshotKind::RegularFile:
-        createDirectories(destination.parent_path());
+    case SnapshotKind::RegularFile: {
+        const auto created = ensureDirectory(destination.parent_path());
+        if (!created.ok()) throw std::runtime_error(created.message);
         // seam-exempt: restoring a recovery snapshot MUST overwrite the current file
         std::filesystem::copy_file(
             source, destination,
             std::filesystem::copy_options::overwrite_existing);
         return;
+    }
     case SnapshotKind::Symlink: {
-        createDirectories(destination.parent_path());
+        const auto created = ensureDirectory(destination.parent_path());
+        if (!created.ok()) throw std::runtime_error(created.message);
         const auto target = std::filesystem::read_symlink(source);
         std::error_code targetError;
         const auto targetPath = std::filesystem::canonical(source, targetError);
@@ -287,8 +283,9 @@ void copyNode(const std::filesystem::path& source,
         }
         return;
     }
-    case SnapshotKind::Directory:
-        createDirectories(destination);
+    case SnapshotKind::Directory: {
+        const auto created = ensureDirectory(destination);
+        if (!created.ok()) throw std::runtime_error(created.message);
         const auto listed = listDirectory(source);
         if (!listed.ok() || !listed.complete) {
             throw std::runtime_error("failed to list recovery source: " +
@@ -301,20 +298,17 @@ void copyNode(const std::filesystem::path& source,
         }
         return;
     }
-}
-
-void removeNode(const std::filesystem::path& path) {
-    const auto removed = removeTree(path);
-    if (!removed.ok() && removed.status != FileIoStatus::NotFound) {
-        throw std::runtime_error("failed to remove filesystem node: " +
-                                 removed.message);
     }
 }
 
 void restoreSnapshot(const std::filesystem::path& destination,
                       const std::filesystem::path& artifact,
                       SnapshotKind kind) {
-    removeNode(destination);
+    const auto removed = removeTreeIfPresent(destination);
+    if (!removed.ok()) {
+        throw std::runtime_error("failed to remove filesystem node: " +
+                                 removed.message);
+    }
     if (kind != SnapshotKind::Missing) {
         copyNode(artifact, destination, kind);
     }
@@ -595,7 +589,8 @@ public:
             throw std::invalid_argument(
                 "recovery maximum byte count must be greater than zero");
         }
-        createDirectories(recoveryRoot_);
+        const auto created = ensureDirectory(recoveryRoot_);
+        if (!created.ok()) throw std::runtime_error(created.message);
         setOwnerOnlyPermissions(recoveryRoot_);
         loadRecords();
     }
@@ -682,10 +677,22 @@ public:
             {source, destination},
             [&] {
                 before(RecoveryStep::MutateFilesystem);
-                removeNode(destination);
+                const auto removed = removeTreeIfPresent(destination);
+                if (!removed.ok()) {
+                    throw std::runtime_error(
+                        "failed to remove filesystem node: " + removed.message);
+                }
                 before(RecoveryStep::MutateFilesystem);
-                createDirectories(source.parent_path());
-                createDirectories(destination.parent_path());
+                const auto sourceParent =
+                    ensureDirectory(source.parent_path());
+                if (!sourceParent.ok()) {
+                    throw std::runtime_error(sourceParent.message);
+                }
+                const auto destinationParent =
+                    ensureDirectory(destination.parent_path());
+                if (!destinationParent.ok()) {
+                    throw std::runtime_error(destinationParent.message);
+                }
                 renameDurably(source, destination);
             },
             [&](const StoredRecord& stored) {
@@ -730,7 +737,8 @@ public:
             {source, destination},
             [&] {
                 before(RecoveryStep::MutateFilesystem);
-                createDirectories(destination.parent_path());
+                const auto parent = ensureDirectory(destination.parent_path());
+                if (!parent.ok()) throw std::runtime_error(parent.message);
                 const auto renamed = renameFileNoClobber(source, destination);
                 if (!renamed.ok()) {
                     throw std::runtime_error("rename failed: " +
@@ -769,7 +777,11 @@ public:
             RecoveryRecordKind::PathDelete, std::nullopt, {path},
             [&] {
                 before(RecoveryStep::MutateFilesystem);
-                removeNode(path);
+                const auto removed = removeTreeIfPresent(path);
+                if (!removed.ok()) {
+                    throw std::runtime_error(
+                        "failed to remove filesystem node: " + removed.message);
+                }
             },
             [&](const StoredRecord& stored) {
                 before(RecoveryStep::RollbackFilesystem);
@@ -848,7 +860,8 @@ private:
             if (!status || status->kind != FileKind::Directory) continue;
             const auto name = entry.path().filename().string();
             if (name.rfind(".staging-", 0) == 0) {
-                removeNode(entry.path());
+                const auto removed = removeTreeIfPresent(entry.path());
+                if (!removed.ok()) throw std::runtime_error(removed.message);
                 continue;
             }
             RecoveryRecordId id{name};
@@ -858,17 +871,20 @@ private:
                 decoded.emplace(decodeManifest(id, entry.path()));
                 state = readRecordState(*decoded);
             } catch (...) {
-                removeNode(entry.path());
+                const auto removed = removeTreeIfPresent(entry.path());
+                if (!removed.ok()) throw std::runtime_error(removed.message);
                 continue;
             }
             auto stored = std::move(*decoded);
             if (!state) {
-                removeNode(entry.path());
+                const auto removed = removeTreeIfPresent(entry.path());
+                if (!removed.ok()) throw std::runtime_error(removed.message);
                 continue;
             }
             if (*state == RecordState::InProgress &&
                 documentKind(stored.record.kind)) {
-                removeNode(entry.path());
+                const auto removed = removeTreeIfPresent(entry.path());
+                if (!removed.ok()) throw std::runtime_error(removed.message);
                 continue;
             }
             if (*state == RecordState::InProgress &&
@@ -878,7 +894,8 @@ private:
                     restoreFilesystemState(stored);
                     syncFilesystemState(stored);
                     markRestored(stored);
-                    removeNode(entry.path());
+                    const auto removed = removeTreeIfPresent(entry.path());
+                    if (!removed.ok()) throw std::runtime_error(removed.message);
                     continue;
                 } catch (...) {
                 }
@@ -948,8 +965,13 @@ private:
         const auto staging =
             recoveryRoot_ / (".staging-" + std::string{id.value()});
         const auto installed = recoveryRoot_ / std::string{id.value()};
-        removeNode(staging);
-        createDirectories(staging / "artifacts");
+        const auto removed = removeTreeIfPresent(staging);
+        if (!removed.ok()) {
+            throw std::runtime_error("failed to remove filesystem node: " +
+                                     removed.message);
+        }
+        const auto created = ensureDirectory(staging / "artifacts");
+        if (!created.ok()) throw std::runtime_error(created.message);
 
         StoredRecord stored{
             {id,
@@ -991,12 +1013,13 @@ private:
             before(RecoveryStep::InstallRecord);
             installDirectoryDurably(staging, installed, recoveryRoot_);
         } catch (...) {
-            (void)removeTree(staging);
+            (void)removeTreeIfPresent(staging);
             throw;
         }
 
         if (stored.record.storedBytes > config_.maximumBytes) {
-            removeNode(installed);
+            const auto removed = removeTreeIfPresent(installed);
+            if (!removed.ok()) throw std::runtime_error(removed.message);
             throw BudgetExceeded(
                 "recovery record exceeds the configured byte budget");
         }
@@ -1028,7 +1051,7 @@ private:
         try {
             markRecordState(*prepared, RecordState::InProgress);
         } catch (...) {
-            (void)removeTree(prepared->directory);
+            (void)removeTreeIfPresent(prepared->directory);
             return {{},
                     error(RecoveryErrorCode::PreparationFailed,
                           "recovery record activation failed: " +
@@ -1088,7 +1111,8 @@ private:
         try {
             before(RecoveryStep::CleanupRecord);
             markRestored(*prepared);
-            removeNode(prepared->directory);
+            const auto removed = removeTreeIfPresent(prepared->directory);
+            if (!removed.ok()) throw std::runtime_error(removed.message);
             return {{},
                     error(RecoveryErrorCode::ActionFailed,
                           "recovery action failed: " +
@@ -1109,7 +1133,8 @@ private:
             throw BudgetExceeded(
                 "recovery record cannot fit the configured budgets");
         }
-        removeNode(records_.front().directory);
+        const auto removed = removeTreeIfPresent(records_.front().directory);
+        if (!removed.ok()) throw std::runtime_error(removed.message);
         records_.erase(records_.begin());
     }
 
@@ -1188,8 +1213,10 @@ private:
         const auto destinationNow = snapshotKind(destination);
         if (sourceNow == SnapshotKind::Missing &&
             destinationNow != SnapshotKind::Missing) {
-            removeNode(source);
-            createDirectories(source.parent_path());
+            const auto removed = removeTreeIfPresent(source);
+            if (!removed.ok()) throw std::runtime_error(removed.message);
+            const auto created = ensureDirectory(source.parent_path());
+            if (!created.ok()) throw std::runtime_error(created.message);
             renameDurably(destination, source);
         } else if (sourceNow == SnapshotKind::Missing) {
             restoreSnapshot(source, artifactPath(stored, 0),
@@ -1238,7 +1265,8 @@ private:
     RecoveryRestoreResult cleanupRestored(RecordIterator record) {
         try {
             before(RecoveryStep::CleanupRecord);
-            removeNode(record->directory);
+            const auto removed = removeTreeIfPresent(record->directory);
+            if (!removed.ok()) throw std::runtime_error(removed.message);
             records_.erase(record);
             return {};
         } catch (...) {

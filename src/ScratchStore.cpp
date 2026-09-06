@@ -134,14 +134,6 @@ bool olderThan(const Remnant& remnant,
     return now - created > maximumAge;
 }
 
-void removeRemnant(const Remnant& remnant) {
-    const auto removed = removeTree(remnant.path);
-    if (!removed.ok() && removed.status != FileIoStatus::NotFound) {
-        throw std::runtime_error("purge restored scratch remnant: " +
-                                 removed.message);
-    }
-}
-
 } // namespace
 
 class ScratchStore::Impl {
@@ -233,7 +225,11 @@ public:
         const auto now = std::chrono::system_clock::now();
         for (const auto& remnant : remnants) {
             if (!olderThan(remnant, config_.maximumAge, now)) continue;
-            removeRemnant(remnant);
+            const auto removed = removeTreeIfPresent(remnant.path);
+            if (!removed.ok()) {
+                throw std::runtime_error("purge restored scratch remnant: " +
+                                         removed.message);
+            }
             result.evictedSessionIds.push_back(remnant.id);
         }
 
@@ -241,7 +237,11 @@ public:
         result.remainingBytes = directoryBytes(scratchRoot_);
         for (const auto& remnant : remaining) {
             if (result.remainingBytes <= config_.maximumBytes) break;
-            removeRemnant(remnant);
+            const auto removed = removeTreeIfPresent(remnant.path);
+            if (!removed.ok()) {
+                throw std::runtime_error("purge restored scratch remnant: " +
+                                         removed.message);
+            }
             result.evictedSessionIds.push_back(remnant.id);
             result.remainingBytes = directoryBytes(scratchRoot_);
         }
@@ -281,7 +281,11 @@ private:
         std::size_t count = 0;
         for (const auto& remnant : restoredRemnants(scratchRoot_)) {
             if (!predicate(remnant)) continue;
-            removeRemnant(remnant);
+            const auto removed = removeTreeIfPresent(remnant.path);
+            if (!removed.ok()) {
+                throw std::runtime_error("purge restored scratch remnant: " +
+                                         removed.message);
+            }
             ++count;
         }
         return count;

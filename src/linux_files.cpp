@@ -636,6 +636,15 @@ FileIoResult createDirectoriesDurably(const std::filesystem::path& path) {
                               "directory already exists"};
 }
 
+FileIoResult ensureDirectory(const std::filesystem::path& path) {
+    auto result = createDirectoriesDurably(path);
+    if (result.status == FileIoStatus::AlreadyExists) {
+        result.status = FileIoStatus::Ok;
+        result.message.clear();
+    }
+    return result;
+}
+
 FileIoResult removeTree(const std::filesystem::path& path) {
     if (const auto injected = injectedFailure("removeTree", path)) {
         return {*injected, "injected fault: removeTree"};
@@ -645,6 +654,15 @@ FileIoResult removeTree(const std::filesystem::path& path) {
     if (error) return {statusForErrno(error.value()), error.message()};
     if (removed == 0) return {FileIoStatus::NotFound, "path not found"};
     return {FileIoStatus::Ok, {}};
+}
+
+FileIoResult removeTreeIfPresent(const std::filesystem::path& path) {
+    auto result = removeTree(path);
+    if (result.status == FileIoStatus::NotFound) {
+        result.status = FileIoStatus::Ok;
+        result.message.clear();
+    }
+    return result;
 }
 
 DirectoryListResult listDirectory(const std::filesystem::path& path,
