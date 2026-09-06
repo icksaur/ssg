@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <limits>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -169,6 +171,50 @@ PathValidation validateWorkspaceRelativePath(std::string_view path,
         return {PathError::PathTooLong, 0};
     }
     return {};
+}
+
+FileIoResult ensureDirectory(const std::filesystem::path& path) {
+    auto result = createDirectoriesDurably(path);
+    if (result.status == FileIoStatus::AlreadyExists) {
+        result.status = FileIoStatus::Ok;
+        result.message.clear();
+    }
+    return result;
+}
+
+FileIoResult removeTreeIfPresent(const std::filesystem::path& path) {
+    auto result = removeTree(path);
+    if (result.status == FileIoStatus::NotFound) {
+        result.status = FileIoStatus::Ok;
+        result.message.clear();
+    }
+    return result;
+}
+
+std::uintmax_t treeBytes(const std::filesystem::path& path) {
+    const auto root = statFile(path);
+    if (!root) return 0;
+    if (root->kind == FileKind::Regular) return root->size;
+    if (root->kind != FileKind::Directory) return 0;
+
+    const auto listed = listDirectory(path, DirectoryTraversal::Recursive);
+    if (listed.status == FileIoStatus::NotFound) return 0;
+    if (!listed.ok() || !listed.complete) {
+        throw std::runtime_error("failed to measure filesystem tree: " +
+                                 listed.message);
+    }
+
+    std::uintmax_t total = 0;
+    for (const auto& entry : listed.entries) {
+        const auto status = statFile(entry.path());
+        if (!status || status->kind != FileKind::Regular) continue;
+        if (status->size >
+            std::numeric_limits<std::uintmax_t>::max() - total) {
+            return std::numeric_limits<std::uintmax_t>::max();
+        }
+        total += status->size;
+    }
+    return total;
 }
 
 } // namespace ssg

@@ -314,42 +314,6 @@ void restoreSnapshot(const std::filesystem::path& destination,
     }
 }
 
-std::uintmax_t storedTreeBytes(const std::filesystem::path& root) {
-    std::uintmax_t total = 0;
-    const auto addNode = [&](const std::filesystem::path& path) {
-        const auto status = statFile(path);
-        if (!status) return;
-        if (status->kind == FileKind::Regular) {
-            const auto size = status->size;
-            if (size > std::numeric_limits<std::uintmax_t>::max() - total) {
-                throw std::overflow_error("recovery byte accounting overflow");
-            }
-            total += size;
-        } else if (status->kind == FileKind::Symlink) {
-            const auto size = pathToUtf8(std::filesystem::read_symlink(path))
-                                  .size();
-            if (size > std::numeric_limits<std::uintmax_t>::max() - total) {
-                throw std::overflow_error("recovery byte accounting overflow");
-            }
-            total += size;
-        }
-    };
-
-    addNode(root);
-    if (snapshotKind(root) == SnapshotKind::Directory) {
-        const auto listed =
-            listDirectory(root, DirectoryTraversal::Recursive);
-        if (!listed.ok() || !listed.complete) {
-            throw std::runtime_error("failed to list recovery tree: " +
-                                     listed.message);
-        }
-        for (const auto& entry : listed.entries) {
-            addNode(entry.path());
-        }
-    }
-    return total;
-}
-
 void protectTree(const std::filesystem::path& root) {
     setOwnerOnlyPermissions(root);
     const auto listed =
@@ -997,7 +961,7 @@ private:
             }
             auto manifest = encodeManifest(stored);
             writeBytes(staging / "manifest.bin", manifest);
-            const auto payloadBytes = storedTreeBytes(staging);
+            const auto payloadBytes = treeBytes(staging);
             if (payloadBytes >
                 std::numeric_limits<std::uintmax_t>::max() -
                     kRecordLifecycleMetadataBytes) {

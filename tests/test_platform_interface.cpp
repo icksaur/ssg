@@ -50,6 +50,8 @@ static_assert(std::same_as<decltype(&ssg::removeTree),
                            ssg::FileIoResult (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::removeTreeIfPresent),
                            ssg::FileIoResult (*)(const Path&)>);
+static_assert(std::same_as<decltype(&ssg::treeBytes),
+                           std::uintmax_t (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::listDirectory),
                            ssg::DirectoryListResult (*)(
                                const Path&, ssg::DirectoryTraversal,
@@ -92,6 +94,7 @@ SSG_TEST_SUITE(test_platform_interface) {
     [[maybe_unused]] auto ensureDirectory = &ssg::ensureDirectory;
     [[maybe_unused]] auto removeTree = &ssg::removeTree;
     [[maybe_unused]] auto removeTreeIfPresent = &ssg::removeTreeIfPresent;
+    [[maybe_unused]] auto treeBytes = &ssg::treeBytes;
     [[maybe_unused]] auto listDirectory = &ssg::listDirectory;
     [[maybe_unused]] auto syncDirectory = &ssg::syncDirectory;
     [[maybe_unused]] auto copyFileDurably = &ssg::copyFileDurably;

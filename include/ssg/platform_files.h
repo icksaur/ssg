@@ -237,6 +237,10 @@ struct DirectoryListResult {
 [[nodiscard]] FileIoResult removeTreeIfPresent(
     const std::filesystem::path& path);
 
+// Counts regular-file bytes without following symlinks. Overflow saturates so
+// quota enforcement remains conservative instead of failing while freeing space.
+[[nodiscard]] std::uintmax_t treeBytes(const std::filesystem::path& path);
+
 // Recursive listings do not follow directory symlinks. A successful result
 // with complete == false is a bounded or partially inaccessible traversal.
 [[nodiscard]] DirectoryListResult listDirectory(

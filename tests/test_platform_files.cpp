@@ -424,6 +424,24 @@ TEST(directorySeamCreatesListsBoundsAndRemovesTrees) {
     ASSERT_EQ(ssg::removeTreeIfPresent(tree).status, ssg::FileIoStatus::Ok);
 }
 
+TEST(treeBytesCountsRegularFilesWithoutFollowingSymlinks) {
+    TemporaryDirectory temporary;
+    const auto tree = temporary.path() / "tree";
+    ASSERT_TRUE(ssg::ensureDirectory(tree / "nested").ok());
+    writeText(tree / "root.txt", "abc");
+    writeText(tree / "nested" / "child.txt", "1234");
+
+    std::error_code error;
+    std::filesystem::create_symlink(tree / "root.txt", tree / "file-link", error);
+    if (!error) {
+        std::filesystem::create_directory_symlink(
+            tree / "nested", tree / "directory-link", error);
+    }
+
+    ASSERT_EQ(ssg::treeBytes(tree), std::uintmax_t{7});
+    ASSERT_EQ(ssg::treeBytes(temporary.path() / "missing"), std::uintmax_t{0});
+}
+
 TEST(directoryCreationHasOneLeafWinner) {
     TemporaryDirectory temporary;
     const auto leaf = temporary.path() / "claimed";
@@ -494,6 +512,7 @@ SSG_TEST_SUITE(test_platform_files) {
     RUN(atomicReplacementPublishesCompleteBytes);
     RUN(atomicReplacementNeverExposesPartialBytes);
     RUN(directorySeamCreatesListsBoundsAndRemovesTrees);
+    RUN(treeBytesCountsRegularFilesWithoutFollowingSymlinks);
     RUN(directoryCreationHasOneLeafWinner);
 #ifndef _WIN32
     RUN(configRootPrefersXdgConfigHomeWhenSetAndAbsolute);

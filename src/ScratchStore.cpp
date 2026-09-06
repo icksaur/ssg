@@ -59,23 +59,6 @@ void applyRemove(JournalRecoverySet& recovery,
     });
 }
 
-std::uintmax_t directoryBytes(const std::filesystem::path& root) {
-    std::uintmax_t result = 0;
-    const auto listed = listDirectory(root, DirectoryTraversal::Recursive);
-    if (listed.status == FileIoStatus::NotFound) return 0;
-    if (!listed.ok()) return 0;
-    for (const auto& entry : listed.entries) {
-        const auto status = statFile(entry.path());
-        if (!status || status->kind != FileKind::Regular) continue;
-        if (status->size >
-            std::numeric_limits<std::uintmax_t>::max() - result) {
-            return std::numeric_limits<std::uintmax_t>::max();
-        }
-        result += status->size;
-    }
-    return result;
-}
-
 struct Remnant {
     std::string id;
     std::filesystem::path path;
@@ -234,7 +217,7 @@ public:
         }
 
         auto remaining = restoredRemnants(scratchRoot_);
-        result.remainingBytes = directoryBytes(scratchRoot_);
+        result.remainingBytes = treeBytes(scratchRoot_);
         for (const auto& remnant : remaining) {
             if (result.remainingBytes <= config_.maximumBytes) break;
             const auto removed = removeTreeIfPresent(remnant.path);
@@ -243,7 +226,7 @@ public:
                                          removed.message);
             }
             result.evictedSessionIds.push_back(remnant.id);
-            result.remainingBytes = directoryBytes(scratchRoot_);
+            result.remainingBytes = treeBytes(scratchRoot_);
         }
         result.withinByteQuota =
             result.remainingBytes <= config_.maximumBytes;

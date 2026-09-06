@@ -4260,6 +4260,7 @@ ssg/platform_files.h	func	ssg::setOwnerOnlyPermissions	void (const std::filesyst
 ssg/platform_files.h	func	ssg::statFile	std::optional<FileStat> (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::syncDirectory	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::syncFile	FileIoResult (const std::filesystem::path &)
+ssg/platform_files.h	func	ssg::treeBytes	std::uintmax_t (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::tryLockFile	std::optional<ExclusiveFileLock> (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::userCacheRoot	std::filesystem::path (std::string_view)
 ssg/platform_files.h	func	ssg::userConfigRoot	std::filesystem::path (std::string_view)
