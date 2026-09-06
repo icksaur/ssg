@@ -4202,14 +4202,22 @@ ssg/focus.h	func	ssg::focusTargetName	std::string_view (FocusTarget) noexcept
 ssg/focus.h	func	ssg::keymapContexts	std::array<std::string_view, 5> () noexcept
 ssg/platform_files.h	class	ssg::ExclusiveFileLock
 ssg/platform_files.h	class	ssg::FileIoFaultInjector
+ssg/platform_files.h	enum	ssg::DirectoryTraversal
 ssg/platform_files.h	enum	ssg::FileIoStatus
+ssg/platform_files.h	enum	ssg::FileKind
 ssg/platform_files.h	enum	ssg::LongPathPolicy
 ssg/platform_files.h	enum	ssg::PathError
 ssg/platform_files.h	enum	ssg::PathSyntax
+ssg/platform_files.h	enumerator	ssg::DirectoryTraversal::Children
+ssg/platform_files.h	enumerator	ssg::DirectoryTraversal::Recursive
 ssg/platform_files.h	enumerator	ssg::FileIoStatus::AlreadyExists
 ssg/platform_files.h	enumerator	ssg::FileIoStatus::IoError
 ssg/platform_files.h	enumerator	ssg::FileIoStatus::NotFound
 ssg/platform_files.h	enumerator	ssg::FileIoStatus::Ok
+ssg/platform_files.h	enumerator	ssg::FileKind::Directory
+ssg/platform_files.h	enumerator	ssg::FileKind::Other
+ssg/platform_files.h	enumerator	ssg::FileKind::Regular
+ssg/platform_files.h	enumerator	ssg::FileKind::Symlink
 ssg/platform_files.h	enumerator	ssg::LongPathPolicy::Extended
 ssg/platform_files.h	enumerator	ssg::LongPathPolicy::Legacy
 ssg/platform_files.h	enumerator	ssg::PathError::Absolute
@@ -4224,6 +4232,7 @@ ssg/platform_files.h	enumerator	ssg::PathError::TrailingDotOrSpace
 ssg/platform_files.h	enumerator	ssg::PathError::Traversal
 ssg/platform_files.h	enumerator	ssg::PathSyntax::Linux
 ssg/platform_files.h	enumerator	ssg::PathSyntax::Windows
+ssg/platform_files.h	func	ssg::DirectoryListResult::ok	bool () const noexcept
 ssg/platform_files.h	func	ssg::ExclusiveFileLock::ExclusiveFileLock	void (ExclusiveFileLock &&) noexcept
 ssg/platform_files.h	func	ssg::ExclusiveFileLock::ExclusiveFileLock	void (const ExclusiveFileLock &)
 ssg/platform_files.h	func	ssg::ExclusiveFileLock::operator=	ExclusiveFileLock &(ExclusiveFileLock &&) noexcept
@@ -4234,16 +4243,19 @@ ssg/platform_files.h	func	ssg::FileReadResult::ok	bool () const noexcept
 ssg/platform_files.h	func	ssg::PathValidation::valid	bool () const noexcept
 ssg/platform_files.h	func	ssg::appendFileDurably	FileIoResult (const std::filesystem::path &, std::span<const std::byte>)
 ssg/platform_files.h	func	ssg::copyFileDurably	FileIoResult (const std::filesystem::path &, const std::filesystem::path &)
+ssg/platform_files.h	func	ssg::createDirectoriesDurably	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::createFileExclusively	FileIoResult (const std::filesystem::path &, std::span<const std::byte>)
-ssg/platform_files.h	func	ssg::fileIdentity	FileIdentity (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::installFileIoFaultInjector	FileIoFaultInjector *(FileIoFaultInjector *) noexcept
+ssg/platform_files.h	func	ssg::listDirectory	DirectoryListResult (const std::filesystem::path &, DirectoryTraversal, std::size_t)
 ssg/platform_files.h	func	ssg::operator==	bool (const FileIdentity &, const FileIdentity &)
 ssg/platform_files.h	func	ssg::readFile	FileReadResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::removeFile	FileIoResult (const std::filesystem::path &)
+ssg/platform_files.h	func	ssg::removeTree	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::renameFileNoClobber	FileIoResult (const std::filesystem::path &, const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::renamePathDurably	FileIoResult (const std::filesystem::path &, const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::replaceFileAtomically	void (const std::filesystem::path &, std::span<const std::byte>)
 ssg/platform_files.h	func	ssg::setOwnerOnlyPermissions	void (const std::filesystem::path &)
+ssg/platform_files.h	func	ssg::statFile	std::optional<FileStat> (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::syncDirectory	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::syncFile	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::tryLockFile	std::optional<ExclusiveFileLock> (const std::filesystem::path &)
@@ -4251,10 +4263,16 @@ ssg/platform_files.h	func	ssg::userCacheRoot	std::filesystem::path (std::string_
 ssg/platform_files.h	func	ssg::userConfigRoot	std::filesystem::path (std::string_view)
 ssg/platform_files.h	func	ssg::userStateRoot	std::filesystem::path (std::string_view)
 ssg/platform_files.h	func	ssg::validateWorkspaceRelativePath	PathValidation (std::string_view, PathSyntax, LongPathPolicy) noexcept
+ssg/platform_files.h	struct	ssg::DirectoryListResult
 ssg/platform_files.h	struct	ssg::FileIdentity
 ssg/platform_files.h	struct	ssg::FileIoResult
 ssg/platform_files.h	struct	ssg::FileReadResult
+ssg/platform_files.h	struct	ssg::FileStat
 ssg/platform_files.h	struct	ssg::PathValidation
+ssg/platform_files.h	var	ssg::DirectoryListResult::complete	bool
+ssg/platform_files.h	var	ssg::DirectoryListResult::entries	std::vector<std::filesystem::directory_entry>
+ssg/platform_files.h	var	ssg::DirectoryListResult::message	std::string
+ssg/platform_files.h	var	ssg::DirectoryListResult::status	FileIoStatus
 ssg/platform_files.h	var	ssg::FileIdentity::file	std::array<std::uint64_t, 2>
 ssg/platform_files.h	var	ssg::FileIdentity::volume	std::uint64_t
 ssg/platform_files.h	var	ssg::FileIoResult::message	std::string
@@ -4262,6 +4280,10 @@ ssg/platform_files.h	var	ssg::FileIoResult::status	FileIoStatus
 ssg/platform_files.h	var	ssg::FileReadResult::bytes	std::vector<std::uint8_t>
 ssg/platform_files.h	var	ssg::FileReadResult::message	std::string
 ssg/platform_files.h	var	ssg::FileReadResult::status	FileIoStatus
+ssg/platform_files.h	var	ssg::FileStat::identity	FileIdentity
+ssg/platform_files.h	var	ssg::FileStat::kind	FileKind
+ssg/platform_files.h	var	ssg::FileStat::mtime	std::filesystem::file_time_type
+ssg/platform_files.h	var	ssg::FileStat::size	std::uintmax_t
 ssg/platform_files.h	var	ssg::PathValidation::componentIndex	std::size_t
 ssg/platform_files.h	var	ssg::PathValidation::error	PathError
 ssg/pointer_routing.h	enum	ssg::WheelTarget

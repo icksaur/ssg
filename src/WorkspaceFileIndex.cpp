@@ -1,4 +1,5 @@
 #include <ssg/WorkspaceFileIndex.h>
+#include <ssg/platform_files.h>
 
 #include <algorithm>
 #include <string>
@@ -19,20 +20,13 @@ struct Entry {
 // filesystem happens to return entries in.
 std::vector<Entry> sortedEntries(const fs::path& directory) {
     std::vector<Entry> entries;
-    std::error_code error;
-    fs::directory_iterator iterator{
-        directory, fs::directory_options::skip_permission_denied, error};
-    if (error) return entries;
-    for (const auto& entry : iterator) {
-        std::error_code status;
-        // symlink_status does not follow the link: a symlinked directory is
-        // never descended into, so a cyclic link cannot hang the walk, and a
-        // symlinked file is not offered as a distinct candidate.
-        auto const kind = entry.symlink_status(status);
-        if (status) continue;
-        if (fs::is_symlink(kind)) continue;
-        bool const directoryEntry = fs::is_directory(kind);
-        if (!directoryEntry && !fs::is_regular_file(kind)) continue;
+    const auto listed = listDirectory(directory);
+    if (!listed.ok()) return entries;
+    for (const auto& entry : listed.entries) {
+        const auto status = statFile(entry.path());
+        if (!status || status->kind == FileKind::Symlink) continue;
+        const bool directoryEntry = status->kind == FileKind::Directory;
+        if (!directoryEntry && status->kind != FileKind::Regular) continue;
         entries.push_back({entry.path(), entry.path().filename().string(),
                            directoryEntry});
     }

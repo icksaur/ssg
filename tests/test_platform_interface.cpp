@@ -19,8 +19,8 @@ static_assert(std::same_as<decltype(&ssg::validateWorkspaceRelativePath),
                            ssg::PathValidation (*)(std::string_view,
                                                    ssg::PathSyntax,
                                                    ssg::LongPathPolicy) noexcept>);
-static_assert(std::same_as<decltype(&ssg::fileIdentity),
-                           ssg::FileIdentity (*)(const Path&)>);
+static_assert(std::same_as<decltype(&ssg::statFile),
+                           std::optional<ssg::FileStat> (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::tryLockFile),
                            std::optional<ssg::ExclusiveFileLock> (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::setOwnerOnlyPermissions),
@@ -42,6 +42,14 @@ static_assert(std::same_as<decltype(&ssg::renameFileNoClobber),
                            ssg::FileIoResult (*)(const Path&, const Path&)>);
 static_assert(std::same_as<decltype(&ssg::removeFile),
                            ssg::FileIoResult (*)(const Path&)>);
+static_assert(std::same_as<decltype(&ssg::createDirectoriesDurably),
+                           ssg::FileIoResult (*)(const Path&)>);
+static_assert(std::same_as<decltype(&ssg::removeTree),
+                           ssg::FileIoResult (*)(const Path&)>);
+static_assert(std::same_as<decltype(&ssg::listDirectory),
+                           ssg::DirectoryListResult (*)(
+                               const Path&, ssg::DirectoryTraversal,
+                               std::size_t)>);
 static_assert(std::same_as<decltype(&ssg::syncDirectory),
                            ssg::FileIoResult (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::copyFileDurably),
@@ -63,7 +71,7 @@ SSG_TEST_SUITE(test_platform_interface) {
     // implementation to provide the public symbol, not merely parse the header.
     [[maybe_unused]] auto validateWorkspaceRelativePath =
         &ssg::validateWorkspaceRelativePath;
-    [[maybe_unused]] auto fileIdentity = &ssg::fileIdentity;
+    [[maybe_unused]] auto statFile = &ssg::statFile;
     [[maybe_unused]] auto tryLockFile = &ssg::tryLockFile;
     [[maybe_unused]] auto setOwnerOnlyPermissions = &ssg::setOwnerOnlyPermissions;
     [[maybe_unused]] auto userCacheRoot = &ssg::userCacheRoot;
@@ -75,6 +83,10 @@ SSG_TEST_SUITE(test_platform_interface) {
         &ssg::createFileExclusively;
     [[maybe_unused]] auto renameFileNoClobber = &ssg::renameFileNoClobber;
     [[maybe_unused]] auto removeFile = &ssg::removeFile;
+    [[maybe_unused]] auto createDirectoriesDurably =
+        &ssg::createDirectoriesDurably;
+    [[maybe_unused]] auto removeTree = &ssg::removeTree;
+    [[maybe_unused]] auto listDirectory = &ssg::listDirectory;
     [[maybe_unused]] auto syncDirectory = &ssg::syncDirectory;
     [[maybe_unused]] auto copyFileDurably = &ssg::copyFileDurably;
     [[maybe_unused]] auto installFileIoFaultInjector =

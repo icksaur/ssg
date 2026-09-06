@@ -89,25 +89,60 @@ private:
 
 } // namespace
 
-FileIdentity fileIdentity(const std::filesystem::path& path) {
+std::optional<FileStat> statFile(const std::filesystem::path& path) {
     const HANDLE handle =
         CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                    nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+                    nullptr, OPEN_EXISTING,
+                    FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                    nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
-        throw_last_error("open file identity", path);
+        const auto error = GetLastError();
+        if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+            return std::nullopt;
+        }
+        throw_last_error("open file metadata", path, error);
     }
+    FILE_BASIC_INFO basic{};
+    FILE_STANDARD_INFO standard{};
     FILE_ID_INFO info{};
-    if (!GetFileInformationByHandleEx(handle, FileIdInfo, &info, sizeof(info))) {
+    FILE_ATTRIBUTE_TAG_INFO tag{};
+    if (!GetFileInformationByHandleEx(handle, FileBasicInfo, &basic,
+                                      sizeof(basic)) ||
+        !GetFileInformationByHandleEx(handle, FileStandardInfo, &standard,
+                                      sizeof(standard)) ||
+        !GetFileInformationByHandleEx(handle, FileIdInfo, &info, sizeof(info)) ||
+        !GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &tag,
+                                      sizeof(tag))) {
         const DWORD error = GetLastError();
         CloseHandle(handle);
-        throw_last_error("read file identity", path, error);
+        throw_last_error("read file metadata", path, error);
     }
     CloseHandle(handle);
     FileIdentity identity;
     identity.volume = info.VolumeSerialNumber;
     std::memcpy(identity.file.data(), info.FileId.Identifier, sizeof(identity.file));
-    return identity;
+    FileKind kind = FileKind::Other;
+    if ((tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+        kind = FileKind::Symlink;
+    } else if ((tag.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        kind = FileKind::Directory;
+    } else {
+        kind = FileKind::Regular;
+    }
+    constexpr std::int64_t windowsEpochSeconds = 11644473600LL;
+    constexpr std::int64_t ticksPerSecond = 10000000LL;
+    const auto ticks = basic.LastWriteTime.QuadPart;
+    const auto systemTime =
+        std::chrono::system_clock::time_point{
+            std::chrono::seconds{ticks / ticksPerSecond -
+                                 windowsEpochSeconds}} +
+        std::chrono::nanoseconds{(ticks % ticksPerSecond) * 100};
+    return FileStat{
+        kind,
+        static_cast<std::uintmax_t>(standard.EndOfFile.QuadPart),
+        std::chrono::file_clock::from_sys(systemTime),
+        identity};
 }
 
 ExclusiveFileLock::ExclusiveFileLock(std::intptr_t native_handle) noexcept
@@ -583,6 +618,110 @@ FileIoResult removeFile(const std::filesystem::path& path) {
         return last_error_failure(GetLastError(), "remove file", path);
     }
     return {FileIoStatus::Ok, {}};
+}
+
+FileIoResult createDirectoriesDurably(const std::filesystem::path& path) {
+    if (const auto injected = injectedFailure("createDirectoriesDurably", path)) {
+        return {*injected, "injected fault: createDirectoriesDurably"};
+    }
+    std::error_code error;
+    std::vector<std::filesystem::path> missing;
+    auto current = path;
+    while (!current.empty() && !std::filesystem::exists(current, error)) {
+        if (error) return {FileIoStatus::IoError, error.message()};
+        missing.push_back(current);
+        current = current.parent_path();
+    }
+    if (error) return {FileIoStatus::IoError, error.message()};
+    if (missing.empty()) {
+        return {FileIoStatus::AlreadyExists, "directory already exists"};
+    }
+    bool createdLeaf = false;
+    for (auto iterator = missing.rbegin(); iterator != missing.rend();
+         ++iterator) {
+        const bool created = std::filesystem::create_directory(*iterator, error);
+        if (error) return {FileIoStatus::IoError, error.message()};
+        if (*iterator == path) createdLeaf = created;
+    }
+    for (const auto& directory : missing) {
+        if (const auto synced = syncDirectory(directory); !synced.ok()) {
+            return synced;
+        }
+    }
+    if (!current.empty()) {
+        if (const auto synced = syncDirectory(current); !synced.ok()) {
+            return synced;
+        }
+    }
+    return createdLeaf
+               ? FileIoResult{FileIoStatus::Ok, {}}
+               : FileIoResult{FileIoStatus::AlreadyExists,
+                              "directory already exists"};
+}
+
+FileIoResult removeTree(const std::filesystem::path& path) {
+    if (const auto injected = injectedFailure("removeTree", path)) {
+        return {*injected, "injected fault: removeTree"};
+    }
+    std::error_code error;
+    const auto removed = std::filesystem::remove_all(path, error);
+    if (error) return {FileIoStatus::IoError, error.message()};
+    if (removed == 0) return {FileIoStatus::NotFound, "path not found"};
+    return {FileIoStatus::Ok, {}};
+}
+
+DirectoryListResult listDirectory(const std::filesystem::path& path,
+                                  DirectoryTraversal traversal,
+                                  std::size_t maximumEntries) {
+    if (const auto injected = injectedFailure("listDirectory", path)) {
+        return {*injected, {}, false, "injected fault: listDirectory"};
+    }
+    DirectoryListResult result{FileIoStatus::Ok, {}, true, {}};
+    std::error_code error;
+    const auto append = [&](const auto& entry) {
+        if (result.entries.size() == maximumEntries) {
+            result.complete = false;
+            return false;
+        }
+        result.entries.push_back(entry);
+        return true;
+    };
+    if (traversal == DirectoryTraversal::Children) {
+        std::filesystem::directory_iterator current{
+            path, std::filesystem::directory_options::skip_permission_denied,
+            error};
+        const std::filesystem::directory_iterator end;
+        if (error) {
+            return {FileIoStatus::IoError, {}, false, error.message()};
+        }
+        for (; current != end; current.increment(error)) {
+            if (error) {
+                result.complete = false;
+                if (result.message.empty()) result.message = error.message();
+                error.clear();
+                continue;
+            }
+            if (!append(*current)) break;
+        }
+    } else {
+        std::filesystem::recursive_directory_iterator current{
+            path, std::filesystem::directory_options::skip_permission_denied,
+            error};
+        const std::filesystem::recursive_directory_iterator end;
+        if (error) {
+            return {FileIoStatus::IoError, {}, false, error.message()};
+        }
+        for (; current != end; current.increment(error)) {
+            if (error) {
+                result.complete = false;
+                if (result.message.empty()) result.message = error.message();
+                error.clear();
+                continue;
+            }
+            if (!append(*current)) break;
+        }
+    }
+    return result;
 }
 
 FileIoResult syncDirectory(const std::filesystem::path& path) {

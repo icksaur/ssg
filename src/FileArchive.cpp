@@ -89,15 +89,16 @@ FileArchiveResult FileArchive::archive(
         return {false, {}, "archive source is outside the workspace"};
     }
 
-    std::error_code code;
-    if (!std::filesystem::is_regular_file(source, code) || code) {
+    const auto sourceStat = statFile(source);
+    if (!sourceStat || sourceStat->kind != FileKind::Regular) {
         return {false, {}, "archive source is not a regular file"};
     }
 
-    std::filesystem::create_directories(root_, code);
-    if (code) {
+    const auto rootCreated = createDirectoriesDurably(root_);
+    if (!rootCreated.ok() &&
+        rootCreated.status != FileIoStatus::AlreadyExists) {
         return {false, {}, "could not create the archive root: " +
-                               code.message()};
+                               rootCreated.message};
     }
 
     // Claim an entry directory that DID NOT already exist. A second process
@@ -111,10 +112,11 @@ FileArchiveResult FileArchive::archive(
     bool claimed = false;
     for (std::size_t attempt = 0; attempt < 10000 && !claimed; ++attempt) {
         entry = root_ / entryDirectoryName(now, counter_++);
-        claimed = std::filesystem::create_directory(entry, code) && !code;
-        if (code) {
+        const auto created = createDirectoriesDurably(entry);
+        claimed = created.ok();
+        if (!created.ok() && created.status != FileIoStatus::AlreadyExists) {
             return {false, {}, "could not create archive entry: " +
-                                   code.message()};
+                                   created.message};
         }
     }
     if (!claimed) {
@@ -122,12 +124,13 @@ FileArchiveResult FileArchive::archive(
     }
 
     const auto destination = entry / *relative;
-    std::filesystem::create_directories(destination.parent_path(), code);
-    if (code) {
-        std::error_code ignored;
-        std::filesystem::remove_all(entry, ignored);
+    const auto destinationCreated =
+        createDirectoriesDurably(destination.parent_path());
+    if (!destinationCreated.ok() &&
+        destinationCreated.status != FileIoStatus::AlreadyExists) {
+        (void)removeTree(entry);
         return {false, {}, "could not create archive directory: " +
-                               code.message()};
+                               destinationCreated.message};
     }
 
     // Durable before returning, so the caller's unlink can never run while the
@@ -136,8 +139,7 @@ FileArchiveResult FileArchive::archive(
     if (!copied.ok()) {
         // Safe because `entry` is one WE created above and no other process can
         // be using it.
-        std::error_code ignored;
-        std::filesystem::remove_all(entry, ignored);
+        (void)removeTree(entry);
         return {false, {}, "could not write archive copy: " + copied.message};
     }
 
@@ -150,8 +152,7 @@ FileArchiveResult FileArchive::archive(
          directory != root_.parent_path() && !directory.empty();
          directory = directory.parent_path()) {
         if (const auto synced = syncDirectory(directory); !synced.ok()) {
-            std::error_code ignored;
-            std::filesystem::remove_all(entry, ignored);
+            (void)removeTree(entry);
             return {false, {}, "could not flush the archive to disk: " +
                                    synced.message};
         }
@@ -164,20 +165,28 @@ FileArchivePruneReport FileArchive::prune(
     std::chrono::system_clock::time_point now, std::chrono::hours maxAge) {
     FileArchivePruneReport report;
 
-    std::error_code code;
-    if (!std::filesystem::exists(root_, code) || code) {
+    std::optional<FileStat> rootStat;
+    try {
+        rootStat = statFile(root_);
+    } catch (const std::system_error& error) {
+        report.message = "could not inspect the archive: " +
+                         std::string{error.what()};
+        return report;
+    }
+    if (!rootStat) {
         // Nothing has been deleted yet. Not an error.
         return report;
     }
 
     std::vector<std::filesystem::path> expired;
-    std::filesystem::directory_iterator entries{root_, code};
-    if (code) {
-        report.message = "could not read the archive: " + code.message();
+    const auto entries = listDirectory(root_);
+    if (!entries.ok() || !entries.complete) {
+        report.message = "could not read the archive: " + entries.message;
         return report;
     }
-    for (const auto& entry : entries) {
-        if (!entry.is_directory(code) || code) continue;
+    for (const auto& entry : entries.entries) {
+        const auto status = statFile(entry.path());
+        if (!status || status->kind != FileKind::Directory) continue;
         const auto timestamp = entryTimestamp(entry.path().filename().string());
         if (!timestamp) {
             ++report.retainedUnparseable;
@@ -195,11 +204,10 @@ FileArchivePruneReport FileArchive::prune(
     }
 
     for (const auto& entry : expired) {
-        std::error_code removeError;
-        std::filesystem::remove_all(entry, removeError);
-        if (removeError) {
+        const auto removed = removeTree(entry);
+        if (!removed.ok() && removed.status != FileIoStatus::NotFound) {
             report.message = "could not remove an expired archive entry: " +
-                             removeError.message();
+                             removed.message;
             continue;
         }
         ++report.removed;

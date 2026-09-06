@@ -564,7 +564,10 @@ JournalReplayResult ScratchJournal::replay() const {
 
 void ScratchJournal::append(std::span<const std::byte> record) const {
     const auto parent = path_.parent_path();
-    if (!parent.empty() && !std::filesystem::is_directory(parent)) {
+    const auto parentStat = parent.empty() ? std::optional<FileStat>{}
+                                           : statFile(parent);
+    if (!parent.empty() &&
+        (!parentStat || parentStat->kind != FileKind::Directory)) {
         throw std::invalid_argument(
             "scratch journal parent directory must already exist");
     }

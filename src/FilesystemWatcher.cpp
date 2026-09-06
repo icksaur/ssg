@@ -13,26 +13,19 @@ namespace ssg {
 
 std::optional<WatchFileState> WatchFileState::observe(
     const std::filesystem::path& path) {
-    std::error_code error;
-    const auto status = std::filesystem::symlink_status(path, error);
-    if (error || status.type() == std::filesystem::file_type::not_found) {
-        return std::nullopt;
-    }
-
-    std::uint64_t size = 0;
-    if (std::filesystem::is_regular_file(status)) {
-        size = std::filesystem::file_size(path, error);
-        if (error) return std::nullopt;
-    }
-
-    const auto modified = std::filesystem::last_write_time(path, error);
-    if (error) return std::nullopt;
-
     try {
+        const auto status = statFile(path);
+        if (!status) {
+            return std::nullopt;
+        }
         return WatchFileState{
-            fileIdentity(path), size,
+            status->identity,
+            status->kind == FileKind::Regular
+                ? static_cast<std::uint64_t>(status->size)
+                : 0,
             std::chrono::duration_cast<std::chrono::nanoseconds>(
-                modified.time_since_epoch()).count()};
+                status->mtime.time_since_epoch())
+                .count()};
     } catch (const std::system_error&) {
         return std::nullopt;
     }

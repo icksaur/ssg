@@ -46,20 +46,20 @@ bool exempt(const std::string& relative) {
                        });
 }
 
-// The raw-stream spellings that reach the filesystem directly. std::fopen is
-// included because it is the C-shaped way to do the same thing.
+// Spellings that reach the filesystem directly. std::fopen is included because
+// it is the C-shaped way to do the same thing.
 //
-// The std::filesystem mutations are here because they CLOBBER: rename and
-// copy_file silently replace an existing destination, and remove deletes
-// without the archive. Those are precisely the behaviors the clash rule and the
-// delete-to-archive design exist to prevent, so reaching past the seam to them
-// has to be a deliberate, justified act. remove_all is absent because recursive
-// directory removal is an operation the seam does not offer an alternative to.
+// Filesystem mutations and traversal belong behind the same seam as byte I/O.
 constexpr std::string_view kForbidden[] = {
-    "std::ifstream",         "std::ofstream",
-    "std::fstream",          "std::fopen",
+    "std::ifstream",           "std::ofstream",
+    "std::fstream",            "std::fopen",
     "std::filesystem::rename", "std::filesystem::copy_file",
-    "std::filesystem::remove(",
+    "std::filesystem::remove(", "::create_directories",
+    "::create_directory(",     "::remove_all",
+    "::directory_iterator",    "::recursive_directory_iterator",
+    "::exists(",               "::is_regular_file(",
+    "::is_directory(",         "::file_size(",
+    "::last_write_time(",      "::symlink_status(",
 };
 
 // A single line may opt out by carrying this marker plus a reason. Line-scoped
@@ -153,8 +153,7 @@ void libraryAndApplicationCodeUseTheFileSeam() {
     for (const auto& offender : offenders) {
         std::fprintf(stderr,
                      "FAIL: raw stream I/O outside the seam: %s\n"
-                     "      Use ssg::readFile / createFileExclusively /\n"
-                     "      replaceFileAtomically from ssg/platform_files.h,\n"
+                     "      Use the operation in ssg/platform_files.h,\n"
                      "      or add a justified entry to kExemptions.\n",
                      offender.c_str());
     }

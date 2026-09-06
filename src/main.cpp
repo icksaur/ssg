@@ -76,8 +76,8 @@ struct LaunchTarget {
 LaunchTarget resolveLaunch(const fs::path& argument) {
     if (argument.empty()) return {fs::current_path(), std::nullopt};
 
-    std::error_code code;
-    if (fs::is_directory(argument, code)) {
+    const auto status = ssg::statFile(argument);
+    if (status && status->kind == ssg::FileKind::Directory) {
         return {fs::absolute(argument), std::nullopt};
     }
     const auto absolute = fs::absolute(argument);
@@ -569,12 +569,11 @@ int main(int argc, char** argv) {
     } else {
         stateBase = ssg::userStateRoot("ssg");
     }
-    std::error_code code;
-    fs::create_directories(stateBase / "scratch", code);
-    fs::create_directories(stateBase / "archive", code);
+    (void)ssg::createDirectoriesDurably(stateBase / "scratch");
+    (void)ssg::createDirectoriesDurably(stateBase / "archive");
     for (const auto& dir : {stateBase, stateBase / "scratch", stateBase / "archive"}) {
-        std::error_code permissionError;
-        if (fs::is_directory(dir, permissionError)) {
+        const auto status = ssg::statFile(dir);
+        if (status && status->kind == ssg::FileKind::Directory) {
             try {
                 ssg::setOwnerOnlyPermissions(dir);
             } catch (const std::exception&) {
@@ -583,7 +582,7 @@ int main(int argc, char** argv) {
     }
 
     auto recoveryBase = fs::temp_directory_path() / ("ssg-" + std::to_string(::getpid()));
-    fs::create_directories(recoveryBase / "recovery", code);
+    (void)ssg::createDirectoriesDurably(recoveryBase / "recovery");
 
     ssg::EditorConfig config;
     config.cwd = target.cwd;
@@ -613,7 +612,7 @@ int main(int argc, char** argv) {
 
     bool startsWithAnEditableDocument = false;
     bool openedNamedFile = false;
-    if (target.file && fs::exists(target.cwd / *target.file)) {
+    if (target.file && ssg::statFile(target.cwd / *target.file)) {
         auto const openResult = runtime.dispatch({"file.open", *target.file});
         startsWithAnEditableDocument = openResult.accepted();
         openedNamedFile = openResult.accepted();

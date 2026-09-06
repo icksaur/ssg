@@ -1,6 +1,7 @@
 #include <ssg/FilesystemWatcher.h>
 
 #include <ssg/OptionalSubsystemAudit.h>
+#include <ssg/platform_files.h>
 
 #include <cerrno>
 #include <chrono>
@@ -24,37 +25,30 @@ namespace {
 WorkspaceScan scanWorkspace(const std::filesystem::path& root,
                              std::size_t maximum) {
     WorkspaceScan result;
-    std::error_code error;
-    std::filesystem::recursive_directory_iterator current(
-        root, std::filesystem::directory_options::skip_permission_denied, error);
-    const std::filesystem::recursive_directory_iterator end;
-    if (error) {
+    const auto listed =
+        listDirectory(root, DirectoryTraversal::Recursive, maximum);
+    if (!listed.ok()) {
         return {{}, false};
     }
-    for (; current != end; current.increment(error)) {
-        if (error) {
+    result.complete = listed.complete;
+    for (const auto& entry : listed.entries) {
+        std::optional<FileStat> status;
+        try {
+            status = statFile(entry.path());
+        } catch (const std::system_error&) {
             result.complete = false;
-            error.clear();
             continue;
         }
-        const auto status = current->symlink_status(error);
-        if (error) {
+        if (!status) {
             result.complete = false;
-            error.clear();
             continue;
         }
-        if (std::filesystem::is_symlink(status)) {
-            if (std::filesystem::is_directory(status)) {
-                current.disable_recursion_pending();
-            }
+        if (status->kind == FileKind::Symlink) {
             continue;
         }
-        if (result.entries.size() == maximum) {
-            return {{}, false};
-        }
-        if (auto state = WatchFileState::observe(current->path())) {
+        if (auto state = WatchFileState::observe(entry.path())) {
             result.entries.push_back(
-                {current->path().lexically_relative(root), *state});
+                {entry.path().lexically_relative(root), *state});
         } else {
             result.complete = false;
         }
@@ -137,29 +131,16 @@ private:
 
     void addWatchTree(const std::filesystem::path& directory) {
         addWatch(directory);
-        std::error_code error;
-        std::filesystem::recursive_directory_iterator current(
-            directory,
-            std::filesystem::directory_options::skip_permission_denied, error);
-        const std::filesystem::recursive_directory_iterator end;
-        if (error) {
-            throw std::filesystem::filesystem_error(
-                "failed to enumerate watcher directories", directory, error);
+        const auto listed =
+            listDirectory(directory, DirectoryTraversal::Recursive);
+        if (!listed.ok() || !listed.complete) {
+            throw std::runtime_error("failed to enumerate watcher directories: " +
+                                     listed.message);
         }
-        for (; current != end; current.increment(error)) {
-            if (error) {
-                throw std::filesystem::filesystem_error(
-                    "failed to enumerate watcher directories", directory, error);
-            }
-            const auto status = current->symlink_status(error);
-            if (error) {
-                throw std::filesystem::filesystem_error(
-                    "failed to inspect watcher directory", current->path(), error);
-            }
-            if (std::filesystem::is_symlink(status)) {
-                current.disable_recursion_pending();
-            } else if (std::filesystem::is_directory(status)) {
-                addWatch(current->path());
+        for (const auto& entry : listed.entries) {
+            const auto status = statFile(entry.path());
+            if (status && status->kind == FileKind::Directory) {
+                addWatch(entry.path());
             }
         }
     }

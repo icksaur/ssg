@@ -153,14 +153,28 @@ TEST(identityIsStableAcrossReopenAndRename) {
     const auto renamed = temporary.path() / "renamed";
     writeText(original, "content");
 
-    const auto before = ssg::fileIdentity(original);
-    ASSERT_EQ(ssg::fileIdentity(original), before);
+    const auto initial = ssg::statFile(original);
+    ASSERT_TRUE(initial.has_value());
+    ASSERT_EQ(initial->kind, ssg::FileKind::Regular);
+    ASSERT_EQ(initial->size, std::uintmax_t{7});
+    ASSERT_EQ(initial->mtime, std::filesystem::last_write_time(original));
+    ASSERT_FALSE(ssg::statFile(temporary.path() / "missing").has_value());
+    ASSERT_EQ(ssg::statFile(temporary.path())->kind,
+              ssg::FileKind::Directory);
+#ifndef _WIN32
+    const auto link = temporary.path() / "link";
+    std::filesystem::create_symlink(original, link);
+    ASSERT_EQ(ssg::statFile(link)->kind, ssg::FileKind::Symlink);
+    ASSERT_NE(ssg::statFile(link)->identity, initial->identity);
+#endif
+    const auto before = initial->identity;
+    ASSERT_EQ(ssg::statFile(original)->identity, before);
     std::filesystem::rename(original, renamed);
-    ASSERT_EQ(ssg::fileIdentity(renamed), before);
+    ASSERT_EQ(ssg::statFile(renamed)->identity, before);
 
     const auto other = temporary.path() / "other";
     writeText(other, "content");
-    ASSERT_NE(ssg::fileIdentity(other), before);
+    ASSERT_NE(ssg::statFile(other)->identity, before);
 }
 
 TEST(durableAppendSyncAndRenamePreserveBytes) {
@@ -381,6 +395,64 @@ TEST(atomicReplacementPublishesCompleteBytes) {
     }
 }
 
+TEST(directorySeamCreatesListsBoundsAndRemovesTrees) {
+    TemporaryDirectory temporary;
+    const auto tree = temporary.path() / "tree";
+    const auto nested = tree / "nested";
+
+    ASSERT_EQ(ssg::createDirectoriesDurably(nested).status,
+              ssg::FileIoStatus::Ok);
+    ASSERT_EQ(ssg::createDirectoriesDurably(nested).status,
+              ssg::FileIoStatus::AlreadyExists);
+    writeText(tree / "root.txt", "root");
+    writeText(nested / "nested.txt", "nested");
+
+    const auto children = ssg::listDirectory(tree);
+    ASSERT_TRUE(children.ok());
+    ASSERT_TRUE(children.complete);
+    ASSERT_EQ(children.entries.size(), std::size_t{2});
+
+    const auto bounded = ssg::listDirectory(
+        tree, ssg::DirectoryTraversal::Recursive, 2);
+    ASSERT_TRUE(bounded.ok());
+    ASSERT_FALSE(bounded.complete);
+    ASSERT_EQ(bounded.entries.size(), std::size_t{2});
+
+    ASSERT_EQ(ssg::removeTree(tree).status, ssg::FileIoStatus::Ok);
+    ASSERT_EQ(ssg::removeTree(tree).status, ssg::FileIoStatus::NotFound);
+}
+
+TEST(directoryCreationHasOneLeafWinner) {
+    TemporaryDirectory temporary;
+    const auto leaf = temporary.path() / "claimed";
+    std::atomic<bool> start{false};
+    std::atomic<int> ready{0};
+    std::vector<ssg::FileIoStatus> statuses(8);
+    std::vector<std::thread> threads;
+    threads.reserve(statuses.size());
+    for (std::size_t index = 0; index < statuses.size(); ++index) {
+        threads.emplace_back([&, index] {
+            ++ready;
+            while (!start.load()) {
+                std::this_thread::yield();
+            }
+            statuses[index] = ssg::createDirectoriesDurably(leaf).status;
+        });
+    }
+    while (ready.load() != static_cast<int>(statuses.size())) {
+        std::this_thread::yield();
+    }
+    start = true;
+    for (auto& thread : threads) thread.join();
+
+    ASSERT_EQ(std::count(statuses.begin(), statuses.end(),
+                         ssg::FileIoStatus::Ok),
+              std::ptrdiff_t{1});
+    ASSERT_EQ(std::count(statuses.begin(), statuses.end(),
+                         ssg::FileIoStatus::AlreadyExists),
+              static_cast<std::ptrdiff_t>(statuses.size() - 1));
+}
+
 TEST(atomicReplacementNeverExposesPartialBytes) {
     TemporaryDirectory temporary;
     const auto target = temporary.path() / "document";
@@ -419,6 +491,8 @@ SSG_TEST_SUITE(test_platform_files) {
     RUN(cacheRootContainsValidatedApplicationComponent);
     RUN(atomicReplacementPublishesCompleteBytes);
     RUN(atomicReplacementNeverExposesPartialBytes);
+    RUN(directorySeamCreatesListsBoundsAndRemovesTrees);
+    RUN(directoryCreationHasOneLeafWinner);
 #ifndef _WIN32
     RUN(configRootPrefersXdgConfigHomeWhenSetAndAbsolute);
     RUN(configRootFallsBackToHomeDotConfigWhenXdgUnsetOrRelative);

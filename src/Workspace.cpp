@@ -45,13 +45,17 @@ std::vector<std::uint8_t> readFileBytes(const std::filesystem::path& path) {
 std::optional<DraftBaseline> captureDiskBaseline(
     const std::filesystem::path& absolute,
     std::span<const std::uint8_t> diskBytes) {
-    std::error_code code;
-    const auto mtime = std::filesystem::last_write_time(absolute, code);
-    if (code) return std::nullopt;
+    std::optional<FileStat> status;
+    try {
+        status = statFile(absolute);
+    } catch (const std::system_error&) {
+        return std::nullopt;
+    }
+    if (!status) return std::nullopt;
     DraftBaseline baseline;
     baseline.mtimeNanos = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
-            mtime.time_since_epoch())
+            status->mtime.time_since_epoch())
             .count());
     baseline.size = static_cast<std::uint64_t>(diskBytes.size());
     baseline.contentHash = fastContentHash(std::string_view{
@@ -378,9 +382,17 @@ public:
                             "path resolves outside the workspace");
             return std::nullopt;
         }
-        if (mustExist && !std::filesystem::exists(candidate)) {
-            error = failure(WorkspaceError::NotFound, "path does not exist");
-            return std::nullopt;
+        if (mustExist) {
+            try {
+                if (!statFile(candidate)) {
+                    error =
+                        failure(WorkspaceError::NotFound, "path does not exist");
+                    return std::nullopt;
+                }
+            } catch (const std::system_error& exception) {
+                error = failure(WorkspaceError::IoFailed, exception.what());
+                return std::nullopt;
+            }
         }
         return candidate;
     }
@@ -474,11 +486,7 @@ public:
                             ? "destination already exists"
                             : created.message);
                 }
-            } else if (std::filesystem::exists(absolute)) {
-                replaceFileAtomically(absolute, asBytes(encoded.bytes));
             } else {
-                // Own path, but nothing there: the file was removed under us.
-                // Recreating it is the right outcome for a save.
                 replaceFileAtomically(absolute, asBytes(encoded.bytes));
             }
             entry.key = JournalDocumentKey::saved(path);
@@ -514,7 +522,8 @@ Workspace Workspace::create(const std::filesystem::path& root,
                             std::optional<std::filesystem::path> archiveRoot) {
     std::error_code code;
     const auto canonical = std::filesystem::canonical(root, code);
-    if (code || !std::filesystem::is_directory(canonical)) {
+    const auto status = code ? std::optional<FileStat>{} : statFile(canonical);
+    if (code || !status || status->kind != FileKind::Directory) {
         throw std::invalid_argument("workspace root must be an existing directory");
     }
     // Defaults beside the other editor-private state, so a caller that does not
@@ -694,7 +703,8 @@ WorkspaceResult Workspace::openDirectory(
     const std::filesystem::path& path) {
     std::error_code code;
     const auto canonical = std::filesystem::canonical(path, code);
-    if (code || !std::filesystem::is_directory(canonical)) {
+    const auto status = code ? std::optional<FileStat>{} : statFile(canonical);
+    if (code || !status || status->kind != FileKind::Directory) {
         return failure(WorkspaceError::InvalidWorkspace,
                        "workspace path must be an existing directory");
     }
@@ -735,7 +745,8 @@ WorkspaceResult Workspace::openFile(std::string_view rawPath) {
         impl_->touchRecent(path);
         return result;
     }
-    if (!std::filesystem::is_regular_file(*absolute)) {
+    const auto status = statFile(*absolute);
+    if (!status || status->kind != FileKind::Regular) {
         return failure(WorkspaceError::NotFound,
                        "path is not a regular file");
     }
@@ -1219,10 +1230,14 @@ WorkspaceResult Workspace::newDirectory(std::string_view rawPath) {
     if (!path) {
         return pathError;
     }
-    std::error_code code;
-    if (!std::filesystem::create_directory(*path, code) || code) {
+    const auto parent = statFile(path->parent_path());
+    if (!parent || parent->kind != FileKind::Directory) {
         return failure(WorkspaceError::IoFailed,
-                       code ? code.message() : "directory already exists");
+                       "parent directory does not exist");
+    }
+    const auto created = createDirectoriesDurably(*path);
+    if (!created.ok()) {
+        return failure(WorkspaceError::IoFailed, created.message);
     }
     return {};
 }

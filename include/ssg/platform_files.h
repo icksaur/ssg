@@ -1,9 +1,11 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -56,7 +58,24 @@ struct FileIdentity {
     friend bool operator==(const FileIdentity&, const FileIdentity&) = default;
 };
 
-[[nodiscard]] FileIdentity fileIdentity(const std::filesystem::path& path);
+enum class FileKind : std::uint8_t {
+    Regular,
+    Directory,
+    Symlink,
+    Other,
+};
+
+struct FileStat {
+    FileKind kind;
+    std::uintmax_t size;
+    std::filesystem::file_time_type mtime;
+    FileIdentity identity;
+};
+
+// Missing is the only absence. Other metadata failures throw so callers cannot
+// confuse an inaccessible path with one that does not exist.
+[[nodiscard]] std::optional<FileStat> statFile(
+    const std::filesystem::path& path);
 
 class ExclusiveFileLock {
 public:
@@ -144,6 +163,22 @@ struct FileReadResult {
     }
 };
 
+enum class DirectoryTraversal : std::uint8_t {
+    Children,
+    Recursive,
+};
+
+struct DirectoryListResult {
+    FileIoStatus status = FileIoStatus::IoError;
+    std::vector<std::filesystem::directory_entry> entries;
+    bool complete = false;
+    std::string message;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status == FileIoStatus::Ok;
+    }
+};
+
 // Reads a whole file. There is deliberately NO overload that turns a path
 // straight into a string or a byte vector: a missing file must never be
 // expressible as empty content, so every caller is forced through a status it
@@ -184,6 +219,22 @@ struct FileReadResult {
 // Reports a missing file as NotFound rather than as a generic failure, so a
 // caller can tell "already gone" from "not allowed to remove".
 [[nodiscard]] FileIoResult removeFile(const std::filesystem::path& path);
+
+// Creates the full missing directory chain and flushes each new directory and
+// its parent. AlreadyExists means the complete chain was already present.
+[[nodiscard]] FileIoResult createDirectoriesDurably(
+    const std::filesystem::path& path);
+
+// Removes a file or directory tree without following directory symlinks.
+// NotFound means there was nothing to remove.
+[[nodiscard]] FileIoResult removeTree(const std::filesystem::path& path);
+
+// Recursive listings do not follow directory symlinks. A successful result
+// with complete == false is a bounded or partially inaccessible traversal.
+[[nodiscard]] DirectoryListResult listDirectory(
+    const std::filesystem::path& path,
+    DirectoryTraversal traversal = DirectoryTraversal::Children,
+    std::size_t maximumEntries = std::numeric_limits<std::size_t>::max());
 
 // Flushes a DIRECTORY's own entry to disk. Writing a file durably only makes
 // the file and its immediate parent survive a crash; when a caller has just

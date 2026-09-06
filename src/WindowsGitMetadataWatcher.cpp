@@ -1,4 +1,5 @@
 #include <ssg/GitMetadataWatcher.h>
+#include <ssg/platform_files.h>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -79,7 +80,8 @@ public:
             for (auto& directory : directories) {
                 directory = std::filesystem::canonical(directory);
                 add(directory, false);
-                if (std::filesystem::is_directory(directory / "refs")) {
+                const auto refs = statFile(directory / "refs");
+                if (refs && refs->kind == FileKind::Directory) {
                     add(directory / "refs", true);
                 }
             }

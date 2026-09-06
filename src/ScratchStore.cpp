@@ -61,29 +61,17 @@ void applyRemove(JournalRecoverySet& recovery,
 
 std::uintmax_t directoryBytes(const std::filesystem::path& root) {
     std::uintmax_t result = 0;
-    std::error_code error;
-    if (!std::filesystem::exists(root, error)) return 0;
-    for (std::filesystem::recursive_directory_iterator iterator{
-             root, std::filesystem::directory_options::skip_permission_denied,
-             error},
-         end;
-         iterator != end; iterator.increment(error)) {
-        if (error) {
-            error.clear();
-            continue;
+    const auto listed = listDirectory(root, DirectoryTraversal::Recursive);
+    if (listed.status == FileIoStatus::NotFound) return 0;
+    if (!listed.ok()) return 0;
+    for (const auto& entry : listed.entries) {
+        const auto status = statFile(entry.path());
+        if (!status || status->kind != FileKind::Regular) continue;
+        if (status->size >
+            std::numeric_limits<std::uintmax_t>::max() - result) {
+            return std::numeric_limits<std::uintmax_t>::max();
         }
-        if (!iterator->is_regular_file(error)) {
-            error.clear();
-            continue;
-        }
-        const auto size = iterator->file_size(error);
-        if (!error) {
-            if (size > std::numeric_limits<std::uintmax_t>::max() - result) {
-                return std::numeric_limits<std::uintmax_t>::max();
-            }
-            result += size;
-        }
-        error.clear();
+        result += status->size;
     }
     return result;
 }
@@ -98,26 +86,24 @@ std::vector<Remnant> restoredRemnants(
     const std::filesystem::path& scratchRoot) {
     std::vector<Remnant> result;
     const auto workspaces = scratchRoot / "workspaces";
-    std::error_code error;
-    for (std::filesystem::directory_iterator workspaceIterator{workspaces,
-                                                                 error},
-         workspaceEnd;
-         !error && workspaceIterator != workspaceEnd;
-         workspaceIterator.increment(error)) {
-        if (!workspaceIterator->is_directory()) continue;
-        const auto sessions = workspaceIterator->path() / "sessions";
-        std::error_code sessionError;
-        for (std::filesystem::directory_iterator sessionIterator{sessions,
-                                                                   sessionError},
-             sessionEnd;
-             !sessionError && sessionIterator != sessionEnd;
-             sessionIterator.increment(sessionError)) {
-            if (!sessionIterator->is_directory()) continue;
-            const auto marker = sessionIterator->path() / "restored";
-            if (!std::filesystem::is_regular_file(marker)) continue;
-            result.push_back({sessionIterator->path().filename().string(),
-                              sessionIterator->path(),
-                              workspaceIterator->path()});
+    const auto workspaceEntries = listDirectory(workspaces);
+    if (!workspaceEntries.ok()) return result;
+    for (const auto& workspaceEntry : workspaceEntries.entries) {
+        const auto workspaceStat = statFile(workspaceEntry.path());
+        if (!workspaceStat ||
+            workspaceStat->kind != FileKind::Directory) continue;
+        const auto sessions = workspaceEntry.path() / "sessions";
+        const auto sessionEntries = listDirectory(sessions);
+        if (!sessionEntries.ok()) continue;
+        for (const auto& sessionEntry : sessionEntries.entries) {
+            const auto sessionStat = statFile(sessionEntry.path());
+            if (!sessionStat ||
+                sessionStat->kind != FileKind::Directory) continue;
+            const auto marker = sessionEntry.path() / "restored";
+            const auto markerStat = statFile(marker);
+            if (!markerStat || markerStat->kind != FileKind::Regular) continue;
+            result.push_back({sessionEntry.path().filename().string(),
+                              sessionEntry.path(), workspaceEntry.path()});
         }
     }
     std::sort(result.begin(), result.end(),
@@ -149,11 +135,10 @@ bool olderThan(const Remnant& remnant,
 }
 
 void removeRemnant(const Remnant& remnant) {
-    std::error_code error;
-    std::filesystem::remove_all(remnant.path, error);
-    if (error) {
-        throw std::filesystem::filesystem_error(
-            "purge restored scratch remnant", remnant.path, error);
+    const auto removed = removeTree(remnant.path);
+    if (!removed.ok() && removed.status != FileIoStatus::NotFound) {
+        throw std::runtime_error("purge restored scratch remnant: " +
+                                 removed.message);
     }
 }
 
@@ -345,12 +330,9 @@ private:
                     break;
                 }
                 if (job.kind != JobKind::Checkpoint) {
-                    std::error_code error;
-                    const auto bytes =
-                        std::filesystem::file_size(session_.journalPath(),
-                                                   error);
-                    if (!error &&
-                        bytes >= config_.compactionThresholdBytes) {
+                    const auto journal = statFile(session_.journalPath());
+                    if (journal &&
+                        journal->size >= config_.compactionThresholdBytes) {
                         replaceCheckpoint(session_.journalPath(), job.snapshot);
                     }
                 }

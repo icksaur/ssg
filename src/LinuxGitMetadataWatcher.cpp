@@ -1,4 +1,5 @@
 #include <ssg/GitMetadataWatcher.h>
+#include <ssg/platform_files.h>
 
 #include <cerrno>
 #include <cstdint>
@@ -110,11 +111,20 @@ private:
     }
 
     void addRefs(const std::filesystem::path& directory) {
-        if (!std::filesystem::is_directory(directory)) return;
+        const auto root = statFile(directory);
+        if (!root || root->kind != FileKind::Directory) return;
         addWatch(directory, Scope::Refs);
-        for (const auto& entry :
-             std::filesystem::recursive_directory_iterator(directory)) {
-            if (entry.is_directory()) addWatch(entry.path(), Scope::Refs);
+        const auto listed =
+            listDirectory(directory, DirectoryTraversal::Recursive);
+        if (!listed.ok() || !listed.complete) {
+            throw std::runtime_error("failed to enumerate Git refs: " +
+                                     listed.message);
+        }
+        for (const auto& entry : listed.entries) {
+            const auto status = statFile(entry.path());
+            if (status && status->kind == FileKind::Directory) {
+                addWatch(entry.path(), Scope::Refs);
+            }
         }
     }
 

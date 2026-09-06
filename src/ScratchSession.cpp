@@ -135,11 +135,10 @@ void requireCanonicalAbsolute(
 }
 
 void makePrivateDirectory(const std::filesystem::path& path) {
-    std::error_code error;
-    std::filesystem::create_directory(path, error);
-    if (error) {
-        throw std::filesystem::filesystem_error(
-            "create scratch directory", path, error);
+    const auto created = createDirectoriesDurably(path);
+    if (!created.ok() && created.status != FileIoStatus::AlreadyExists) {
+        throw std::runtime_error("create scratch directory: " +
+                                 created.message);
     }
     setOwnerOnlyPermissions(path);
 }
@@ -217,14 +216,13 @@ ScratchSession ScratchSession::create(
     for (int attempt = 0; attempt < 100; ++attempt) {
         auto id = generateSessionId();
         const auto path = sessionsPath / id;
-        std::error_code error;
-        const bool created = std::filesystem::create_directory(path, error);
-        if (error) {
-            throw std::filesystem::filesystem_error(
-                "create scratch session directory", path, error);
-        }
-        if (!created) {
+        const auto created = createDirectoriesDurably(path);
+        if (created.status == FileIoStatus::AlreadyExists) {
             continue;
+        }
+        if (!created.ok()) {
+            throw std::runtime_error("create scratch session directory: " +
+                                     created.message);
         }
         setOwnerOnlyPermissions(path);
         auto lock = tryLockFile(path / "session.lock");
@@ -241,17 +239,16 @@ ScratchSession ScratchSession::create(
 std::optional<ScratchRemnantClaim>
 ScratchSession::claimNewestRestorable() const {
     std::vector<std::filesystem::path> candidates;
-    for (const auto& entry : std::filesystem::directory_iterator(sessionsPath_)) {
-        std::error_code statusError;
-        const bool isDirectory = entry.is_directory(statusError);
-        if (statusError == std::errc::no_such_file_or_directory) {
+    const auto listed = listDirectory(sessionsPath_);
+    if (!listed.ok() || !listed.complete) {
+        throw std::runtime_error("list scratch sessions: " + listed.message);
+    }
+    for (const auto& entry : listed.entries) {
+        const auto status = statFile(entry.path());
+        if (!status) {
             continue;
         }
-        if (statusError) {
-            throw std::filesystem::filesystem_error(
-                "inspect scratch session directory", entry.path(), statusError);
-        }
-        if (isDirectory &&
+        if (status->kind == FileKind::Directory &&
             validSessionId(entry.path().filename().string()) &&
             entry.path().filename().string() != id_.value()) {
             candidates.push_back(entry.path());
@@ -280,8 +277,9 @@ ScratchSession::claimNewestRestorable() const {
         if (!lock) {
             continue;
         }
-        if (std::filesystem::exists(candidate / "restored") ||
-            !std::filesystem::is_regular_file(candidate / "journal.bin")) {
+        const auto restored = statFile(candidate / "restored");
+        const auto journal = statFile(candidate / "journal.bin");
+        if (restored || !journal || journal->kind != FileKind::Regular) {
             continue;
         }
         const auto replayed = ScratchJournal{candidate / "journal.bin"}.replay();

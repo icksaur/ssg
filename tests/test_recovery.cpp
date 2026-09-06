@@ -257,7 +257,7 @@ TEST(renameRoundTripRestoresBothPathsAndSourceIdentity) {
     writeBytes(source, "source bytes");
     writeBytes(destination, "destination bytes");
     const auto before = snapshotTree(canonical);
-    const auto sourceIdentity = ssg::fileIdentity(source);
+    const auto sourceIdentity = ssg::statFile(source)->identity;
     auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
 
@@ -266,7 +266,7 @@ TEST(renameRoundTripRestoresBothPathsAndSourceIdentity) {
     ASSERT_TRUE(renamed.accepted());
     ASSERT_FALSE(std::filesystem::exists(source));
     ASSERT_EQ(readBytes(destination), "source bytes");
-    ASSERT_EQ(ssg::fileIdentity(destination), sourceIdentity);
+    ASSERT_EQ(ssg::statFile(destination)->identity, sourceIdentity);
     actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
     const auto reconstructedRecords = actions.records();
@@ -275,7 +275,7 @@ TEST(renameRoundTripRestoresBothPathsAndSourceIdentity) {
     ASSERT_TRUE(
         actions.restoreFilesystem(*renamed.compensation).accepted());
     ASSERT_EQ(snapshotTree(canonical), before);
-    ASSERT_EQ(ssg::fileIdentity(source), sourceIdentity);
+    ASSERT_EQ(ssg::statFile(source)->identity, sourceIdentity);
 }
 
 TEST(deleteTreeRoundTripRestoresBinaryFilesAndEmptyDirectories) {
@@ -496,7 +496,7 @@ TEST(renameFailedPublicationRollbackRemainsSafeAfterReconstruction) {
     writeBytes(source, "source bytes");
     writeBytes(destination, "destination bytes");
     const auto before = snapshotTree(canonical);
-    const auto sourceIdentity = ssg::fileIdentity(source);
+    const auto sourceIdentity = ssg::statFile(source)->identity;
     {
         InjectedRecoveryFailures injection;
         injection.fail(ssg::RecoveryStep::PublishRecord, 1);
@@ -521,7 +521,7 @@ TEST(renameFailedPublicationRollbackRemainsSafeAfterReconstruction) {
     ASSERT_EQ(snapshotTree(canonical), before);
     ASSERT_TRUE(std::filesystem::exists(source));
     if (std::filesystem::exists(source)) {
-        ASSERT_EQ(ssg::fileIdentity(source), sourceIdentity);
+        ASSERT_EQ(ssg::statFile(source)->identity, sourceIdentity);
     }
 }
 
@@ -559,7 +559,7 @@ TEST(renamePartialRestoreRetryPreservesSourceIdentity) {
     writeBytes(source, "source bytes");
     writeBytes(destination, "destination bytes");
     const auto before = snapshotTree(temporary.path() / "canonical");
-    const auto sourceIdentity = ssg::fileIdentity(source);
+    const auto sourceIdentity = ssg::statFile(source)->identity;
     InjectedRecoveryFailures injection;
     auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(), injection);
@@ -576,7 +576,7 @@ TEST(renamePartialRestoreRetryPreservesSourceIdentity) {
         ASSERT_EQ(failedRestore.error->code,
                   ssg::RecoveryErrorCode::RestorationFailed);
     }
-    ASSERT_EQ(ssg::fileIdentity(source), sourceIdentity);
+    ASSERT_EQ(ssg::statFile(source)->identity, sourceIdentity);
     ASSERT_FALSE(std::filesystem::exists(destination));
     ASSERT_EQ(actions.records().size(), std::size_t{1});
 
@@ -584,7 +584,7 @@ TEST(renamePartialRestoreRetryPreservesSourceIdentity) {
     ASSERT_TRUE(
         actions.restoreFilesystem(*renamed.compensation).accepted());
     ASSERT_EQ(snapshotTree(temporary.path() / "canonical"), before);
-    ASSERT_EQ(ssg::fileIdentity(source), sourceIdentity);
+    ASSERT_EQ(ssg::statFile(source)->identity, sourceIdentity);
 }
 
 TEST(renameCompletedRestoreRetryPreservesSourceIdentity) {
@@ -595,7 +595,7 @@ TEST(renameCompletedRestoreRetryPreservesSourceIdentity) {
     writeBytes(source, "source bytes");
     writeBytes(destination, "destination bytes");
     const auto before = snapshotTree(temporary.path() / "canonical");
-    const auto sourceIdentity = ssg::fileIdentity(source);
+    const auto sourceIdentity = ssg::statFile(source)->identity;
     InjectedRecoveryFailures injection;
     auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(), injection);
@@ -609,14 +609,14 @@ TEST(renameCompletedRestoreRetryPreservesSourceIdentity) {
     ASSERT_FALSE(failedRestore.accepted());
     ASSERT_TRUE(failedRestore.error.has_value());
     ASSERT_EQ(snapshotTree(temporary.path() / "canonical"), before);
-    ASSERT_EQ(ssg::fileIdentity(source), sourceIdentity);
+    ASSERT_EQ(ssg::statFile(source)->identity, sourceIdentity);
     ASSERT_EQ(actions.records().size(), std::size_t{1});
 
     injection.clearFailures();
     ASSERT_TRUE(
         actions.restoreFilesystem(*renamed.compensation).accepted());
     ASSERT_EQ(snapshotTree(temporary.path() / "canonical"), before);
-    ASSERT_EQ(ssg::fileIdentity(source), sourceIdentity);
+    ASSERT_EQ(ssg::statFile(source)->identity, sourceIdentity);
 }
 
 TEST(cleanupFailureKeepsRestoredRecordRetryable) {

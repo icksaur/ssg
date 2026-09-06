@@ -98,7 +98,7 @@ bool collectDiffFiles(git_repository* repository, git_diff* diff,
         }
         if (!deleted) {
             auto absolute = root / currentPath;
-            if (std::filesystem::exists(absolute)) {
+            if (statFile(absolute)) {
                 auto text = readWorktreeText(absolute);
                 if (text.size() > config.maxBytesPerFile) {
                     return false;
@@ -315,8 +315,9 @@ public:
             }
             std::error_code error;
             auto directory = std::filesystem::canonical(raw, error);
-            if (!error && std::filesystem::is_directory(directory, error) &&
-                !error) {
+            const auto status =
+                error ? std::optional<FileStat>{} : statFile(directory);
+            if (!error && status && status->kind == FileKind::Directory) {
                 unique.insert(std::move(directory));
             }
         }

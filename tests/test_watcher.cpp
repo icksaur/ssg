@@ -470,7 +470,7 @@ TEST(watchFileStateObservesFilesystemMetadata) {
         std::error_code error;
         const auto modified = std::filesystem::last_write_time(file, error);
         ASSERT_FALSE(error);
-        ASSERT_EQ(observedFile->identity, ssg::fileIdentity(file));
+        ASSERT_EQ(observedFile->identity, ssg::statFile(file)->identity);
         ASSERT_EQ(observedFile->size,
                   static_cast<std::uint64_t>(contents.size()));
         ASSERT_EQ(
@@ -490,7 +490,7 @@ TEST(watchFileStateObservesFilesystemMetadata) {
     const auto observedDirectory = WatchFileState::observe(root);
     ASSERT_TRUE(observedDirectory.has_value());
     if (observedDirectory) {
-        ASSERT_EQ(observedDirectory->identity, ssg::fileIdentity(root));
+        ASSERT_EQ(observedDirectory->identity, ssg::statFile(root)->identity);
         ASSERT_EQ(observedDirectory->size, std::uint64_t{0});
     }
     ASSERT_FALSE(WatchFileState::observe(root / "missing").has_value());

@@ -175,7 +175,8 @@ SelectionViewState initialSelection() {
 std::filesystem::path canonicalDirectory(std::filesystem::path const& path) {
     std::error_code code;
     auto canonical = std::filesystem::canonical(path, code);
-    if (code || !std::filesystem::is_directory(canonical)) {
+    const auto status = code ? std::optional<FileStat>{} : statFile(canonical);
+    if (code || !status || status->kind != FileKind::Directory) {
         throw std::invalid_argument{"workspace root must be an existing directory"};
     }
     return canonical;
@@ -520,28 +521,38 @@ WorkspaceSnapshot Editor::snapshot(std::uint64_t revision) const {
         if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
         result.files.push_back({state->key.savedPath(), workspace.document(id).snapshot().text});
     }
-    std::filesystem::recursive_directory_iterator it{root};
-    std::filesystem::recursive_directory_iterator end;
-    for (; it != end; ++it) {
-        auto const& entry = *it;
-        if (entry.is_directory() &&
-            (pathContains(scratchRoot, entry.path()) ||
-             pathContains(recoveryRoot, entry.path()) ||
-             pathContains(archiveRoot, entry.path()))) {
-            it.disable_recursion_pending();
-            continue;
+    std::vector<std::filesystem::path> directories{root};
+    while (!directories.empty()) {
+        const auto directory = std::move(directories.back());
+        directories.pop_back();
+        const auto listed = listDirectory(directory);
+        if (!listed.ok() || !listed.complete) return result;
+        for (const auto& entry : listed.entries) {
+            const auto status = statFile(entry.path());
+            if (!status) continue;
+            if (status->kind == FileKind::Directory &&
+                (pathContains(scratchRoot, entry.path()) ||
+                 pathContains(recoveryRoot, entry.path()) ||
+                 pathContains(archiveRoot, entry.path()))) {
+                continue;
+            }
+            if (status->kind == FileKind::Directory) {
+                directories.push_back(entry.path());
+                continue;
+            }
+            if (status->kind != FileKind::Regular) continue;
+            auto relative = relativeToRoot(root, entry.path());
+            if (!relative) continue;
+            if (std::find_if(result.files.begin(), result.files.end(),
+                             [&](WorkspaceFile const& file) {
+                                 return file.path == *relative;
+                             }) != result.files.end()) {
+                continue;
+            }
+            auto content = readFileText(entry.path());
+            if (!content) continue;
+            result.files.push_back({*relative, std::move(*content)});
         }
-        if (!entry.is_regular_file()) continue;
-        auto relative = relativeToRoot(root, entry.path());
-        if (!relative) continue;
-        if (std::find_if(result.files.begin(), result.files.end(), [&](WorkspaceFile const& file) {
-                return file.path == *relative;
-            }) != result.files.end()) {
-            continue;
-        }
-        auto content = readFileText(entry.path());
-        if (!content) continue;
-        result.files.push_back({*relative, std::move(*content)});
     }
     return result;
 }
@@ -766,9 +777,10 @@ CommandHandlerResult Editor::openDraftDiff() {
 bool Editor::archiveDiscardedDraft(std::string_view savedPath,
                                                 std::string_view content) {
     const auto archiveDir = scratchRoot.parent_path() / "draft-archive";
-    std::error_code code;
-    std::filesystem::create_directories(archiveDir, code);
-    if (code) return false;
+    const auto created = createDirectoriesDurably(archiveDir);
+    if (!created.ok() && created.status != FileIoStatus::AlreadyExists) {
+        return false;
+    }
 
     const auto target =
         archiveDir / uniqueDiscardedDraftArchiveName(savedPath);
@@ -1244,8 +1256,18 @@ EditorCreateResult createEditor(EditorConfig config) {
         if (config.scratchRoot.empty()) config.scratchRoot = cwd / ".ssg" / "scratch";
         if (config.recoveryRoot.empty()) config.recoveryRoot = cwd / ".ssg" / "recovery";
         if (config.archiveRoot.empty()) config.archiveRoot = cwd / ".ssg" / "archive";
-        std::filesystem::create_directories(config.scratchRoot);
-        std::filesystem::create_directories(config.recoveryRoot);
+        const auto scratchCreated =
+            createDirectoriesDurably(config.scratchRoot);
+        if (!scratchCreated.ok() &&
+            scratchCreated.status != FileIoStatus::AlreadyExists) {
+            throw std::runtime_error(scratchCreated.message);
+        }
+        const auto recoveryCreated =
+            createDirectoriesDurably(config.recoveryRoot);
+        if (!recoveryCreated.ok() &&
+            recoveryCreated.status != FileIoStatus::AlreadyExists) {
+            throw std::runtime_error(recoveryCreated.message);
+        }
         auto editor = std::unique_ptr<Editor>{new Editor{
             cwd, config.scratchRoot, config.recoveryRoot, config.archiveRoot,
             config.deferEnrichment, std::move(config.syntaxParser),

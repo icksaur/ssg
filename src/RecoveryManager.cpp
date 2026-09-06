@@ -184,12 +184,18 @@ void syncPath(const std::filesystem::path& path, bool directory) {
 void syncTree(const std::filesystem::path& root) {
     std::vector<std::filesystem::path> directories;
     directories.push_back(root);
-    for (const auto& entry :
-         std::filesystem::recursive_directory_iterator(root)) {
-        const auto status = entry.symlink_status();
-        if (std::filesystem::is_regular_file(status)) {
+    const auto listed =
+        listDirectory(root, DirectoryTraversal::Recursive);
+    if (!listed.ok() || !listed.complete) {
+        throw std::runtime_error("failed to list recovery tree: " +
+                                 listed.message);
+    }
+    for (const auto& entry : listed.entries) {
+        const auto status = statFile(entry.path());
+        if (!status) continue;
+        if (status->kind == FileKind::Regular) {
             syncPath(entry.path(), false);
-        } else if (std::filesystem::is_directory(status)) {
+        } else if (status->kind == FileKind::Directory) {
             directories.push_back(entry.path());
         }
     }
@@ -232,25 +238,24 @@ std::vector<std::byte> readBytes(const std::filesystem::path& path) {
 }
 
 SnapshotKind snapshotKind(const std::filesystem::path& path) {
-    std::error_code error;
-    const auto status = std::filesystem::symlink_status(path, error);
-    if (error == std::errc::no_such_file_or_directory ||
-        status.type() == std::filesystem::file_type::not_found) {
-        return SnapshotKind::Missing;
-    }
-    if (error) {
-        throw std::filesystem::filesystem_error(
-            "failed to inspect recovery source", path, error);
-    }
-    if (std::filesystem::is_symlink(status)) return SnapshotKind::Symlink;
-    if (std::filesystem::is_regular_file(status)) {
+    const auto status = statFile(path);
+    if (!status) return SnapshotKind::Missing;
+    if (status->kind == FileKind::Symlink) return SnapshotKind::Symlink;
+    if (status->kind == FileKind::Regular) {
         return SnapshotKind::RegularFile;
     }
-    if (std::filesystem::is_directory(status)) {
+    if (status->kind == FileKind::Directory) {
         return SnapshotKind::Directory;
     }
     throw std::runtime_error("unsupported filesystem node in recovery action: " +
                              path.string());
+}
+
+void createDirectories(const std::filesystem::path& path) {
+    const auto created = createDirectoriesDurably(path);
+    if (!created.ok() && created.status != FileIoStatus::AlreadyExists) {
+        throw std::runtime_error(created.message);
+    }
 }
 
 void copyNode(const std::filesystem::path& source,
@@ -260,20 +265,21 @@ void copyNode(const std::filesystem::path& source,
     case SnapshotKind::Missing:
         return;
     case SnapshotKind::RegularFile:
-        std::filesystem::create_directories(destination.parent_path());
+        createDirectories(destination.parent_path());
         // seam-exempt: restoring a recovery snapshot MUST overwrite the current file
         std::filesystem::copy_file(
             source, destination,
             std::filesystem::copy_options::overwrite_existing);
         return;
     case SnapshotKind::Symlink: {
-        std::filesystem::create_directories(destination.parent_path());
+        createDirectories(destination.parent_path());
         const auto target = std::filesystem::read_symlink(source);
-        std::error_code statusError;
+        std::error_code targetError;
+        const auto targetPath = std::filesystem::canonical(source, targetError);
+        const auto targetStat =
+            targetError ? std::optional<FileStat>{} : statFile(targetPath);
         const bool directoryTarget =
-            std::filesystem::is_directory(
-                std::filesystem::status(source, statusError)) &&
-            !statusError;
+            targetStat && targetStat->kind == FileKind::Directory;
         if (directoryTarget) {
             std::filesystem::create_directory_symlink(target, destination);
         } else {
@@ -282,8 +288,13 @@ void copyNode(const std::filesystem::path& source,
         return;
     }
     case SnapshotKind::Directory:
-        std::filesystem::create_directories(destination);
-        for (const auto& entry : std::filesystem::directory_iterator(source)) {
+        createDirectories(destination);
+        const auto listed = listDirectory(source);
+        if (!listed.ok() || !listed.complete) {
+            throw std::runtime_error("failed to list recovery source: " +
+                                     listed.message);
+        }
+        for (const auto& entry : listed.entries) {
             const auto childKind = snapshotKind(entry.path());
             copyNode(entry.path(), destination / entry.path().filename(),
                       childKind);
@@ -293,11 +304,10 @@ void copyNode(const std::filesystem::path& source,
 }
 
 void removeNode(const std::filesystem::path& path) {
-    std::error_code error;
-    std::filesystem::remove_all(path, error);
-    if (error) {
-        throw std::filesystem::filesystem_error(
-            "failed to remove filesystem node", path, error);
+    const auto removed = removeTree(path);
+    if (!removed.ok() && removed.status != FileIoStatus::NotFound) {
+        throw std::runtime_error("failed to remove filesystem node: " +
+                                 removed.message);
     }
 }
 
@@ -313,14 +323,15 @@ void restoreSnapshot(const std::filesystem::path& destination,
 std::uintmax_t storedTreeBytes(const std::filesystem::path& root) {
     std::uintmax_t total = 0;
     const auto addNode = [&](const std::filesystem::path& path) {
-        const auto kind = snapshotKind(path);
-        if (kind == SnapshotKind::RegularFile) {
-            const auto size = std::filesystem::file_size(path);
+        const auto status = statFile(path);
+        if (!status) return;
+        if (status->kind == FileKind::Regular) {
+            const auto size = status->size;
             if (size > std::numeric_limits<std::uintmax_t>::max() - total) {
                 throw std::overflow_error("recovery byte accounting overflow");
             }
             total += size;
-        } else if (kind == SnapshotKind::Symlink) {
+        } else if (status->kind == FileKind::Symlink) {
             const auto size = pathToUtf8(std::filesystem::read_symlink(path))
                                   .size();
             if (size > std::numeric_limits<std::uintmax_t>::max() - total) {
@@ -332,8 +343,13 @@ std::uintmax_t storedTreeBytes(const std::filesystem::path& root) {
 
     addNode(root);
     if (snapshotKind(root) == SnapshotKind::Directory) {
-        for (const auto& entry :
-             std::filesystem::recursive_directory_iterator(root)) {
+        const auto listed =
+            listDirectory(root, DirectoryTraversal::Recursive);
+        if (!listed.ok() || !listed.complete) {
+            throw std::runtime_error("failed to list recovery tree: " +
+                                     listed.message);
+        }
+        for (const auto& entry : listed.entries) {
             addNode(entry.path());
         }
     }
@@ -342,9 +358,15 @@ std::uintmax_t storedTreeBytes(const std::filesystem::path& root) {
 
 void protectTree(const std::filesystem::path& root) {
     setOwnerOnlyPermissions(root);
-    for (const auto& entry :
-         std::filesystem::recursive_directory_iterator(root)) {
-        if (!std::filesystem::is_symlink(entry.symlink_status())) {
+    const auto listed =
+        listDirectory(root, DirectoryTraversal::Recursive);
+    if (!listed.ok() || !listed.complete) {
+        throw std::runtime_error("failed to list recovery tree: " +
+                                 listed.message);
+    }
+    for (const auto& entry : listed.entries) {
+        const auto status = statFile(entry.path());
+        if (status && status->kind != FileKind::Symlink) {
             setOwnerOnlyPermissions(entry.path());
         }
     }
@@ -573,7 +595,7 @@ public:
             throw std::invalid_argument(
                 "recovery maximum byte count must be greater than zero");
         }
-        std::filesystem::create_directories(recoveryRoot_);
+        createDirectories(recoveryRoot_);
         setOwnerOnlyPermissions(recoveryRoot_);
         loadRecords();
     }
@@ -662,8 +684,8 @@ public:
                 before(RecoveryStep::MutateFilesystem);
                 removeNode(destination);
                 before(RecoveryStep::MutateFilesystem);
-                std::filesystem::create_directories(source.parent_path());
-                std::filesystem::create_directories(destination.parent_path());
+                createDirectories(source.parent_path());
+                createDirectories(destination.parent_path());
                 renameDurably(source, destination);
             },
             [&](const StoredRecord& stored) {
@@ -708,7 +730,7 @@ public:
             {source, destination},
             [&] {
                 before(RecoveryStep::MutateFilesystem);
-                std::filesystem::create_directories(destination.parent_path());
+                createDirectories(destination.parent_path());
                 const auto renamed = renameFileNoClobber(source, destination);
                 if (!renamed.ok()) {
                     throw std::runtime_error("rename failed: " +
@@ -792,8 +814,7 @@ public:
             return {error(RecoveryErrorCode::RecordKindMismatch,
                           "recovery record does not restore filesystem state")};
         }
-        if (!found->restoredInMemory &&
-            !std::filesystem::exists(restoredMarker(*found))) {
+        if (!found->restoredInMemory && !statFile(restoredMarker(*found))) {
             try {
                 before(RecoveryStep::RestoreFilesystem);
                 restoreFilesystemState(*found);
@@ -817,9 +838,14 @@ private:
     }
 
     void loadRecords() {
-        for (const auto& entry :
-             std::filesystem::directory_iterator(recoveryRoot_)) {
-            if (!entry.is_directory()) continue;
+        const auto listed = listDirectory(recoveryRoot_);
+        if (!listed.ok() || !listed.complete) {
+            throw std::runtime_error("failed to list recovery records: " +
+                                     listed.message);
+        }
+        for (const auto& entry : listed.entries) {
+            const auto status = statFile(entry.path());
+            if (!status || status->kind != FileKind::Directory) continue;
             const auto name = entry.path().filename().string();
             if (name.rfind(".staging-", 0) == 0) {
                 removeNode(entry.path());
@@ -847,7 +873,7 @@ private:
             }
             if (*state == RecordState::InProgress &&
                 !documentKind(stored.record.kind) &&
-                !std::filesystem::exists(restoredMarker(stored))) {
+                !statFile(restoredMarker(stored))) {
                 try {
                     restoreFilesystemState(stored);
                     syncFilesystemState(stored);
@@ -923,7 +949,7 @@ private:
             recoveryRoot_ / (".staging-" + std::string{id.value()});
         const auto installed = recoveryRoot_ / std::string{id.value()};
         removeNode(staging);
-        std::filesystem::create_directories(staging / "artifacts");
+        createDirectories(staging / "artifacts");
 
         StoredRecord stored{
             {id,
@@ -965,8 +991,7 @@ private:
             before(RecoveryStep::InstallRecord);
             installDirectoryDurably(staging, installed, recoveryRoot_);
         } catch (...) {
-            std::error_code ignored;
-            std::filesystem::remove_all(staging, ignored);
+            (void)removeTree(staging);
             throw;
         }
 
@@ -1003,8 +1028,7 @@ private:
         try {
             markRecordState(*prepared, RecordState::InProgress);
         } catch (...) {
-            std::error_code ignored;
-            std::filesystem::remove_all(prepared->directory, ignored);
+            (void)removeTree(prepared->directory);
             return {{},
                     error(RecoveryErrorCode::PreparationFailed,
                           "recovery record activation failed: " +
@@ -1117,13 +1141,7 @@ private:
 
     static std::optional<RecordState> readRecordState(
         const StoredRecord& stored) {
-        std::error_code error;
-        if (!std::filesystem::exists(statePath(stored), error)) {
-            if (error) {
-                throw std::filesystem::filesystem_error(
-                    "failed to inspect recovery record state",
-                    statePath(stored), error);
-            }
+        if (!statFile(statePath(stored))) {
             return std::nullopt;
         }
         const auto encoded = readBytes(statePath(stored));
@@ -1155,13 +1173,7 @@ private:
 
     bool restoredInThisInstance(const StoredRecord& stored) const {
         if (stored.restoredInMemory) return true;
-        std::error_code error;
-        if (!std::filesystem::exists(restoredMarker(stored), error)) {
-            if (error) {
-                throw std::filesystem::filesystem_error(
-                    "failed to inspect restored recovery marker",
-                    restoredMarker(stored), error);
-            }
+        if (!statFile(restoredMarker(stored))) {
             return false;
         }
         return readBytes(restoredMarker(stored)) ==
@@ -1177,7 +1189,7 @@ private:
         if (sourceNow == SnapshotKind::Missing &&
             destinationNow != SnapshotKind::Missing) {
             removeNode(source);
-            std::filesystem::create_directories(source.parent_path());
+            createDirectories(source.parent_path());
             renameDurably(destination, source);
         } else if (sourceNow == SnapshotKind::Missing) {
             restoreSnapshot(source, artifactPath(stored, 0),

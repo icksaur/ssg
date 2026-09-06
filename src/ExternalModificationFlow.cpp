@@ -72,11 +72,13 @@ DiskObservation observeDiskChange(const std::filesystem::path& root,
         return observation;
     }
 
-    std::error_code code;
-    const auto status = std::filesystem::symlink_status(path, code);
-    if (status.type() == std::filesystem::file_type::none) {
+    std::optional<FileStat> status;
+    try {
+        status = statFile(path);
+    } catch (const std::system_error&) {
         observation.unknown = true;
-    } else if (std::filesystem::exists(status)) {
+    }
+    if (status) {
         observation.content = readFileText(path);
         if (observation.content) {
             event.kind = WatchEventKind::Modify;
@@ -361,23 +363,20 @@ bool ExternalModificationFlow::reconcileAllOpenDocumentsAgainstDisk() {
 
         const std::filesystem::path relative{state->key.savedPath()};
         const auto absolute = workspace_->root() / relative;
-        std::error_code linkCode;
-        const auto linkStatus =
-            std::filesystem::symlink_status(absolute, linkCode);
         WatchEvent event;
         event.path = relative;
         event.origin = WatchEventOrigin::External;
         event.sequence = ++sequence;
-        if (linkStatus.type() == std::filesystem::file_type::none) {
+        std::optional<FileStat> diskStatus;
+        try {
+            diskStatus = statFile(absolute);
+        } catch (const std::system_error&) {
             event.kind = WatchEventKind::Modify;
             synthesized.push_back(std::move(event));
             continue;
         }
 
-        const bool entryPresent = std::filesystem::exists(linkStatus);
-        std::error_code code;
-        const bool exists = std::filesystem::exists(absolute, code) && !code;
-        if (!entryPresent) {
+        if (!diskStatus) {
             if (workspace_->matchesExternalBaseline(documentId, std::nullopt)) {
                 continue;
             }
@@ -386,7 +385,7 @@ bool ExternalModificationFlow::reconcileAllOpenDocumentsAgainstDisk() {
             continue;
         }
 
-        const auto disk = exists ? readFileText(absolute) : std::nullopt;
+        const auto disk = readFileText(absolute);
         if (disk && workspace_->matchesExternalBaseline(documentId, *disk)) {
             continue;
         }
