@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/DurableStore.h>
+
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
@@ -51,7 +53,7 @@ public:
     explicit FileArchive(std::filesystem::path root);
 
     [[nodiscard]] const std::filesystem::path& root() const noexcept {
-        return root_;
+        return store_.root();
     }
 
     // Copies `source` into the archive under its workspace-relative path, and
@@ -75,20 +77,8 @@ public:
         std::chrono::system_clock::time_point now,
         std::chrono::hours maxAge);
 
-    // `<utc-timestamp>-<counter>`, chosen to sort chronologically so the
-    // archive is browsable with ls. The counter separates deletions within the
-    // same second.
-    [[nodiscard]] static std::string entryDirectoryName(
-        std::chrono::system_clock::time_point moment, std::size_t counter);
-
-    // The inverse of entryDirectoryName; nullopt when the name was not written
-    // by this code.
-    [[nodiscard]] static std::optional<std::chrono::system_clock::time_point>
-    entryTimestamp(std::string_view directoryName);
-
 private:
-    std::filesystem::path root_;
-    std::size_t counter_ = 0;
+    DurableStore store_;
 };
 
 // How long a deleted file stays recoverable. Age-based rather than count-based

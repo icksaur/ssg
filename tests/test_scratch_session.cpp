@@ -215,6 +215,25 @@ TEST(staleEmptyAndOtherWorkspaceSessionsAreNotRestored) {
               ssg::scratchWorkspaceKey(workspaceB));
 }
 
+TEST(legacySessionNamesRemainRestorable) {
+    TemporaryDirectory temporary;
+    const auto workspace =
+        std::filesystem::absolute(temporary.path() / "workspace").lexically_normal();
+    const std::string legacyId =
+        "00000000001000000000-0123456789abcdef0123456789abcdef";
+    const auto legacyPath =
+        temporary.path() / "workspaces" / ssg::scratchWorkspaceKey(workspace) /
+        "sessions" / legacyId;
+    std::filesystem::create_directories(legacyPath);
+    ssg::ScratchJournal{legacyPath / "journal.bin"}.appendDocument(
+        document("legacy.txt", "legacy"));
+
+    auto current = ssg::ScratchSession::create(temporary.path(), workspace);
+    auto restored = current.claimNewestRestorable();
+    ASSERT_TRUE(restored.has_value());
+    ASSERT_EQ(restored->id().value(), legacyId);
+}
+
 int childMain(const std::filesystem::path& root,
                const std::filesystem::path& workspace,
                const std::filesystem::path& ready) {
@@ -241,6 +260,7 @@ SSG_TEST_SUITE_ARGS(test_scratch_session) {
     RUN(concurrentProcessIsHiddenUntilCrashReleasesLock);
     RUN(newestUnlockedRemnantIsClaimedOnce);
     RUN(staleEmptyAndOtherWorkspaceSessionsAreNotRestored);
+    RUN(legacySessionNamesRemainRestorable);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

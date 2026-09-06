@@ -41,6 +41,22 @@ public:
     }
 };
 
+class FailSelectedRemove : public ssg::FileIoFaultInjector {
+public:
+    explicit FailSelectedRemove(fs::path blocked)
+        : blocked_(std::move(blocked)) {}
+
+    ssg::FileIoStatus beforeOperation(std::string_view operation,
+                                      const fs::path& path) override {
+        return operation == "removeTree" && path == blocked_
+                   ? ssg::FileIoStatus::IoError
+                   : ssg::FileIoStatus::Ok;
+    }
+
+private:
+    fs::path blocked_;
+};
+
 // Out-of-band so the archive is never its own oracle.
 std::string readOutOfBand(const fs::path& path) {
     std::ifstream input(path, std::ios::binary);
@@ -141,10 +157,11 @@ TEST(pruningRemovesOnlyEntriesOlderThanTheLimit) {
     const auto archiveRoot = workspace.path() / ".ssg" / "archive";
 
     const auto now = at(2026, 3, 1);
-    const auto old = ssg::FileArchive::entryDirectoryName(at(2026, 2, 1), 0);
-    const auto fresh = ssg::FileArchive::entryDirectoryName(at(2026, 2, 27), 0);
-    const auto boundary = ssg::FileArchive::entryDirectoryName(
-        now - std::chrono::hours{24 * 14} + std::chrono::hours{1}, 0);
+    const auto old = ssg::DurableStore::entryName(at(2026, 2, 1), "old");
+    const auto fresh =
+        ssg::DurableStore::entryName(at(2026, 2, 27), "fresh");
+    const auto boundary = ssg::DurableStore::entryName(
+        now - std::chrono::hours{24 * 14} + std::chrono::hours{1}, "boundary");
     writeOutOfBand(archiveRoot / old / "gone.txt", "expired");
     writeOutOfBand(archiveRoot / fresh / "kept.txt", "recent");
     writeOutOfBand(archiveRoot / boundary / "edge.txt", "just inside");
@@ -167,7 +184,7 @@ TEST(pruningRetainsAndReportsUnparseableEntries) {
     const auto archiveRoot = workspace.path() / ".ssg" / "archive";
     writeOutOfBand(archiveRoot / "not-a-timestamp" / "mystery.txt", "keep me");
     writeOutOfBand(
-        archiveRoot / ssg::FileArchive::entryDirectoryName(at(2020, 1, 1), 0) /
+        archiveRoot / ssg::DurableStore::entryName(at(2020, 1, 1), "ancient") /
             "ancient.txt",
         "expired");
 
@@ -193,12 +210,14 @@ TEST(pruningAnAbsentArchiveIsNotAnError) {
 // Entry names must sort chronologically, so the archive is browsable and the
 // counter cannot reorder same-second entries.
 TEST(entryDirectoryNamesSortChronologically) {
-    const auto earlier = ssg::FileArchive::entryDirectoryName(at(2026, 2, 1), 0);
-    const auto later = ssg::FileArchive::entryDirectoryName(at(2026, 3, 1), 0);
+    const auto earlier =
+        ssg::DurableStore::entryName(at(2026, 2, 1), "same");
+    const auto later =
+        ssg::DurableStore::entryName(at(2026, 3, 1), "same");
     ASSERT_TRUE(earlier < later);
 
-    const auto first = ssg::FileArchive::entryDirectoryName(at(2026, 2, 1), 1);
-    const auto second = ssg::FileArchive::entryDirectoryName(at(2026, 2, 1), 2);
+    const auto first = ssg::DurableStore::entryName(at(2026, 2, 1), "first");
+    const auto second = ssg::DurableStore::entryName(at(2026, 2, 1), "second");
     ASSERT_TRUE(first < second);
 }
 
@@ -207,13 +226,14 @@ TEST(entryDirectoryNamesSortChronologically) {
 TEST(entryTimestampsRoundTripThroughTheDirectoryName) {
     for (const auto moment :
          {at(2020, 1, 1), at(2026, 2, 28), at(2026, 12, 31)}) {
-        const auto name = ssg::FileArchive::entryDirectoryName(moment, 7);
-        const auto parsed = ssg::FileArchive::entryTimestamp(name);
+        const auto name = ssg::DurableStore::entryName(moment, "roundtrip");
+        const auto parsed = ssg::DurableStore::entryTimestamp(name);
         ASSERT_TRUE(parsed.has_value());
         ASSERT_TRUE(*parsed == moment);
     }
-    ASSERT_FALSE(ssg::FileArchive::entryTimestamp("not-a-timestamp").has_value());
-    ASSERT_FALSE(ssg::FileArchive::entryTimestamp("").has_value());
+    ASSERT_FALSE(
+        ssg::DurableStore::entryTimestamp("not-a-timestamp").has_value());
+    ASSERT_FALSE(ssg::DurableStore::entryTimestamp("").has_value());
 }
 
 // A second process deleting in the same second starts its counter at zero too.
@@ -269,7 +289,7 @@ TEST(pruningRetainsAndReportsFutureDatedEntries) {
     const auto archiveRoot = workspace.path() / ".ssg" / "archive";
     const auto now = at(2026, 3, 1);
     writeOutOfBand(
-        archiveRoot / ssg::FileArchive::entryDirectoryName(at(2027, 1, 1), 0) /
+        archiveRoot / ssg::DurableStore::entryName(at(2027, 1, 1), "future") /
             "tomorrow.txt",
         "from the future");
 
@@ -290,7 +310,8 @@ TEST(pruningReportsButNeverFailsTheCallerWhenAnEntryCannotBeRemoved) {
     TemporaryDirectory workspace;
     const auto archiveRoot = workspace.path() / ".ssg" / "archive";
     const auto now = at(2026, 3, 1);
-    const auto expired = ssg::FileArchive::entryDirectoryName(at(2020, 1, 1), 0);
+    const auto expired =
+        ssg::DurableStore::entryName(at(2020, 1, 1), "expired");
     writeOutOfBand(archiveRoot / expired / "ancient.txt", "expired");
 
     // Remove write permission on the entry directory so unlinking the file
@@ -313,6 +334,29 @@ TEST(pruningReportsButNeverFailsTheCallerWhenAnEntryCannotBeRemoved) {
     ASSERT_TRUE(fs::exists(archiveRoot / expired / "ancient.txt"));
 }
 
+TEST(pruningContinuesAfterOneExpiredEntryCannotBeRemoved) {
+    TemporaryDirectory workspace;
+    const auto archiveRoot = workspace.path() / ".ssg" / "archive";
+    const auto blocked =
+        ssg::DurableStore::entryName(at(2020, 1, 1), "blocked");
+    const auto removable =
+        ssg::DurableStore::entryName(at(2020, 1, 2), "removable");
+    writeOutOfBand(archiveRoot / blocked / "blocked.txt", "blocked");
+    writeOutOfBand(archiveRoot / removable / "removable.txt", "removable");
+
+    FailSelectedRemove injector{archiveRoot / blocked};
+    auto* previous = ssg::installFileIoFaultInjector(&injector);
+    ssg::FileArchive archive{archiveRoot};
+    const auto report =
+        archive.prune(at(2026, 3, 1), std::chrono::hours{24 * 14});
+    (void)ssg::installFileIoFaultInjector(previous);
+
+    ASSERT_FALSE(report.message.empty());
+    ASSERT_EQ(report.removed, std::size_t{1});
+    ASSERT_TRUE(fs::exists(archiveRoot / blocked / "blocked.txt"));
+    ASSERT_FALSE(fs::exists(archiveRoot / removable));
+}
+
 }  // namespace
 
 SSG_TEST_SUITE(test_file_archive) {
@@ -329,6 +373,7 @@ SSG_TEST_SUITE(test_file_archive) {
     RUN(aFailedArchiveNeverRemovesAnEarlierEntry);
     RUN(pruningRetainsAndReportsFutureDatedEntries);
     RUN(pruningReportsButNeverFailsTheCallerWhenAnEntryCannotBeRemoved);
+    RUN(pruningContinuesAfterOneExpiredEntryCannotBeRemoved);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

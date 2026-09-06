@@ -1,14 +1,11 @@
 #include <ssg/ScratchStore.h>
+#include <ssg/DurableStore.h>
 
-#include <algorithm>
 #include <array>
 #include <bit>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
-#include <iomanip>
-#include <random>
-#include <sstream>
 #include <stdexcept>
 #include <system_error>
 #include <vector>
@@ -143,37 +140,6 @@ void makePrivateDirectory(const std::filesystem::path& path) {
     setOwnerOnlyPermissions(path);
 }
 
-std::string generateSessionId() {
-    const auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                         std::chrono::system_clock::now().time_since_epoch())
-                         .count();
-    if (now < 0) {
-        throw std::runtime_error("system clock predates the Unix epoch");
-    }
-    std::array<std::byte, 16> randomBytes{};
-    std::random_device source;
-    for (auto& byte : randomBytes) {
-        byte = static_cast<std::byte>(source() & 0xffU);
-    }
-    std::ostringstream result;
-    result << std::setw(20) << std::setfill('0')
-           << static_cast<std::uint64_t>(now) << '-'
-           << lowercaseHex(randomBytes);
-    return result.str();
-}
-
-bool validSessionId(std::string_view id) {
-    if (id.size() != 53 || id[20] != '-') {
-        return false;
-    }
-    return std::all_of(id.begin(), id.begin() + 20,
-                       [](char value) { return value >= '0' && value <= '9'; }) &&
-           std::all_of(id.begin() + 21, id.end(), [](char value) {
-               return (value >= '0' && value <= '9') ||
-                      (value >= 'a' && value <= 'f');
-           });
-}
-
 } // namespace
 
 std::string scratchWorkspaceKey(
@@ -213,53 +179,36 @@ ScratchSession ScratchSession::create(
     const auto sessionsPath = workspacePath / "sessions";
     makePrivateDirectory(sessionsPath);
 
-    for (int attempt = 0; attempt < 100; ++attempt) {
-        auto id = generateSessionId();
-        const auto path = sessionsPath / id;
-        const auto created = createDirectoriesDurably(path);
-        if (created.status == FileIoStatus::AlreadyExists) {
-            continue;
-        }
-        if (!created.ok()) {
-            throw std::runtime_error("create scratch session directory: " +
-                                     created.message);
-        }
-        setOwnerOnlyPermissions(path);
-        auto lock = tryLockFile(path / "session.lock");
-        if (!lock) {
-            throw std::runtime_error(
-                "new scratch session lock unexpectedly contended");
-        }
-        return ScratchSession{ScratchSessionId{std::move(id)}, path,
-                              sessionsPath, std::move(*lock)};
+    const auto claimed = DurableStore{sessionsPath}.claimEntry(
+        std::chrono::system_clock::now());
+    if (!claimed.ok()) {
+        throw std::runtime_error("create scratch session directory: " +
+                                 claimed.message);
     }
-    throw std::runtime_error("cannot allocate a unique scratch session ID");
+    setOwnerOnlyPermissions(claimed.path);
+    auto lock = tryLockFile(claimed.path / "session.lock");
+    if (!lock) {
+        throw std::runtime_error(
+            "new scratch session lock unexpectedly contended");
+    }
+    return ScratchSession{
+        ScratchSessionId{claimed.path.filename().string()}, claimed.path,
+        sessionsPath, std::move(*lock)};
 }
 
 std::optional<ScratchRemnantClaim>
 ScratchSession::claimNewestRestorable() const {
-    std::vector<std::filesystem::path> candidates;
-    const auto listed = listDirectory(sessionsPath_);
+    const auto listed = DurableStore{sessionsPath_}.entries();
     if (!listed.ok() || !listed.complete) {
         throw std::runtime_error("list scratch sessions: " + listed.message);
     }
-    for (const auto& entry : listed.entries) {
-        const auto status = statFile(entry.path());
-        if (!status) {
+
+    for (auto entry = listed.entries.rbegin();
+         entry != listed.entries.rend(); ++entry) {
+        if (!entry->created || entry->path.filename().string() == id_.value()) {
             continue;
         }
-        if (status->kind == FileKind::Directory &&
-            validSessionId(entry.path().filename().string()) &&
-            entry.path().filename().string() != id_.value()) {
-            candidates.push_back(entry.path());
-        }
-    }
-    std::sort(candidates.begin(), candidates.end(),
-              [](const auto& left, const auto& right) {
-                  return left.filename().string() > right.filename().string();
-              });
-
-    for (const auto& candidate : candidates) {
+        const auto& candidate = entry->path;
         std::optional<ExclusiveFileLock> lock;
         try {
             lock = tryLockFile(candidate / "session.lock");

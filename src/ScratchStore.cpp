@@ -1,4 +1,5 @@
 #include <ssg/ScratchStore.h>
+#include <ssg/DurableStore.h>
 
 #include <ssg/platform_files.h>
 
@@ -63,6 +64,7 @@ struct Remnant {
     std::string id;
     std::filesystem::path path;
     std::filesystem::path workspacePath;
+    std::optional<std::chrono::system_clock::time_point> created;
 };
 
 std::vector<Remnant> restoredRemnants(
@@ -76,45 +78,46 @@ std::vector<Remnant> restoredRemnants(
         if (!workspaceStat ||
             workspaceStat->kind != FileKind::Directory) continue;
         const auto sessions = workspaceEntry.path() / "sessions";
-        const auto sessionEntries = listDirectory(sessions);
+        const auto sessionEntries = DurableStore{sessions}.entries();
         if (!sessionEntries.ok()) continue;
         for (const auto& sessionEntry : sessionEntries.entries) {
-            const auto sessionStat = statFile(sessionEntry.path());
-            if (!sessionStat ||
-                sessionStat->kind != FileKind::Directory) continue;
-            const auto marker = sessionEntry.path() / "restored";
+            const auto marker = sessionEntry.path / "restored";
             const auto markerStat = statFile(marker);
             if (!markerStat || markerStat->kind != FileKind::Regular) continue;
-            result.push_back({sessionEntry.path().filename().string(),
-                              sessionEntry.path(), workspaceEntry.path()});
+            result.push_back({sessionEntry.path.filename().string(),
+                              sessionEntry.path, workspaceEntry.path(),
+                              sessionEntry.created});
         }
     }
-    std::sort(result.begin(), result.end(),
-              [](const Remnant& left, const Remnant& right) {
-                  return left.id < right.id;
-              });
     return result;
 }
 
 bool olderThan(const Remnant& remnant,
                 std::chrono::seconds maximumAge,
                 std::chrono::system_clock::time_point now) {
-    if (remnant.id.size() < 20) return false;
-    std::uint64_t nanoseconds = 0;
-    for (std::size_t index = 0; index < 20; ++index) {
-        const char value = remnant.id[index];
-        if (value < '0' || value > '9') return false;
-        const auto digit = static_cast<std::uint64_t>(value - '0');
-        if (nanoseconds >
-            (std::numeric_limits<std::uint64_t>::max() - digit) / 10U) {
-            return false;
-        }
-        nanoseconds = nanoseconds * 10U + digit;
+    return remnant.created && now - *remnant.created > maximumAge;
+}
+
+std::vector<DurableStoreEntry> storeEntries(
+    const std::vector<Remnant>& remnants) {
+    std::vector<DurableStoreEntry> result;
+    result.reserve(remnants.size());
+    for (const auto& remnant : remnants) {
+        result.push_back({remnant.path, remnant.created});
     }
-    const auto created =
-        std::chrono::system_clock::time_point{std::chrono::nanoseconds{
-            nanoseconds}};
-    return now - created > maximumAge;
+    return result;
+}
+
+void appendRemovedIds(ScratchQuotaResult& result,
+                      const DurableStoreEvictionResult& eviction) {
+    if (!eviction.ok()) {
+        throw std::runtime_error("purge restored scratch remnant: " +
+                                 eviction.message);
+    }
+    for (const auto& removed : eviction.removed) {
+        result.evictedSessionIds.push_back(
+            removed.path.filename().string());
+    }
 }
 
 } // namespace
@@ -206,28 +209,27 @@ public:
         ScratchQuotaResult result;
         auto remnants = restoredRemnants(scratchRoot_);
         const auto now = std::chrono::system_clock::now();
+        std::vector<DurableStoreEntry> expired;
         for (const auto& remnant : remnants) {
-            if (!olderThan(remnant, config_.maximumAge, now)) continue;
-            const auto removed = removeTreeIfPresent(remnant.path);
-            if (!removed.ok()) {
-                throw std::runtime_error("purge restored scratch remnant: " +
-                                         removed.message);
+            if (olderThan(remnant, config_.maximumAge, now)) {
+                expired.push_back({remnant.path, remnant.created});
             }
-            result.evictedSessionIds.push_back(remnant.id);
         }
+        appendRemovedIds(
+            result, DurableStore::evictOldestWhile(
+                        std::move(expired),
+                        [](std::span<const DurableStoreEntry> remaining) {
+                            return remaining.empty();
+                        }));
 
         auto remaining = restoredRemnants(scratchRoot_);
+        const auto quotaEviction = DurableStore::evictOldestWhile(
+            storeEntries(remaining),
+            [&](std::span<const DurableStoreEntry>) {
+                return treeBytes(scratchRoot_) <= config_.maximumBytes;
+            });
+        appendRemovedIds(result, quotaEviction);
         result.remainingBytes = treeBytes(scratchRoot_);
-        for (const auto& remnant : remaining) {
-            if (result.remainingBytes <= config_.maximumBytes) break;
-            const auto removed = removeTreeIfPresent(remnant.path);
-            if (!removed.ok()) {
-                throw std::runtime_error("purge restored scratch remnant: " +
-                                         removed.message);
-            }
-            result.evictedSessionIds.push_back(remnant.id);
-            result.remainingBytes = treeBytes(scratchRoot_);
-        }
         result.withinByteQuota =
             result.remainingBytes <= config_.maximumBytes;
         return result;
@@ -261,17 +263,22 @@ public:
 private:
     template <typename Predicate>
     std::size_t purge(Predicate predicate) {
-        std::size_t count = 0;
+        std::vector<DurableStoreEntry> selected;
         for (const auto& remnant : restoredRemnants(scratchRoot_)) {
-            if (!predicate(remnant)) continue;
-            const auto removed = removeTreeIfPresent(remnant.path);
-            if (!removed.ok()) {
-                throw std::runtime_error("purge restored scratch remnant: " +
-                                         removed.message);
+            if (predicate(remnant)) {
+                selected.push_back({remnant.path, remnant.created});
             }
-            ++count;
         }
-        return count;
+        const auto eviction = DurableStore::evictOldestWhile(
+            std::move(selected),
+            [](std::span<const DurableStoreEntry> remaining) {
+                return remaining.empty();
+            });
+        if (!eviction.ok()) {
+            throw std::runtime_error("purge restored scratch remnant: " +
+                                     eviction.message);
+        }
+        return eviction.removed.size();
     }
 
     void requireAccepting() const {

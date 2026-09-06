@@ -3,19 +3,12 @@
 #include <ssg/platform_files.h>
 
 #include <algorithm>
-#include <array>
-#include <cstdio>
-#include <ctime>
-#include <iomanip>
-#include <sstream>
 #include <system_error>
 #include <utility>
 #include <vector>
 
 namespace ssg {
 namespace {
-
-constexpr std::size_t kTimestampLength = 15;  // YYYYMMDDTHHMMSS
 
 // The source must live inside the workspace, both so the archived layout mirrors
 // the workspace and so a delete cannot be tricked into copying arbitrary files
@@ -39,47 +32,7 @@ std::optional<std::filesystem::path> relativeToWorkspace(
 }  // namespace
 
 FileArchive::FileArchive(std::filesystem::path root)
-    : root_(std::move(root)) {}
-
-std::string FileArchive::entryDirectoryName(
-    std::chrono::system_clock::time_point moment, std::size_t counter) {
-    const auto seconds = std::chrono::system_clock::to_time_t(moment);
-    std::tm utc{};
-#ifdef _WIN32
-    gmtime_s(&utc, &seconds);
-#else
-    gmtime_r(&seconds, &utc);
-#endif
-    std::ostringstream name;
-    name << std::put_time(&utc, "%Y%m%dT%H%M%S") << '-' << std::setfill('0')
-         << std::setw(4) << counter;
-    return name.str();
-}
-
-std::optional<std::chrono::system_clock::time_point>
-FileArchive::entryTimestamp(std::string_view directoryName) {
-    if (directoryName.size() < kTimestampLength) return std::nullopt;
-    // A separator must follow the fixed-width stamp, or this is some other
-    // name that merely happens to start with digits.
-    if (directoryName.size() > kTimestampLength &&
-        directoryName[kTimestampLength] != '-') {
-        return std::nullopt;
-    }
-
-    std::tm utc{};
-    std::istringstream stamp{
-        std::string{directoryName.substr(0, kTimestampLength)}};
-    stamp >> std::get_time(&utc, "%Y%m%dT%H%M%S");
-    if (stamp.fail()) return std::nullopt;
-
-#ifdef _WIN32
-    const auto seconds = _mkgmtime(&utc);
-#else
-    const auto seconds = timegm(&utc);
-#endif
-    if (seconds == static_cast<std::time_t>(-1)) return std::nullopt;
-    return std::chrono::system_clock::from_time_t(seconds);
-}
+    : store_(std::move(root)) {}
 
 FileArchiveResult FileArchive::archive(
     const std::filesystem::path& workspaceRoot,
@@ -94,33 +47,13 @@ FileArchiveResult FileArchive::archive(
         return {false, {}, "archive source is not a regular file"};
     }
 
-    const auto rootCreated = ensureDirectory(root_);
-    if (!rootCreated.ok()) {
-        return {false, {}, "could not create the archive root: " +
-                               rootCreated.message};
-    }
-
-    // Claim an entry directory that DID NOT already exist. A second process
-    // deleting in the same second starts its counter at zero too, and
-    // create_directories succeeds silently on an existing path -- so without
-    // this the two deletions would merge into one entry, and the cleanup below
-    // could then delete the other process's archived files. create_directory
-    // returns false when the directory already exists, which is the signal.
     const auto now = std::chrono::system_clock::now();
-    std::filesystem::path entry;
-    bool claimed = false;
-    for (std::size_t attempt = 0; attempt < 10000 && !claimed; ++attempt) {
-        entry = root_ / entryDirectoryName(now, counter_++);
-        const auto created = createDirectoriesDurably(entry);
-        claimed = created.ok();
-        if (!created.ok() && created.status != FileIoStatus::AlreadyExists) {
-            return {false, {}, "could not create archive entry: " +
-                                   created.message};
-        }
+    const auto claimed = store_.claimEntry(now);
+    if (!claimed.ok()) {
+        return {false, {}, "could not create archive entry: " +
+                               claimed.message};
     }
-    if (!claimed) {
-        return {false, {}, "could not claim a unique archive entry"};
-    }
+    const auto& entry = claimed.path;
 
     const auto destination = entry / *relative;
     const auto destinationCreated = ensureDirectory(destination.parent_path());
@@ -146,14 +79,14 @@ FileArchiveResult FileArchive::archive(
     // a crash could take the whole subtree while the caller believed the copy
     // was safe and went on to unlink the original.
     for (auto directory = destination.parent_path();
-         directory != root_.parent_path() && !directory.empty();
+         directory != store_.root().parent_path() && !directory.empty();
          directory = directory.parent_path()) {
         if (const auto synced = syncDirectory(directory); !synced.ok()) {
             (void)removeTreeIfPresent(entry);
             return {false, {}, "could not flush the archive to disk: " +
                                    synced.message};
         }
-        if (directory == root_) break;
+        if (directory == store_.root()) break;
     }
     return {true, destination, {}};
 }
@@ -162,34 +95,19 @@ FileArchivePruneReport FileArchive::prune(
     std::chrono::system_clock::time_point now, std::chrono::hours maxAge) {
     FileArchivePruneReport report;
 
-    std::optional<FileStat> rootStat;
-    try {
-        rootStat = statFile(root_);
-    } catch (const std::system_error& error) {
-        report.message = "could not inspect the archive: " +
-                         std::string{error.what()};
-        return report;
-    }
-    if (!rootStat) {
-        // Nothing has been deleted yet. Not an error.
-        return report;
-    }
-
-    std::vector<std::filesystem::path> expired;
-    const auto entries = listDirectory(root_);
+    const auto entries = store_.entries();
+    if (entries.status == FileIoStatus::NotFound) return report;
     if (!entries.ok() || !entries.complete) {
         report.message = "could not read the archive: " + entries.message;
         return report;
     }
+    std::vector<DurableStoreEntry> expired;
     for (const auto& entry : entries.entries) {
-        const auto status = statFile(entry.path());
-        if (!status || status->kind != FileKind::Directory) continue;
-        const auto timestamp = entryTimestamp(entry.path().filename().string());
-        if (!timestamp) {
+        if (!entry.created) {
             ++report.retainedUnparseable;
             continue;
         }
-        if (*timestamp > now) {
+        if (*entry.created > now) {
             // Clock skew, or an archive restored from a backup. Retained rather
             // than pruned: deleting a user's only copy of a deleted file
             // because a clock disagreed would be the very loss this feature
@@ -197,11 +115,11 @@ FileArchivePruneReport FileArchive::prune(
             ++report.retainedFutureDated;
             continue;
         }
-        if (now - *timestamp > maxAge) expired.push_back(entry.path());
+        if (now - *entry.created > maxAge) expired.push_back(entry);
     }
 
     for (const auto& entry : expired) {
-        const auto removed = removeTreeIfPresent(entry);
+        const auto removed = removeTreeIfPresent(entry.path);
         if (!removed.ok()) {
             report.message = "could not remove an expired archive entry: " +
                              removed.message;

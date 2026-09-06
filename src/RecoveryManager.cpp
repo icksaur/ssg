@@ -1,5 +1,6 @@
 #include <ssg/RecoveryManager.h>
 
+#include <ssg/DurableStore.h>
 #include <ssg/platform_files.h>
 
 #include <algorithm>
@@ -814,17 +815,15 @@ private:
     }
 
     void loadRecords() {
-        const auto listed = listDirectory(recoveryRoot_);
+        const auto listed = DurableStore{recoveryRoot_}.entries();
         if (!listed.ok() || !listed.complete) {
             throw std::runtime_error("failed to list recovery records: " +
                                      listed.message);
         }
         for (const auto& entry : listed.entries) {
-            const auto status = statFile(entry.path());
-            if (!status || status->kind != FileKind::Directory) continue;
-            const auto name = entry.path().filename().string();
+            const auto name = entry.path.filename().string();
             if (name.rfind(".staging-", 0) == 0) {
-                const auto removed = removeTreeIfPresent(entry.path());
+                const auto removed = removeTreeIfPresent(entry.path);
                 if (!removed.ok()) throw std::runtime_error(removed.message);
                 continue;
             }
@@ -832,22 +831,22 @@ private:
             std::optional<StoredRecord> decoded;
             std::optional<RecordState> state;
             try {
-                decoded.emplace(decodeManifest(id, entry.path()));
+                decoded.emplace(decodeManifest(id, entry.path));
                 state = readRecordState(*decoded);
             } catch (...) {
-                const auto removed = removeTreeIfPresent(entry.path());
+                const auto removed = removeTreeIfPresent(entry.path);
                 if (!removed.ok()) throw std::runtime_error(removed.message);
                 continue;
             }
             auto stored = std::move(*decoded);
             if (!state) {
-                const auto removed = removeTreeIfPresent(entry.path());
+                const auto removed = removeTreeIfPresent(entry.path);
                 if (!removed.ok()) throw std::runtime_error(removed.message);
                 continue;
             }
             if (*state == RecordState::InProgress &&
                 documentKind(stored.record.kind)) {
-                const auto removed = removeTreeIfPresent(entry.path());
+                const auto removed = removeTreeIfPresent(entry.path);
                 if (!removed.ok()) throw std::runtime_error(removed.message);
                 continue;
             }
@@ -858,7 +857,7 @@ private:
                     restoreFilesystemState(stored);
                     syncFilesystemState(stored);
                     markRestored(stored);
-                    const auto removed = removeTreeIfPresent(entry.path());
+                    const auto removed = removeTreeIfPresent(entry.path);
                     if (!removed.ok()) throw std::runtime_error(removed.message);
                     continue;
                 } catch (...) {
@@ -873,14 +872,8 @@ private:
                 nextId_ = std::max(nextId_, numeric);
             }
         }
-        std::sort(records_.begin(), records_.end(),
-                  [](const StoredRecord& left, const StoredRecord& right) {
-                      return left.record.id.value() <
-                             right.record.id.value();
-                  });
-        while (records_.size() > config_.maximumRecords ||
-               totalStoredBytes() > config_.maximumBytes) {
-            evictOldest();
+        if (const auto failure = enforceBudgets()) {
+            throw std::runtime_error(*failure);
         }
     }
 
@@ -893,18 +886,6 @@ private:
         std::ostringstream encoded;
         encoded << std::setfill('0') << std::setw(20) << nextId_;
         return RecoveryRecordId{encoded.str()};
-    }
-
-    std::uintmax_t totalStoredBytes() const {
-        std::uintmax_t total = 0;
-        for (const auto& record : records_) {
-            if (record.record.storedBytes >
-                std::numeric_limits<std::uintmax_t>::max() - total) {
-                return std::numeric_limits<std::uintmax_t>::max();
-            }
-            total += record.record.storedBytes;
-        }
-        return total;
     }
 
     void validateRecoverySeparation(
@@ -1092,24 +1073,42 @@ private:
         }
     }
 
-    void evictOldest() {
-        if (records_.empty()) {
-            throw BudgetExceeded(
-                "recovery record cannot fit the configured budgets");
-        }
-        const auto removed = removeTreeIfPresent(records_.front().directory);
-        if (!removed.ok()) throw std::runtime_error(removed.message);
-        records_.erase(records_.begin());
-    }
-
     std::optional<std::string> enforceBudgets() {
-        while (records_.size() > config_.maximumRecords ||
-               totalStoredBytes() > config_.maximumBytes) {
-            try {
-                evictOldest();
-            } catch (...) {
-                return exceptionMessage(std::current_exception());
-            }
+        std::vector<DurableStoreEntry> candidates;
+        candidates.reserve(records_.size());
+        for (const auto& record : records_) {
+            candidates.push_back(
+                {record.directory,
+                 DurableStore::entryTimestamp(record.record.id.value())});
+        }
+        const auto eviction = DurableStore::evictOldestWhile(
+            std::move(candidates),
+            [&](std::span<const DurableStoreEntry> remaining) {
+                if (remaining.size() > config_.maximumRecords) return false;
+                std::uintmax_t total = 0;
+                for (const auto& entry : remaining) {
+                    const auto record = std::find_if(
+                        records_.begin(), records_.end(),
+                        [&](const StoredRecord& candidate) {
+                            return candidate.directory == entry.path;
+                        });
+                    if (record == records_.end()) continue;
+                    if (record->record.storedBytes >
+                        std::numeric_limits<std::uintmax_t>::max() - total) {
+                        return false;
+                    }
+                    total += record->record.storedBytes;
+                }
+                return total <= config_.maximumBytes;
+            });
+        for (const auto& removed : eviction.removed) {
+            std::erase_if(records_, [&](const StoredRecord& record) {
+                return record.directory == removed.path;
+            });
+        }
+        if (!eviction.ok()) return eviction.message;
+        if (!eviction.policySatisfied) {
+            return "recovery record cannot fit the configured budgets";
         }
         return std::nullopt;
     }

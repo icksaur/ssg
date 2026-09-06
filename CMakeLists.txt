@@ -487,6 +487,7 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Workspace.cpp
     ${SSG_SOURCE_DIR}/src/FileCommands.cpp
     ${SSG_SOURCE_DIR}/src/FileArchive.cpp
+    ${SSG_SOURCE_DIR}/src/DurableStore.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -529,6 +530,13 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         SYMBOL test_file_archive)
     ssg_test_include_directories(test_file_archive PRIVATE ${SSG_SOURCE_DIR}/tests)
     ssg_test_link_libraries(test_file_archive PRIVATE ssg_core)
+
+    ssg_add_test_suite(
+        NAME test_durable_store
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_durable_store.cpp
+        SYMBOL test_durable_store)
+    ssg_test_include_directories(test_durable_store PRIVATE ${SSG_SOURCE_DIR}/tests)
+    ssg_test_link_libraries(test_durable_store PRIVATE ssg_core)
 
 endif()
 

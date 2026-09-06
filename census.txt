@@ -512,6 +512,34 @@ ssg/DraftReopenClassifier.h	func	ssg::classifyDraftReopen	DraftReopenClass (cons
 ssg/DraftReopenClassifier.h	struct	ssg::DraftDiskState
 ssg/DraftReopenClassifier.h	var	ssg::DraftDiskState::decodedText	std::string
 ssg/DraftReopenClassifier.h	var	ssg::DraftDiskState::rawBytes	std::string
+ssg/DurableStore.h	class	ssg::DurableStore
+ssg/DurableStore.h	func	ssg::DurableStore::DurableStore	void (std::filesystem::path)
+ssg/DurableStore.h	func	ssg::DurableStore::claimEntry	DurableStoreClaimResult (std::chrono::system_clock::time_point)
+ssg/DurableStore.h	func	ssg::DurableStore::entries	DurableStoreListResult () const
+ssg/DurableStore.h	func	ssg::DurableStore::entryName	std::string (std::chrono::system_clock::time_point, std::string_view)
+ssg/DurableStore.h	func	ssg::DurableStore::entryTimestamp	std::optional<std::chrono::system_clock::time_point> (std::string_view)
+ssg/DurableStore.h	func	ssg::DurableStore::evictOldestWhile	DurableStoreEvictionResult (std::vector<DurableStoreEntry>, const std::function<bool (std::span<const DurableStoreEntry>)> &)
+ssg/DurableStore.h	func	ssg::DurableStore::root	const std::filesystem::path &() const noexcept
+ssg/DurableStore.h	func	ssg::DurableStoreClaimResult::ok	bool () const noexcept
+ssg/DurableStore.h	func	ssg::DurableStoreEvictionResult::ok	bool () const noexcept
+ssg/DurableStore.h	func	ssg::DurableStoreListResult::ok	bool () const noexcept
+ssg/DurableStore.h	struct	ssg::DurableStoreClaimResult
+ssg/DurableStore.h	struct	ssg::DurableStoreEntry
+ssg/DurableStore.h	struct	ssg::DurableStoreEvictionResult
+ssg/DurableStore.h	struct	ssg::DurableStoreListResult
+ssg/DurableStore.h	var	ssg::DurableStoreClaimResult::message	std::string
+ssg/DurableStore.h	var	ssg::DurableStoreClaimResult::path	std::filesystem::path
+ssg/DurableStore.h	var	ssg::DurableStoreClaimResult::status	FileIoStatus
+ssg/DurableStore.h	var	ssg::DurableStoreEntry::created	std::optional<std::chrono::system_clock::time_point>
+ssg/DurableStore.h	var	ssg::DurableStoreEntry::path	std::filesystem::path
+ssg/DurableStore.h	var	ssg::DurableStoreEvictionResult::message	std::string
+ssg/DurableStore.h	var	ssg::DurableStoreEvictionResult::policySatisfied	bool
+ssg/DurableStore.h	var	ssg::DurableStoreEvictionResult::remaining	std::vector<DurableStoreEntry>
+ssg/DurableStore.h	var	ssg::DurableStoreEvictionResult::removed	std::vector<DurableStoreEntry>
+ssg/DurableStore.h	var	ssg::DurableStoreListResult::complete	bool
+ssg/DurableStore.h	var	ssg::DurableStoreListResult::entries	std::vector<DurableStoreEntry>
+ssg/DurableStore.h	var	ssg::DurableStoreListResult::message	std::string
+ssg/DurableStore.h	var	ssg::DurableStoreListResult::status	FileIoStatus
 ssg/EditCommands.h	enum	ssg::EditCommand
 ssg/EditCommands.h	enum	ssg::EditCommandError
 ssg/EditCommands.h	enumerator	ssg::EditCommand::DeleteLine
@@ -862,8 +890,6 @@ ssg/ExternalModificationFlow.h	var	ssg::ExternalOpenDiffResult::target	std::opti
 ssg/FileArchive.h	class	ssg::FileArchive
 ssg/FileArchive.h	func	ssg::FileArchive::FileArchive	void (std::filesystem::path)
 ssg/FileArchive.h	func	ssg::FileArchive::archive	FileArchiveResult (const std::filesystem::path &, const std::filesystem::path &)
-ssg/FileArchive.h	func	ssg::FileArchive::entryDirectoryName	std::string (std::chrono::system_clock::time_point, std::size_t)
-ssg/FileArchive.h	func	ssg::FileArchive::entryTimestamp	std::optional<std::chrono::system_clock::time_point> (std::string_view)
 ssg/FileArchive.h	func	ssg::FileArchive::prune	FileArchivePruneReport (std::chrono::system_clock::time_point, std::chrono::hours)
 ssg/FileArchive.h	func	ssg::FileArchive::root	const std::filesystem::path &() const noexcept
 ssg/FileArchive.h	func	ssg::FileArchivePruneReport::ok	bool () const noexcept
