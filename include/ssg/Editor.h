@@ -1,30 +1,30 @@
 #pragma once
 
-#include <ssg/ClipboardRegister.h>
 #include <ssg/ClientInput.h>
-#include <ssg/ScreenState.h>
+#include <ssg/ClipboardRegister.h>
+#include <ssg/CommandCatalog.h>
+#include <ssg/CompiledKeymap.h>
 #include <ssg/DiffModel.h>
+#include <ssg/DocumentHistory.h>
 #include <ssg/DraftAutosaveScheduler.h>
 #include <ssg/EditCommands.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/FileCommands.h>
 #include <ssg/FindReplace.h>
 #include <ssg/FollowEditsModel.h>
-#include <ssg/DocumentHistory.h>
-#include <ssg/CommandCatalog.h>
-#include <ssg/CompiledKeymap.h>
+#include <ssg/GitDiffIngress.h>
 #include <ssg/Keymap.h>
-#include <ssg/LspFeatureController.h>
 #include <ssg/LineLayoutCache.h>
+#include <ssg/LspFeatureController.h>
 #include <ssg/LuaCommandHost.h>
 #include <ssg/PaneTopology.h>
 #include <ssg/Picker.h>
 #include <ssg/PromptSurface.h>
+#include <ssg/ScreenState.h>
 #include <ssg/Search.h>
 #include <ssg/Settings.h>
-#include <ssg/StatusFields.h>
 #include <ssg/StatusBar.h>
-#include <ssg/GitDiffWorker.h>
+#include <ssg/StatusFields.h>
 #include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/TabManager.h>
@@ -32,14 +32,13 @@
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
 #include <ssg/Viewport.h>
-#include <ssg/WorkspaceFileIndex.h>
 #include <ssg/Workspace.h>
+#include <ssg/WorkspaceFileIndex.h>
 
 #include <any>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <deque>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -143,10 +142,8 @@ struct DocumentRuntimeState {
     }
 
     DocumentRuntimeState(DocumentRuntimeState&& other) noexcept
-        : history{std::move(other.history)},
-          syntax{std::move(other.syntax)},
-          reopen{other.reopen},
-          autosaveOversizeReported{other.autosaveOversizeReported} {
+        : history{std::move(other.history)}, syntax{std::move(other.syntax)},
+          reopen{other.reopen} {
         ++liveCount;
     }
 
@@ -163,10 +160,6 @@ struct DocumentRuntimeState {
     DocumentHistory history;
     SyntaxModel syntax;
     DraftReopenOutcome reopen = DraftReopenOutcome::None;
-    // Whether the "too large to autosave a draft" warning has already been
-    // surfaced for this document, so an oversized buffer is reported once rather
-    // than on every flush tick. Cleared if the buffer drops back under the cap.
-    bool autosaveOversizeReported = false;
 
 private:
     inline static std::atomic<std::uint64_t> liveCount{0};
@@ -224,12 +217,6 @@ public:
     };
     [[nodiscard]] DeferredWorkCounts deferredWorkCounts() const;
     [[nodiscard]] static std::uint64_t liveDocumentRuntimeStateCountForTests();
-    void setAutosaveDraftByteCapForTests(std::uint64_t cap);
-    void reconcileExternalWatchEventsForTest(std::vector<WatchEvent> events);
-    [[nodiscard]] bool diffModelHasFileForTest(const DiffFileId& id) const;
-    void reportWatcherAvailabilityForTest(bool available);
-    void refreshFilesystemForTest();
-    [[nodiscard]] std::uint64_t gitFullRefreshCountForTest() const;
     [[nodiscard]] std::string activeDocumentText() const;
 
     enum class DraftReopenNotice { None, Restored, Conflict };
@@ -251,50 +238,41 @@ public:
     SettingsModel settings;
     std::map<std::uint64_t, DocumentRuntimeState> documentRuntimeStates;
     ClipboardRegister clipboard;
-    // Autosave debounce state for open dirty documents (single-file draft
-    // recovery, M15). The policy lives here (library-owned); the app supplies
-    // only a periodic tick and a clean-exit call.
     DraftAutosaveScheduler autosave;
-    // Per-draft byte cap: a buffer larger than this is not autosaved (writing a
-    // multi-hundred-MiB draft every debounce would blow the scratch quota and
-    // stall the fsync thread). A field, not a constant, so a test can lower it
-    // without materialising a huge buffer; production keeps the default. Over-cap
-    // is reported (a one-time status), never a silent partial draft.
-    std::uintmax_t autosaveDraftByteCap = 64U * 1024U * 1024U;
     FindReplaceController findReplace;
     // The document the find/replace controller last evaluated against.  Find
     // matches are byte offsets into one specific document; when the active
-    // document identity or revision drifts from this, the controller is stale and
-    // must be dismissed (see reconcile_find_document).
+    // document identity or revision drifts from this, the controller is stale
+    // and must be dismissed (see reconcile_find_document).
     std::optional<FileDocumentId> findDocumentId;
     StatusBar status;
     TabManager tabs;
     DiffModel diff;
     ExternalModificationFlow external;
     FollowEditsModel follow;
-    std::uint64_t lastGitScanRevision{0};
-    std::optional<std::string> currentGitBranch;
     TreeModel tree;
     std::shared_ptr<SyntaxParser> syntaxParser;
     // The single interaction authority: owner of the screen schema, the
-    // prompt surface, panel/focus/provider truth, the interaction projection, and the tree
-    // revision source. Presentation reads its projection; every focus, presence,
-    // and prompt change flows through it. Declared after `tree` so it is
-    // constructed first.
+    // prompt surface, panel/focus/provider truth, the interaction projection,
+    // and the tree revision source. Presentation reads its projection; every
+    // focus, presence, and prompt change flows through it. Declared after
+    // `tree` so it is constructed first.
     ScreenState screen;
     std::unordered_map<std::string, FileDocumentId> liveDiffDocuments;
-    // Read-only, in-memory "output" tabs (help, and any future generated-content
-    // tab), keyed by the tab's content identity. Mirrors liveDiffDocuments: a
-    // content tab does not store its document id in TabState, so the document is
-    // resolved through this side map. The backing documents are DocumentMode::
-    // ReadOnly and untitled, so they are excluded from autosave and cannot be
-    // saved; their content is refreshed by remove+recreate, never edited in
-    // place (see openReadOnlyTab).
+    // Read-only, in-memory "output" tabs (help, and any future
+    // generated-content tab), keyed by the tab's content identity. Mirrors
+    // liveDiffDocuments: a content tab does not store its document id in
+    // TabState, so the document is resolved through this side map. The backing
+    // documents are DocumentMode:: ReadOnly and untitled, so they are excluded
+    // from autosave and cannot be saved; their content is refreshed by
+    // remove+recreate, never edited in place (see openReadOnlyTab).
     std::unordered_map<std::string, FileDocumentId> readOnlyTabDocuments;
     // The user's home directory, resolved once at construction (HOME, then
-    // USERPROFILE, with trailing separators stripped) so the header path field's
+    // USERPROFILE, with trailing separators stripped) so the header path
+    // field's
     // "~" abbreviation is deterministic across a session rather than re-reading
-    // the process environment on every presentation. Empty disables abbreviation.
+    // the process environment on every presentation. Empty disables
+    // abbreviation.
     std::string homeDirectory;
     // Per-document syntax language override for documents with no on-disk path
     // to infer a language from (a read-only help/output tab). refreshSyntax
@@ -327,8 +305,8 @@ public:
     SessionTopology sessionTopology;
     CommandCatalog catalog;
     // Commands a running handler asked to dispatch, run in order once the
-    // operation lock releases. The operation mutex is not reentrant, so a handler
-    // cannot dispatch; this is how it asks for one.
+    // operation lock releases. The operation mutex is not reentrant, so a
+    // handler cannot dispatch; this is how it asks for one.
     //
     // ONE queue, drained inside the dispatch wrapper, rather than a field per
     // caller: palette.execute, prompt.submit and a script's ssg.command all
@@ -342,8 +320,8 @@ public:
         ClientCommand command;
     };
 
-    // The queue, shaped so `Editor::deferDispatch` is the only way to ADD to it -- by
-    // construction, not by convention.
+    // The queue, shaped so `Editor::deferDispatch` is the only way to ADD to it
+    // -- by construction, not by convention.
     //
     // It was previously a bare vector that two callers pushed to directly while
     // a third went through a checked method, so the shortest way to queue a
@@ -376,9 +354,9 @@ public:
         void clear() noexcept { commands_.clear(); }
 
     private:
-        // Only reachable through Editor::deferDispatch, which is what enforces that a
-        // dispatch is actually in progress.  Queueing outside one would strand
-        // the command until some later, unrelated dispatch drained it.
+        // Only reachable through Editor::deferDispatch, which is what enforces
+        // that a dispatch is actually in progress.  Queueing outside one would
+        // strand the command until some later, unrelated dispatch drained it.
         friend struct Editor;
         [[nodiscard]] bool enqueue(DeferredCommand deferred) {
             if (commands_.size() >= kMaximum) return false;
@@ -435,9 +413,9 @@ public:
         const WorkspaceReplacePreview& preview);
     [[nodiscard]] std::optional<FileDocumentId> activeDocumentId() const;
     [[nodiscard]] const TabState* activeTabState() const;
-    // Whether the active tab shows a live diff. A guard several command handlers
-    // share (a live-diff tab is read-only for edits), read from the active tab's
-    // own kind so the rule lives in one place.
+    // Whether the active tab shows a live diff. A guard several command
+    // handlers share (a live-diff tab is read-only for edits), read from the
+    // active tab's own kind so the rule lives in one place.
     [[nodiscard]] bool activeTabIsLiveDiff() const {
         const auto* tab = activeTabState();
         return tab != nullptr && tab->kind == TabKind::LiveDiff;
@@ -471,32 +449,34 @@ public:
     [[nodiscard]] PromptStatusViewState promptStatusView() const;
     // The geometry-free semantic projection of the active footer-region prompt,
     // or nullopt unless a footer-region prompt is open.
-    // The one draft-conflict notice resolver: the geometry-free NoticeView for the
-    // active document, or nullopt unless its reopen outcome is Conflict.
+    // The one draft-conflict notice resolver: the geometry-free NoticeView for
+    // the active document, or nullopt unless its reopen outcome is Conflict.
     [[nodiscard]] std::optional<NoticeView> draftNotice() const;
     // The geometry-free draft-conflict notice used during presentation.
     [[nodiscard]] std::optional<NoticeView> noticeView() const;
     // Whether the active document currently raises a draft-conflict notice. The
-    // notice's tree-node presence lives outside the prompt/panel transitions, so the
-    // runtime reconciles this into the interaction authority after each dispatch.
+    // notice's tree-node presence lives outside the prompt/panel transitions,
+    // so the runtime reconciles this into the interaction authority after each
+    // dispatch.
     [[nodiscard]] bool noticePresent() const;
-    // Whether any file is externally modified (the external-modification section is
-    // non-empty). Like noticePresent, reconciled into the interaction authority so
-    // the external-modification node's presence tracks it -- after each dispatch and
-    // in the watcher drain.
+    // Whether any file is externally modified (the external-modification
+    // section is non-empty). Like noticePresent, reconciled into the
+    // interaction authority so the external-modification node's presence tracks
+    // it -- after each dispatch and in the watcher drain.
     [[nodiscard]] bool externalModificationPresent() const {
         return !external.viewState().files.empty();
     }
     // Dismiss the find/replace controller (and its prompt) when the active
-    // document identity or revision no longer matches what it evaluated against,
-    // so stale matches are never navigable or projected.
+    // document identity or revision no longer matches what it evaluated
+    // against, so stale matches are never navigable or projected.
     void reconcileFindDocument();
     // The projected and command-bound header/footer status fields the UI tree
     // resolves its provider widgets against.
     // The status-field styling UI resolution wants: the grid path prefixes
-    // the cwd with a terminal glyph; the semantic dynamic-state path takes none, so
-    // a native client receives no presentation styling. A strong mode (not a raw
-    // prefix) makes semantic purity a named choice at each call site.
+    // the cwd with a terminal glyph; the semantic dynamic-state path takes
+    // none, so a native client receives no presentation styling. A strong mode
+    // (not a raw prefix) makes semantic purity a named choice at each call
+    // site.
     [[nodiscard]] StatusFieldProjection uiStatusFields() const;
     [[nodiscard]] PaletteViewState paletteView() const;
     // The geometry-free tree state; GridPresenter resolves its visible window.
@@ -506,58 +486,25 @@ public:
     [[nodiscard]] DiffIngressResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
     [[nodiscard]] DiffIngressResult applyGitDiffScan(GitDiffScan scan);
-    [[nodiscard]] DiffIngressResult applyGitDiffScanLocked(GitDiffScan scan);
-    // CONTRACT
-    // Editor: reconcileExternalWatchEvents and every mutation of
-    //   `external` and its shared DiffModel it drives run only on the runtime
-    //   thread, reached through the wake drain (or the test hook that stands in for
-    //   it); the watcher worker thread only queues normalized events and never
-    //   touches the flow. A host never observes a presentation mid-drain.
-    void reconcileExternalWatchEvents(std::vector<WatchEvent> events,
-                                      bool resync = false);
-    // Overflow recovery: the watcher lost events, so re-derive which OPEN documents
-    // changed by comparing each to its disk baseline and reconcile the differences
-    // through a sequence-free resync. Runs on the runtime thread (the worker only
-    // signals). Without this, modifications during the overflow window are lost.
-    void reconcileAllOpenDocumentsAgainstDisk();
-    // The one runtime-owned external diff identity: a namespaced id derived from a
-    // saved document key, and its reverse resolution to the open document. Both the
-    // ingress reconcile and the action handlers resolve through these, so the id the
-    // section publishes is exactly the id the handlers resolve, and it can never
-    // collide with a git path-keyed entry in the shared DiffModel.
-    [[nodiscard]] static DiffFileId externalDiffFileId(std::string_view savedPath);
-    [[nodiscard]] static std::optional<std::string> savedPathFromExternalDiffId(
-        const DiffFileId& id);
-    [[nodiscard]] std::optional<FileDocumentId> resolveExternalDocument(
-        const DiffFileId& id) const;
-    // Drives the workspace's atomic external-baseline dismissal and refreshes an
-    // already-persisted draft record (Decision 5) to the same baseline, so a
-    // keep_buffer dismissal stops an overflow resync or a crash-reopen from
-    // resurrecting the change. Returns whether the whole cross-store commit landed.
-    [[nodiscard]] bool commitExternalDismissal(
-        FileDocumentId document, bool removed,
-        const std::optional<std::string>& dismissedContent);
-    [[nodiscard]] std::optional<FileDocumentId> resolveOpenSavedDocumentByPath(
-        const std::filesystem::path& relativePath) const;
-    // Records that SSG itself wrote `relativePath`, so the matching watcher event is
-    // correlated as a self-save and never raises a false external conflict. Ordered
-    // by the save primitive before the write is observable; the library owns this,
-    // a client never participates.
-    void registerExternalSaveExpectation(
-        const std::filesystem::path& relativePath);
-    [[nodiscard]] CommandHandlerResult openOrFocusLiveDiffTab(
-        const DiffFileView& file, NavigationClass classification);
+    // Records that SSG itself wrote `relativePath`, so the matching watcher
+    // event is correlated as a self-save and never raises a false external
+    // conflict. Ordered by the save primitive before the write is observable;
+    // the library owns this, a client never participates.
+    [[nodiscard]] CommandHandlerResult
+    openOrFocusLiveDiffTab(const DiffFileView& file,
+                           NavigationClass classification);
     // Open (or re-focus) a read-only, in-memory tab of generated text content.
     // The reusable primitive behind the help page and any future
     // generated-content tab. Opens the text as a DocumentMode::ReadOnly virtual
     // document (untitled -> never autosaved, never savable) in a tab of `kind`
     // deduped by `contentIdentity`, and activates it. Re-opening the same
-    // identity REFRESHES the content by remove+recreate -- it constructs a fresh
-    // read-only document rather than editing the existing one, so the read-only
-    // edit chokepoint (Document::apply) is never bypassed.
-    [[nodiscard]] CommandHandlerResult openReadOnlyTab(
-        TabKind kind, std::string contentIdentity, std::string label,
-        std::string text, LanguageId language = LanguageId::plainText());
+    // identity REFRESHES the content by remove+recreate -- it constructs a
+    // fresh read-only document rather than editing the existing one, so the
+    // read-only edit chokepoint (Document::apply) is never bypassed.
+    [[nodiscard]] CommandHandlerResult
+    openReadOnlyTab(TabKind kind, std::string contentIdentity,
+                    std::string label, std::string text,
+                    LanguageId language = LanguageId::plainText());
     // Open a live diff tab of the active saved document's buffer (the draft,
     // the target) against its CURRENT disk content (the baseline), via the
     // source-agnostic non-git diff engine. A missing/unreadable disk file diffs
@@ -577,13 +524,10 @@ public:
     // Returns false only when the archive copy could not be written.
     [[nodiscard]] bool archiveDiscardedDraft(std::string_view savedPath,
                                              std::string_view content);
-    void refreshLiveDiffDocuments(const DiffViewState& view);
-    [[nodiscard]] bool openOrRevealFollowTargetProgrammatic(
-        const FollowTarget& target);
-    [[nodiscard]] bool revealCurrentDiffTarget(
-        const FollowTarget& target, NavigationClass classification);
-    [[nodiscard]] bool revealDiffTarget(
-        const FollowTarget& target, NavigationClass classification);
+    [[nodiscard]] bool
+    openOrRevealFollowTargetProgrammatic(const FollowTarget& target);
+    [[nodiscard]] bool revealDiffTarget(const FollowTarget& target,
+                                        NavigationClass classification);
     void recordNavigation(NavigationClass classification);
     [[nodiscard]] CommandHandlerResult splitPane(SplitAxis axis);
     [[nodiscard]] CommandHandlerResult closePane();
@@ -591,65 +535,53 @@ public:
     [[nodiscard]] bool focusPane(PaneId pane);
     [[nodiscard]] bool refreshTree();
     void refreshTreeForPublication();
-    // Re-assemble the authority-owned screen schema from the given UI inputs and
-    // migrate the interaction over it. Takes the inputs as parameters (not members) so a
-    // caller can build and migrate before adopting the new style.
+    // Re-assemble the authority-owned screen schema from the given UI inputs
+    // and migrate the interaction over it. Takes the inputs as parameters (not
+    // members) so a caller can build and migrate before adopting the new style.
     void rebuildInteractionSchema(const StyleDimensions& dimensions,
                                   std::string_view promptSigil);
-    // Refresh the file picker's candidates off the authority's picker epoch: a newly
-    // (re)opened File picker rebuilds synchronously, any other picker state clears.
+    // Refresh the file picker's candidates off the authority's picker epoch: a
+    // newly (re)opened File picker rebuilds synchronously, any other picker
+    // state clears.
     [[nodiscard]] bool openPickerPrompt(PickerKind kind);
-    // Walks the workspace into `fileCandidates`, honoring the gitignore setting.
+    // Walks the workspace into `fileCandidates`, honoring the gitignore
+    // setting.
     void rebuildFileCandidates();
     void refreshSyntax(std::vector<SyntaxEdit> edits = {});
-    // While `deferring_enrichment` is set (the pre-first-frame window when created with
-    // defer_enrichment=true), refresh_tree and refresh_syntax record that work is
-    // pending instead of running the O(workspace)/O(document) scan, so the first
-    // frame is not blocked by it.  prime_deferred() clears the flag and runs any
-    // pending scan.  The run counters exist for the startup oracle to assert no
-    // scan happened before priming.
+    // While `deferring_enrichment` is set (the pre-first-frame window when
+    // created with defer_enrichment=true), refresh_tree and refresh_syntax
+    // record that work is pending instead of running the
+    // O(workspace)/O(document) scan, so the first frame is not blocked by it.
+    // prime_deferred() clears the flag and runs any pending scan.  The run
+    // counters exist for the startup oracle to assert no scan happened before
+    // priming.
     void primeDeferred();
-    // Flush drafts of open dirty documents. `flushDueAutosaveDrafts` applies the
-    // debounce policy (eager first, then once per AutosaveDebounceMs); called on
-    // the app's periodic tick. `flushAllAutosaveDrafts` forces every dirty draft,
-    // for a clean process exit. Both return the number of drafts written this
-    // call. Non-blocking: durability is the background fsync thread's job.
+    // Flush drafts of open dirty documents. `flushDueAutosaveDrafts` applies
+    // the debounce policy (eager first, then once per AutosaveDebounceMs);
+    // called on the app's periodic tick. `flushAllAutosaveDrafts` forces every
+    // dirty draft, for a clean process exit. Both return the number of drafts
+    // written this call. Non-blocking: durability is the background fsync
+    // thread's job.
     std::size_t flushDueAutosaveDrafts();
     std::size_t flushAllAutosaveDrafts();
-    std::size_t persistAutosaveDraft(FileDocumentId document);
-    // On the first open of a saved document from disk, reconcile any dirty draft
-    // recovered for its path against the current disk file (single-file draft
-    // recovery, M15). Converged drafts are dropped and the clean disk buffer
-    // kept; otherwise the draft is loaded as a dirty buffer and the document's
-    // reopen outcome recorded (Restored when disk is unchanged, Conflict when it
-    // changed externally). A no-op when there is no dirty draft for the path.
+    // On the first open of a saved document from disk, reconcile any dirty
+    // draft recovered for its path against the current disk file (single-file
+    // draft recovery, M15). Converged drafts are dropped and the clean disk
+    // buffer kept; otherwise the draft is loaded as a dirty buffer and the
+    // document's reopen outcome recorded (Restored when disk is unchanged,
+    // Conflict when it changed externally). A no-op when there is no dirty
+    // draft for the path.
     void reconcileDraftOnOpen(FileDocumentId document);
     bool deferringEnrichment = false;
     bool pendingTreeRefresh = false;
     bool pendingSyntaxRefresh = false;
     std::uint64_t treeScanCount = 0;
     std::uint64_t syntaxRunCount = 0;
-    // The git-diff/filesystem-watcher background worker: git repository scans,
-    // watcher construction, and their pending-event queues all live behind this
-    // narrow owned member (see GitDiffWorker.h). A no-op when both git and
-    // watching are disabled.
-    GitDiffWorker gitDiffWorker;
-    // Runtime-owned save correlation. The save primitive records the intended
-    // post-write disk state here; the reconcile consumes a match so an SSG write is
-    // never mistaken for an external modification. Guarded because the save runs on
-    // the dispatch thread and the reconcile on the runtime-thread drain.
-    mutable std::mutex externalSaveMutex;
-    std::deque<SaveExpectation> pendingSaveExpectations;
+    GitDiffIngress gitDiffIngress;
 
     void enqueueStatus(StatusPriority priority, std::string text);
-    // Applies one GitDiffWorker::drain() batch to editor state (the shared
-    // DiffModel, the external-modification flow, the tree): the worker only
-    // produces scans/events/reconcile signals, this is where they land. Returns
-    // whether anything changed that a caller should treat as accepted work.
-    [[nodiscard]] bool drainGitDiffWorker();
     [[nodiscard]] int gitDiffWakeDescriptor() const;
 };
-
 
 [[nodiscard]] CommandHandlerResult success();
 [[nodiscard]] CommandHandlerResult failure(std::string message);

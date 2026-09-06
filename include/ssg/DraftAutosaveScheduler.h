@@ -6,9 +6,12 @@
 #include <cstdint>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace ssg {
+
+struct Editor;
 
 // One open document's autosave-relevant state for a single scheduling decision.
 // `contentHash` is a fast hash of the current buffer text, used to avoid
@@ -28,7 +31,7 @@ struct AutosaveCandidate {
 // interval). After that it flushes again only when BOTH its content has changed
 // since the last flush AND at least `interval` has elapsed. A document that is
 // clean, or no longer open, drops its state, so its next dirty edit is eager
-// again. The scheduler performs no I/O and holds only timing/identity state.
+// again.
 class DraftAutosaveScheduler {
 public:
     explicit DraftAutosaveScheduler(
@@ -38,6 +41,11 @@ public:
     [[nodiscard]] std::chrono::milliseconds interval() const noexcept {
         return interval_;
     }
+
+    std::uintmax_t draftByteCap = 64U * 1024U * 1024U;
+
+    [[nodiscard]] std::size_t flushDueDrafts(Editor& editor);
+    [[nodiscard]] std::size_t flushAllDrafts(Editor& editor);
 
     // The ids to flush now, per the eager + debounced-interval policy above.
     // Also updates internal state: flushed ids record their content+time, and
@@ -66,6 +74,10 @@ private:
 
     std::chrono::milliseconds interval_;
     std::unordered_map<std::uint64_t, FlushRecord> flushed_;
+    std::unordered_set<std::uint64_t> oversizeReported_;
+
+    [[nodiscard]] std::size_t persistDraft(Editor& editor,
+                                           FileDocumentId document);
 };
 
 } // namespace ssg

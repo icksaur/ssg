@@ -23,6 +23,8 @@ private:
     std::string value_;
 };
 
+[[nodiscard]] DiffFileId externalDiffFileId(std::string_view savedPath);
+
 enum class DiffLineKind {
     Added = 0,
     Removed = 1,

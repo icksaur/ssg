@@ -1,9 +1,29 @@
 #include <ssg/DraftAutosaveScheduler.h>
 
+#include <ssg/Editor.h>
+
 #include <algorithm>
-#include <unordered_set>
 
 namespace ssg {
+namespace {
+
+std::vector<AutosaveCandidate> autosaveCandidates(const Workspace& workspace) {
+    std::vector<AutosaveCandidate> candidates;
+    for (const auto id : workspace.documents()) {
+        auto state = workspace.state(id);
+        if (!state) continue;
+        auto const* current = workspace.tryDocument(id);
+        if (current == nullptr || current->mode() != DocumentMode::Edit) {
+            continue;
+        }
+        const auto contentHash =
+            state->dirty ? fastContentHash(current->snapshot().text) : 0;
+        candidates.push_back({id, state->dirty, contentHash});
+    }
+    return candidates;
+}
+
+} // namespace
 
 DraftAutosaveScheduler::DraftAutosaveScheduler(
     std::chrono::milliseconds interval)
@@ -12,6 +32,27 @@ DraftAutosaveScheduler::DraftAutosaveScheduler(
 void DraftAutosaveScheduler::setInterval(
     std::chrono::milliseconds interval) noexcept {
     interval_ = interval;
+}
+
+std::size_t DraftAutosaveScheduler::flushDueDrafts(Editor& editor) {
+    setInterval(std::chrono::milliseconds{uint32Setting(
+        editor.settings, SettingKey::AutosaveDebounceMs, 10000)});
+    const auto candidates = autosaveCandidates(editor.workspace);
+    std::size_t flushed = 0;
+    for (const auto id : due(std::chrono::steady_clock::now(), candidates)) {
+        flushed += persistDraft(editor, id);
+    }
+    return flushed;
+}
+
+std::size_t DraftAutosaveScheduler::flushAllDrafts(Editor& editor) {
+    const auto candidates = autosaveCandidates(editor.workspace);
+    std::size_t flushed = 0;
+    for (const auto id :
+         flushAll(std::chrono::steady_clock::now(), candidates)) {
+        flushed += persistDraft(editor, id);
+    }
+    return flushed;
 }
 
 std::vector<FileDocumentId> DraftAutosaveScheduler::due(
@@ -68,6 +109,31 @@ std::vector<FileDocumentId> DraftAutosaveScheduler::flushAll(
 
 void DraftAutosaveScheduler::forget(FileDocumentId id) noexcept {
     flushed_.erase(id.value());
+    oversizeReported_.erase(id.value());
+}
+
+std::size_t DraftAutosaveScheduler::persistDraft(
+    Editor& editor, FileDocumentId document) {
+    auto state = editor.workspace.state(document);
+    auto const* current = editor.workspace.tryDocument(document);
+    if (!state || current == nullptr) return 0;
+
+    const auto& text = current->snapshot().text;
+    if (text.size() > draftByteCap) {
+        if (oversizeReported_.insert(document.value()).second) {
+            editor.scratch.removeDocument(state->key);
+            editor.enqueueStatus(
+                StatusPriority::Warning,
+                "file is too large to autosave a draft; unsaved edits are not "
+                "crash-protected until saved");
+        }
+        return 0;
+    }
+    oversizeReported_.erase(document.value());
+    editor.scratch.updateDocument(
+        JournalDocument{state->key, current->mode(), state->dirty, text,
+                        editor.workspace.baselineFor(document)});
+    return 1;
 }
 
 } // namespace ssg

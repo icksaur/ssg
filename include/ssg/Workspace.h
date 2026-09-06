@@ -149,24 +149,9 @@ public:
     [[nodiscard]] bool matchesExternalBaseline(
         FileDocumentId document,
         const std::optional<std::string>& observedContent) const;
-    // Dismisses an external change: advances this document's authoritative
-    // IN-MEMORY external baseline to the GIVEN dismissed disk bytes
-    // (`removed`==false) or to Missing (`removed`==true), then invokes
-    // `persistDraft` with the projected baseline to refresh an already-persisted
-    // draft record to the same state. The in-memory advance is synchronous; if
-    // `persistDraft` returns false or throws, the in-memory baseline is reverted
-    // and the dismissal fails (returns false), so this document's live state stays
-    // prior and the caller leaves the conflict raised. DURABLE persistence of the
-    // refreshed draft record is best-effort through the scratch durability worker
-    // — the same async window autosave already has — NOT a synchronous cross-store
-    // durability guarantee: a crash within that window may retain the old journal
-    // baseline. The buffer, key, label, and encoding are untouched, and the
-    // advance uses the exact given bytes, never a fresh disk read.
     [[nodiscard]] bool commitExternalDismissal(
         FileDocumentId document, bool removed,
-        const std::optional<std::string>& dismissedContent,
-        const std::function<bool(const std::optional<DraftBaseline>&)>&
-            persistDraft);
+        const std::optional<std::string>& dismissedContent);
     // The literal bytes read from disk when the document was opened or last
     // reloaded — the same bytes the baseline hash was computed over. Used by
     // draft recovery to classify a recovered draft against the current disk

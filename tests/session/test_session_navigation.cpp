@@ -1089,7 +1089,7 @@ TEST(workerFilesystemRefreshPublishesChangedFileCandidates) {
     auto& runtime = *created.session;
     std::ofstream{root / "workspace" / "arrived.txt"} << "new\n";
 
-    runtime.refreshFilesystemForTest();
+    runtime.refreshTreeForPublication();
 
     auto snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});

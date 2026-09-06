@@ -753,7 +753,7 @@ TEST(oversizedBufferIsNotAutosavedAndIsReportedOnce) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    runtime.setAutosaveDraftByteCapForTests(4);  // "hi\n" + edits exceed it
+    runtime.autosave.draftByteCap = 4;  // "hi\n" + edits exceed it
     ASSERT_TRUE(runtime.dispatch({"file.open",
                                   std::string{"note.txt"}})
                     .accepted());

@@ -267,6 +267,7 @@ endif()
 
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Editor.cpp
+    ${SSG_SOURCE_DIR}/src/GitDiffIngress.cpp
     ${SSG_SOURCE_DIR}/src/editing.cpp
     ${SSG_SOURCE_DIR}/src/input_routing.cpp
     ${SSG_SOURCE_DIR}/src/files.cpp

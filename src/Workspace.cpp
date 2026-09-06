@@ -647,19 +647,9 @@ bool Workspace::matchesExternalBaseline(
 
 bool Workspace::commitExternalDismissal(
     FileDocumentId documentId, bool removed,
-    const std::optional<std::string>& dismissedContent,
-    const std::function<bool(const std::optional<DraftBaseline>&)>&
-        persistDraft) {
+    const std::optional<std::string>& dismissedContent) {
     auto* entry = impl_->find(documentId);
     if (!entry) return false;
-    // Advance the in-memory baseline first (cheap, revertible), then let the
-    // caller enqueue a best-effort refresh of an already-persisted draft record to
-    // the SAME baseline (durability is the scratch worker's async job, as autosave).
-    // If issuing that refresh fails, revert the in-memory baseline so the workspace
-    // entry stays at its prior state and the conflict remains raised. The buffer,
-    // key, label, and encoding are untouched: only the branched-from disk baseline
-    // moves. The advance uses the exact dismissed bytes, never a fresh disk read.
-    const Impl::ExternalBaseline prior = entry->baseline;
     if (removed) {
         entry->baseline = Impl::ExternalBaseline::removed();
     } else {
@@ -675,16 +665,6 @@ bool Workspace::commitExternalDismissal(
         // raise/skip and draft-classify comparisons use size+contentHash, so mtime
         // is never load-bearing; a misleading mixed value must not be stored.
         entry->baseline = Impl::ExternalBaseline{advanced};
-    }
-    bool refreshed = false;
-    try {
-        refreshed = !persistDraft || persistDraft(entry->baseline.present);
-    } catch (...) {
-        refreshed = false;
-    }
-    if (!refreshed) {
-        entry->baseline = prior;
-        return false;
     }
     return true;
 }

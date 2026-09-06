@@ -1,21 +1,21 @@
-#include <ssg/Editor.h>
 #include <ssg/CommandCatalog.h>
 #include <ssg/DraftReopenClassifier.h>
+#include <ssg/Editor.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
-#include <ssg/Style.h>
 #include <ssg/ScreenLayout.h>
+#include <ssg/Style.h>
 #include <ssg/platform_files.h>
 
 #include <algorithm>
 #include <array>
-#include <span>
 #include <chrono>
 #include <cstdlib>
 #include <deque>
 #include <fstream>
-#include <limits>
 #include <iterator>
+#include <limits>
+#include <span>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -26,20 +26,6 @@ namespace {
 // comfortably within startup budget, while multi-MB input can exceed it and is
 // deferred until primeDeferred().
 constexpr std::size_t kEagerSyntaxMaxBytes = 2 * 1024 * 1024;
-
-std::vector<GitTreeRecord> gitTreeRecordsFromScan(
-    const std::vector<GitDiffFile>& files) {
-    std::vector<GitTreeRecord> records;
-    records.reserve(files.size());
-    for (const auto& file : files) {
-        records.push_back(
-            {.workspacePath = file.path.generic_string(),
-             .label = file.path.generic_string(),
-             .status = file.status(),
-             .commands = {}});
-    }
-    return records;
-}
 
 std::string liveDiffTabLabelForPath(const std::filesystem::path& path) {
     const auto filename = path.filename().string();
@@ -85,9 +71,9 @@ std::string liveDiffDocumentText(const DiffFileView& file) {
 // The curated terminal runtime keymap: a small set of
 // argument-free bindings the TUI drives, plus the context-divergent navigation
 // keys.  Only argument-free-usable commands are bound (a bare stroke dispatches
-// with no payload); exhaustive reachability is the palette's job.  Every binding
-// is a single stroke: global (*) actions are Alt chords, navigation differs per
-// focus, and Escape is a plain cancel.
+// with no payload); exhaustive reachability is the palette's job.  Every
+// binding is a single stroke: global (*) actions are Alt chords, navigation
+// differs per focus, and Escape is a plain cancel.
 } // namespace
 
 KeymapViewState defaultTerminalKeymap() {
@@ -105,8 +91,8 @@ KeymapViewState defaultTerminalKeymap() {
 
     // Frequent actions are single Alt+<key> chords.  In a terminal Alt+X
     // transmits as the bytes ESC X, which decode_input coalesces into one
-    // alt=true stroke, so these are the same keys the user already presses -- the
-    // former Escape leader is gone, and Escape is now a plain cancel key.
+    // alt=true stroke, so these are the same keys the user already presses --
+    // the former Escape leader is gone, and Escape is now a plain cancel key.
     bind(seq({"Alt+KeyS"}), "file.save", "*");
     bind(seq({"Alt+KeyN"}), "file.new", "*");
     bind(seq({"Alt+KeyZ"}), "edit.undo", "*");
@@ -118,8 +104,9 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Alt+KeyB"}), "panel.toggle", "*");
     bind(seq({"Alt+KeyH"}), "help.open", "*");
     bind(seq({"Alt+KeyO"}), "panel.focus", "*");
-    // Tab cycling: Alt+BracketRight/Left cannot be used -- ESC ] / ESC [ are the
-    // OSC / CSI introducers -- so the brackets give way to Alt+Period/Comma.
+    // Tab cycling: Alt+BracketRight/Left cannot be used -- ESC ] / ESC [ are
+    // the OSC / CSI introducers -- so the brackets give way to
+    // Alt+Period/Comma.
     bind(seq({"Alt+Period"}), "tab.next", "*");
     bind(seq({"Alt+Comma"}), "tab.previous", "*");
     bind(seq({"Alt+KeyW"}), "tab.close", "*");
@@ -132,8 +119,8 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Alt+KeyK"}), "select.add_cursor_up", "*");
     bind(seq({"Alt+KeyJ"}), "select.add_cursor_down", "*");
     bind(seq({"Alt+Slash"}), "find.open", "*");
-    // Alt+8 seeds find with the word under the caret.  Editor-context: it acts on
-    // the caret and document.
+    // Alt+8 seeds find with the word under the caret.  Editor-context: it acts
+    // on the caret and document.
     bind(seq({"Alt+Digit8"}), "find.word_under_cursor", "editor");
     bind(seq({"Alt+KeyR"}), "replace.open", "*");
     // Draft recovery's "Use disk": discard unsaved edits back to the disk
@@ -146,11 +133,11 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Alt+KeyX"}), "clipboard.cut", "editor");
     bind(seq({"Alt+KeyC"}), "clipboard.copy", "editor");
     bind(seq({"Alt+KeyV"}), "clipboard.paste", "editor");
-    // Paste also works while a prompt owns the keyboard -- find, replace, a path,
-    // the palette query.  The client fulfils it against the prompt's own text
-    // rather than the document, the same way typing into a prompt is routed.
-    // Cut and copy are deliberately absent: a prompt's value is client-owned and
-    // there is no selection within it to take.
+    // Paste also works while a prompt owns the keyboard -- find, replace, a
+    // path, the palette query.  The client fulfils it against the prompt's own
+    // text rather than the document, the same way typing into a prompt is
+    // routed. Cut and copy are deliberately absent: a prompt's value is
+    // client-owned and there is no selection within it to take.
     bind(seq({"Alt+KeyV"}), "clipboard.paste", "prompt");
 
     bind(seq({"ArrowDown"}), "cursor.line_down", "editor");
@@ -167,9 +154,9 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Shift+End"}), "select.line_end", "editor");
     bind(seq({"Ctrl+Home"}), "cursor.document_start", "editor");
     bind(seq({"Ctrl+End"}), "cursor.document_end", "editor");
-    // Alt+Home/End also jump to the document extremes: the physical Home/End keys
-    // are natural for "top/bottom of file", and Alt is the modifier the rest of
-    // the editor uses.
+    // Alt+Home/End also jump to the document extremes: the physical Home/End
+    // keys are natural for "top/bottom of file", and Alt is the modifier the
+    // rest of the editor uses.
     bind(seq({"Alt+Home"}), "cursor.document_start", "editor");
     bind(seq({"Alt+End"}), "cursor.document_end", "editor");
     // Alt+Shift+G opens a prompt for a line number and jumps there (clamped).
@@ -187,8 +174,8 @@ KeymapViewState defaultTerminalKeymap() {
     // the bytes ESC 0x7f, which decode_input coalesces into one Alt+Backspace
     // stroke.
     bind(seq({"Alt+Backspace"}), "text.delete_word_backward", "editor");
-    // Word navigation: Alt+Left/Right (and Shift to extend).  Arrow keys use the
-    // CSI modifier-parameter form, which decode_input parses into a single
+    // Word navigation: Alt+Left/Right (and Shift to extend).  Arrow keys use
+    // the CSI modifier-parameter form, which decode_input parses into a single
     // alt=true stroke.
     bind(seq({"Alt+ArrowLeft"}), "cursor.word_left", "editor");
     bind(seq({"Alt+ArrowRight"}), "cursor.word_right", "editor");
@@ -210,13 +197,13 @@ KeymapViewState defaultTerminalKeymap() {
     // query and replacement); a single-input prompt stays put.
     bind(seq({"Tab"}), "prompt.focus_next_control", "prompt");
     // The find/replace option toggles (find.toggle_case/whole_word/regex,
-    // replace.all) are reachable through the command palette; they do not earn a
-    // dedicated key and are left unbound.
+    // replace.all) are reachable through the command palette; they do not earn
+    // a dedicated key and are left unbound.
 
     // The external-modification bar. Alt+E focuses it from any state (global,
-    // present-gated by the command); within the external context the arrows move
-    // the selection and Enter/K/D run the offered action on it, mirroring the
-    // panel's navigation, and Escape returns focus without touching prompt
+    // present-gated by the command); within the external context the arrows
+    // move the selection and Enter/K/D run the offered action on it, mirroring
+    // the panel's navigation, and Escape returns focus without touching prompt
     // lifecycle.
     bind(seq({"Alt+KeyE"}), "external.focus", "*");
     bind(seq({"ArrowDown"}), "external.select_next", "external");
@@ -253,10 +240,6 @@ std::span<const std::byte> asByteSpan(std::string_view text) noexcept {
     return {reinterpret_cast<const std::byte*>(text.data()), text.size()};
 }
 
-// std::nullopt for a file that could not be read, so an unreadable file can
-// never be mistaken for an empty one. That mistake is destructive here: these
-// results feed staleness comparisons and rollback snapshots, where fake empty
-// content would overwrite or restore nothing over something.
 std::optional<std::string> readFileText(std::filesystem::path const& path) {
     auto result = readFile(path);
     if (!result.ok()) return std::nullopt;
@@ -264,21 +247,8 @@ std::optional<std::string> readFileText(std::filesystem::path const& path) {
                        result.bytes.size()};
 }
 
-std::size_t lineStartOffset(std::string_view text, std::size_t line) {
-    std::size_t offset = 0;
-    while (line > 0 && offset < text.size()) {
-        const auto newline = text.find('\n', offset);
-        if (newline == std::string_view::npos) {
-            return text.size();
-        }
-        offset = newline + 1;
-        --line;
-    }
-    return offset;
-}
-
-std::unordered_map<std::uint64_t, std::uint64_t> documentRevisions(
-    const Workspace& workspace) {
+std::unordered_map<std::uint64_t, std::uint64_t>
+documentRevisions(const Workspace& workspace) {
     std::unordered_map<std::uint64_t, std::uint64_t> revisions;
     for (auto const id : workspace.documents()) {
         revisions.emplace(id.value(), workspace.document(id).revision());
@@ -384,11 +354,8 @@ Editor::Editor(std::filesystem::path canonicalCwd,
       recovery{RecoveryManager::create(recoveryRoot)},
       scratch{ScratchStore::create(scratchRoot, root)},
       workspace{Workspace::create(root, recovery, this->archiveRoot)},
-      selection{initialSelection()},
-      clipboard{4},
-      tabs{},
-      external{recovery, diff},
-      syntaxParser{std::move(parser)},
+      selection{initialSelection()}, clipboard{4}, tabs{},
+      external{workspace, recovery, diff}, syntaxParser{std::move(parser)},
       screen{assembleScreen("help.open", StyleDimensions{},
                             Style{}.inputLineSigil),
              tree},
@@ -405,12 +372,13 @@ Editor::Editor(std::filesystem::path canonicalCwd,
                   catalog.find(commandId) != nullptr, {}};
           },
       }},
-      theme{defaultTheme()},
-      deferringEnrichment{deferEnrichment},
-      gitDiffWorker{root, enableGitDiffWorker, enableFilesystemWatcher} {
+      theme{defaultTheme()}, deferringEnrichment{deferEnrichment},
+      gitDiffIngress{*this, root, enableGitDiffWorker,
+                     enableFilesystemWatcher} {
     homeDirectory = resolveHomeDirectory();
-    workspace.setSaveObserver([this](const std::filesystem::path& relativePath) {
-        registerExternalSaveExpectation(relativePath);
+    workspace.setSaveObserver(
+        [this](const std::filesystem::path& relativePath) {
+            external.registerSaveExpectation(relativePath);
     });
     (void)refreshTree();
     refreshSyntax();
@@ -418,40 +386,8 @@ Editor::Editor(std::filesystem::path canonicalCwd,
 
 Editor::~Editor() = default;
 
-bool Editor::drainGitDiffWorker() {
-    auto batch = gitDiffWorker.drain();
-    bool accepted = batch.watcherAvailabilityChanged || !batch.scans.empty() ||
-                    !batch.watchEvents.empty() || batch.fullReconcile;
-    for (auto& scan : batch.scans) {
-        (void)applyGitDiffScanLocked(std::move(scan));
-    }
-    // Git scans first, then the external reconcile once over the whole queue, so a
-    // burst of git scans never starves external ingress and both draw revisions
-    // from the one shared DiffModel in order (Decision 10).
-    if (!batch.watchEvents.empty()) {
-        reconcileExternalWatchEvents(std::vector<WatchEvent>{
-            batch.watchEvents.begin(), batch.watchEvents.end()});
-        const bool inventoryChanged = std::any_of(
-            batch.watchEvents.begin(), batch.watchEvents.end(),
-            [](const WatchEvent& event) {
-                return event.kind != WatchEventKind::Modify ||
-                       event.path.filename() == ".gitignore";
-            });
-        if (inventoryChanged) {
-            refreshTreeForPublication();
-        }
-    }
-    // After ordinary ingress, recover any events the watcher dropped on overflow by
-    // re-scanning every open document against disk (a full external resync).
-    if (batch.fullReconcile) {
-        reconcileAllOpenDocumentsAgainstDisk();
-        refreshTreeForPublication();
-    }
-    return accepted;
-}
-
 int Editor::gitDiffWakeDescriptor() const {
-    return gitDiffWorker.wakeDescriptor();
+    return gitDiffIngress.worker.wakeDescriptor();
 }
 
 
@@ -572,8 +508,10 @@ TabLifecycleResult Editor::closeTab(
                 std::nullopt, std::nullopt, std::nullopt, false};
     }
     documentRuntimeStates.erase(tab.document->value());
-    return {TabError::None, {}, closed.compensation, std::nullopt, std::nullopt,
-            scratch.waitUntilDurable(durabilityTimeout)};
+    autosave.forget(*tab.document);
+    return {TabError::None,      {},
+            closed.compensation, std::nullopt,
+            std::nullopt,        scratch.waitUntilDurable(durabilityTimeout)};
 }
 
 TabLifecycleResult Editor::reopenTab(
@@ -837,9 +775,10 @@ CommandHandlerResult Editor::openReadOnlyTab(
     TabKind kind, std::string contentIdentity, std::string label,
     std::string text, LanguageId language) {
     // Build the replacement document FIRST, then swap: a ReadOnly document
-    // rejects Document::apply, so content is refreshed by remove+recreate (never
-    // an in-place edit) -- and creating before removing keeps a refresh failure
-    // non-destructive, so a failed rebuild leaves the existing tab intact.
+    // rejects Document::apply, so content is refreshed by remove+recreate
+    // (never an in-place edit) -- and creating before removing keeps a refresh
+    // failure non-destructive, so a failed rebuild leaves the existing tab
+    // intact.
     auto created =
         workspace.openVirtualDocument(label, text, DocumentMode::ReadOnly);
     if (!created.accepted() || !created.document) {
@@ -911,397 +850,6 @@ CommandHandlerResult Editor::openDraftDiff() {
     return openOrFocusLiveDiffTab(file->get(), NavigationClass::Programmatic);
 }
 
-DiffFileId Editor::externalDiffFileId(std::string_view savedPath) {
-    return DiffFileId{"external:" + std::string{savedPath}};
-}
-
-std::optional<std::string> Editor::savedPathFromExternalDiffId(
-    const DiffFileId& id) {
-    static constexpr std::string_view prefix{"external:"};
-    const auto& value = id.value();
-    if (std::string_view{value}.substr(0, prefix.size()) != prefix) {
-        return std::nullopt;
-    }
-    return value.substr(prefix.size());
-}
-
-std::optional<FileDocumentId> Editor::resolveExternalDocument(
-    const DiffFileId& id) const {
-    const auto savedPath = savedPathFromExternalDiffId(id);
-    if (!savedPath) return std::nullopt;
-    for (const auto documentId : workspace.documents()) {
-        const auto state = workspace.state(documentId);
-        if (state && state->key.kind() == JournalDocumentKeyKind::Saved &&
-            state->key.savedPath() == *savedPath) {
-            return documentId;
-        }
-    }
-    return std::nullopt;
-}
-
-std::optional<FileDocumentId>
-Editor::resolveOpenSavedDocumentByPath(
-    const std::filesystem::path& relativePath) const {
-    const auto normalized = relativePath.generic_string();
-    for (const auto documentId : workspace.documents()) {
-        const auto state = workspace.state(documentId);
-        if (state && state->key.kind() == JournalDocumentKeyKind::Saved &&
-            state->key.savedPath() == normalized) {
-            return documentId;
-        }
-    }
-    return std::nullopt;
-}
-
-void Editor::registerExternalSaveExpectation(
-    const std::filesystem::path& relativePath) {
-    const auto observed =
-        WatchFileState::observe(workspace.root() / relativePath);
-    if (!observed) return;
-    SaveExpectation expectation{relativePath, *observed};
-    {
-        std::lock_guard lock(externalSaveMutex);
-        pendingSaveExpectations.push_back(expectation);
-        // Bound the deque: a save the watcher never reports back must not
-        // accumulate forever.
-        constexpr std::size_t kMaxSaveExpectations = 256;
-        while (pendingSaveExpectations.size() > kMaxSaveExpectations) {
-            pendingSaveExpectations.pop_front();
-        }
-    }
-    // Also register with the real watcher's normalizer so a genuine save is stamped
-    // at source (Decision 9); handed to the worker thread, which owns the watcher,
-    // so the main thread never touches it. Bounded so a save the worker never drains
-    // cannot grow without limit.
-    gitDiffWorker.registerSavedPath(std::move(expectation));
-}
-
-void Editor::reconcileExternalWatchEvents(
-    std::vector<WatchEvent> events, bool resync) {
-    const auto flowRevisionBefore = external.viewState().revision;
-    for (auto& event : events) {
-        if (event.kind == WatchEventKind::Overflow) {
-            continue;
-        }
-        // Correlate SSG's own writes so a save never reads as an external change.
-        // A self-save resolves the external state: consume exactly its expectation
-        // and clear any pending conflict for the file, so a stale expectation can
-        // never accumulate to suppress a later genuine external edit.
-        {
-            std::optional<WatchFileState> observed;
-            if (event.identity && event.size && event.modificationTime) {
-                observed = WatchFileState{*event.identity, *event.size,
-                                          *event.modificationTime};
-            } else {
-                observed =
-                    WatchFileState::observe(workspace.root() / event.path);
-            }
-            bool selfSave = false;
-            if (observed) {
-                std::lock_guard lock(externalSaveMutex);
-                const auto found = std::find_if(
-                    pendingSaveExpectations.begin(),
-                    pendingSaveExpectations.end(),
-                    [&](const SaveExpectation& expectation) {
-                        return expectation.path == event.path &&
-                               expectation.state == *observed;
-                    });
-                if (found != pendingSaveExpectations.end()) {
-                    pendingSaveExpectations.erase(found);
-                    selfSave = true;
-                }
-            }
-            if (selfSave) {
-                // The save already advanced the workspace baseline to the written
-                // bytes; clearing any pending conflict needs no further cross-store
-                // commit, so the dismissal commit is a no-op.
-                (void)external.keepBuffer(
-                    externalDiffFileId(event.path.generic_string()),
-                    [](bool, const std::optional<std::string>&) { return true; });
-                continue;
-            }
-        }
-
-        const std::filesystem::path& lookupPath =
-            (event.kind == WatchEventKind::Rename && event.previousPath)
-                ? *event.previousPath
-                : event.path;
-        const auto documentId = resolveOpenSavedDocumentByPath(lookupPath);
-        if (!documentId) {
-            // A change to a file no open document corresponds to is ignored by this
-            // flow; the tree/git refresh already covers it.
-            continue;
-        }
-        const auto state = workspace.state(*documentId);
-        const auto* document = workspace.tryDocument(*documentId);
-        if (!state || document == nullptr) {
-            continue;
-        }
-
-        const std::string savedPath = event.path.generic_string();
-        const DiffFileId id = externalDiffFileId(savedPath);
-        const std::string baseline = document->snapshot().text;
-
-        std::optional<std::string> diskContent;
-        bool unknownObservation = false;
-        if (event.kind != WatchEventKind::Remove) {
-            diskContent = readFileText(workspace.root() / event.path);
-            if (!diskContent) {
-                // Decision 2a: an unreadable/non-regular path where a file was is
-                // Unknown. Never silently skip it -- raise it as a removal conflict,
-                // so the buffer now orphaned from any regular file surfaces.
-                unknownObservation = true;
-                event.kind = WatchEventKind::Remove;
-            }
-        } else {
-            // A queued ordinary Remove carries only the fact "removed" and is never
-            // re-observed by the watcher. Between the emit and this processing the
-            // path may have reappeared as a directory, an unreadable file, or a
-            // regular file. Re-observe before trusting the Remove so a stale one
-            // cannot match a Missing baseline and be silently skipped: a status
-            // error or a present-but-non-regular/unreadable entry is Unknown (raise
-            // through the same chokepoint), a present regular file is a real change
-            // (raise as Modify), and only a still-genuine absence stays a Remove that
-            // a Missing baseline suppresses. Runtime thread only.
-            std::error_code linkCode;
-            const auto linkStatus =
-                std::filesystem::symlink_status(workspace.root() / event.path,
-                                                linkCode);
-            const bool statusError =
-                linkStatus.type() == std::filesystem::file_type::none;
-            if (statusError) {
-                unknownObservation = true;
-            } else if (std::filesystem::exists(linkStatus)) {
-                auto reobserved = readFileText(workspace.root() / event.path);
-                if (reobserved) {
-                    diskContent = std::move(reobserved);
-                    event.kind = WatchEventKind::Modify;
-                } else {
-                    unknownObservation = true;
-                }
-            }
-        }
-
-        // Decision 4: an event whose observed disk state equals the document's
-        // external baseline is a change already adopted or dismissed (keep_buffer);
-        // skip it so a duplicate/coalesced ordinary event does not re-raise a
-        // dismissed conflict. A rename changes identity (handled by adoption) and an
-        // Unknown observation never matches, so both fall through to processing. The
-        // diff CONTENT stays buffer-vs-disk; only this raise/skip decision consults
-        // the baseline.
-        if (!unknownObservation && event.kind != WatchEventKind::Rename &&
-            workspace.matchesExternalBaseline(*documentId, diskContent)) {
-            continue;
-        }
-
-        // Seed the non-git entry the first time this file is observed, so openDiff
-        // finds a file and applyNonGitEvent is not rejected (Decision 5). Its
-        // revision, like the event's, is allocated from the shared DiffModel.
-        bool seededHere = false;
-        if (!diff.file(id).has_value()) {
-            const std::uint64_t seedRevision{diff.viewState().revision + 1};
-            (void)diff.seedNonGit({{id, event.path, baseline}}, seedRevision);
-            seededHere = true;
-        }
-        const std::uint64_t diffRevision{diff.viewState().revision + 1};
-
-        std::optional<JournalDocument> journal{JournalDocument{
-            state->key, document->mode(), state->dirty, document->snapshot().text}};
-
-        // The clean auto-reload and rename-adoption paths commit to the workspace
-        // BEFORE the flow publishes the cleared/updated state (Decision 11): the
-        // flow calls this and only adopts when it succeeds, so a failed workspace
-        // commit leaves the prior published conflict rather than a stale buffer.
-        // The commit decodes the RAW disk bytes through the document's encoding.
-        bool committed = false;
-        std::function<bool()> commitClean;
-        std::function<bool()> commitConflictRename;
-        if (event.kind == WatchEventKind::Rename) {
-            commitClean = [&]() {
-                const bool ok =
-                    workspace
-                        .adoptExternalRename(*documentId, savedPath,
-                                             diskContent.value_or(std::string{}),
-                                             /*replaceBuffer=*/true)
-                        .accepted();
-                committed = ok;
-                return ok;
-            };
-            // A dirty rename keeps its buffer, but the document must still adopt
-            // the new path's disk identity and baseline BEFORE the flow publishes
-            // the conflict under the new-path id. The flow calls this and refuses
-            // to publish when it fails, so a failed adoption never leaves an action
-            // referencing a path no document owns.
-            commitConflictRename = [&]() {
-                const bool ok =
-                    workspace
-                        .adoptExternalRename(*documentId, savedPath,
-                                             diskContent.value_or(std::string{}),
-                                             /*replaceBuffer=*/false)
-                        .accepted();
-                committed = ok;
-                return ok;
-            };
-        } else if (event.kind != WatchEventKind::Remove) {
-            commitClean = [&]() {
-                const bool ok =
-                    workspace
-                        .reloadWithContent(*documentId,
-                                           diskContent.value_or(std::string{}))
-                        .accepted();
-                committed = ok;
-                return ok;
-            };
-        }
-
-        ExternalEventInput input{event, id, baseline, diskContent};
-        if (event.kind == WatchEventKind::Rename && event.previousPath) {
-            input.previousId =
-                externalDiffFileId(event.previousPath->generic_string());
-        }
-        const auto result =
-            resync ? external.processResyncEvent(std::move(input), diffRevision,
-                                                 journal, commitClean,
-                                                 commitConflictRename)
-                   : external.processEvent(std::move(input), diffRevision,
-                                           journal, commitClean,
-                                           commitConflictRename);
-        if (!result.accepted()) {
-            // A rejected event must leave no diff entry behind. When this iteration
-            // seeded the new-path entry (so openDiff would have a file), roll it back
-            // so a failed rename-adoption -- or any rejected event -- never orphans a
-            // diff entry keyed to a path no pending action owns.
-            if (seededHere && diff.file(id).has_value()) {
-                const std::uint64_t removalRevision{diff.viewState().revision +
-                                               1};
-                (void)diff.removeFile(id, removalRevision);
-            }
-            continue;
-        }
-
-        // A rename changes the namespaced id; retire the stale diff entry keyed by
-        // the old path so a second, orphaned entry is not left behind (Decision 10).
-        if (event.kind == WatchEventKind::Rename && event.previousPath) {
-            const DiffFileId previousId =
-                externalDiffFileId(event.previousPath->generic_string());
-            if (previousId != id && diff.file(previousId).has_value()) {
-                const std::uint64_t removalRevision{diff.viewState().revision +
-                                               1};
-                (void)diff.removeFile(previousId, removalRevision);
-            }
-        }
-
-        if (committed) {
-            (void)updateTabsFor(*documentId);
-        }
-    }
-    // External state changes here in the watcher drain, not only on a command
-    // dispatch: reconcile the section's presence into the screen whenever the
-    // flow's view advanced, so the node appears/updates
-    // without waiting for an unrelated command.
-    if (external.viewState().revision != flowRevisionBefore) {
-        screen.refreshExternalModificationPresence(
-            externalModificationPresent());
-    }
-}
-
-bool Editor::commitExternalDismissal(
-    FileDocumentId document, bool removed,
-    const std::optional<std::string>& dismissedContent) {
-    return workspace.commitExternalDismissal(
-        document, removed, dismissedContent,
-        [&](const std::optional<DraftBaseline>& newBaseline) -> bool {
-            // Decision 5: an already-persisted draft record still carries the
-            // pre-dismissal baseline; refresh it to the dismissed state so a
-            // crash-reopen classifies Unchanged instead of resurrecting the
-            // conflict via draft recovery. No persisted record: nothing to do.
-            const auto state = workspace.state(document);
-            if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
-                return true;
-            }
-            const auto drafts = scratch.recovery().documents;
-            const auto draft = std::find_if(
-                drafts.begin(), drafts.end(),
-                [&](const JournalDocument& candidate) {
-                    return candidate.dirty && candidate.key == state->key;
-                });
-            if (draft == drafts.end()) return true;
-            scratch.updateDocument(JournalDocument{draft->key, draft->mode,
-                                                   draft->dirty,
-                                                   draft->utf8Content,
-                                                   newBaseline});
-            return true;
-        });
-}
-
-void Editor::reconcileAllOpenDocumentsAgainstDisk() {
-    std::vector<WatchEvent> synthesized;
-    std::uint64_t sequence = 0;
-    for (const auto documentId : workspace.documents()) {
-        const auto state = workspace.state(documentId);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
-            continue;
-        }
-        const std::filesystem::path relative{state->key.savedPath()};
-        const auto absolute = workspace.root() / relative;
-        std::error_code linkCode;
-        const auto linkStatus = std::filesystem::symlink_status(absolute, linkCode);
-        WatchEvent event;
-        event.path = relative;
-        event.origin = WatchEventOrigin::External;
-        event.sequence = ++sequence;
-        // file_type::none is an indeterminate status (permission denied, I/O error);
-        // file_type::not_found is a determinate clean absence. Only the former is a
-        // status error.
-        if (linkStatus.type() == std::filesystem::file_type::none) {
-            // Decision 2a: a status/stat error is Unknown, not a clean absence -- it
-            // must never become a Missing-matchable Remove the resync could suppress.
-            // Synthesize a Modify so the shared reconcile re-reads, fails, and marks
-            // the observation Unknown, which always raises. This converges on the one
-            // Unknown-detection chokepoint.
-            event.kind = WatchEventKind::Modify;
-            synthesized.push_back(std::move(event));
-            continue;
-        }
-        // The path entry itself is present (a regular file, a directory, or even a
-        // broken symlink) -- distinct from exists(), which follows the link and is
-        // false for a broken symlink, indistinguishable there from a true absence.
-        const bool entryPresent = std::filesystem::exists(linkStatus);
-        std::error_code code;
-        const bool exists = std::filesystem::exists(absolute, code) && !code;
-        if (!entryPresent) {
-            // A genuine absence. A dismissed removal (keep_buffer set the baseline
-            // Missing) must not be re-raised by the resync; only a still-differing
-            // absence raises.
-            if (workspace.matchesExternalBaseline(documentId, std::nullopt)) {
-                continue;
-            }
-            event.kind = WatchEventKind::Remove;
-            synthesized.push_back(std::move(event));
-            continue;
-        }
-        // The entry is present. If it is a readable regular file whose content
-        // matches the baseline, it did not change during the overflow window and
-        // needs no event (and a dirty document must not be told its unchanged disk
-        // file was modified). Otherwise -- a changed file OR an Unknown observation
-        // (unreadable, non-regular, or broken symlink) -- synthesize a Modify. The
-        // shared reconcile re-reads it; on a failed read it marks the observation
-        // Unknown, which ALWAYS raises and never matches a Missing baseline, so an
-        // Unknown never collapses into a Remove the ordinary reconcile could
-        // suppress. Both the ordinary and overflow paths thus converge on the one
-        // Unknown-detection chokepoint (Decision 2a).
-        const auto disk = exists ? readFileText(absolute) : std::nullopt;
-        if (disk && workspace.matchesExternalBaseline(documentId, *disk)) {
-            continue;
-        }
-        event.kind = WatchEventKind::Modify;
-        synthesized.push_back(std::move(event));
-    }
-    if (!synthesized.empty()) {
-        reconcileExternalWatchEvents(std::move(synthesized), /*resync=*/true);
-    }
-}
-
 bool Editor::archiveDiscardedDraft(std::string_view savedPath,
                                                 std::string_view content) {
     // Beside the scratch store (not the workspace deleted-file archive, which
@@ -1314,10 +862,10 @@ bool Editor::archiveDiscardedDraft(std::string_view savedPath,
 
     // Name by a HASH of the workspace-relative path rather than the flattened
     // path itself: a legal deep path can exceed a filesystem's per-component
-    // name limit (255 bytes on Linux), which would make discard fail for a valid
-    // file. A short basename prefix stays for humans browsing the archive; the
-    // hash disambiguates two files sharing a basename, and the nanosecond stamp
-    // keeps repeated discards of one file distinct.
+    // name limit (255 bytes on Linux), which would make discard fail for a
+    // valid file. A short basename prefix stays for humans browsing the
+    // archive; the hash disambiguates two files sharing a basename, and the
+    // nanosecond stamp keeps repeated discards of one file distinct.
     std::string basename =
         std::filesystem::path{std::string{savedPath}}.filename().string();
     if (basename.empty()) basename = "draft";
@@ -1360,8 +908,9 @@ CommandHandlerResult Editor::discardDraft() {
     scratch.removeDocument(state->key);
     // "Use disk" is meant to be final. removeDocument is queued to the async
     // durability thread, so wait briefly (as tab close does) to shrink the
-    // window where a crash could replay the just-discarded draft on next launch.
-    // Best-effort: the archived copy already makes a lost race recoverable.
+    // window where a crash could replay the just-discarded draft on next
+    // launch. Best-effort: the archived copy already makes a lost race
+    // recoverable.
     (void)scratch.waitUntilDurable(std::chrono::milliseconds{100});
     if (const auto found = documentRuntimeStates.find(id->value());
         found != documentRuntimeStates.end()) {
@@ -1386,45 +935,7 @@ CommandHandlerResult Editor::dismissDraftNotice() {
     return success();
 }
 
-void Editor::refreshLiveDiffDocuments(const DiffViewState& diffView) {
-    for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
-        const auto id = DiffFileId{it->first};
-        auto file = std::find_if(
-            diffView.files.begin(), diffView.files.end(),
-            [&](const DiffFileView& candidate) { return candidate.id == id; });
-        const auto desired =
-            file == diffView.files.end() ? std::string{}
-                                         : liveDiffDocumentText(*file);
-        const auto document = it->second;
-        const auto* opened = workspace.tryDocument(document);
-        if (opened == nullptr) {
-            it = liveDiffDocuments.erase(it);
-            continue;
-        }
-        if (opened->snapshot().text == desired) {
-            ++it;
-            continue;
-        }
-        auto state = workspace.state(document);
-        const auto label =
-            state ? state->displayLabel : std::string{"LiveDiff"};
-        auto replacement = workspace.openVirtualDocument(
-            label, desired, DocumentMode::Diff);
-        if (!replacement.accepted() || !replacement.document) {
-            continue;
-        }
-        it->second = *replacement.document;
-        ensureDocumentRuntimeState(*replacement.document);
-        auto removed = workspace.removeDocument(document);
-        if (removed.accepted()) {
-            documentRuntimeStates.erase(document.value());
-        }
-        ++it;
-    }
-}
-
-bool Editor::openOrRevealFollowTargetProgrammatic(
-    const FollowTarget& target) {
+bool Editor::openOrRevealFollowTargetProgrammatic(const FollowTarget& target) {
     const auto file = diff.file(target.id);
     if (!file.has_value()) {
         return false;
@@ -1436,7 +947,8 @@ bool Editor::openOrRevealFollowTargetProgrammatic(
     if (target.deleted) {
         return true;
     }
-    return revealCurrentDiffTarget(target, NavigationClass::Programmatic);
+    return gitDiffIngress.revealCurrentDiffTarget(
+        target, NavigationClass::Programmatic);
 }
 
 Document const* Editor::activeDocument() const {
@@ -1477,8 +989,8 @@ void Editor::discardDocumentRuntimeState(FileDocumentId document) {
 DocumentHistory& Editor::historyFor(FileDocumentId document) {
     auto it = documentRuntimeStates.find(document.value());
     if (it == documentRuntimeStates.end()) {
-        throw std::logic_error{
-            "document history was requested before document runtime state existed"};
+        throw std::logic_error{"document history was requested before document "
+                               "runtime state existed"};
     }
     return it->second.history;
 }
@@ -1486,8 +998,8 @@ DocumentHistory& Editor::historyFor(FileDocumentId document) {
 SyntaxModel& Editor::syntaxFor(FileDocumentId document) {
     auto it = documentRuntimeStates.find(document.value());
     if (it == documentRuntimeStates.end()) {
-        throw std::logic_error{
-            "document syntax was requested before document runtime state existed"};
+        throw std::logic_error{"document syntax was requested before document "
+                               "runtime state existed"};
     }
     return it->second.syntax;
 }
@@ -1555,8 +1067,8 @@ void Editor::clampSelectionsToActiveDocument() {
         if (offset > text.size()) offset = text.size();
         // Prefer the exact offset; if it is not a grapheme boundary (only
         // possible for a selection carried from a differently-shaped document,
-        // not for the edit paths this serves), snap DOWN to the nearest boundary
-        // at or below it rather than teleporting to the document end.
+        // not for the edit paths this serves), snap DOWN to the nearest
+        // boundary at or below it rather than teleporting to the document end.
         for (;;) {
             if (auto at = ssg::resolveSelectionPosition(
                     text, ByteOffset{offset})) {
@@ -1607,8 +1119,8 @@ bool Editor::openPickerPrompt(PickerKind kind) {
 }
 
 // The index opens its OWN repository handle rather than sharing the git-diff
-// worker's: that one is owned by its thread, and libgit2 handles are not safe to
-// use from two threads.
+// worker's: that one is owned by its thread, and libgit2 handles are not safe
+// to use from two threads.
 void Editor::rebuildFileCandidates() {
     auto matcher = makePlatformGitIgnoreMatcher(root);
     WorkspaceFileIndexOptions options;
@@ -1630,7 +1142,8 @@ void Editor::reconcileFindDocument() {
         document->snapshot().revision != findReplace.viewState().sourceRevision;
     if (!stale) return;
     // The document the find evaluated against is gone, changed, or was edited:
-    // close the controller and dismiss its prompt so no stale match is navigable.
+    // close the controller and dismiss its prompt so no stale match is
+    // navigable.
     findReplace.close();
     if (auto const& request = screen.prompt().request();
         request && (request->kind == PromptKind::Find ||
@@ -1699,74 +1212,6 @@ void Editor::enqueueStatus(StatusPriority priority, std::string text) {
     }
 }
 
-namespace {
-
-std::vector<AutosaveCandidate> autosaveCandidates(const Workspace& workspace) {
-    std::vector<AutosaveCandidate> candidates;
-    for (const auto id : workspace.documents()) {
-        auto state = workspace.state(id);
-        if (!state) continue;
-        auto const* current = workspace.tryDocument(id);
-        if (current == nullptr) continue;
-        // Only an editable document can hold unsaved user edits worth a draft. A
-        // live-diff tab's virtual document (DocumentMode::Diff) is a derived view
-        // that is untitled and non-empty, so it would otherwise read as a dirty
-        // untitled buffer and be persisted as a spurious scratch draft.
-        if (current->mode() != DocumentMode::Edit) continue;
-        // Only a dirty document is a flush candidate, so only a dirty document
-        // pays for a text snapshot + hash. A clean one still appears (hash 0) so
-        // the scheduler can drop any debounce state it held — cheap, no copy.
-        std::uint64_t contentHash = 0;
-        if (state->dirty) {
-            contentHash = fastContentHash(current->snapshot().text);
-        }
-        candidates.push_back(AutosaveCandidate{id, state->dirty, contentHash});
-    }
-    return candidates;
-}
-
-} // namespace
-
-std::size_t Editor::persistAutosaveDraft(FileDocumentId document) {
-    auto state = workspace.state(document);
-    auto const* current = workspace.tryDocument(document);
-    if (!state || current == nullptr) return 0;
-
-    // A buffer too large to draft gets NO draft (and thus no crash-safety),
-    // reported rather than silently written: a giant draft would blow the
-    // scratch quota and stall fsync, and a stale partial draft would be false
-    // reassurance. Remove any earlier draft for the key so the on-disk state is
-    // honestly "no draft", and warn once.
-    const auto& text = current->snapshot().text;
-    if (text.size() > autosaveDraftByteCap) {
-        // Report and drop any prior draft exactly ONCE per over-cap episode:
-        // the reported flag gates the whole block so a long oversized edit
-        // session does not enqueue a no-op journal remove on every flush tick.
-        if (const auto found = documentRuntimeStates.find(document.value());
-            found != documentRuntimeStates.end() &&
-            !found->second.autosaveOversizeReported) {
-            found->second.autosaveOversizeReported = true;
-            scratch.removeDocument(state->key);
-            enqueueStatus(StatusPriority::Warning,
-                          "file is too large to autosave a draft; unsaved edits "
-                          "are not crash-protected until saved");
-        }
-        return 0;
-    }
-    if (const auto found = documentRuntimeStates.find(document.value());
-        found != documentRuntimeStates.end()) {
-        found->second.autosaveOversizeReported = false;
-    }
-
-    // Identical JournalDocument to the tab-close path, minus the blocking
-    // durability wait: autosave leaves fsync to the background thread so a tick
-    // never stalls the UI (the recovery badge still reports pending/durable).
-    scratch.updateDocument(JournalDocument{state->key, current->mode(),
-                                           state->dirty, text,
-                                           workspace.baselineFor(document)});
-    return 1;
-}
-
 void Editor::reconcileDraftOnOpen(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) return;
@@ -1822,26 +1267,12 @@ void Editor::reconcileDraftOnOpen(FileDocumentId document) {
 
 std::size_t Editor::flushDueAutosaveDrafts() {
     std::lock_guard operationLock{operationMutex};
-    autosave.setInterval(std::chrono::milliseconds{
-        uint32Setting(settings, SettingKey::AutosaveDebounceMs, 10000)});
-    const auto candidates = autosaveCandidates(workspace);
-    std::size_t flushed = 0;
-    for (const auto id :
-         autosave.due(std::chrono::steady_clock::now(), candidates)) {
-        flushed += persistAutosaveDraft(id);
-    }
-    return flushed;
+    return autosave.flushDueDrafts(*this);
 }
 
 std::size_t Editor::flushAllAutosaveDrafts() {
     std::lock_guard operationLock{operationMutex};
-    const auto candidates = autosaveCandidates(workspace);
-    std::size_t flushed = 0;
-    for (const auto id :
-         autosave.flushAll(std::chrono::steady_clock::now(), candidates)) {
-        flushed += persistAutosaveDraft(id);
-    }
-    return flushed;
+    return autosave.flushAllDrafts(*this);
 }
 
 DiffIngressResult Editor::applyExternalDiffBurst(
@@ -1891,168 +1322,8 @@ DiffIngressResult Editor::applyExternalDiffBurst(
     return {};
 }
 
-DiffIngressResult Editor::applyGitDiffScanLocked(GitDiffScan scan) {
-    if (scan.revision == 0) {
-        auto const previousBranch = currentGitBranch;
-        currentGitBranch = scan.currentBranch;
-        (void)previousBranch;
-        return {};
-    }
-    if (scan.revision <= lastGitScanRevision) {
-        return {DiffIngressError::DiffRejected};
-    }
-    currentGitBranch = scan.currentBranch;
-    auto gitRecords = gitTreeRecordsFromScan(scan.files);
-    auto stagedDiff = diff;
-    auto stagedFollow = follow;
-    std::vector<FollowDiffChange> followChanges;
-    followChanges.reserve(scan.files.size() + stagedDiff.viewState().files.size());
-    bool mutated = false;
-    std::vector<DiffFileId> statusOnlyIds;
-
-    std::uint64_t nextRevision = std::uint64_t{stagedDiff.viewState().revision + 1};
-    const auto nextMutationRevision = [&nextRevision]() {
-        auto current = nextRevision;
-        nextRevision = std::uint64_t{nextRevision + 1};
-        return current;
-    };
-    const auto removeDetailedFile =
-        [&](const DiffFileId& id) -> DiffIngressResult {
-        const auto prior = stagedDiff.file(id);
-        if (!prior || !stagedDiff.isGitFile(id)) {
-            return {};
-        }
-        auto removedFile = prior->get();
-        auto priorHunks = removedFile.hunks;
-        const auto revision = nextMutationRevision();
-        const auto removed = stagedDiff.removeFile(id, revision);
-        if (!removed.accepted()) {
-            return {DiffIngressError::DiffRejected};
-        }
-        mutated = true;
-        removedFile.deleted = true;
-        removedFile.currentContent.clear();
-        removedFile.hunks.clear();
-        removedFile.changedLines.clear();
-        followChanges.push_back(
-            {std::move(removedFile), std::move(priorHunks), revision});
-        return {};
-    };
-
-    std::vector<DiffFileId> scannedIds;
-    scannedIds.reserve(scan.files.size());
-    for (auto& file : scan.files) {
-        scannedIds.push_back(file.id);
-        std::vector<DiffHunk> priorHunks;
-        if (const auto prior = stagedDiff.file(file.id)) {
-            priorHunks = prior->get().hunks;
-        }
-        const auto revision = nextMutationRevision();
-        const auto applied = stagedDiff.updateGitFile(
-            {.id = file.id,
-             .path = file.path,
-             .previousPath = file.previousPath,
-             .baselineContent = std::move(file.baselineContent),
-             .workingContent = std::move(file.workingContent)},
-            scan.baselineIdentity, revision);
-        if (!applied.accepted()) {
-            if (applied.error != DiffError::WorkLimitExceeded) {
-                return {DiffIngressError::DiffRejected};
-            }
-            statusOnlyIds.push_back(file.id);
-            if (auto removed = removeDetailedFile(file.id);
-                !removed.accepted()) {
-                return removed;
-            }
-            continue;
-        }
-        const auto changedFile = stagedDiff.file(file.id);
-        if (!changedFile) {
-            return {DiffIngressError::DiffRejected};
-        }
-        mutated = true;
-        followChanges.push_back(
-            {changedFile->get(), std::move(priorHunks), revision});
-    }
-
-    const auto stagedView = stagedDiff.viewState();
-    for (const auto& file : stagedView.files) {
-        if (std::find(scannedIds.begin(), scannedIds.end(), file.id) !=
-            scannedIds.end()) {
-            continue;
-        }
-        // A git rescan reconciles only git-source entries. A non-git entry (a
-        // draft-vs-disk diff, or an external-modification view) is owned by a
-        // different flow and must survive a scan that simply does not mention
-        // it, rather than being evicted as "no longer changed".
-        if (!stagedDiff.isGitFile(file.id)) {
-            continue;
-        }
-        if (auto removed = removeDetailedFile(file.id); !removed.accepted()) {
-            return removed;
-        }
-    }
-
-    if (mutated) {
-        const auto followed =
-            stagedFollow.acceptExternalChanges(std::move(followChanges));
-        if (!followed.accepted()) {
-            return {DiffIngressError::FollowRejected};
-        }
-
-        const auto previousTarget = follow.viewState().activeTarget;
-        diff = std::move(stagedDiff);
-        follow = std::move(stagedFollow);
-        for (const auto& id : statusOnlyIds) {
-            std::optional<TabId> liveTab;
-            for (const auto& tab : tabs.viewState().tabs) {
-                if (tab.kind == TabKind::LiveDiff &&
-                    tab.contentIdentity == id.value()) {
-                    liveTab = tab.id;
-                    break;
-                }
-            }
-            if (liveTab) {
-                const auto found = std::find_if(
-                    tabs.viewState().tabs.begin(), tabs.viewState().tabs.end(),
-                    [&](const TabState& tab) { return tab.id == *liveTab; });
-                if (found != tabs.viewState().tabs.end()) {
-                    auto outcome = closeTab(*found, std::chrono::milliseconds{100});
-                    (void)tabs.close(*liveTab, std::move(outcome));
-                }
-            }
-        }
-        refreshLiveDiffDocuments(diff.viewState());
-        const auto next = follow.viewState();
-        if (next.mode == FollowMode::Following && next.activeTarget &&
-            next.activeTarget != previousTarget) {
-            (void)openOrRevealFollowTargetProgrammatic(*next.activeTarget);
-        }
-    }
-    tree.replaceProvider(TreeProviderSnapshot::fromGit(
-        TreeProviderId{"git"}, std::move(gitRecords)));
-    lastGitScanRevision = scan.revision;
-    return {};
-}
-
-bool Editor::revealCurrentDiffTarget(
-    const FollowTarget& target, NavigationClass classification) {
-    (void)classification;
-    const auto& text = activeText();
-    const auto offset = lineStartOffset(text, target.newestHunkLine);
-    const auto position =
-        resolveSelectionPosition(text, ByteOffset{offset});
-    if (!position) {
-        return false;
-    }
-    selection.selections =
-        SelectionSet{std::vector<Selection>{Selection{*position, *position}}};
-    screen.focusEditor();
-    return true;
-}
-
-bool Editor::revealDiffTarget(
-    const FollowTarget& target, NavigationClass classification) {
+bool Editor::revealDiffTarget(const FollowTarget& target,
+                              NavigationClass classification) {
     if (target.deleted) {
         return false;
     }
@@ -2061,7 +1332,7 @@ bool Editor::revealDiffTarget(
         !activateDocument(*opened.document).accepted) {
         return false;
     }
-    return revealCurrentDiffTarget(target, classification);
+    return gitDiffIngress.revealCurrentDiffTarget(target, classification);
 }
 
 void Editor::recordNavigation(NavigationClass classification) {
@@ -2116,11 +1387,11 @@ EditorCreateResult createEditor(EditorConfig config) {
         if (config.archiveRoot.empty()) config.archiveRoot = cwd / ".ssg" / "archive";
         std::filesystem::create_directories(config.scratchRoot);
         std::filesystem::create_directories(config.recoveryRoot);
-        // The archive root is deliberately NOT created here. Creating it eagerly
-        // would materialise a `.ssg/` directory inside every workspace merely
-        // for being opened -- visible in the file tree, and pointless for a
-        // session that never deletes anything. FileArchive creates it on the
-        // first delete instead.
+        // The archive root is deliberately NOT created here. Creating it
+        // eagerly would materialise a `.ssg/` directory inside every workspace
+        // merely for being opened -- visible in the file tree, and pointless
+        // for a session that never deletes anything. FileArchive creates it on
+        // the first delete instead.
         auto editor = std::unique_ptr<Editor>{new Editor{
             cwd, config.scratchRoot, config.recoveryRoot, config.archiveRoot,
             config.deferEnrichment, std::move(config.syntaxParser),
@@ -2149,7 +1420,7 @@ PumpResult Editor::pump() {
         throw std::logic_error{"worker results cannot be pumped during dispatch"};
     }
     std::lock_guard operationLock{operationMutex};
-    return {drainGitDiffWorker()};
+    return {gitDiffIngress.drainGitDiffWorker()};
 }
 
 Editor::DeferredWorkCounts Editor::deferredWorkCounts() const {
@@ -2159,49 +1430,6 @@ Editor::DeferredWorkCounts Editor::deferredWorkCounts() const {
 
 std::uint64_t Editor::liveDocumentRuntimeStateCountForTests() {
     return DocumentRuntimeState::liveInstances();
-}
-
-void Editor::setAutosaveDraftByteCapForTests(std::uint64_t cap) {
-    std::lock_guard operationLock{operationMutex};
-    autosaveDraftByteCap = cap;
-}
-
-void Editor::reconcileExternalWatchEventsForTest(
-    std::vector<WatchEvent> events) {
-    std::lock_guard operationLock{operationMutex};
-    // Mirror the runtime drain: an Overflow in the batch triggers the full
-    // open-document-vs-disk resync (the worker would signal it out of band), the
-    // ordinary events reconcile normally.
-    bool overflowed = false;
-    std::vector<WatchEvent> ordinary;
-    for (auto& event : events) {
-        if (event.kind == WatchEventKind::Overflow) {
-            overflowed = true;
-        } else {
-            ordinary.push_back(std::move(event));
-        }
-    }
-    if (!ordinary.empty()) {
-        reconcileExternalWatchEvents(std::move(ordinary));
-    }
-    if (overflowed) {
-        reconcileAllOpenDocumentsAgainstDisk();
-    }
-}
-
-bool Editor::diffModelHasFileForTest(const DiffFileId& id) const {
-    std::lock_guard operationLock{operationMutex};
-    return diff.file(id).has_value();
-}
-
-void Editor::reportWatcherAvailabilityForTest(bool available) {
-    std::lock_guard operationLock{operationMutex};
-    gitDiffWorker.setAvailabilityForTest(available);
-}
-
-void Editor::refreshFilesystemForTest() {
-    std::lock_guard operationLock{operationMutex};
-    refreshTreeForPublication();
 }
 
 bool Editor::dispatchInProgress() const noexcept {
@@ -2219,16 +1447,18 @@ CommandResult Editor::dispatchLocked(ClientCommand const& command) {
     // follow pause.
     const auto dispatchAs = [&](const ClientCommand& dispatched) {
         const auto revisionsBefore = documentRevisions(workspace);
+        screen.refreshExternalModificationPresence(
+            externalModificationPresent());
         auto result = catalog.dispatch(dispatched);
         if (result.activeWorkspace) {
             sessionTopology.activeWorkspace = result.activeWorkspace;
         }
         reconcileFindDocument();
-        // The draft-conflict notice's presence lives in per-document runtime state,
-        // outside the prompt/panel transitions, so reconcile it into the screen
-        // here where every state change (open, reopen, tab switch, discard,
-        // dismiss) has settled -- the notice region then shows/hides in the presence
-        // section this dispatch publishes.
+        // The draft-conflict notice's presence lives in per-document runtime
+        // state, outside the prompt/panel transitions, so reconcile it into the
+        // screen here where every state change (open, reopen, tab switch,
+        // discard, dismiss) has settled -- the notice region then shows/hides
+        // in the presence section this dispatch publishes.
         screen.refreshNoticePresence(noticePresent());
         screen.refreshExternalModificationPresence(
             externalModificationPresent());
@@ -2381,16 +1611,13 @@ std::vector<CommandHandle> Editor::replaceCommandGeneration(
     return catalog.replaceGeneration(retire, std::move(commands));
 }
 
-std::uint64_t Editor::gitFullRefreshCountForTest() const {
-    std::lock_guard operationLock{operationMutex};
-    return gitDiffWorker.fullRefreshCount();
+std::filesystem::path const& Editor::workspaceRoot() const noexcept {
+    return root;
 }
-
-std::filesystem::path const& Editor::workspaceRoot() const noexcept { return root; }
 
 DiffIngressResult Editor::applyGitDiffScan(GitDiffScan scan) {
     std::lock_guard operationLock{operationMutex};
-    return applyGitDiffScanLocked(std::move(scan));
+    return gitDiffIngress.applyGitDiffScanLocked(std::move(scan));
 }
 
 std::string Editor::activeDocumentText() const {

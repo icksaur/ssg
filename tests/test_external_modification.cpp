@@ -1,5 +1,5 @@
-#include <ssg/ExternalModificationFlow.h>
 #include "test_helpers.h"
+#include <ssg/ExternalModificationFlow.h>
 
 #include <filesystem>
 #include <fstream>
@@ -26,14 +26,9 @@ private:
     std::filesystem::path path_;
 };
 
-ssg::JournalDocument document(std::string text, bool dirty) {
-    return {ssg::JournalDocumentKey::saved("note.txt"),
-            ssg::DocumentMode::Edit, dirty, std::move(text)};
-}
-
-ssg::WatchEvent event(std::uint64_t sequence,
-                      ssg::WatchEventOrigin origin =
-                          ssg::WatchEventOrigin::External) {
+ssg::WatchEvent
+event(std::uint64_t sequence,
+      ssg::WatchEventOrigin origin = ssg::WatchEventOrigin::External) {
     ssg::WatchEvent result;
     result.kind = ssg::WatchEventKind::Modify;
     result.path = "note.txt";
@@ -53,14 +48,48 @@ struct Fixture {
     TemporaryDirectory temporary;
     ssg::RecoveryManager recovery =
         ssg::RecoveryManager::create(temporary.path() / "recovery");
+    ssg::Workspace workspace =
+        ssg::Workspace::create(temporary.path(), recovery);
     ssg::DiffModel diff;
-    ssg::ExternalModificationFlow flow{recovery, diff};
+    ssg::ExternalModificationFlow flow{workspace, recovery, diff};
+    ssg::FileDocumentId documentId;
 
-    Fixture() {
-        ASSERT_TRUE(diff.seedNonGit(
-                            {{ssg::DiffFileId{"note"}, "note.txt", "base\n"}},
+    explicit Fixture(bool seedDiff = true) {
+        std::ofstream{temporary.path() / "note.txt", std::ios::binary}
+            << "base\n";
+        const auto opened = workspace.openFile("note.txt");
+        ASSERT_TRUE(opened.accepted());
+        ASSERT_TRUE(opened.document.has_value());
+        documentId = *opened.document;
+        if (seedDiff) {
+            ASSERT_TRUE(diff.seedNonGit({{ssg::DiffFileId{"note"}, "note.txt",
+                                          "base\n"}},
                             std::uint64_t{1})
                         .accepted());
+    }
+    }
+
+    void setContent(std::string content) {
+        const auto snapshot = workspace.document(documentId).snapshot();
+        ASSERT_TRUE(
+            workspace
+                .apply(documentId,
+                       {snapshot.revision,
+                        {{ssg::ByteOffset{0},
+                          static_cast<std::uint64_t>(snapshot.text.size()),
+                          std::move(content)}}})
+                .accepted());
+    }
+
+    [[nodiscard]] ssg::DocumentSnapshot snapshot() const {
+        return workspace.document(documentId).snapshot();
+    }
+
+    [[nodiscard]] std::optional<ssg::JournalDocument> journal() const {
+        const auto state = workspace.state(documentId);
+        const auto current = snapshot();
+        return ssg::JournalDocument{state->key, current.mode, state->dirty,
+                                    current.text};
     }
 };
 
@@ -83,67 +112,30 @@ TEST(externalActionAffordanceReturnsLabelAndCommandForEachAction) {
 
 TEST(cleanExternalEditAutoReloadsWithoutRecoveryStatus) {
     Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("base\n", false)};
 
     const auto result =
-        fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open);
+        fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2});
 
     ASSERT_TRUE(result.accepted());
     ASSERT_FALSE(result.statusPublished);
-    ASSERT_EQ(open->utf8Content, "disk\n");
-    ASSERT_FALSE(open->dirty);
-    ASSERT_TRUE(fixture.recovery.records().empty());
-    ASSERT_TRUE(fixture.flow.viewState().files.empty());
-}
-
-TEST(aFailedCleanCommitRaisesTheConflictInsteadOfClearing) {
-    Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("base\n", false)};
-
-    // Clean document, but the workspace commit the reconcile supplies fails. The
-    // flow must NOT clear to a stale buffer: it stages, sees the commit fail, and
-    // raises the conflict (Decision 11's stage->commit->publish for the clean path).
-    const auto result = fixture.flow.processEvent(
-        input(2, "disk\n"), std::uint64_t{2}, open, []() { return false; });
-
-    ASSERT_TRUE(result.accepted());
-    ASSERT_TRUE(result.statusPublished);
-    ASSERT_EQ(open->utf8Content, "base\n");
-    ASSERT_FALSE(open->dirty);
-    const auto state = fixture.flow.viewState();
-    ASSERT_EQ(state.files.size(), 1U);
-    ASSERT_EQ(state.files[0].status,
-              ssg::ExternalDocumentStatus::ExternallyModified);
-}
-
-TEST(aSucceedingCleanCommitAdoptsTheDiskContent) {
-    Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("base\n", false)};
-
-    bool committed = false;
-    const auto result = fixture.flow.processEvent(
-        input(2, "disk\n"), std::uint64_t{2}, open,
-        [&]() { committed = true; return true; });
-
-    ASSERT_TRUE(committed);
-    ASSERT_TRUE(result.accepted());
-    ASSERT_FALSE(result.statusPublished);
-    ASSERT_EQ(open->utf8Content, "disk\n");
+    ASSERT_EQ(fixture.snapshot().text, "disk\n");
+    ASSERT_FALSE(fixture.snapshot().dirty);
+    ASSERT_EQ(fixture.recovery.records().size(), 1U);
     ASSERT_TRUE(fixture.flow.viewState().files.empty());
 }
 
 TEST(dirtyExternalEditPreservesBufferAndPublishesActions) {
     Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
+    fixture.setContent("buffer\n");
 
     const auto result =
-        fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open);
+        fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2});
     const auto state = fixture.flow.viewState();
 
     ASSERT_TRUE(result.accepted());
     ASSERT_TRUE(result.statusPublished);
-    ASSERT_EQ(open->utf8Content, "buffer\n");
-    ASSERT_TRUE(open->dirty);
+    ASSERT_EQ(fixture.snapshot().text, "buffer\n");
+    ASSERT_TRUE(fixture.snapshot().dirty);
     ASSERT_EQ(state.files.size(), 1U);
     ASSERT_EQ(state.files[0].status,
               ssg::ExternalDocumentStatus::ExternallyModified);
@@ -168,8 +160,9 @@ TEST(dirtyExternalEditPreservesBufferAndPublishesActions) {
 
 TEST(openDiffIsObservationalAndKeepBufferAcknowledgesDisk) {
     Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open).accepted());
+    fixture.setContent("buffer\n");
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2})
+                    .accepted());
     const auto before = fixture.flow.viewState();
 
     const auto target = fixture.flow.openDiff(ssg::DiffFileId{"note"});
@@ -177,20 +170,20 @@ TEST(openDiffIsObservationalAndKeepBufferAcknowledgesDisk) {
     ASSERT_EQ(target.target->path, std::filesystem::path{"note.txt"});
     ASSERT_EQ(fixture.flow.viewState(), before);
 
-    const auto kept = fixture.flow.keepBuffer(
-        ssg::DiffFileId{"note"},
-        [](bool, const std::optional<std::string>&) { return true; });
+    const auto kept = fixture.flow.keepBuffer(ssg::DiffFileId{"note"});
     ASSERT_TRUE(kept.accepted());
-    ASSERT_EQ(open->utf8Content, "buffer\n");
-    ASSERT_TRUE(open->dirty);
+    ASSERT_EQ(fixture.snapshot().text, "buffer\n");
+    ASSERT_TRUE(fixture.snapshot().dirty);
     ASSERT_TRUE(fixture.flow.viewState().files.empty());
     ASSERT_TRUE(fixture.recovery.records().empty());
 }
 
 TEST(reloadIsReversibleAndRecordPrecedesBufferReplacement) {
     Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open).accepted());
+    fixture.setContent("buffer\n");
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2})
+                    .accepted());
+    auto open = fixture.journal();
 
     const auto reloaded =
         fixture.flow.reload(ssg::DiffFileId{"note"}, open);
@@ -211,153 +204,103 @@ TEST(reloadIsReversibleAndRecordPrecedesBufferReplacement) {
 
 TEST(ssgSaveAdvancesBaselineWithoutDuplicateStatus) {
     Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("saved\n", false)};
+    ASSERT_TRUE(
+        fixture.workspace.reloadWithContent(fixture.documentId, "saved\n")
+            .accepted());
 
     const auto saved = fixture.flow.processEvent(
-        input(2, "saved\n", ssg::WatchEventOrigin::SsgSave), std::uint64_t{2}, open);
+        input(2, "saved\n", ssg::WatchEventOrigin::SsgSave), std::uint64_t{2});
 
     ASSERT_TRUE(saved.accepted());
     ASSERT_FALSE(saved.statusPublished);
     ASSERT_TRUE(fixture.flow.viewState().files.empty());
-    ASSERT_EQ(open->utf8Content, "saved\n");
+    ASSERT_EQ(fixture.snapshot().text, "saved\n");
 }
 
 TEST(genuineExternalEditIsNotConsumedBySaveCorrelation) {
     Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow
-                    .processEvent(
-                        input(2, "saved\n", ssg::WatchEventOrigin::SsgSave),
-                        std::uint64_t{2}, open)
+    fixture.setContent("buffer\n");
+    ASSERT_TRUE(
+        fixture.flow
+            .processEvent(input(2, "saved\n", ssg::WatchEventOrigin::SsgSave),
+                          std::uint64_t{2})
                     .accepted());
 
     const auto external =
-        fixture.flow.processEvent(input(3, "other\n"), std::uint64_t{3}, open);
+        fixture.flow.processEvent(input(3, "other\n"), std::uint64_t{3});
 
     ASSERT_TRUE(external.accepted());
     ASSERT_TRUE(external.statusPublished);
-    ASSERT_EQ(open->utf8Content, "buffer\n");
+    ASSERT_EQ(fixture.snapshot().text, "buffer\n");
     ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
 }
 
 TEST(staleEventIsFailureAtomic) {
     Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open).accepted());
+    fixture.setContent("buffer\n");
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2})
+                    .accepted());
     const auto state = fixture.flow.viewState();
     const auto diff = fixture.diff.viewState();
-    const auto before = open;
+    const auto before = fixture.snapshot();
 
     const auto stale =
-        fixture.flow.processEvent(input(2, "stale\n"), std::uint64_t{3}, open);
+        fixture.flow.processEvent(input(2, "stale\n"), std::uint64_t{3});
 
     ASSERT_FALSE(stale.accepted());
     ASSERT_EQ(stale.error, ssg::ExternalModificationError::StaleEvent);
-    ASSERT_EQ(open, before);
+    ASSERT_EQ(fixture.snapshot(), before);
     ASSERT_EQ(fixture.flow.viewState(), state);
     ASSERT_EQ(fixture.diff.viewState(), diff);
 }
 
 TEST(diffRejectionDoesNotSuppressDirtyBufferSafetyStatus) {
-    TemporaryDirectory temporary;
-    auto recovery =
-        ssg::RecoveryManager::create(temporary.path() / "recovery");
-    ssg::DiffModel diff;
-    ssg::ExternalModificationFlow flow{recovery, diff};
-    std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
+    Fixture fixture{false};
+    fixture.setContent("buffer\n");
 
-    const auto result = flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open);
+    const auto result =
+        fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2});
 
     ASSERT_TRUE(result.accepted());
     ASSERT_FALSE(result.diffRouted);
     ASSERT_TRUE(result.statusPublished);
-    ASSERT_EQ(open->utf8Content, "buffer\n");
-    ASSERT_TRUE(open->dirty);
-    ASSERT_EQ(flow.viewState().files.size(), 1U);
+    ASSERT_EQ(fixture.snapshot().text, "buffer\n");
+    ASSERT_TRUE(fixture.snapshot().dirty);
+    ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
 }
 
-TEST(aFailedWorkspaceCommitLeavesThePendingActionRaised) {
+TEST(aMissingWorkspaceDocumentLeavesThePendingActionRaised) {
     Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow
-                    .processEvent(input(2, "disk\n"), std::uint64_t{2}, open)
+    fixture.setContent("buffer\n");
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2})
                     .accepted());
     ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
 
-    // A commit that reports it did not land must leave the action raised, so the
-    // section never clears over a buffer the reload did not actually replace.
-    const auto failedReload = fixture.flow.resolveReload(
-        ssg::DiffFileId{"note"},
-        [](const std::string&) -> ssg::ExternalReloadCommitResult {
-            return {false, std::nullopt};
-        });
+    ASSERT_TRUE(fixture.workspace
+                    .adoptExternalRename(fixture.documentId, "moved.txt",
+                                         "disk\n", false)
+                    .accepted());
+    const auto failedReload =
+        fixture.flow.resolveReload(ssg::DiffFileId{"note"});
     ASSERT_FALSE(failedReload.accepted());
-    ASSERT_EQ(failedReload.error, ssg::ExternalModificationError::RecoveryFailed);
+    ASSERT_EQ(failedReload.error,
+              ssg::ExternalModificationError::DocumentMissing);
     ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
-
-    // The primitive commits the CAPTURED bytes, not a fresh disk read; a landing
-    // commit receives exactly them and then clears the action.
-    std::string committed;
-    const auto ok = fixture.flow.resolveReload(
-        ssg::DiffFileId{"note"},
-        [&](const std::string& content) -> ssg::ExternalReloadCommitResult {
-            committed = content;
-            return {true, std::nullopt};
-        });
-    ASSERT_TRUE(ok.accepted());
-    ASSERT_EQ(committed, "disk\n");
-    ASSERT_TRUE(fixture.flow.viewState().files.empty());
 }
 
-TEST(aFailedKeepBufferCommitLeavesTheConflictRaised) {
+TEST(resolveReloadCommitsCapturedContent) {
     Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow
-                    .processEvent(input(2, "disk\n"), std::uint64_t{2}, open)
+    fixture.setContent("buffer\n");
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2})
                     .accepted());
-    ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
 
-    // The dismissal drives its cross-store commit with the EXACT captured state; a
-    // commit that reports it did not land must leave the conflict raised (both
-    // stores stay at their prior state), never clear over an un-advanced baseline.
-    bool sawContent = false;
-    const auto rejected = fixture.flow.keepBuffer(
-        ssg::DiffFileId{"note"},
-        [&](bool removed, const std::optional<std::string>& content) {
-            sawContent = !removed && content.has_value() && *content == "disk\n";
-            return false;
-        });
-    ASSERT_FALSE(rejected.accepted());
-    ASSERT_EQ(rejected.error, ssg::ExternalModificationError::RecoveryFailed);
-    ASSERT_TRUE(sawContent);
-    ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
-
-    // A landing commit receives the same captured state and then clears the action.
-    const auto ok = fixture.flow.keepBuffer(
-        ssg::DiffFileId{"note"},
-        [](bool, const std::optional<std::string>&) { return true; });
+    std::ofstream{fixture.temporary.path() / "note.txt", std::ios::binary}
+        << "newer\n";
+    const auto ok = fixture.flow.resolveReload(ssg::DiffFileId{"note"});
     ASSERT_TRUE(ok.accepted());
     ASSERT_TRUE(fixture.flow.viewState().files.empty());
-    ASSERT_EQ(open->utf8Content, "buffer\n");
-    ASSERT_TRUE(open->dirty);
-}
-
-TEST(keepBufferWithNoBaselineAdvancingCommitNeverClears) {
-    Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow
-                    .processEvent(input(2, "disk\n"), std::uint64_t{2}, open)
-                    .accepted());
-    ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
-
-    // An explicitly-empty commit advances no baseline; clearing over it would
-    // resurrect the dismissed conflict, so keepBuffer must refuse and leave the
-    // conflict raised.
-    const auto rejected =
-        fixture.flow.keepBuffer(ssg::DiffFileId{"note"}, ssg::ExternalKeepBufferCommit{});
-    ASSERT_FALSE(rejected.accepted());
-    ASSERT_EQ(rejected.error, ssg::ExternalModificationError::RecoveryFailed);
-    ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
+    ASSERT_EQ(fixture.snapshot().text, "disk\n");
+    ASSERT_FALSE(fixture.snapshot().dirty);
 }
 
 }  // namespace
@@ -369,9 +312,8 @@ TEST(aRenameRetiresPendingKeyedByThePreviousId) {
                                   "base\n"}},
                                 std::uint64_t{2})
                     .accepted());
-    std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow
-                    .processEvent(input(3, "disk\n"), std::uint64_t{3}, open)
+    fixture.setContent("buffer\n");
+    ASSERT_TRUE(fixture.flow.processEvent(input(3, "disk\n"), std::uint64_t{3})
                     .accepted());
     ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
 
@@ -384,8 +326,8 @@ TEST(aRenameRetiresPendingKeyedByThePreviousId) {
     ssg::ExternalEventInput renameInput{rename, ssg::DiffFileId{"note2"}, "base\n",
                                         std::string{"disk2\n"}};
     renameInput.previousId = ssg::DiffFileId{"note"};
-    const auto result = fixture.flow.processEvent(std::move(renameInput),
-                                                  std::uint64_t{4}, open);
+    const auto result =
+        fixture.flow.processEvent(std::move(renameInput), std::uint64_t{4});
 
     ASSERT_TRUE(result.accepted());
     // The old-id pending entry was retired; only the new-id entry remains.
@@ -398,18 +340,33 @@ TEST(theExternalModSelectionFollowsTheListAndSurvivesResolves) {
     TemporaryDirectory temporary;
     ssg::RecoveryManager recovery =
         ssg::RecoveryManager::create(temporary.path() / "recovery");
+    std::ofstream{temporary.path() / "a.txt", std::ios::binary} << "base\n";
+    std::ofstream{temporary.path() / "b.txt", std::ios::binary} << "base\n";
+    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
+    const auto a = workspace.openFile("a.txt");
+    const auto b = workspace.openFile("b.txt");
+    ASSERT_TRUE(a.accepted() && a.document.has_value());
+    ASSERT_TRUE(b.accepted() && b.document.has_value());
     ssg::DiffModel diff;
     ASSERT_TRUE(diff.seedNonGit({{ssg::DiffFileId{"a"}, "a.txt", "base\n"},
                                  {ssg::DiffFileId{"b"}, "b.txt", "base\n"}},
                                 std::uint64_t{1})
                     .accepted());
-    ssg::ExternalModificationFlow flow{recovery, diff};
+    ssg::ExternalModificationFlow flow{workspace, recovery, diff};
 
     auto raise = [&](const char* id, const char* path, std::uint64_t sequence,
                      std::uint64_t revision) {
-        std::optional<ssg::JournalDocument> open{
-            {ssg::JournalDocumentKey::saved(path), ssg::DocumentMode::Edit, true,
-             "buffer\n"}};
+        const auto documentId =
+            std::string_view{path} == "a.txt" ? *a.document : *b.document;
+        const auto snapshot = workspace.document(documentId).snapshot();
+        ASSERT_TRUE(
+            workspace
+                .apply(documentId,
+                       {snapshot.revision,
+                        {{ssg::ByteOffset{0},
+                          static_cast<std::uint64_t>(snapshot.text.size()),
+                          "buffer\n"}}})
+                .accepted());
         ssg::WatchEvent e;
         e.kind = ssg::WatchEventKind::Modify;
         e.path = path;
@@ -417,7 +374,7 @@ TEST(theExternalModSelectionFollowsTheListAndSurvivesResolves) {
         e.origin = ssg::WatchEventOrigin::External;
         ssg::ExternalEventInput in{e, ssg::DiffFileId{id}, "base\n",
                                    std::string{"disk\n"}};
-        ASSERT_TRUE(flow.processEvent(std::move(in), revision, open).accepted());
+        ASSERT_TRUE(flow.processEvent(std::move(in), revision).accepted());
     };
 
     // The section becomes non-empty: the selection homes to the first file.
@@ -434,23 +391,15 @@ TEST(theExternalModSelectionFollowsTheListAndSurvivesResolves) {
     ASSERT_TRUE(flow.selectNext());
     ASSERT_TRUE(flow.viewState().selected == ssg::DiffFileId{"a"});
 
-    // Resolving the selected file re-homes to the file that now occupies its slot
-    // (the next file), not to nullopt while others remain.
+    // Resolving the selected file re-homes to the file that now occupies its
+    // slot (the next file), not to nullopt while others remain.
     ASSERT_TRUE(flow.viewState().selected == ssg::DiffFileId{"a"});
-    ASSERT_TRUE(flow.keepBuffer(ssg::DiffFileId{"a"},
-                               [](bool, const std::optional<std::string>&) {
-                                   return true;
-                               })
-                    .accepted());
+    ASSERT_TRUE(flow.keepBuffer(ssg::DiffFileId{"a"}).accepted());
     ASSERT_EQ(flow.viewState().files.size(), 1U);
     ASSERT_TRUE(flow.viewState().selected == ssg::DiffFileId{"b"});
 
     // Resolving the last file clears the selection.
-    ASSERT_TRUE(flow.keepBuffer(ssg::DiffFileId{"b"},
-                               [](bool, const std::optional<std::string>&) {
-                                   return true;
-                               })
-                    .accepted());
+    ASSERT_TRUE(flow.keepBuffer(ssg::DiffFileId{"b"}).accepted());
     ASSERT_TRUE(flow.viewState().files.empty());
     ASSERT_FALSE(flow.viewState().selected.has_value());
 }
@@ -458,8 +407,6 @@ TEST(theExternalModSelectionFollowsTheListAndSurvivesResolves) {
 SSG_TEST_SUITE(test_external_modification) {
     RUN(externalActionAffordanceReturnsLabelAndCommandForEachAction);
     RUN(cleanExternalEditAutoReloadsWithoutRecoveryStatus);
-    RUN(aFailedCleanCommitRaisesTheConflictInsteadOfClearing);
-    RUN(aSucceedingCleanCommitAdoptsTheDiskContent);
     RUN(aRenameRetiresPendingKeyedByThePreviousId);
     RUN(dirtyExternalEditPreservesBufferAndPublishesActions);
     RUN(openDiffIsObservationalAndKeepBufferAcknowledgesDisk);
@@ -468,9 +415,8 @@ SSG_TEST_SUITE(test_external_modification) {
     RUN(genuineExternalEditIsNotConsumedBySaveCorrelation);
     RUN(staleEventIsFailureAtomic);
     RUN(diffRejectionDoesNotSuppressDirtyBufferSafetyStatus);
-    RUN(aFailedWorkspaceCommitLeavesThePendingActionRaised);
-    RUN(aFailedKeepBufferCommitLeavesTheConflictRaised);
-    RUN(keepBufferWithNoBaselineAdvancingCommitNeverClears);
+    RUN(aMissingWorkspaceDocumentLeavesThePendingActionRaised);
+    RUN(resolveReloadCommitsCapturedContent);
     RUN(theExternalModSelectionFollowsTheListAndSurvivesResolves);
     return failed == 0 ? 0 : 1;
 }

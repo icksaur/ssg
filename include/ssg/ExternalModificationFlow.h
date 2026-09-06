@@ -1,17 +1,21 @@
 #pragma once
 
 #include <ssg/DiffModel.h>
-#include <ssg/RecoveryManager.h>
 #include <ssg/FilesystemWatcher.h>
+#include <ssg/RecoveryManager.h>
+#include <ssg/Workspace.h>
 
 #include <cstdint>
-#include <functional>
-#include <memory>
+#include <deque>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace ssg {
+
+class CommandCatalog;
+struct Editor;
 
 enum class ExternalAction : std::uint8_t {
     Reload = 0,
@@ -43,12 +47,12 @@ struct ExternalActionAffordance {
 
 [[nodiscard]] ExternalActionAffordance
 externalActionAffordance(ExternalAction action);
+void bindExternalModificationCommands(CommandCatalog& catalog, Editor& editor);
 
 struct ExternalDocumentView {
     DiffFileId id;
     std::filesystem::path path;
-    ExternalDocumentStatus status =
-        ExternalDocumentStatus::ExternallyModified;
+    ExternalDocumentStatus status = ExternalDocumentStatus::ExternallyModified;
     std::string accessibleStatus;
     std::string statusLabel;
     std::vector<ExternalActionAffordance> actions;
@@ -61,10 +65,10 @@ struct ExternalModificationViewState {
     std::uint64_t revision{0};
     std::string message;
     std::vector<ExternalDocumentView> files;
-    // The library-owned selection, mirroring TreeProviderView::selected. An id is
-    // stable across list mutation where an index is not. Invariant the flow
-    // maintains and the wire codec enforces: present only when it names a file in
-    // `files`, else nullopt -- never a dangling selection.
+    // The library-owned selection, mirroring TreeProviderView::selected. An id
+    // is stable across list mutation where an index is not. Invariant the flow
+    // maintains and the wire codec enforces: present only when it names a file
+    // in `files`, else nullopt -- never a dangling selection.
     std::optional<DiffFileId> selected;
 
     friend bool operator==(const ExternalModificationViewState&,
@@ -77,8 +81,9 @@ struct ExternalEventInput {
     std::string baselineContent;
     std::optional<std::string> diskContent;
     // The old path's namespaced id on a rename. A rename changes the id (it is
-    // derived from the path), so the reconcile threads the previous id here for the
-    // flow to retire the pending entry staged under it, rather than orphan it.
+    // derived from the path), so the reconcile threads the previous id here for
+    // the flow to retire the pending entry staged under it, rather than orphan
+    // it.
     std::optional<DiffFileId> previousId;
 };
 
@@ -112,111 +117,77 @@ struct ExternalOpenDiffResult {
     }
 };
 
-// The outcome a workspace-commit callback reports back to resolveReload: whether
-// the captured content reached the workspace, and the reversal record if it did.
-struct ExternalReloadCommitResult {
-    bool committed = false;
-    std::optional<RecoveryRecordId> compensation;
-};
-
-// Commits the flow's captured pending disk content into the workspace, returning
-// whether it landed. The flow supplies the EXACT bytes it captured when it raised
-// the conflict (never a fresh disk read), so the buffer the user sees is replaced
-// with the content the actions were offered about.
-using ExternalReloadCommit =
-    std::function<ExternalReloadCommitResult(const std::string& capturedContent)>;
-
-// Commits a keep_buffer dismissal by advancing the document's IN-MEMORY external
-// baseline and enqueuing a refresh of any already-persisted draft record to the
-// same baseline, returning whether the in-memory advance held and the refresh was
-// issued. `removed` is true when the dismissed state is a removal (the baseline
-// advances to Missing); otherwise `content` carries the exact dismissed disk bytes
-// the baseline advances to. The flow clears the pending action ONLY when this
-// reports success, so a failed in-memory commit leaves the conflict raised. Durable
-// persistence of the refreshed draft is best-effort through the scratch durability
-// worker, identical to autosave -- not a synchronous guarantee.
-using ExternalKeepBufferCommit =
-    std::function<bool(bool removed, const std::optional<std::string>& content)>;
-
 class ExternalModificationFlow {
-public:
-    ExternalModificationFlow(RecoveryManager& recovery, DiffModel& diff);
-    ~ExternalModificationFlow();
-    ExternalModificationFlow(ExternalModificationFlow&&) noexcept;
-    ExternalModificationFlow& operator=(ExternalModificationFlow&&) noexcept;
+  public:
+    ExternalModificationFlow(Workspace& workspace, RecoveryManager& recovery,
+                             DiffModel& diff);
+    ~ExternalModificationFlow() = default;
+    ExternalModificationFlow(ExternalModificationFlow&& other) noexcept;
+    ExternalModificationFlow&
+    operator=(ExternalModificationFlow&& other) noexcept;
     ExternalModificationFlow(const ExternalModificationFlow&) = delete;
-    ExternalModificationFlow& operator=(const ExternalModificationFlow&) =
-        delete;
+    ExternalModificationFlow&
+    operator=(const ExternalModificationFlow&) = delete;
+
+    bool ingest(std::vector<WatchEvent> events, bool resync = false);
+    bool reconcileAllOpenDocumentsAgainstDisk();
+    void registerSaveExpectation(const std::filesystem::path& relativePath);
 
     // CONTRACT
-    // ExternalModificationFlow::processEvent enforces the watcher sequence: an
-    //   event at or below the high-water mark is rejected as stale, and a processed
-    //   event advances the mark. processResyncEvent is the ONLY sequence-free path;
-    //   the runtime invokes it solely to reconcile an overflow resync (a synthetic,
-    //   out-of-stream event), so it neither consults nor advances the mark. These
-    //   are the two entry points; there is no way to run a NORMAL watcher event
-    //   without sequence enforcement.
-    [[nodiscard]] ExternalModificationResult processEvent(
-        ExternalEventInput input, std::uint64_t diffRevision,
-        std::optional<JournalDocument>& document,
-        std::function<bool()> commitClean = {},
-        std::function<bool()> commitConflictRename = {});
-    // An overflow RESYNC: the watcher lost events, so the runtime re-derives which
-    // open documents changed by comparing them to disk and drives this per
-    // document. Such a synthetic event is outside the ordered watcher stream, so it
-    // neither consults nor advances the sequence high-water mark -- otherwise the
-    // real events that resume after the overflow would be rejected as stale.
-    [[nodiscard]] ExternalModificationResult processResyncEvent(
-        ExternalEventInput input, std::uint64_t diffRevision,
-        std::optional<JournalDocument>& document,
-        std::function<bool()> commitClean = {},
-        std::function<bool()> commitConflictRename = {});
-    [[nodiscard]] ExternalModificationResult reload(
-        const DiffFileId& id, std::optional<JournalDocument>& document);
-    // The library-owned atomic reload resolution both clients share: stages the
-    // captured pending content, drives `commit` to write exactly those bytes into
-    // the workspace, and clears the raised action ONLY when the commit reports it
-    // landed. A failed commit leaves the action raised, so the section never clears
-    // over a buffer the reload did not actually replace.
-    [[nodiscard]] ExternalModificationResult resolveReload(
-        const DiffFileId& id, const ExternalReloadCommit& commit);
-    // CONTRACT
-    // ExternalModificationFlow::keepBuffer dismisses an external change: it drives
-    //   `commit` with the EXACT captured dismissed state (the removal flag and the
-    //   bytes the conflict was raised about, never a fresh disk read) and clears the
-    //   pending action ONLY when the commit reports success. The commit advances the
-    //   document's authoritative IN-MEMORY external baseline (the workspace entry)
-    //   synchronously and enqueues a refresh of any already-persisted draft record to
-    //   the same baseline; it reports success once the in-memory advance holds and
-    //   that refresh is issued, so an ordinary duplicate event, an overflow resync,
-    //   or a live draft reopen no longer re-raises the dismissed state while the
-    //   buffer is preserved. Durable persistence of the refreshed draft is
-    //   best-effort through the scratch durability worker -- the same async window
-    //   autosave already has, NOT a synchronous cross-store durability guarantee. A
-    //   failed in-memory commit leaves the conflict raised and the workspace baseline
-    //   at its prior state.
-    [[nodiscard]] ExternalModificationResult keepBuffer(
-        const DiffFileId& id, const ExternalKeepBufferCommit& commit);
+    // Normal events enforce and advance the watcher sequence. Resync events are
+    // synthetic and outside that ordered stream, so they do neither.
+    [[nodiscard]] ExternalModificationResult
+    processEvent(ExternalEventInput input, std::uint64_t diffRevision,
+                 bool resync = false);
+    [[nodiscard]] ExternalModificationResult
+    reload(const DiffFileId& id, std::optional<JournalDocument>& document);
+    [[nodiscard]] ExternalModificationResult
+    resolveReload(const DiffFileId& id);
+    [[nodiscard]] ExternalModificationResult keepBuffer(const DiffFileId& id);
     [[nodiscard]] ExternalOpenDiffResult openDiff(const DiffFileId& id) const;
     // Selection commands mirroring tree.select/select_next/select_previous: the
-    // library owns which file is selected and the payload-less action commands act
-    // on it. Each returns whether the selection moved (a move advances the revision
-    // so a selection-only delta is published). selectFile is a no-op returning false
-    // when the id names no present file; the wraparound movers are no-ops on an
-    // empty section.
+    // library owns which file is selected and the payload-less action commands
+    // act on it. Each returns whether the selection moved (a move advances the
+    // revision so a selection-only delta is published). selectFile is a no-op
+    // returning false when the id names no present file; the wraparound movers
+    // are no-ops on an empty section.
     [[nodiscard]] bool selectFile(const DiffFileId& id);
-    // Whether the id names a file currently present in the section. selectFile's
-    // false conflates an absent id with an already-selected id, so a caller that
-    // must reject only absent ids (external.select gating a follow-up action)
-    // tests presence here instead of using selectFile's bool.
+    // Whether the id names a file currently present in the section.
+    // selectFile's false conflates an absent id with an already-selected id, so
+    // a caller that must reject only absent ids (external.select gating a
+    // follow-up action) tests presence here instead of using selectFile's bool.
     [[nodiscard]] bool hasFile(const DiffFileId& id);
     [[nodiscard]] bool selectNext();
     [[nodiscard]] bool selectPrevious();
     [[nodiscard]] ExternalModificationViewState viewState() const;
 
-private:
-    class Impl;
-    std::unique_ptr<Impl> impl_;
+  private:
+    struct PendingChange {
+        ExternalDocumentView view;
+        std::optional<std::string> diskContent;
+    };
+
+    [[nodiscard]] std::optional<FileDocumentId>
+    resolveDocument(const std::filesystem::path& path) const;
+    [[nodiscard]] static ExternalModificationResult
+    failure(ExternalModificationError error);
+    [[nodiscard]] std::vector<PendingChange>::iterator
+    findPending(const DiffFileId& id);
+    [[nodiscard]] std::vector<PendingChange>::const_iterator
+    findPending(const DiffFileId& id) const;
+    void advanceRevision();
+    void reconcileSelection(std::optional<std::size_t> preferred);
+    [[nodiscard]] bool moveSelection(int direction);
+
+    Workspace* workspace_;
+    RecoveryManager* recovery_;
+    DiffModel* diff_;
+    std::uint64_t lastWatcherSequence_ = 0;
+    std::uint64_t revision_{0};
+    std::vector<PendingChange> pending_;
+    std::optional<DiffFileId> selected_;
+    std::mutex saveExpectationMutex_;
+    std::deque<SaveExpectation> pendingSaveExpectations_;
 };
 
-}  // namespace ssg
+} // namespace ssg

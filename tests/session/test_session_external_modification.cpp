@@ -100,20 +100,7 @@ struct Session {
 
 std::vector<ssg::ExternalDocumentView> externalFiles(
     ssg::Editor& runtime) {
-    auto snapshot = ssg::test::projectGridFrame(runtime);
-    if (!snapshot) return {};
-    return snapshot->externalModification.files;
-}
-
-std::string activeTabLabel(ssg::Editor& runtime) {
-    auto snapshot = ssg::test::projectGridFrame(runtime);
-    if (!snapshot) return {};
-    const auto& tabs = snapshot->tabs;
-    if (!tabs.active) return {};
-    for (const auto& tab : tabs.tabs) {
-        if (tab.id == *tabs.active) return tab.label;
-    }
-    return {};
+    return runtime.external.viewState().files;
 }
 
 bool activeTabIsLiveDiff(ssg::Editor& runtime) {
@@ -130,7 +117,7 @@ bool activeTabIsLiveDiff(ssg::Editor& runtime) {
 TEST(anOpenDocumentChangedOnDiskPopulatesTheExternalSection) {
     auto session = Session::open("changed_populates", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
 
     const auto files = externalFiles(*session.runtime);
@@ -142,7 +129,7 @@ TEST(anOpenDocumentChangedOnDiskPopulatesTheExternalSection) {
 TEST(anOpenDocumentRemovedOnDiskPublishesRemovedStatusAndItsActions) {
     auto session = Session::open("removed_status", "hi\n", true);
     std::filesystem::remove(session.workspacePath("note.txt"));
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
 
     const auto files = externalFiles(*session.runtime);
@@ -160,7 +147,7 @@ TEST(anOpenDocumentRemovedOnDiskPublishesRemovedStatusAndItsActions) {
 TEST(aChangeToANonOpenFileRaisesNoExternalSection) {
     auto session = Session::open("non_open", "hi\n", true);
     writeFile(session.workspacePath("other.txt"), "other\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "other.txt", 1)});
 
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
@@ -169,7 +156,7 @@ TEST(aChangeToANonOpenFileRaisesNoExternalSection) {
 TEST(aCleanOpenDocumentChangedOnDiskAutoReloadsWithoutRaisingActions) {
     auto session = Session::open("clean_autoreload", "hi\n", false);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
 
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
@@ -179,7 +166,7 @@ TEST(aCleanOpenDocumentChangedOnDiskAutoReloadsWithoutRaisingActions) {
 TEST(externalReloadCommitsDiskIntoTheWorkspaceAndClearsTheSection) {
     auto session = Session::open("reload_commits", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -197,7 +184,7 @@ TEST(externalKeepBufferClearsTheSectionWithoutTouchingTheBuffer) {
     auto session = Session::open("keep_buffer", "hi\n", true);
     const auto buffer = session.runtime->activeDocumentText();
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -213,7 +200,7 @@ TEST(externalKeepBufferClearsTheSectionWithoutTouchingTheBuffer) {
 TEST(externalOpenDiffOpensALiveDiffTabForThatFile) {
     auto session = Session::open("open_diff", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -238,7 +225,7 @@ TEST(externalActionOnAnUnknownIdIsARejectedNoOp) {
 TEST(exmdStaleIdDoesNotActOnThePreviousSelection) {
     auto session = Session::open("stale_select", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -252,9 +239,7 @@ TEST(exmdStaleIdDoesNotActOnThePreviousSelection) {
     const auto stale = session.runtime->dispatch({"external.select",
          ssg::DiffFileId{"external:not-a-real-file.txt"}});
     ASSERT_FALSE(stale.accepted());
-    auto snapshot = ssg::test::projectGridFrame(*session.runtime);
-    ASSERT_TRUE(snapshot.has_value());
-    const auto& external = snapshot->externalModification;
+    const auto external = session.runtime->external.viewState();
     ASSERT_TRUE(external.selected.has_value());
     ASSERT_EQ(*external.selected, present);
 }
@@ -262,7 +247,7 @@ TEST(exmdStaleIdDoesNotActOnThePreviousSelection) {
 TEST(exmdOnAnAlreadySelectedPresentIdStillActsOnIt) {
     auto session = Session::open("reselect", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -280,7 +265,7 @@ TEST(anSsgSaveIsCorrelatedAndRaisesNoExternalNotice) {
     auto session = Session::open("own_save", "hi\n", true);
     // A prior external change raised a pending conflict for the file.
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     ASSERT_EQ(externalFiles(*session.runtime).size(), 1U);
     // SSG writes the file itself; the save primitive records the expectation.
@@ -290,7 +275,7 @@ TEST(anSsgSaveIsCorrelatedAndRaisesNoExternalNotice) {
     // The watcher reports the write with no state supplied; the reconcile stats the
     // (unchanged-since-save) file, matches the expectation, consumes it, AND clears
     // the pending conflict -- a successful self-save resolves the external state.
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 2)});
 
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
@@ -302,9 +287,12 @@ TEST(aGenuineExternalEditAfterASelfSaveIsNotSuppressed) {
     ASSERT_TRUE(session.runtime
                     ->dispatch({"file.save",  {}})
                     .accepted());
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
+    ASSERT_FALSE(session.runtime->diff
+                     .file(ssg::DiffFileId{"external:note.txt"})
+                     .has_value());
 
     // A genuine external edit follows. Because the expectation was consumed rather
     // than left to accumulate, it is NOT suppressed and raises actions.
@@ -313,7 +301,7 @@ TEST(aGenuineExternalEditAfterASelfSaveIsNotSuppressed) {
                                 ssg::TextInputArguments{"x"}})
                     .accepted());
     writeFile(session.workspacePath("note.txt"), "genuinely-external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 2)});
 
     ASSERT_EQ(externalFiles(*session.runtime).size(), 1U);
@@ -329,7 +317,7 @@ TEST(aCleanExternalReloadDecodesNonUtf8BytesThroughTheDocumentsEncoding) {
             .accepted());
     // An external writer replaces the file with more Latin-1 bytes.
     writeFile(session.workspacePath("note.txt"), std::string{"\xe9\xe9\n"});
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
 
     // The clean auto-reload decoded the raw disk bytes through the document's
@@ -352,7 +340,7 @@ TEST(aFailedDirtyRenameAdoptionDoesNotPublishAnUnresolvableNewPathEntry) {
 
     std::filesystem::rename(session.workspacePath("note.txt"),
                             session.workspacePath("other.txt"));
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Rename, "other.txt", 1, "note.txt")});
 
     // The adoption failed, so the flow published nothing under the new-path id: a
@@ -367,13 +355,13 @@ TEST(aFailedDirtyRenameAdoptionDoesNotPublishAnUnresolvableNewPathEntry) {
 TEST(aRenameRetiresThePendingEntryKeyedByThePreviousPath) {
     auto session = Session::open("rename_pending", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     ASSERT_EQ(externalFiles(*session.runtime).size(), 1U);
 
     std::filesystem::rename(session.workspacePath("note.txt"),
                             session.workspacePath("renamed.txt"));
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Rename, "renamed.txt", 2, "note.txt")});
 
     // The old-path entry was retired: exactly one pending entry, keyed by the new
@@ -387,19 +375,22 @@ TEST(aRenamedOpenDocumentFollowsItsFileWithoutASpuriousRemove) {
     auto session = Session::open("rename_follows", "hi\n", false);
     std::filesystem::rename(session.workspacePath("note.txt"),
                             session.workspacePath("renamed.txt"));
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Rename, "renamed.txt", 1, "note.txt")});
 
     // No spurious removed/created pair, and the open document followed its file.
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
-    ASSERT_EQ(activeTabLabel(*session.runtime), "renamed.txt");
+    const auto state =
+        session.runtime->workspace.state(*session.runtime->activeDocumentId());
+    ASSERT_TRUE(state.has_value());
+    ASSERT_EQ(state->key.savedPath(), "renamed.txt");
     ASSERT_EQ(session.runtime->activeDocumentText(), "hi\n");
 }
 
 TEST(theExternalIdNeverCollidesWithAGitPathId) {
     auto session = Session::open("no_collision", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
 
     const auto files = externalFiles(*session.runtime);
@@ -413,12 +404,12 @@ TEST(theExternalIdNeverCollidesWithAGitPathId) {
 TEST(aSecondExternalChangeWhileActionsArePendingUpdatesNotDuplicates) {
     auto session = Session::open("second_change", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external-1\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     ASSERT_EQ(externalFiles(*session.runtime).size(), 1U);
 
     writeFile(session.workspacePath("note.txt"), "external-2\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 2)});
 
     const auto files = externalFiles(*session.runtime);
@@ -444,7 +435,7 @@ TEST(aCleanExternalReloadDecodesUtf16BytesWithNulThroughTheDocumentsEncoding) {
     writeFile(session.workspacePath("note.txt"),
               std::string{'\x68', '\x00', '\x69', '\x00', '\x21', '\x00',
                           '\x0a', '\x00'});
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
 
     // The clean auto-reload decoded the UTF-16LE disk bytes through the document's
@@ -460,8 +451,7 @@ TEST(anOverflowResyncsOpenDocumentsSoAChangeDuringTheOverflowRaisesItsConflict) 
     // event is lost, and only the Overflow arrives.
     auto session = Session::open("overflow_resync", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
-        {watchEvent(ssg::WatchEventKind::Overflow, "", 1)});
+    session.runtime->external.reconcileAllOpenDocumentsAgainstDisk();
 
     // The overflow re-scanned open documents against disk, found note.txt changed,
     // and raised its conflict -- the modification was not lost with the events.
@@ -485,18 +475,19 @@ TEST(aFailedRenameLeavesNoOrphanDiffEntry) {
 
     std::filesystem::rename(session.workspacePath("note.txt"),
                             session.workspacePath("other.txt"));
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Rename, "other.txt", 1, "note.txt")});
 
-    ASSERT_FALSE(session.runtime->diffModelHasFileForTest(
-        ssg::DiffFileId{"external:other.txt"}));
+    ASSERT_FALSE(session.runtime->diff
+                     .file(ssg::DiffFileId{"external:other.txt"})
+                     .has_value());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 }
 
 TEST(anOverflowDoesNotResurrectAConflictDismissedByKeepBuffer) {
     auto session = Session::open("keep_overflow", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     const auto raised = externalFiles(*session.runtime);
     ASSERT_EQ(raised.size(), 1U);
@@ -509,15 +500,13 @@ TEST(anOverflowDoesNotResurrectAConflictDismissedByKeepBuffer) {
     // An overflow resync re-derives events from disk. Disk still differs from the
     // buffer's baseline, but the user already dismissed this state, so it must NOT
     // re-raise the conflict.
-    session.runtime->reconcileExternalWatchEventsForTest(
-        {watchEvent(ssg::WatchEventKind::Overflow, "", 2)});
+    session.runtime->external.reconcileAllOpenDocumentsAgainstDisk();
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 
     // A genuinely NEW disk change after the acknowledgement is a fresh question and
     // still raises the conflict.
     writeFile(session.workspacePath("note.txt"), "external again\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
-        {watchEvent(ssg::WatchEventKind::Overflow, "", 3)});
+    session.runtime->external.reconcileAllOpenDocumentsAgainstDisk();
     const auto reraised = externalFiles(*session.runtime);
     ASSERT_EQ(reraised.size(), 1U);
     ASSERT_EQ(reraised[0].id, ssg::DiffFileId{"external:note.txt"});
@@ -528,7 +517,7 @@ TEST(keepBufferAdvancesTheExternalBaselineToTheDismissedDiskState) {
     auto session = Session::open("keep_advances", "hi\n", true);
     const auto buffer = session.runtime->activeDocumentText();
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -540,7 +529,7 @@ TEST(keepBufferAdvancesTheExternalBaselineToTheDismissedDiskState) {
 
     // The baseline now equals the dismissed disk state, so a duplicate ordinary
     // event carrying that SAME state is a no-op, and the buffer is preserved.
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 2)});
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
     ASSERT_EQ(session.runtime->activeDocumentText(), buffer);
@@ -550,7 +539,7 @@ TEST(keepBufferOnARemovedFileSetsTheExternalBaselineMissing) {
     auto session = Session::open("keep_removed", "hi\n", true);
     const auto buffer = session.runtime->activeDocumentText();
     std::filesystem::remove(session.workspacePath("note.txt"));
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -563,8 +552,7 @@ TEST(keepBufferOnARemovedFileSetsTheExternalBaselineMissing) {
 
     // The baseline is Missing (not a bogus empty-bytes baseline), so an overflow
     // resync with the file still absent does not re-raise the dismissed removal.
-    session.runtime->reconcileExternalWatchEventsForTest(
-        {watchEvent(ssg::WatchEventKind::Overflow, "", 2)});
+    session.runtime->external.reconcileAllOpenDocumentsAgainstDisk();
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
     ASSERT_EQ(session.runtime->activeDocumentText(), buffer);
 }
@@ -577,7 +565,7 @@ TEST(anEventObservingANonRegularOrUnreadablePathAlwaysRaises) {
         auto session = Session::open("unknown_dir_ordinary", "hi\n", true);
         std::filesystem::remove(session.workspacePath("note.txt"));
         std::filesystem::create_directory(session.workspacePath("note.txt"));
-        session.runtime->reconcileExternalWatchEventsForTest(
+        session.runtime->external.ingest(
             {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
         const auto files = externalFiles(*session.runtime);
         ASSERT_EQ(files.size(), 1U);
@@ -590,8 +578,7 @@ TEST(anEventObservingANonRegularOrUnreadablePathAlwaysRaises) {
         // The overflow path formerly collapsed this to a bare Remove, which could
         // match a Missing baseline and be suppressed; it must route through the one
         // Unknown-detection chokepoint and raise like the ordinary path.
-        session.runtime->reconcileExternalWatchEventsForTest(
-            {watchEvent(ssg::WatchEventKind::Overflow, "", 1)});
+        session.runtime->external.reconcileAllOpenDocumentsAgainstDisk();
         const auto files = externalFiles(*session.runtime);
         ASSERT_EQ(files.size(), 1U);
         ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
@@ -606,8 +593,7 @@ TEST(anEventObservingANonRegularOrUnreadablePathAlwaysRaises) {
         std::filesystem::create_symlink("does-not-exist",
                                         session.workspacePath("note.txt"), linkCode);
         ASSERT_FALSE(static_cast<bool>(linkCode));
-        session.runtime->reconcileExternalWatchEventsForTest(
-            {watchEvent(ssg::WatchEventKind::Overflow, "", 1)});
+        session.runtime->external.reconcileAllOpenDocumentsAgainstDisk();
         const auto files = externalFiles(*session.runtime);
         ASSERT_EQ(files.size(), 1U);
         ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
@@ -621,7 +607,7 @@ TEST(anUnknownObservationRaisesEvenAfterAMissingBaselineOnBothPaths) {
     // baseline would silently suppress), on BOTH the ordinary and overflow paths.
     auto dismissRemoval = [](Session& session) {
         std::filesystem::remove(session.workspacePath("note.txt"));
-        session.runtime->reconcileExternalWatchEventsForTest(
+        session.runtime->external.ingest(
             {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
         auto files = externalFiles(*session.runtime);
         ASSERT_EQ(files.size(), 1U);
@@ -635,7 +621,7 @@ TEST(anUnknownObservationRaisesEvenAfterAMissingBaselineOnBothPaths) {
         auto session = Session::open("missing_then_unknown_ordinary", "hi\n", true);
         dismissRemoval(session);
         std::filesystem::create_directory(session.workspacePath("note.txt"));
-        session.runtime->reconcileExternalWatchEventsForTest(
+        session.runtime->external.ingest(
             {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 2)});
         const auto files = externalFiles(*session.runtime);
         ASSERT_EQ(files.size(), 1U);
@@ -645,8 +631,7 @@ TEST(anUnknownObservationRaisesEvenAfterAMissingBaselineOnBothPaths) {
         auto session = Session::open("missing_then_unknown_overflow", "hi\n", true);
         dismissRemoval(session);
         std::filesystem::create_directory(session.workspacePath("note.txt"));
-        session.runtime->reconcileExternalWatchEventsForTest(
-            {watchEvent(ssg::WatchEventKind::Overflow, "", 2)});
+        session.runtime->external.reconcileAllOpenDocumentsAgainstDisk();
         const auto files = externalFiles(*session.runtime);
         ASSERT_EQ(files.size(), 1U);
         ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
@@ -660,7 +645,7 @@ TEST(aStaleOrdinaryRemoveWhosePathReappearedNonRegularRaises) {
     // present non-regular entry (Unknown) and RAISES.
     auto session = Session::open("stale_remove_reappeared", "hi\n", true);
     std::filesystem::remove(session.workspacePath("note.txt"));
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
     auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -671,7 +656,7 @@ TEST(aStaleOrdinaryRemoveWhosePathReappearedNonRegularRaises) {
 
     // The path reappears as a directory; a stale ORDINARY Remove now arrives.
     std::filesystem::create_directory(session.workspacePath("note.txt"));
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 2)});
     files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -683,7 +668,7 @@ TEST(aStaleOrdinaryRemoveWhosePathReappearedRegularRaisesAsModified) {
     // content: that is a real change, not an absence, so it must raise as modified.
     auto session = Session::open("stale_remove_regular", "hi\n", true);
     std::filesystem::remove(session.workspacePath("note.txt"));
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
     auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -693,7 +678,7 @@ TEST(aStaleOrdinaryRemoveWhosePathReappearedRegularRaisesAsModified) {
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 
     writeFile(session.workspacePath("note.txt"), "reappeared\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 2)});
     files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -715,23 +700,22 @@ TEST(aStatusErrorOnAMissingBaselineRaisesOnTheOverflowPath) {
     (void)runtime->dispatch({"text.insert",  ssg::TextInputArguments{"!"}});
 
     std::filesystem::remove(root / "workspace" / "sub" / "note.txt");
-    runtime->reconcileExternalWatchEventsForTest(
+    runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Remove, "sub/note.txt", 1)});
-    auto snapshot0 = ssg::test::projectGridFrame(*runtime);
-    ASSERT_EQ(snapshot0->externalModification.files.size(), 1U);
+    const auto snapshot0 = runtime->external.viewState();
+    ASSERT_EQ(snapshot0.files.size(), 1U);
     ASSERT_TRUE(
         runtime
             ->dispatch({"external.keep_buffer",
-                        snapshot0->externalModification.files[0].id})
+                        snapshot0.files[0].id})
             .accepted());
 
     // Deny search permission on the parent: symlink_status of the child now errors.
     std::filesystem::permissions(root / "workspace" / "sub",
                                  std::filesystem::perms::none);
-    runtime->reconcileExternalWatchEventsForTest(
-        {watchEvent(ssg::WatchEventKind::Overflow, "", 2)});
-    auto snapshot1 = ssg::test::projectGridFrame(*runtime);
-    const auto& raised = snapshot1->externalModification.files;
+    runtime->external.reconcileAllOpenDocumentsAgainstDisk();
+    const auto snapshot1 = runtime->external.viewState();
+    const auto& raised = snapshot1.files;
     // Restore permission before asserting so the test dir is always cleanable.
     std::filesystem::permissions(root / "workspace" / "sub",
                                  std::filesystem::perms::owner_all);
@@ -742,7 +726,7 @@ TEST(aStatusErrorOnAMissingBaselineRaisesOnTheOverflowPath) {
 TEST(anOrdinaryDuplicateEventMatchingTheBaselineDoesNotResurrectTheConflict) {
     auto session = Session::open("ordinary_duplicate", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -754,7 +738,7 @@ TEST(anOrdinaryDuplicateEventMatchingTheBaselineDoesNotResurrectTheConflict) {
     // A coalesced/duplicate ORDINARY watcher event carrying the SAME dismissed disk
     // state matches the advanced baseline and must not resurrect the conflict (the
     // regression the side-table caused).
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 2)});
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 }
@@ -762,7 +746,7 @@ TEST(anOrdinaryDuplicateEventMatchingTheBaselineDoesNotResurrectTheConflict) {
 TEST(aRealChangeAfterKeepBufferStillRaises) {
     auto session = Session::open("real_change", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -774,7 +758,7 @@ TEST(aRealChangeAfterKeepBufferStillRaises) {
     // A genuinely NEW disk state differs from the advanced baseline and raises
     // afresh through the ordinary path.
     writeFile(session.workspacePath("note.txt"), "external again\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 2)});
     files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -785,7 +769,7 @@ TEST(keepBufferLeavesTheBufferAndEncodingUntouched) {
     auto session = Session::open("keep_untouched", "hi\n", true);
     const auto buffer = session.runtime->activeDocumentText();
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -799,54 +783,11 @@ TEST(keepBufferLeavesTheBufferAndEncodingUntouched) {
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 }
 
-TEST(aDraftPersistedBeforeKeepBufferReopensWithoutResurrectingTheConflict) {
-    auto root = uniqueRoot("draft_keep");
-    writeFile(root / "workspace" / "note.txt", "hi\n");
-    std::string draft;
-    {
-        auto created = ssg::createEditor(configFor(root));
-        ASSERT_TRUE(created.accepted());
-        auto& runtime = *created.session;
-        (void)runtime.dispatch({"file.open",  std::string{"note.txt"}});
-        (void)runtime.dispatch({"text.insert",
-                                ssg::TextInputArguments{"!"}});
-        draft = runtime.activeDocumentText();
-        // Persist a draft whose journal baseline is the ORIGINAL disk state.
-        ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{1});
-
-        // An external change raises a conflict; dismissing it must refresh the
-        // already-persisted draft record's baseline to the dismissed disk state, so
-        // a crash-reopen does not re-raise the conflict via draft recovery.
-        writeFile(root / "workspace" / "note.txt", "external\n");
-        runtime.reconcileExternalWatchEventsForTest(
-            {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
-        const auto files = externalFiles(runtime);
-        ASSERT_EQ(files.size(), 1U);
-        ASSERT_TRUE(runtime
-                        .dispatch({"external.keep_buffer",
-                                   files[0].id})
-                        .accepted());
-    }
-
-    // Crash-reopen over the same scratch store: the persisted draft now branches
-    // from the dismissed disk state, so it classifies Restored, not Conflict.
-    auto created = ssg::createEditor(configFor(root));
-    ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"note.txt"}})
-                    .accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), draft);
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::Restored);
-}
-
 TEST(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile) {
     auto session = Session::open("offered_guard", "hi\n", true);
     const auto buffer = session.runtime->activeDocumentText();
     std::filesystem::remove(session.workspacePath("note.txt"));
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
     auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
@@ -879,19 +820,15 @@ TEST(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile) {
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 }
 
-TEST(externalPresenceAndSelectionRefreshInTheWatcherDrainNotOnlyOnDispatch) {
+TEST(externalSelectionRefreshesDuringIngest) {
     auto session = Session::open("drain_refresh", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    // Only a watcher event is drained -- no command is dispatched afterwards.
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
 
-    auto snapshot = ssg::test::projectGridFrame(*session.runtime);
-    ASSERT_TRUE(snapshot.has_value());
-    const auto& external = snapshot->externalModification;
+    const auto external = session.runtime->external.viewState();
     ASSERT_EQ(external.files.size(), 1U);
-    // The library-owned selection homed to the raised file in the watcher drain,
-    // not on a later dispatch: it is already populated in the very first snapshot.
+    // The library-owned selection is populated before any later dispatch.
     ASSERT_TRUE(external.selected.has_value());
     ASSERT_EQ(*external.selected, external.files[0].id);
 }
@@ -899,7 +836,7 @@ TEST(externalPresenceAndSelectionRefreshInTheWatcherDrainNotOnlyOnDispatch) {
 TEST(aHostRoutesExternalKeysInTheExternalContextWhenExternalFocusHeld) {
     auto session = Session::open("host_ext_context", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
-    session.runtime->reconcileExternalWatchEventsForTest(
+    session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     ASSERT_TRUE(session.runtime->dispatch({"external.focus", {}}).accepted());
     ssg::KeyStroke down;
@@ -939,13 +876,12 @@ SSG_TEST_SUITE(test_session_external_modification) {
     RUN(anOrdinaryDuplicateEventMatchingTheBaselineDoesNotResurrectTheConflict);
     RUN(aRealChangeAfterKeepBufferStillRaises);
     RUN(keepBufferLeavesTheBufferAndEncodingUntouched);
-    RUN(aDraftPersistedBeforeKeepBufferReopensWithoutResurrectingTheConflict);
     RUN(aRenamedOpenDocumentFollowsItsFileWithoutASpuriousRemove);
     RUN(theExternalIdNeverCollidesWithAGitPathId);
     RUN(aSecondExternalChangeWhileActionsArePendingUpdatesNotDuplicates);
     RUN(anOverflowResyncsOpenDocumentsSoAChangeDuringTheOverflowRaisesItsConflict);
     RUN(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile);
-    RUN(externalPresenceAndSelectionRefreshInTheWatcherDrainNotOnlyOnDispatch);
+    RUN(externalSelectionRefreshesDuringIngest);
     RUN(aHostRoutesExternalKeysInTheExternalContextWhenExternalFocusHeld);
     return failed == 0 ? 0 : 1;
 }
