@@ -57,10 +57,15 @@ add_library(ssg::ssg ALIAS ssg)
 # its own toolchain and its own idea of which warnings matter, and inheriting
 # -Werror from a dependency is how a library breaks someone else's build on a
 # compiler upgrade.  Vendored third-party sources already build with -w.
+#
+# missing-field-initializers is off because omitting a trailing aggregate member
+# value-initializes it, which is what every site here means.  Do not re-enable it
+# expecting to find uninitialized state; -Wuninitialized covers that.
 option(SSG_WERROR "Treat compiler warnings as errors in ssg's own sources"
        ${PROJECT_IS_TOP_LEVEL})
 function(ssg_configure_component target)
-    target_compile_options("${target}" PRIVATE -Wall -Wextra)
+    target_compile_options("${target}" PRIVATE
+        -Wall -Wextra -Wno-missing-field-initializers)
     if(SSG_SANITIZE)
         target_compile_options("${target}" PUBLIC
             -fsanitize=address,undefined

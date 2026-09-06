@@ -92,8 +92,8 @@ std::vector<Line> linesOf(std::string_view text) {
         lines.push_back({start, contentEnd, end});
         start = end;
     }
-    if (lines.empty() || lines.back().end == text.size() &&
-                             lines.back().contentEnd != lines.back().end) {
+    if (lines.empty() || (lines.back().end == text.size() &&
+                          lines.back().contentEnd != lines.back().end)) {
         lines.push_back({text.size(), text.size(), text.size()});
     }
     return lines;

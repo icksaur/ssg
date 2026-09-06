@@ -55,7 +55,7 @@ bool loadBlob(git_repository* repository, const git_oid* oid,
     auto blobGuard = std::unique_ptr<git_blob, decltype(&git_blob_free)>(
         blob, &git_blob_free);
     auto size = git_blob_rawsize(blob);
-    if (size < 0 || static_cast<std::size_t>(size) > maxBytes) {
+    if (static_cast<std::uintmax_t>(size) > maxBytes) {
         return false;
     }
     auto bytes = static_cast<const char*>(git_blob_rawcontent(blob));
