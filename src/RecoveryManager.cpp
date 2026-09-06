@@ -207,9 +207,7 @@ void syncTree(const std::filesystem::path& root) {
 }
 
 void installDirectoryDurably(const std::filesystem::path& staging,
-                               const std::filesystem::path& installed,
-                               const std::filesystem::path& parent) {
-    (void)parent;
+                               const std::filesystem::path& installed) {
     const auto result = renamePathDurably(staging, installed);
     if (!result.ok()) {
         throw std::runtime_error(result.message);
@@ -956,7 +954,7 @@ private:
             syncTree(staging);
 
             before(RecoveryStep::InstallRecord);
-            installDirectoryDurably(staging, installed, recoveryRoot_);
+            installDirectoryDurably(staging, installed);
         } catch (...) {
             (void)removeTreeIfPresent(staging);
             throw;
