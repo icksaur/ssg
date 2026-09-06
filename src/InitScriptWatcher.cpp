@@ -14,7 +14,7 @@
 #include <thread>
 #include <unistd.h>
 
-namespace ssg::app {
+namespace ssg {
 
 namespace {
 
@@ -156,4 +156,4 @@ std::optional<std::string> InitScriptWatcher::readInitScriptIfPresentQuiet(
     return readInitScriptIfPresent(scriptPath, false);
 }
 
-}  // namespace ssg::app
+}  // namespace ssg

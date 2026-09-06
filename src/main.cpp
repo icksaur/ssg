@@ -1,5 +1,8 @@
 #include <ssg/pointer_routing.h>
-#include <ssg/ssg_terminal.h>
+#include <ssg/Terminal.h>
+#include <ssg/TerminalCapabilities.h>
+#include <ssg/TerminalInput.h>
+#include <ssg/TerminalOutput.h>
 
 #include <ssg/Editor.h>
 #include <ssg/GridPresenter.h>
@@ -36,7 +39,7 @@
 #include <utility>
 #include <vector>
 
-namespace ssg::app {
+namespace ssg {
 
 namespace fs = std::filesystem;
 
@@ -64,6 +67,24 @@ constexpr int kEdgeScrollIntervalMs = 40;
 constexpr int kAutosaveTickMs = 1000;
 constexpr int kDragFrameIntervalMs = 16;
 volatile std::sig_atomic_t gSignalPipeWrite = -1;
+
+struct LaunchTarget {
+    fs::path cwd;
+    std::optional<std::string> file;
+};
+
+LaunchTarget resolveLaunch(const fs::path& argument) {
+    if (argument.empty()) return {fs::current_path(), std::nullopt};
+
+    std::error_code code;
+    if (fs::is_directory(argument, code)) {
+        return {fs::absolute(argument), std::nullopt};
+    }
+    const auto absolute = fs::absolute(argument);
+    const auto parent =
+        absolute.has_parent_path() ? absolute.parent_path() : fs::current_path();
+    return {parent, absolute.filename().string()};
+}
 
 struct FdReadiness {
     bool input = false;
@@ -301,7 +322,7 @@ void drainSignals(SsgContext& context) {
         if (n <= 0) break;
         tags.append(scratch, static_cast<std::size_t>(n));
     }
-    auto const events = classify_signal_tags(tags);
+    auto const events = classifySignalTags(tags);
     if (events.terminate) {
         int const signo = *events.terminate;
         context.terminal.restore();
@@ -377,7 +398,7 @@ void handleScroll(SsgContext& context, const Decoded& decoded) {
 }
 
 void handleKey(SsgContext& context, const Decoded& decoded, bool& quit) {
-    if (application_quit_requested(decoded.stroke)) {
+    if (applicationQuitRequested(decoded.stroke)) {
         quit = true;
         return;
     }
@@ -482,7 +503,7 @@ void dispatchBufferedInput(SsgContext& context, std::string& buffer, PointerStat
     char bytes[4096];
     while (!buffer.empty() && !quit) {
         std::size_t consumed = 0;
-        auto decoded = decode_input(buffer, false, consumed);
+        auto decoded = decodeInput(buffer, false, consumed);
         if (decoded.status == DecodeStatus::incomplete) {
             auto const ready = waitReadiness(kEscapeTimeoutMs, context.signalReadFd, -1);
             if (ready.signal) drainSignals(context);
@@ -493,7 +514,7 @@ void dispatchBufferedInput(SsgContext& context, std::string& buffer, PointerStat
                     continue;
                 }
             }
-            decoded = decode_input(buffer, true, consumed);
+            decoded = decodeInput(buffer, true, consumed);
             if (decoded.status == DecodeStatus::incomplete) return;
         }
         buffer.erase(0, consumed);
@@ -504,7 +525,7 @@ void dispatchBufferedInput(SsgContext& context, std::string& buffer, PointerStat
         }
         if (decoded.status == DecodeStatus::pointer && decoded.pointer.kind == PointerKind::drag) {
             std::size_t peekConsumed = 0;
-            const auto next = decode_input(buffer, false, peekConsumed);
+            const auto next = decodeInput(buffer, false, peekConsumed);
             if (next.status == DecodeStatus::pointer && next.pointer.kind == PointerKind::drag) {
                 continue;
             }
@@ -532,15 +553,15 @@ void dispatchBufferedInput(SsgContext& context, std::string& buffer, PointerStat
     }
 }
 
-} // namespace ssg::app
+} // namespace ssg
 
 int main(int argc, char** argv) {
-    using namespace ssg::app;
+    using namespace ssg;
 
     recordStartupMark("main_entry");
     const int firstOperand = argc > 1 && std::string_view{argv[1]} == "--" ? 2 : 1;
     const fs::path argument = argc > firstOperand ? argv[firstOperand] : fs::path{};
-    auto target = resolve_launch(argument);
+    auto target = resolveLaunch(argument);
 
     fs::path stateBase;
     if (const char* stateOverride = std::getenv("SSG_STATE_DIR"); stateOverride != nullptr && *stateOverride != '\0' && fs::path{stateOverride}.is_absolute()) {
@@ -648,7 +669,9 @@ int main(int argc, char** argv) {
             auto& snapshot = context.activeSnapshot;
             if (snapshot) {
                 auto grid = renderer.render(*snapshot);
-                std::string frame = ssg::app::encode_frame(grid, colorDepth, !pointer.gutterDrag.has_value());
+                std::string frame =
+                    ssg::encodeFrame(grid, colorDepth,
+                                     !pointer.gutterDrag.has_value());
                 if (!firstFrameMarked) {
                     recordStartupMark("first_content_frame");
                     firstFrameMarked = true;
@@ -674,7 +697,7 @@ int main(int argc, char** argv) {
             char bytes[4096];
             std::optional<int> dragEdge;
             if (pointer.dragging && snapshot && snapshot->document) {
-                dragEdge = ssg::app::edge_scroll(pointer.dragging, pointer.lastRow, snapshot->document->content);
+                dragEdge = ssg::edge_scroll(pointer.dragging, pointer.lastRow, snapshot->document->content);
             }
             if (dragEdge) {
                 auto const ready = waitReadiness(kEdgeScrollIntervalMs, context.signalReadFd, -1);

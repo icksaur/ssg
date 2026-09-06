@@ -1241,30 +1241,57 @@ endif()
 # layout, and rendering behavior is in the ssg library.
 #
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    add_library(ssg_terminal_objects OBJECT
+        ${SSG_SOURCE_DIR}/src/Terminal.cpp
+        ${SSG_SOURCE_DIR}/src/TerminalCapabilities.cpp
+        ${SSG_SOURCE_DIR}/src/TerminalInput.cpp
+        ${SSG_SOURCE_DIR}/src/TerminalOutput.cpp
+        ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
+    )
+    target_include_directories(ssg_terminal_objects PUBLIC
+        "${SSG_SOURCE_DIR}/include")
+    target_link_libraries(ssg_terminal_objects PUBLIC ssg_core)
+    ssg_configure_component(ssg_terminal_objects)
+
     add_executable(ssg_app
         ${SSG_SOURCE_DIR}/src/main.cpp
-        ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
-        ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
         ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp
     )
     set_target_properties(ssg_app PROPERTIES OUTPUT_NAME ssg)
-    target_link_libraries(ssg_app PRIVATE ssg_tui_objects)
+    target_link_libraries(ssg_app PRIVATE
+        ssg_terminal_objects
+        ssg_tui_objects)
 
     ssg_add_test_suite(
-        NAME test_ssg_app
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_ssg_app.cpp
-        SYMBOL test_ssg_app
-        SOURCES
-            ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
-            ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
-            ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp)
-    ssg_test_include_directories(test_ssg_app PRIVATE
-        ${SSG_SOURCE_DIR}/tests
-    )
-    ssg_test_compile_definitions(test_ssg_app PRIVATE
-        SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}"
-    )
-    ssg_test_link_libraries(test_ssg_app PRIVATE ssg_tui_objects)
+        NAME test_terminal
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal.cpp
+        SYMBOL test_terminal)
+    ssg_add_test_suite(
+        NAME test_terminal_capabilities
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_capabilities.cpp
+        SYMBOL test_terminal_capabilities)
+    ssg_add_test_suite(
+        NAME test_terminal_input
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_input.cpp
+        SYMBOL test_terminal_input)
+    ssg_add_test_suite(
+        NAME test_terminal_output
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_output.cpp
+        SYMBOL test_terminal_output)
+
+    foreach(test_target
+            test_terminal
+            test_terminal_capabilities
+            test_terminal_input
+            test_terminal_output)
+        ssg_test_include_directories(${test_target} PRIVATE
+            ${SSG_SOURCE_DIR}/tests)
+        ssg_test_compile_definitions(${test_target} PRIVATE
+            SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}")
+        ssg_test_link_libraries(${test_target} PRIVATE
+            ssg_terminal_objects
+            ssg_tui_objects)
+    endforeach()
 
 endif()
 

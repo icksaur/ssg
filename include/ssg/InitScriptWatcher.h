@@ -12,7 +12,7 @@ class ScriptHost;
 class Editor;
 }  // namespace ssg
 
-namespace ssg::app {
+namespace ssg {
 
 // Evaluates `script` (already read from `scriptPath`, used only for diagnostic
 // messages) through the process-lifetime ScriptHost -- the SINGLE funnel used by
@@ -59,4 +59,4 @@ private:
     std::optional<std::string> pendingScript_;
 };
 
-}  // namespace ssg::app
+}  // namespace ssg

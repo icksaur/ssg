@@ -6,7 +6,7 @@
 #include <ssg/PaletteSearcher.h>
 #include <ssg/TreeModel.h>
 
-namespace ssg::app {
+namespace ssg {
 namespace {
 
 // The one list of scrollable surfaces. `route_pointer` and `route_wheel` both
@@ -246,4 +246,4 @@ std::optional<int> edge_scroll(bool dragging, int pointerRow,
     return std::nullopt;
 }
 
-}  // namespace ssg::app
+}  // namespace ssg

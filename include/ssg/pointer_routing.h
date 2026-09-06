@@ -8,7 +8,7 @@
 // directly; the loop does only decode -> refresh -> hit_test -> resolve -> route
 // -> input.
 
-#include <ssg/ssg_terminal.h>
+#include <ssg/TerminalInput.h>
 
 #include <ssg/ClientInput.h>
 #include <ssg/HitTester.h>
@@ -22,7 +22,7 @@
 #include <string_view>
 #include <vector>
 
-namespace ssg::app {
+namespace ssg {
 
 // Which scroll a gesture drives, by the surface it targets. Declared here
 // because both the wheel and the gutter routing name surfaces with it.
@@ -161,4 +161,4 @@ struct PointerTargets {
 [[nodiscard]] std::optional<int> edge_scroll(bool dragging, int pointer_row,
                                              ssg::Rect const& content);
 
-}  // namespace ssg::app
+}  // namespace ssg

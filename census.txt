@@ -1329,16 +1329,16 @@ ssg/HitTester.h	var	ssg::RegionHit::scrollDenominator	std::uint32_t
 ssg/HitTester.h	var	ssg::RegionHit::scrollNumerator	std::uint32_t
 ssg/HitTester.h	var	ssg::RegionHit::tabIndex	std::uint32_t
 ssg/InitScriptWatcher.h	class	ssg::Editor
+ssg/InitScriptWatcher.h	class	ssg::InitScriptWatcher
 ssg/InitScriptWatcher.h	class	ssg::ScriptHost
-ssg/InitScriptWatcher.h	class	ssg::app::InitScriptWatcher
-ssg/InitScriptWatcher.h	func	ssg::app::InitScriptWatcher::InitScriptWatcher	void (const InitScriptWatcher &)
-ssg/InitScriptWatcher.h	func	ssg::app::InitScriptWatcher::InitScriptWatcher	void (std::filesystem::path, std::optional<std::string>)
-ssg/InitScriptWatcher.h	func	ssg::app::InitScriptWatcher::drainAndEvaluate	void (ScriptHost &, Editor &)
-ssg/InitScriptWatcher.h	func	ssg::app::InitScriptWatcher::operator=	InitScriptWatcher &(const InitScriptWatcher &)
-ssg/InitScriptWatcher.h	func	ssg::app::InitScriptWatcher::wakeDescriptor	int () const noexcept
-ssg/InitScriptWatcher.h	func	ssg::app::evaluateInitScript	void (ScriptHost &, Editor &, const std::filesystem::path &, const std::string &)
-ssg/InitScriptWatcher.h	func	ssg::app::loadInitScript	std::optional<std::string> (ScriptHost &, Editor &)
-ssg/InitScriptWatcher.h	func	ssg::app::resolveInitScriptPath	std::optional<std::filesystem::path> ()
+ssg/InitScriptWatcher.h	func	ssg::InitScriptWatcher::InitScriptWatcher	void (const InitScriptWatcher &)
+ssg/InitScriptWatcher.h	func	ssg::InitScriptWatcher::InitScriptWatcher	void (std::filesystem::path, std::optional<std::string>)
+ssg/InitScriptWatcher.h	func	ssg::InitScriptWatcher::drainAndEvaluate	void (ScriptHost &, Editor &)
+ssg/InitScriptWatcher.h	func	ssg::InitScriptWatcher::operator=	InitScriptWatcher &(const InitScriptWatcher &)
+ssg/InitScriptWatcher.h	func	ssg::InitScriptWatcher::wakeDescriptor	int () const noexcept
+ssg/InitScriptWatcher.h	func	ssg::evaluateInitScript	void (ScriptHost &, Editor &, const std::filesystem::path &, const std::string &)
+ssg/InitScriptWatcher.h	func	ssg::loadInitScript	std::optional<std::string> (ScriptHost &, Editor &)
+ssg/InitScriptWatcher.h	func	ssg::resolveInitScriptPath	std::optional<std::filesystem::path> ()
 ssg/KeyCode.h	enum	ssg::KeyCode
 ssg/KeyCode.h	enumerator	ssg::KeyCode::ArrowDown
 ssg/KeyCode.h	enumerator	ssg::KeyCode::ArrowLeft
@@ -3324,6 +3324,104 @@ ssg/TabManager.h	var	ssg::TabState::mode	DocumentMode
 ssg/TabManager.h	var	ssg::TabState::recovery	std::optional<ScratchDurability>
 ssg/TabManager.h	var	ssg::TabViewState::active	std::optional<TabId>
 ssg/TabManager.h	var	ssg::TabViewState::tabs	std::vector<TabState>
+ssg/Terminal.h	alias	ssg::TerminalModes::Writer
+ssg/Terminal.h	class	ssg::TerminalModes
+ssg/Terminal.h	class	ssg::TerminalModes::Guard
+ssg/Terminal.h	class	ssg::TerminalSession
+ssg/Terminal.h	func	ssg::TerminalModes::Guard::Guard	void () noexcept
+ssg/Terminal.h	func	ssg::TerminalModes::Guard::Guard	void (Guard &&) noexcept
+ssg/Terminal.h	func	ssg::TerminalModes::Guard::Guard	void (const Guard &)
+ssg/Terminal.h	func	ssg::TerminalModes::Guard::operator=	Guard &(Guard &&) noexcept
+ssg/Terminal.h	func	ssg::TerminalModes::Guard::operator=	Guard &(const Guard &)
+ssg/Terminal.h	func	ssg::TerminalModes::TerminalModes	void (Writer)
+ssg/Terminal.h	func	ssg::TerminalModes::TerminalModes	void (const TerminalModes &)
+ssg/Terminal.h	func	ssg::TerminalModes::depth	std::size_t () const noexcept
+ssg/Terminal.h	func	ssg::TerminalModes::enter	Guard (TerminalMode)
+ssg/Terminal.h	func	ssg::TerminalModes::operator=	TerminalModes &(const TerminalModes &)
+ssg/Terminal.h	func	ssg::TerminalSession::TerminalSession	void ()
+ssg/Terminal.h	func	ssg::TerminalSession::TerminalSession	void (const TerminalSession &)
+ssg/Terminal.h	func	ssg::TerminalSession::active	bool () const noexcept
+ssg/Terminal.h	func	ssg::TerminalSession::enableKeyboardProtocol	void ()
+ssg/Terminal.h	func	ssg::TerminalSession::operator=	TerminalSession &(const TerminalSession &)
+ssg/Terminal.h	func	ssg::TerminalSession::restore	void () noexcept
+ssg/Terminal.h	func	ssg::allModesUndoSequence	std::string_view () noexcept
+ssg/Terminal.h	func	ssg::classifySignalTags	SignalEvents (std::string_view)
+ssg/Terminal.h	func	ssg::terminalSize	ViewportDimensions ()
+ssg/Terminal.h	func	ssg::writeAll	void (std::string_view)
+ssg/Terminal.h	struct	ssg::SignalEvents
+ssg/Terminal.h	struct	ssg::TerminalMode
+ssg/Terminal.h	var	ssg::SignalEvents::resize	bool
+ssg/Terminal.h	var	ssg::SignalEvents::terminate	std::optional<int>
+ssg/Terminal.h	var	ssg::TerminalMode::enter	std::string_view
+ssg/Terminal.h	var	ssg::TerminalMode::leave	std::string_view
+ssg/Terminal.h	var	ssg::kAllModes	const TerminalMode[7]
+ssg/Terminal.h	var	ssg::kAlternateScreen	const TerminalMode
+ssg/Terminal.h	var	ssg::kBracketedPaste	const TerminalMode
+ssg/Terminal.h	var	ssg::kCursorHidden	const TerminalMode
+ssg/Terminal.h	var	ssg::kCursorStyleBar	const TerminalMode
+ssg/Terminal.h	var	ssg::kKeyboardProtocol	const TerminalMode
+ssg/Terminal.h	var	ssg::kMouseButtons	const TerminalMode
+ssg/Terminal.h	var	ssg::kMouseMotion	const TerminalMode
+ssg/Terminal.h	var	ssg::kMouseSgrCoordinates	const TerminalMode
+ssg/TerminalCapabilities.h	alias	ssg::TerminalCapabilities::Clock
+ssg/TerminalCapabilities.h	alias	ssg::TerminalCapabilities::EnvironmentLookup
+ssg/TerminalCapabilities.h	class	ssg::TerminalCapabilities
+ssg/TerminalCapabilities.h	enum	ssg::Capability
+ssg/TerminalCapabilities.h	enumerator	ssg::Capability::ClipboardWrite
+ssg/TerminalCapabilities.h	enumerator	ssg::Capability::KeyboardProtocol
+ssg/TerminalCapabilities.h	enumerator	ssg::Capability::SynchronizedOutput
+ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::TerminalCapabilities	void (EnvironmentLookup, Clock)
+ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::beginProbe	std::string ()
+ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::colorDepth	ColorDepth () const
+ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::endProbe	void ()
+ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::has	bool (Capability) const
+ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::observeReply	void (std::string_view)
+ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::probing	bool () const
+ssg/TerminalCapabilities.h	func	ssg::capabilityName	std::string_view (Capability)
+ssg/TerminalCapabilities.h	var	ssg::TerminalCapabilities::kProbeWindow	const std::chrono::milliseconds
+ssg/TerminalCapabilities.h	var	ssg::kAllCapabilities	const std::array<Capability, 3>
+ssg/TerminalInput.h	enum	ssg::DecodeStatus
+ssg/TerminalInput.h	enum	ssg::PointerButton
+ssg/TerminalInput.h	enum	ssg::PointerKind
+ssg/TerminalInput.h	enumerator	ssg::DecodeStatus::incomplete
+ssg/TerminalInput.h	enumerator	ssg::DecodeStatus::key
+ssg/TerminalInput.h	enumerator	ssg::DecodeStatus::none
+ssg/TerminalInput.h	enumerator	ssg::DecodeStatus::paste
+ssg/TerminalInput.h	enumerator	ssg::DecodeStatus::pointer
+ssg/TerminalInput.h	enumerator	ssg::DecodeStatus::reply
+ssg/TerminalInput.h	enumerator	ssg::DecodeStatus::scroll
+ssg/TerminalInput.h	enumerator	ssg::PointerButton::left
+ssg/TerminalInput.h	enumerator	ssg::PointerButton::middle
+ssg/TerminalInput.h	enumerator	ssg::PointerButton::other
+ssg/TerminalInput.h	enumerator	ssg::PointerButton::right
+ssg/TerminalInput.h	enumerator	ssg::PointerKind::drag
+ssg/TerminalInput.h	enumerator	ssg::PointerKind::press
+ssg/TerminalInput.h	enumerator	ssg::PointerKind::release
+ssg/TerminalInput.h	func	ssg::applicationQuitRequested	bool (const KeyStroke &) noexcept
+ssg/TerminalInput.h	func	ssg::decodeInput	Decoded (std::string_view, bool, std::size_t &)
+ssg/TerminalInput.h	func	ssg::operator==	bool (const PointerEvent &, const PointerEvent &)
+ssg/TerminalInput.h	struct	ssg::Decoded
+ssg/TerminalInput.h	struct	ssg::PointerEvent
+ssg/TerminalInput.h	var	ssg::Decoded::pointer	PointerEvent
+ssg/TerminalInput.h	var	ssg::Decoded::reply	std::string
+ssg/TerminalInput.h	var	ssg::Decoded::scroll	std::int64_t
+ssg/TerminalInput.h	var	ssg::Decoded::status	DecodeStatus
+ssg/TerminalInput.h	var	ssg::Decoded::stroke	KeyStroke
+ssg/TerminalInput.h	var	ssg::Decoded::text	std::string
+ssg/TerminalInput.h	var	ssg::PointerEvent::alt	bool
+ssg/TerminalInput.h	var	ssg::PointerEvent::button	PointerButton
+ssg/TerminalInput.h	var	ssg::PointerEvent::column	int
+ssg/TerminalInput.h	var	ssg::PointerEvent::kind	PointerKind
+ssg/TerminalInput.h	var	ssg::PointerEvent::row	int
+ssg/TerminalInput.h	var	ssg::kMaxPasteBytes	const std::size_t
+ssg/TerminalInput.h	var	ssg::kMaxSequenceBytes	const std::size_t
+ssg/TerminalOutput.h	class	ssg::SystemClipboardWriter
+ssg/TerminalOutput.h	func	ssg::SystemClipboardWriter::bytesFor	std::optional<std::string> (const std::optional<ClipboardWrite> &, bool)
+ssg/TerminalOutput.h	func	ssg::colorDepthName	std::string_view (ColorDepth)
+ssg/TerminalOutput.h	func	ssg::detectColorDepth	ColorDepth (const char *, const char *, const char *, const char *)
+ssg/TerminalOutput.h	func	ssg::encodeAnsiFrame	std::string (const CellGrid &, ColorDepth)
+ssg/TerminalOutput.h	func	ssg::encodeClipboardWrite	std::string (std::string_view)
+ssg/TerminalOutput.h	func	ssg::encodeFrame	std::string (const CellGrid &, ColorDepth, bool)
 ssg/TextCodec.h	class	ssg::ValidatedUtf8
 ssg/TextCodec.h	enum	ssg::FinalNewlinePolicy
 ssg/TextCodec.h	enum	ssg::LineTerminator
@@ -4180,153 +4278,51 @@ ssg/platform_files.h	var	ssg::FileReadResult::message	std::string
 ssg/platform_files.h	var	ssg::FileReadResult::status	FileIoStatus
 ssg/platform_files.h	var	ssg::PathValidation::componentIndex	std::size_t
 ssg/platform_files.h	var	ssg::PathValidation::error	PathError
-ssg/pointer_routing.h	enum	ssg::app::WheelTarget
-ssg/pointer_routing.h	enumerator	ssg::app::WheelTarget::editor
-ssg/pointer_routing.h	enumerator	ssg::app::WheelTarget::none
-ssg/pointer_routing.h	enumerator	ssg::app::WheelTarget::palette
-ssg/pointer_routing.h	enumerator	ssg::app::WheelTarget::tree
-ssg/pointer_routing.h	func	ssg::app::GutterFraction::operator==	bool (const GutterFraction &) const
-ssg/pointer_routing.h	func	ssg::app::double_click_dispatch	PointerDispatch (ssg::DocumentPosition)
-ssg/pointer_routing.h	func	ssg::app::edge_scroll	std::optional<int> (bool, int, const ssg::Rect &)
-ssg/pointer_routing.h	func	ssg::app::gutter_fraction	GutterFraction (int, int, int) noexcept
-ssg/pointer_routing.h	func	ssg::app::is_scrollbar_region	bool (ssg::HitRegion) noexcept
-ssg/pointer_routing.h	func	ssg::app::register_click_is_double	bool (ClickTracker &, std::chrono::steady_clock::time_point, std::uint64_t, int, int, std::chrono::milliseconds) noexcept
-ssg/pointer_routing.h	func	ssg::app::route_pointer	PointerDispatch (const ssg::RegionHit &, PointerButton, PointerKind, bool, bool, std::optional<ssg::DocumentPosition>, const PointerTargets &)
-ssg/pointer_routing.h	func	ssg::app::route_wheel	WheelTarget (ssg::HitRegion)
-ssg/pointer_routing.h	func	ssg::app::scrollable_regions	std::span<const ScrollableRegionDescriptor> () noexcept
-ssg/pointer_routing.h	func	ssg::app::scrollbar_grab_offset	int (int, int, int) noexcept
-ssg/pointer_routing.h	struct	ssg::app::ClickTracker
-ssg/pointer_routing.h	struct	ssg::app::ClientScroll
-ssg/pointer_routing.h	struct	ssg::app::GutterFraction
-ssg/pointer_routing.h	struct	ssg::app::PointerDispatch
-ssg/pointer_routing.h	struct	ssg::app::PointerTargets
-ssg/pointer_routing.h	struct	ssg::app::ScrollableRegionDescriptor
-ssg/pointer_routing.h	var	ssg::app::ClickTracker::column	int
-ssg/pointer_routing.h	var	ssg::app::ClickTracker::row	int
-ssg/pointer_routing.h	var	ssg::app::ClickTracker::surface	std::uint64_t
-ssg/pointer_routing.h	var	ssg::app::ClickTracker::time	std::optional<std::chrono::steady_clock::time_point>
-ssg/pointer_routing.h	var	ssg::app::ClientScroll::denominator	std::uint32_t
-ssg/pointer_routing.h	var	ssg::app::ClientScroll::numerator	std::uint32_t
-ssg/pointer_routing.h	var	ssg::app::ClientScroll::target	WheelTarget
-ssg/pointer_routing.h	var	ssg::app::GutterFraction::denominator	std::uint32_t
-ssg/pointer_routing.h	var	ssg::app::GutterFraction::numerator	std::uint32_t
-ssg/pointer_routing.h	var	ssg::app::PointerDispatch::begins_drag	bool
-ssg/pointer_routing.h	var	ssg::app::PointerDispatch::client_scroll	std::optional<ClientScroll>
-ssg/pointer_routing.h	var	ssg::app::PointerDispatch::command	std::optional<ssg::ClientCommand>
-ssg/pointer_routing.h	var	ssg::app::PointerDispatch::ends_drag	bool
-ssg/pointer_routing.h	var	ssg::app::PointerDispatch::semantic_input	std::optional<ssg::ClientInput>
-ssg/pointer_routing.h	var	ssg::app::PointerTargets::document_position	std::optional<ssg::DocumentPosition>
-ssg/pointer_routing.h	var	ssg::app::PointerTargets::external_invocation	std::optional<ssg::ExternalActionInvocation>
-ssg/pointer_routing.h	var	ssg::app::PointerTargets::notice_action_id	std::optional<std::string>
-ssg/pointer_routing.h	var	ssg::app::PointerTargets::picker_activation	std::optional<ssg::PickerActivation>
-ssg/pointer_routing.h	var	ssg::app::PointerTargets::picker_candidate_id	std::optional<std::string>
-ssg/pointer_routing.h	var	ssg::app::PointerTargets::tab_id	std::optional<ssg::TabId>
-ssg/pointer_routing.h	var	ssg::app::PointerTargets::ui_node_id	std::optional<ssg::UiNodeId>
-ssg/pointer_routing.h	var	ssg::app::ScrollableRegionDescriptor::content	ssg::HitRegion
-ssg/pointer_routing.h	var	ssg::app::ScrollableRegionDescriptor::scrollbar	ssg::HitRegion
-ssg/pointer_routing.h	var	ssg::app::ScrollableRegionDescriptor::target	WheelTarget
-ssg/ssg_terminal.h	alias	ssg::app::TerminalCapabilities::Clock
-ssg/ssg_terminal.h	alias	ssg::app::TerminalCapabilities::EnvironmentLookup
-ssg/ssg_terminal.h	alias	ssg::app::TerminalModes::Writer
-ssg/ssg_terminal.h	class	ssg::app::SystemClipboardWriter
-ssg/ssg_terminal.h	class	ssg::app::TerminalCapabilities
-ssg/ssg_terminal.h	class	ssg::app::TerminalModes
-ssg/ssg_terminal.h	class	ssg::app::TerminalModes::Guard
-ssg/ssg_terminal.h	class	ssg::app::TerminalSession
-ssg/ssg_terminal.h	enum	ssg::app::Capability
-ssg/ssg_terminal.h	enum	ssg::app::DecodeStatus
-ssg/ssg_terminal.h	enum	ssg::app::PointerButton
-ssg/ssg_terminal.h	enum	ssg::app::PointerKind
-ssg/ssg_terminal.h	enumerator	ssg::app::Capability::ClipboardWrite
-ssg/ssg_terminal.h	enumerator	ssg::app::Capability::KeyboardProtocol
-ssg/ssg_terminal.h	enumerator	ssg::app::Capability::SynchronizedOutput
-ssg/ssg_terminal.h	enumerator	ssg::app::DecodeStatus::incomplete
-ssg/ssg_terminal.h	enumerator	ssg::app::DecodeStatus::key
-ssg/ssg_terminal.h	enumerator	ssg::app::DecodeStatus::none
-ssg/ssg_terminal.h	enumerator	ssg::app::DecodeStatus::paste
-ssg/ssg_terminal.h	enumerator	ssg::app::DecodeStatus::pointer
-ssg/ssg_terminal.h	enumerator	ssg::app::DecodeStatus::reply
-ssg/ssg_terminal.h	enumerator	ssg::app::DecodeStatus::scroll
-ssg/ssg_terminal.h	enumerator	ssg::app::PointerButton::left
-ssg/ssg_terminal.h	enumerator	ssg::app::PointerButton::middle
-ssg/ssg_terminal.h	enumerator	ssg::app::PointerButton::other
-ssg/ssg_terminal.h	enumerator	ssg::app::PointerButton::right
-ssg/ssg_terminal.h	enumerator	ssg::app::PointerKind::drag
-ssg/ssg_terminal.h	enumerator	ssg::app::PointerKind::press
-ssg/ssg_terminal.h	enumerator	ssg::app::PointerKind::release
-ssg/ssg_terminal.h	func	ssg::app::SystemClipboardWriter::bytesFor	std::optional<std::string> (const std::optional<ssg::ClipboardWrite> &, bool)
-ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::TerminalCapabilities	void (EnvironmentLookup, Clock)
-ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::beginProbe	std::string ()
-ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::colorDepth	ssg::ColorDepth () const
-ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::endProbe	void ()
-ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::has	bool (Capability) const
-ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::observeReply	void (std::string_view)
-ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::probing	bool () const
-ssg/ssg_terminal.h	func	ssg::app::TerminalModes::Guard::Guard	void () noexcept
-ssg/ssg_terminal.h	func	ssg::app::TerminalModes::Guard::Guard	void (Guard &&) noexcept
-ssg/ssg_terminal.h	func	ssg::app::TerminalModes::Guard::Guard	void (const Guard &)
-ssg/ssg_terminal.h	func	ssg::app::TerminalModes::Guard::operator=	Guard &(Guard &&) noexcept
-ssg/ssg_terminal.h	func	ssg::app::TerminalModes::Guard::operator=	Guard &(const Guard &)
-ssg/ssg_terminal.h	func	ssg::app::TerminalModes::TerminalModes	void (Writer)
-ssg/ssg_terminal.h	func	ssg::app::TerminalModes::TerminalModes	void (const TerminalModes &)
-ssg/ssg_terminal.h	func	ssg::app::TerminalModes::depth	std::size_t () const noexcept
-ssg/ssg_terminal.h	func	ssg::app::TerminalModes::enter	Guard (TerminalMode)
-ssg/ssg_terminal.h	func	ssg::app::TerminalModes::operator=	TerminalModes &(const TerminalModes &)
-ssg/ssg_terminal.h	func	ssg::app::TerminalSession::TerminalSession	void ()
-ssg/ssg_terminal.h	func	ssg::app::TerminalSession::TerminalSession	void (const TerminalSession &)
-ssg/ssg_terminal.h	func	ssg::app::TerminalSession::active	bool () const noexcept
-ssg/ssg_terminal.h	func	ssg::app::TerminalSession::enableKeyboardProtocol	void ()
-ssg/ssg_terminal.h	func	ssg::app::TerminalSession::operator=	TerminalSession &(const TerminalSession &)
-ssg/ssg_terminal.h	func	ssg::app::TerminalSession::restore	void () noexcept
-ssg/ssg_terminal.h	func	ssg::app::all_modes_undo_sequence	std::string_view () noexcept
-ssg/ssg_terminal.h	func	ssg::app::application_quit_requested	bool (const KeyStroke &) noexcept
-ssg/ssg_terminal.h	func	ssg::app::capability_name	std::string_view (Capability)
-ssg/ssg_terminal.h	func	ssg::app::classify_signal_tags	SignalEvents (std::string_view)
-ssg/ssg_terminal.h	func	ssg::app::color_depth_name	std::string_view (ssg::ColorDepth)
-ssg/ssg_terminal.h	func	ssg::app::decode_input	Decoded (std::string_view, bool, std::size_t &)
-ssg/ssg_terminal.h	func	ssg::app::detect_color_depth	ssg::ColorDepth (const char *, const char *, const char *, const char *)
-ssg/ssg_terminal.h	func	ssg::app::encode_ansi_frame	std::string (const ssg::CellGrid &, ssg::ColorDepth)
-ssg/ssg_terminal.h	func	ssg::app::encode_clipboard_write	std::string (std::string_view)
-ssg/ssg_terminal.h	func	ssg::app::encode_frame	std::string (const ssg::CellGrid &, ssg::ColorDepth, bool)
-ssg/ssg_terminal.h	func	ssg::app::operator==	bool (const PointerEvent &, const PointerEvent &)
-ssg/ssg_terminal.h	func	ssg::app::resolve_launch	LaunchTarget (const std::filesystem::path &)
-ssg/ssg_terminal.h	func	ssg::app::terminalSize	ssg::ViewportDimensions ()
-ssg/ssg_terminal.h	func	ssg::app::writeAll	void (std::string_view)
-ssg/ssg_terminal.h	struct	ssg::app::Decoded
-ssg/ssg_terminal.h	struct	ssg::app::LaunchTarget
-ssg/ssg_terminal.h	struct	ssg::app::PointerEvent
-ssg/ssg_terminal.h	struct	ssg::app::SignalEvents
-ssg/ssg_terminal.h	struct	ssg::app::TerminalMode
-ssg/ssg_terminal.h	var	ssg::app::Decoded::pointer	PointerEvent
-ssg/ssg_terminal.h	var	ssg::app::Decoded::reply	std::string
-ssg/ssg_terminal.h	var	ssg::app::Decoded::scroll	std::int64_t
-ssg/ssg_terminal.h	var	ssg::app::Decoded::status	DecodeStatus
-ssg/ssg_terminal.h	var	ssg::app::Decoded::stroke	ssg::KeyStroke
-ssg/ssg_terminal.h	var	ssg::app::Decoded::text	std::string
-ssg/ssg_terminal.h	var	ssg::app::LaunchTarget::cwd	std::filesystem::path
-ssg/ssg_terminal.h	var	ssg::app::LaunchTarget::file	std::optional<std::string>
-ssg/ssg_terminal.h	var	ssg::app::PointerEvent::alt	bool
-ssg/ssg_terminal.h	var	ssg::app::PointerEvent::button	PointerButton
-ssg/ssg_terminal.h	var	ssg::app::PointerEvent::column	int
-ssg/ssg_terminal.h	var	ssg::app::PointerEvent::kind	PointerKind
-ssg/ssg_terminal.h	var	ssg::app::PointerEvent::row	int
-ssg/ssg_terminal.h	var	ssg::app::SignalEvents::resize	bool
-ssg/ssg_terminal.h	var	ssg::app::SignalEvents::terminate	std::optional<int>
-ssg/ssg_terminal.h	var	ssg::app::TerminalCapabilities::kProbeWindow	const std::chrono::milliseconds
-ssg/ssg_terminal.h	var	ssg::app::TerminalMode::enter	std::string_view
-ssg/ssg_terminal.h	var	ssg::app::TerminalMode::leave	std::string_view
-ssg/ssg_terminal.h	var	ssg::app::kAllCapabilities	const std::array<Capability, 3>
-ssg/ssg_terminal.h	var	ssg::app::kAllModes	const TerminalMode[7]
-ssg/ssg_terminal.h	var	ssg::app::kAlternateScreen	const TerminalMode
-ssg/ssg_terminal.h	var	ssg::app::kBracketedPaste	const TerminalMode
-ssg/ssg_terminal.h	var	ssg::app::kCursorHidden	const TerminalMode
-ssg/ssg_terminal.h	var	ssg::app::kCursorStyleBar	const TerminalMode
-ssg/ssg_terminal.h	var	ssg::app::kKeyboardProtocol	const TerminalMode
-ssg/ssg_terminal.h	var	ssg::app::kMaxPasteBytes	const std::size_t
-ssg/ssg_terminal.h	var	ssg::app::kMaxSequenceBytes	const std::size_t
-ssg/ssg_terminal.h	var	ssg::app::kMouseButtons	const TerminalMode
-ssg/ssg_terminal.h	var	ssg::app::kMouseMotion	const TerminalMode
-ssg/ssg_terminal.h	var	ssg::app::kMouseSgrCoordinates	const TerminalMode
+ssg/pointer_routing.h	enum	ssg::WheelTarget
+ssg/pointer_routing.h	enumerator	ssg::WheelTarget::editor
+ssg/pointer_routing.h	enumerator	ssg::WheelTarget::none
+ssg/pointer_routing.h	enumerator	ssg::WheelTarget::palette
+ssg/pointer_routing.h	enumerator	ssg::WheelTarget::tree
+ssg/pointer_routing.h	func	ssg::GutterFraction::operator==	bool (const GutterFraction &) const
+ssg/pointer_routing.h	func	ssg::double_click_dispatch	PointerDispatch (ssg::DocumentPosition)
+ssg/pointer_routing.h	func	ssg::edge_scroll	std::optional<int> (bool, int, const ssg::Rect &)
+ssg/pointer_routing.h	func	ssg::gutter_fraction	GutterFraction (int, int, int) noexcept
+ssg/pointer_routing.h	func	ssg::is_scrollbar_region	bool (ssg::HitRegion) noexcept
+ssg/pointer_routing.h	func	ssg::register_click_is_double	bool (ClickTracker &, std::chrono::steady_clock::time_point, std::uint64_t, int, int, std::chrono::milliseconds) noexcept
+ssg/pointer_routing.h	func	ssg::route_pointer	PointerDispatch (const ssg::RegionHit &, PointerButton, PointerKind, bool, bool, std::optional<ssg::DocumentPosition>, const PointerTargets &)
+ssg/pointer_routing.h	func	ssg::route_wheel	WheelTarget (ssg::HitRegion)
+ssg/pointer_routing.h	func	ssg::scrollable_regions	std::span<const ScrollableRegionDescriptor> () noexcept
+ssg/pointer_routing.h	func	ssg::scrollbar_grab_offset	int (int, int, int) noexcept
+ssg/pointer_routing.h	struct	ssg::ClickTracker
+ssg/pointer_routing.h	struct	ssg::ClientScroll
+ssg/pointer_routing.h	struct	ssg::GutterFraction
+ssg/pointer_routing.h	struct	ssg::PointerDispatch
+ssg/pointer_routing.h	struct	ssg::PointerTargets
+ssg/pointer_routing.h	struct	ssg::ScrollableRegionDescriptor
+ssg/pointer_routing.h	var	ssg::ClickTracker::column	int
+ssg/pointer_routing.h	var	ssg::ClickTracker::row	int
+ssg/pointer_routing.h	var	ssg::ClickTracker::surface	std::uint64_t
+ssg/pointer_routing.h	var	ssg::ClickTracker::time	std::optional<std::chrono::steady_clock::time_point>
+ssg/pointer_routing.h	var	ssg::ClientScroll::denominator	std::uint32_t
+ssg/pointer_routing.h	var	ssg::ClientScroll::numerator	std::uint32_t
+ssg/pointer_routing.h	var	ssg::ClientScroll::target	WheelTarget
+ssg/pointer_routing.h	var	ssg::GutterFraction::denominator	std::uint32_t
+ssg/pointer_routing.h	var	ssg::GutterFraction::numerator	std::uint32_t
+ssg/pointer_routing.h	var	ssg::PointerDispatch::begins_drag	bool
+ssg/pointer_routing.h	var	ssg::PointerDispatch::client_scroll	std::optional<ClientScroll>
+ssg/pointer_routing.h	var	ssg::PointerDispatch::command	std::optional<ssg::ClientCommand>
+ssg/pointer_routing.h	var	ssg::PointerDispatch::ends_drag	bool
+ssg/pointer_routing.h	var	ssg::PointerDispatch::semantic_input	std::optional<ssg::ClientInput>
+ssg/pointer_routing.h	var	ssg::PointerTargets::document_position	std::optional<ssg::DocumentPosition>
+ssg/pointer_routing.h	var	ssg::PointerTargets::external_invocation	std::optional<ssg::ExternalActionInvocation>
+ssg/pointer_routing.h	var	ssg::PointerTargets::notice_action_id	std::optional<std::string>
+ssg/pointer_routing.h	var	ssg::PointerTargets::picker_activation	std::optional<ssg::PickerActivation>
+ssg/pointer_routing.h	var	ssg::PointerTargets::picker_candidate_id	std::optional<std::string>
+ssg/pointer_routing.h	var	ssg::PointerTargets::tab_id	std::optional<ssg::TabId>
+ssg/pointer_routing.h	var	ssg::PointerTargets::ui_node_id	std::optional<ssg::UiNodeId>
+ssg/pointer_routing.h	var	ssg::ScrollableRegionDescriptor::content	ssg::HitRegion
+ssg/pointer_routing.h	var	ssg::ScrollableRegionDescriptor::scrollbar	ssg::HitRegion
+ssg/pointer_routing.h	var	ssg::ScrollableRegionDescriptor::target	WheelTarget
 ssg/types.h	enum	ssg::CycleDirection
 ssg/types.h	enum	ssg::DocumentMode
 ssg/types.h	enumerator	ssg::CycleDirection::Next
