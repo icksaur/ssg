@@ -97,18 +97,8 @@ ClientInputResult routeInput(Editor& editor, ClientKeyInput const& input) {
         return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
     };
 
-    auto const catalogRevision = editor.catalog.revision();
-    if (!editor.inputKeymap ||
-        editor.inputKeymapGeneration != editor.keymapGeneration ||
-        editor.inputCatalogRevision != catalogRevision) {
-        editor.inputKeymap =
-            std::make_unique<CompiledKeymap>(editor.keymap, editor.catalog);
-        editor.inputKeymapGeneration = editor.keymapGeneration;
-        editor.inputCatalogRevision = catalogRevision;
-    }
-
     if (input.stroke.code != KeyCode::None) {
-        auto const resolved = editor.inputKeymap->resolve(
+        auto const resolved = editor.resolveInputKeymap().resolve(
             std::array{CompiledKeymap::compile(input.stroke)}, routing.focus);
         if (resolved.kind == KeymapMatchKind::Resolved) {
             auto const& command = resolved.command;

@@ -209,6 +209,7 @@ public:
         std::vector<CommandSpec> commands);
     [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
     void resetKeymapToDefault();
+    [[nodiscard]] CompiledKeymap const& resolveInputKeymap();
     void focusEditor();
 
     struct DeferredWorkCounts {
@@ -290,9 +291,13 @@ public:
     // command registers nothing -- so routing-change detection needs this
     // separate counter.
     std::uint64_t keymapGeneration = 0;
+
+private:
     std::unique_ptr<CompiledKeymap> inputKeymap;
     std::optional<std::uint64_t> inputKeymapGeneration;
     std::optional<CatalogRevision> inputCatalogRevision;
+
+public:
     ThemeSnapshot theme{};
     // UI glyphs and dimensions, beside the theme because they are the same
     // kind of thing: presentation this runtime owns and hands to layout.

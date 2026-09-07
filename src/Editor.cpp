@@ -174,7 +174,7 @@ SelectionViewState initialSelection() {
 
 std::filesystem::path canonicalDirectory(std::filesystem::path const& path) {
     std::error_code code;
-    auto canonical = std::filesystem::canonical(path, code);
+    auto canonical = canonicalPath(path, code);
     const auto status = code ? std::optional<FileStat>{} : statFile(canonical);
     if (code || !status || status->kind != FileKind::Directory) {
         throw std::invalid_argument{"workspace root must be an existing directory"};
@@ -254,7 +254,7 @@ std::optional<std::filesystem::path> workspaceChangePath(
         }
     }
     std::error_code code;
-    auto candidate = std::filesystem::weakly_canonical(root / supplied, code);
+    auto candidate = weaklyCanonicalPath(root / supplied, code);
     if (code) {
         message = code.message();
         return std::nullopt;
@@ -294,9 +294,9 @@ Editor::Editor(std::filesystem::path canonicalCwd,
                bool enableGitDiffWorker,
                bool enableFilesystemWatcher)
     : root{std::move(canonicalCwd)},
-      scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
-      recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
-      archiveRoot{std::filesystem::weakly_canonical(archiveRoot)},
+      scratchRoot{weaklyCanonicalPath(scratchRoot)},
+      recoveryRoot{weaklyCanonicalPath(recoveryRoot)},
+      archiveRoot{weaklyCanonicalPath(archiveRoot)},
       recovery{RecoveryManager::create(recoveryRoot)},
       scratch{ScratchStore::create(scratchRoot, root)},
       workspace{Workspace::create(root, recovery, this->archiveRoot)},
@@ -1243,6 +1243,17 @@ void Editor::resetKeymapToDefault() {
     std::lock_guard operationLock{operationMutex};
     keymap = defaultTerminalKeymap();
     ++keymapGeneration;
+}
+
+CompiledKeymap const& Editor::resolveInputKeymap() {
+    auto const catalogRevision = catalog.revision();
+    if (!inputKeymap || inputKeymapGeneration != keymapGeneration ||
+        inputCatalogRevision != catalogRevision) {
+        inputKeymap = std::make_unique<CompiledKeymap>(keymap, catalog);
+        inputKeymapGeneration = keymapGeneration;
+        inputCatalogRevision = catalogRevision;
+    }
+    return *inputKeymap;
 }
 
 void Editor::focusEditor() {

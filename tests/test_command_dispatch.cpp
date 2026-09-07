@@ -93,6 +93,60 @@ TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
     }
 }
 
+TEST(inputKeymapRebuildsForKeymapAndCatalogChanges) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+
+    ASSERT_TRUE(
+        runtime
+            ->dispatch({"keymap.bind",
+                        ssg::KeymapBindArguments{
+                            "Ctrl+KeyG", "oracle.late_command", "editor"}})
+            .accepted());
+
+    ssg::KeyStroke firstStroke;
+    firstStroke.code = ssg::KeyCode::KeyG;
+    firstStroke.control = true;
+    auto missing = runtime->input(ssg::ClientKeyInput{firstStroke, {}});
+    ASSERT_EQ(missing.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_TRUE(missing.command.has_value());
+    if (missing.command) {
+        ASSERT_EQ(missing.command->error, ssg::CommandError::UnknownCommand);
+    }
+
+    int calls = 0;
+    (void)runtime->registerCommand(ssg::CommandSpec{
+        .id = "oracle.late_command",
+        .owner = "test-oracle",
+        .summary = "records keymap cache invalidation",
+        .effect = ssg::CommandEffect::Mutation,
+        .binding = ssg::bindNoArgumentHandler(
+            [&](ssg::CommandContext&) {
+                ++calls;
+                return ssg::CommandHandlerResult::success();
+            }),
+    });
+
+    auto registered = runtime->input(ssg::ClientKeyInput{firstStroke, {}});
+    ASSERT_EQ(registered.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(calls, 1);
+
+    ASSERT_TRUE(
+        runtime
+            ->dispatch({"keymap.bind",
+                        ssg::KeymapBindArguments{
+                            "Ctrl+KeyH", "oracle.late_command", "editor"}})
+            .accepted());
+    ssg::KeyStroke secondStroke;
+    secondStroke.code = ssg::KeyCode::KeyH;
+    secondStroke.control = true;
+    auto rebound = runtime->input(ssg::ClientKeyInput{secondStroke, {}});
+    ASSERT_EQ(rebound.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(calls, 2);
+}
+
 // THE ORACLE for reentrant dispatch.
 //
 // Counts accepted mutating dispatches independently of the revision counter --
@@ -322,6 +376,7 @@ TEST(editorSessionAbsorbsSuccessfulWorkspaceChanges) {
 
 SSG_TEST_SUITE(test_command_dispatch) {
     RUN(viewActionResultsRemainExplicitAcrossTheAggregateBoundary);
+    RUN(inputKeymapRebuildsForKeymapAndCatalogChanges);
     RUN(aHandlerThatDispatchesIsToldToDeferInstead);
     RUN(routingCommandsQueueExactlyOneDirectOrdinaryTarget);
     RUN(aHandlerCannotMutateTheCommandCatalogReentrantly);
