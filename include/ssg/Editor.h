@@ -6,6 +6,7 @@
 #include <ssg/CompiledKeymap.h>
 #include <ssg/DiffModel.h>
 #include <ssg/DocumentHistory.h>
+#include <ssg/DocumentPointerGesture.h>
 #include <ssg/DraftAutosaveScheduler.h>
 #include <ssg/EditCommands.h>
 #include <ssg/ExternalModificationFlow.h>
@@ -387,15 +388,7 @@ public:
     mutable KeymapViewState commandCandidateKeymap;
     mutable bool commandCandidateCacheValid = false;
     PaneTopology paneTopology = PaneTopology::initial();
-    struct DocumentPointerGesture {
-        FileDocumentId documentId;
-        std::uint64_t documentRevision;
-        DocumentPosition anchor;
-        DocumentPosition active;
-        bool additive = false;
-        std::vector<Selection> baseline;
-    };
-    std::optional<DocumentPointerGesture> documentPointerGesture;
+    DocumentPointerGesture documentPointerGesture;
     bool wordWrap = false;
     bool lineNumbers = false;
     // The active document's immutable flattened text, shared by navigation and

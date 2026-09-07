@@ -182,7 +182,7 @@ ClientInputResult routeInput(Editor& editor,
     }
     if (input.phase == InputPointerPhase::Press ||
         input.phase == InputPointerPhase::Cancel) {
-        editor.documentPointerGesture.reset();
+        editor.documentPointerGesture.clear();
     }
     if (input.phase == InputPointerPhase::Cancel) {
         return handled();
@@ -223,13 +223,9 @@ ClientInputResult routeInput(Editor& editor,
                         std::nullopt, std::nullopt, std::move(baseline)});
             }
         }
-        editor.documentPointerGesture = Editor::DocumentPointerGesture{
-            *documentId,
-            editor.activeDocument()->revision(),
-            *position,
-            *position,
-            input.additive,
-            baseline};
+        editor.documentPointerGesture.begin(
+            *documentId, editor.activeDocument()->revision(), *position,
+            input.additive, std::move(baseline));
         auto result =
             input.additive
                 ? dispatchInput(
@@ -240,22 +236,21 @@ ClientInputResult routeInput(Editor& editor,
                       editor, "cursor.set_position",
                       SelectionCommandArguments{*position, std::nullopt});
         if (!result.command || !result.command->accepted()) {
-            editor.documentPointerGesture.reset();
+            editor.documentPointerGesture.clear();
         }
         return result;
     }
-    if (!editor.documentPointerGesture) {
+    if (!editor.documentPointerGesture.has_value()) {
         return unhandled();
     }
 
-    auto& gesture = *editor.documentPointerGesture;
-    if (editor.activeDocumentId() !=
-        std::optional<FileDocumentId>{gesture.documentId}) {
-        editor.documentPointerGesture.reset();
+    auto const target = editor.documentPointerGesture.validateTarget(
+        editor.activeDocumentId(),
+        editor.activeDocument() ? editor.activeDocument()->revision() : 0);
+    if (target == DocumentPointerTargetState::DocumentChanged) {
         return rejected("document pointer gesture target changed");
     }
-    if (editor.activeDocument()->revision() != gesture.documentRevision) {
-        editor.documentPointerGesture.reset();
+    if (target == DocumentPointerTargetState::RevisionChanged) {
         return rejected("document changed during pointer gesture");
     }
     auto position = resolvePosition();
@@ -270,27 +265,19 @@ ClientInputResult routeInput(Editor& editor,
     }
     ClientInputResult result = handled();
     if (position) {
-        if (gesture.additive) {
-            auto ranges = gesture.baseline;
-            ranges.push_back(Selection{gesture.anchor, *position});
-            result = dispatchInput(
-                editor, "select.set_ranges",
-                SelectionCommandArguments{
-                    std::nullopt, std::nullopt, std::move(ranges)});
-        } else {
-            result = dispatchInput(
-                editor, "select.set_range",
-                SelectionCommandArguments{
-                    std::nullopt, Selection{gesture.anchor, *position}});
-        }
+        result = dispatchInput(
+            editor,
+            editor.documentPointerGesture.additive() ? "select.set_ranges"
+                                                     : "select.set_range",
+            editor.documentPointerGesture.selectionThrough(*position));
         if (result.command && result.command->accepted()) {
-            gesture.active = *position;
+            editor.documentPointerGesture.moveTo(*position);
         } else {
-            editor.documentPointerGesture.reset();
+            editor.documentPointerGesture.clear();
         }
     }
     if (input.phase == InputPointerPhase::Release) {
-        editor.documentPointerGesture.reset();
+        editor.documentPointerGesture.clear();
     }
     return result;
 }
@@ -356,7 +343,7 @@ ClientInputResult routeTransition(Editor& editor,
 
 ClientInputResult routeTransition(
     Editor& editor, PointerSelectionTransition const& transition) {
-    if (!editor.documentPointerGesture) {
+    if (!editor.documentPointerGesture.has_value()) {
         return rejected("pointer selection has no active gesture");
     }
     return routeInput(
