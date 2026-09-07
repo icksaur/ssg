@@ -368,9 +368,8 @@ public:
         const auto relative = std::filesystem::path{normalized};
         std::error_code code;
         const auto candidate = mustExist
-                                   ? std::filesystem::weakly_canonical(
-                                         root / relative, code)
-                                   : std::filesystem::weakly_canonical(
+                                   ? weaklyCanonicalPath(root / relative, code)
+                                   : weaklyCanonicalPath(
                                          root / relative.parent_path(), code) /
                                          relative.filename();
         if (code) {
@@ -521,7 +520,7 @@ Workspace Workspace::create(const std::filesystem::path& root,
                             RecoveryManager& recovery,
                             std::optional<std::filesystem::path> archiveRoot) {
     std::error_code code;
-    const auto canonical = std::filesystem::canonical(root, code);
+    const auto canonical = canonicalPath(root, code);
     const auto status = code ? std::optional<FileStat>{} : statFile(canonical);
     if (code || !status || status->kind != FileKind::Directory) {
         throw std::invalid_argument("workspace root must be an existing directory");
@@ -702,7 +701,7 @@ std::vector<std::string> Workspace::recentFiles() const {
 WorkspaceResult Workspace::openDirectory(
     const std::filesystem::path& path) {
     std::error_code code;
-    const auto canonical = std::filesystem::canonical(path, code);
+    const auto canonical = canonicalPath(path, code);
     const auto status = code ? std::optional<FileStat>{} : statFile(canonical);
     if (code || !status || status->kind != FileKind::Directory) {
         return failure(WorkspaceError::InvalidWorkspace,

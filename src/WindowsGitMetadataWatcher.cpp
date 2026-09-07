@@ -78,7 +78,7 @@ public:
         clear();
         try {
             for (auto& directory : directories) {
-                directory = std::filesystem::canonical(directory);
+                directory = canonicalPath(directory);
                 add(directory, false);
                 const auto refs = statFile(directory / "refs");
                 if (refs && refs->kind == FileKind::Directory) {

@@ -32,6 +32,7 @@ struct Exemption {
 
 constexpr Exemption kExemptions[] = {
     // The seam's own implementations ARE the filesystem access.
+    {"src/platform_files.cpp", "implements shared seam operations"},
     {"src/linux_files.cpp", "implements the seam"},
     {"src/windows_files.cpp", "implements the seam"},
     // Tests read and write files out-of-band on purpose: a test that used the
@@ -60,6 +61,7 @@ constexpr std::string_view kForbidden[] = {
     "::exists(",               "::is_regular_file(",
     "::is_directory(",         "::file_size(",
     "::last_write_time(",      "::symlink_status(",
+    "::canonical(",            "::weakly_canonical(",
 };
 
 // A single line may opt out by carrying this marker plus a reason. Line-scoped

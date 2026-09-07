@@ -88,7 +88,7 @@ public:
         }
         watches_.clear();
         for (auto& directory : directories) {
-            directory = std::filesystem::canonical(directory);
+            directory = canonicalPath(directory);
             addRoot(directory);
         }
         healthy_ = true;

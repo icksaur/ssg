@@ -10,6 +10,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace ssg {
@@ -51,6 +52,15 @@ struct PathValidation {
     PathSyntax syntax,
     LongPathPolicy longPaths = LongPathPolicy::Legacy) noexcept;
 
+[[nodiscard]] std::filesystem::path canonicalPath(
+    const std::filesystem::path& path);
+[[nodiscard]] std::filesystem::path canonicalPath(
+    const std::filesystem::path& path, std::error_code& error);
+[[nodiscard]] std::filesystem::path weaklyCanonicalPath(
+    const std::filesystem::path& path);
+[[nodiscard]] std::filesystem::path weaklyCanonicalPath(
+    const std::filesystem::path& path, std::error_code& error);
+
 struct FileIdentity {
     std::uint64_t volume = 0;
     std::array<std::uint64_t, 2> file{};
@@ -72,10 +82,16 @@ struct FileStat {
     FileIdentity identity;
 };
 
+enum class SymlinkMode : std::uint8_t {
+    Preserve,
+    Follow,
+};
+
 // Missing is the only absence. Other metadata failures throw so callers cannot
 // confuse an inaccessible path with one that does not exist.
 [[nodiscard]] std::optional<FileStat> statFile(
-    const std::filesystem::path& path);
+    const std::filesystem::path& path,
+    SymlinkMode symlinks = SymlinkMode::Preserve);
 
 class ExclusiveFileLock {
 public:
@@ -237,8 +253,9 @@ struct DirectoryListResult {
 [[nodiscard]] FileIoResult removeTreeIfPresent(
     const std::filesystem::path& path);
 
-// Counts regular-file bytes without following symlinks. Overflow saturates so
-// quota enforcement remains conservative instead of failing while freeing space.
+// Counts regular-file bytes without following symlinks, including when `path`
+// itself is a symlink. Overflow or an incomplete observation saturates so quota
+// enforcement remains conservative instead of failing while freeing space.
 [[nodiscard]] std::uintmax_t treeBytes(const std::filesystem::path& path);
 
 // Recursive listings do not follow directory symlinks. A successful result

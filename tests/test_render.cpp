@@ -1548,11 +1548,12 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
     for (int i = 0; i < 40; ++i) {
         std::ofstream{root / ("file-" + std::to_string(i) + ".txt")} << "x";
     }
+    std::filesystem::create_directories(root / "a-dir");
+    std::ofstream{root / "a-dir" / "child.txt"} << "x";
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch({"panel.toggle",  {}});
-    (void)runtime->dispatch({"tree.select_next",  {}});
     (void)runtime->dispatch({"tree.activate",  {}});
 
     ssg::StyleDefineArguments args;
@@ -1946,12 +1947,12 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
         document += "line " + std::to_string(i) + " of the document\n";
     }
 
-    auto makeSnapshot = [&](bool pickerOpen) {
+    auto makeSnapshot = [&](bool pickerOpen, bool panelFocused = false) {
         return ssg::test::GridPresentationBuilder{}
             .document(document)
             .viewport(120, 40)
             .panel(true)
-            .panelFocused(false)
+            .panelFocused(panelFocused)
             .statusFields(ssg::StatusFieldProjection{
                 {{"path", "Working directory", "~/project"}},
                 {{"status", "Encoding", "UTF-8"}}})
@@ -2075,6 +2076,15 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     for (auto const& cell : tabGrid.cells) {
         emitted.insert(encode(tabGrid.colors[cell.foreground]));
         emitted.insert(encode(tabGrid.colors[cell.background]));
+    }
+
+    // A focused panel labels its provider with PanelActive; an unfocused one
+    // with PanelInactive (which directory rows also use). Union both.
+    auto focusedPanelGrid =
+        ssg::renderFrame(makeSnapshot(false, true), lineCache);
+    for (auto const& cell : focusedPanelGrid.cells) {
+        emitted.insert(encode(focusedPanelGrid.colors[cell.foreground]));
+        emitted.insert(encode(focusedPanelGrid.colors[cell.background]));
     }
 
     for (auto const role : ssg::kAllSemanticRoles) {

@@ -63,13 +63,14 @@ struct TreeProviderBinding {
     bool operator==(const TreeProviderBinding&) const = default;
 };
 
+// The filesystem provider lists the CWD's contents as top-level nodes; the CWD
+// itself is not a node, so there is no Root kind.
 enum class TreeNodeKind {
-    Root = 0,
-    Directory = 1,
-    File = 2,
-    Symlink = 3,
-    GitEntry = 4,
-    Symbol = 5,
+    Directory = 0,
+    File = 1,
+    Symlink = 2,
+    GitEntry = 3,
+    Symbol = 4,
 };
 struct GitTreeAffordance {
     DiffFileStatus status = DiffFileStatus::Modified;

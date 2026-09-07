@@ -14,13 +14,30 @@
 namespace {
 
 using Path = std::filesystem::path;
+using CanonicalPath = Path (*)(const Path&);
+using CanonicalPathWithError = Path (*)(const Path&, std::error_code&);
 
 static_assert(std::same_as<decltype(&ssg::validateWorkspaceRelativePath),
                            ssg::PathValidation (*)(std::string_view,
                                                    ssg::PathSyntax,
                                                    ssg::LongPathPolicy) noexcept>);
+static_assert(std::same_as<
+              decltype(static_cast<CanonicalPath>(&ssg::canonicalPath)),
+              CanonicalPath>);
+static_assert(std::same_as<
+              decltype(static_cast<CanonicalPathWithError>(
+                  &ssg::canonicalPath)),
+              CanonicalPathWithError>);
+static_assert(std::same_as<
+              decltype(static_cast<CanonicalPath>(&ssg::weaklyCanonicalPath)),
+              CanonicalPath>);
+static_assert(std::same_as<
+              decltype(static_cast<CanonicalPathWithError>(
+                  &ssg::weaklyCanonicalPath)),
+              CanonicalPathWithError>);
 static_assert(std::same_as<decltype(&ssg::statFile),
-                           std::optional<ssg::FileStat> (*)(const Path&)>);
+                           std::optional<ssg::FileStat> (*)(
+                               const Path&, ssg::SymlinkMode)>);
 static_assert(std::same_as<decltype(&ssg::tryLockFile),
                            std::optional<ssg::ExclusiveFileLock> (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::setOwnerOnlyPermissions),
@@ -77,6 +94,14 @@ SSG_TEST_SUITE(test_platform_interface) {
     // implementation to provide the public symbol, not merely parse the header.
     [[maybe_unused]] auto validateWorkspaceRelativePath =
         &ssg::validateWorkspaceRelativePath;
+    [[maybe_unused]] auto canonicalPath =
+        static_cast<CanonicalPath>(&ssg::canonicalPath);
+    [[maybe_unused]] auto canonicalPathWithError =
+        static_cast<CanonicalPathWithError>(&ssg::canonicalPath);
+    [[maybe_unused]] auto weaklyCanonicalPath =
+        static_cast<CanonicalPath>(&ssg::weaklyCanonicalPath);
+    [[maybe_unused]] auto weaklyCanonicalPathWithError =
+        static_cast<CanonicalPathWithError>(&ssg::weaklyCanonicalPath);
     [[maybe_unused]] auto statFile = &ssg::statFile;
     [[maybe_unused]] auto tryLockFile = &ssg::tryLockFile;
     [[maybe_unused]] auto setOwnerOnlyPermissions = &ssg::setOwnerOnlyPermissions;

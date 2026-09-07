@@ -269,10 +269,7 @@ void copyNode(const std::filesystem::path& source,
         const auto created = ensureDirectory(destination.parent_path());
         if (!created.ok()) throw std::runtime_error(created.message);
         const auto target = std::filesystem::read_symlink(source);
-        std::error_code targetError;
-        const auto targetPath = std::filesystem::canonical(source, targetError);
-        const auto targetStat =
-            targetError ? std::optional<FileStat>{} : statFile(targetPath);
+        const auto targetStat = statFile(source, SymlinkMode::Follow);
         const bool directoryTarget =
             targetStat && targetStat->kind == FileKind::Directory;
         if (directoryTarget) {

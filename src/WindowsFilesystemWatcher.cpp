@@ -65,7 +65,7 @@ std::system_error windows_error(const char* operation) {
 class WindowsFilesystemWatcher final : public FilesystemWatcher {
 public:
     WindowsFilesystemWatcher(std::filesystem::path root, WatcherConfig config)
-        : root_(std::filesystem::canonical(std::move(root))),
+        : root_(canonicalPath(std::move(root))),
           buffer_(64 * 1024),
           max_rescan_entries_(config.maxRescanEntries) {
         noteOptionalConstruction(OptionalSubsystem::FilesystemWatcher);

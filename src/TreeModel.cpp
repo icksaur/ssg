@@ -216,7 +216,8 @@ std::optional<TreeNode> detail::inspectFilesystemTreeEntry(
         std::filesystem::path{relative}.parent_path().generic_string();
     return TreeNode{
         nodeId(providerId, relative),
-        nodeId(providerId, parentPath.empty() ? "." : parentPath),
+        parentPath.empty() ? std::optional<TreeNodeId>{}
+                           : nodeId(providerId, parentPath),
         entry.path().filename().string(),
         symlink ? TreeNodeKind::Symlink
                 : (directory ? TreeNodeKind::Directory : TreeNodeKind::File),
@@ -265,7 +266,7 @@ TreeProviderSnapshot::TreeProviderSnapshot(
 TreeProviderSnapshot TreeProviderSnapshot::fromFilesystem(
     TreeProviderId providerId, const std::filesystem::path& canonicalCwd) {
     std::error_code error;
-    const auto root = std::filesystem::canonical(canonicalCwd, error);
+    const auto root = canonicalPath(canonicalCwd, error);
     const auto rootStat = error ? std::optional<FileStat>{} : statFile(root);
     if (error || !rootStat || rootStat->kind != FileKind::Directory) {
         throw std::invalid_argument(
@@ -273,16 +274,6 @@ TreeProviderSnapshot TreeProviderSnapshot::fromFilesystem(
     }
 
     std::vector<TreeNode> nodes;
-    nodes.push_back(TreeNode{nodeId(providerId, "."),
-                             std::nullopt,
-                             root.filename().string(),
-                             TreeNodeKind::Root,
-                             std::nullopt,
-                             {},
-                             std::nullopt,
-                             std::string{"."},
-                             std::nullopt});
-
     const auto listed = listDirectory(root, DirectoryTraversal::Recursive);
     if (!listed.ok() && listed.status != FileIoStatus::NotFound) {
         throw std::runtime_error("failed to scan filesystem tree: " +

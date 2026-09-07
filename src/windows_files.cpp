@@ -89,16 +89,22 @@ private:
 
 } // namespace
 
-std::optional<FileStat> statFile(const std::filesystem::path& path) {
+std::optional<FileStat> statFile(const std::filesystem::path& path,
+                                SymlinkMode symlinks) {
+    const DWORD flags =
+        FILE_FLAG_BACKUP_SEMANTICS |
+        (symlinks == SymlinkMode::Preserve ? FILE_FLAG_OPEN_REPARSE_POINT : 0);
     const HANDLE handle =
         CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                    nullptr, OPEN_EXISTING,
-                    FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
-                    nullptr);
+                    nullptr, OPEN_EXISTING, flags, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
         const auto error = GetLastError();
         if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+            return std::nullopt;
+        }
+        if (symlinks == SymlinkMode::Follow &&
+            error == ERROR_CANT_RESOLVE_FILENAME) {
             return std::nullopt;
         }
         throw_last_error("open file metadata", path, error);

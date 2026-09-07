@@ -43,8 +43,8 @@ ThemeSnapshot defaultTheme() noexcept {
     // --- Foreground text (greyscale except where noted) ---
     role(SemanticRole::Text, rgb(235, 235, 235));   // editor text + file names: white
     role(SemanticRole::Caret, rgb(255, 255, 255));
-    role(SemanticRole::PanelActive, rgb(228, 232, 238));   // directory names / active panel: white, faint cool tint
-    role(SemanticRole::PanelInactive, rgb(140, 140, 146));  // inactive panel provider: dim grey
+    role(SemanticRole::PanelActive, rgb(228, 232, 238));   // active panel provider label: white, faint cool tint
+    role(SemanticRole::PanelInactive, rgb(140, 140, 146));  // inactive panel provider + directory names: dim grey
     role(SemanticRole::Header, rgb(166, 166, 172));   // header text: mid grey
     role(SemanticRole::Footer, rgb(166, 166, 172));   // footer text: mid grey
     role(SemanticRole::TabActive, rgb(232, 232, 235));   // active tab: bright, stands out

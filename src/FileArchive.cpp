@@ -17,9 +17,9 @@ std::optional<std::filesystem::path> relativeToWorkspace(
     const std::filesystem::path& workspaceRoot,
     const std::filesystem::path& source) {
     std::error_code code;
-    const auto root = std::filesystem::weakly_canonical(workspaceRoot, code);
+    const auto root = weaklyCanonicalPath(workspaceRoot, code);
     if (code) return std::nullopt;
-    const auto target = std::filesystem::weakly_canonical(source, code);
+    const auto target = weaklyCanonicalPath(source, code);
     if (code) return std::nullopt;
 
     const auto relative = std::filesystem::relative(target, root, code);

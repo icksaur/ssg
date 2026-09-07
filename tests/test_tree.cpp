@@ -72,10 +72,10 @@ TEST(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks) {
         TreeProviderId{"files"}, temporary.path());
 
     std::vector<std::string> expected{
-        "files:.", "files:a-dir", "files:a-link", "files:a.txt", "files:b.txt",
+        "files:a-dir", "files:a-link", "files:a.txt", "files:b.txt",
         "files:z-dir", "files:z-dir/child.txt"};
     if (symlinkError) {
-        expected.erase(expected.begin() + 2);
+        expected.erase(expected.begin() + 1);
     }
     const auto firstIds = nodeIds(first);
     const auto secondIds = nodeIds(second);

@@ -2294,11 +2294,9 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
         return snap ? ssg::effectiveUiFocus(snap->uiTree)
                     : ssg::FocusTarget::Editor;
     };
-    // Showing the panel now focuses it (QOL); expand the root so a directory node
-    // and a file node are both visible/selectable.
+    // Showing the panel now focuses it (QOL); the CWD's entries are top-level, so
+    // "dir" and "top.txt" are both immediately visible/selectable.
     ASSERT_TRUE(runtime.dispatch({"panel.toggle",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"tree.select_next",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"tree.activate",  {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     auto snap = projectFrame(runtime, dims);

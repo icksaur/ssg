@@ -59,7 +59,7 @@ WorkspaceScan scanWorkspace(const std::filesystem::path& root,
 class LinuxFilesystemWatcher final : public FilesystemWatcher {
 public:
     LinuxFilesystemWatcher(std::filesystem::path root, WatcherConfig config)
-        : root_(std::filesystem::canonical(std::move(root))),
+        : root_(canonicalPath(std::move(root))),
           maxRescanEntries_(config.maxRescanEntries) {
         noteOptionalConstruction(OptionalSubsystem::FilesystemWatcher);
         descriptor_ = ::inotify_init1(IN_NONBLOCK | IN_CLOEXEC);

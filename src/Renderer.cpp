@@ -254,6 +254,7 @@ CellGridCell const& CellGrid::at(int column, int row) const {
 // tint kind (not resolved colors) -- coupling this golden to exact color
 // bytes would break every legitimate color tweak for no structural reason.
 // Theme color values are tested directly in test_theme.cpp instead.
+// seam-exempt: CellGrid serialization, not filesystem path resolution
 std::string CellGrid::canonical() const {
     std::ostringstream output;
     output << "size " << size.columns << ' ' << size.rows << '\n';

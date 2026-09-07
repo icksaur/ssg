@@ -11,7 +11,7 @@ void paintPanelTree(CellGrid& grid, SolvedPanelSurface const& panel,
                       std::uint8_t background, bool focused,
                       Style const& style) {
     auto const foreground = semanticIndex(theme, SemanticRole::Text);
-    auto const directory = semanticIndex(theme, SemanticRole::PanelActive);
+    auto const directory = semanticIndex(theme, SemanticRole::PanelInactive);
     auto const selectedBg = semanticIndex(theme, SemanticRole::TreeFocus);
     const auto providerRole =
         focused ? SemanticRole::PanelActive : SemanticRole::PanelInactive;
@@ -26,9 +26,11 @@ void paintPanelTree(CellGrid& grid, SolvedPanelSurface const& panel,
                     SemanticRole::TreeFocus);
             if (focused) grid.caret = GridPosition{row.rect.x, row.rect.y};
         }
+        const auto role =
+            row.directory ? SemanticRole::PanelInactive : SemanticRole::Text;
         const auto color = row.directory ? directory : foreground;
         paintText(grid, row.rect.x, row.rect.y, row.rect.right(), row.text,
-                  color, rowBackground, SemanticRole::Text, style);
+                  color, rowBackground, role, style);
     }
     if (panel.scrollbarGutter) {
         paintScrollGutter(grid, panel.scrollbarGutter->x,

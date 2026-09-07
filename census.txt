@@ -4234,6 +4234,7 @@ ssg/platform_files.h	enum	ssg::FileKind
 ssg/platform_files.h	enum	ssg::LongPathPolicy
 ssg/platform_files.h	enum	ssg::PathError
 ssg/platform_files.h	enum	ssg::PathSyntax
+ssg/platform_files.h	enum	ssg::SymlinkMode
 ssg/platform_files.h	enumerator	ssg::DirectoryTraversal::Children
 ssg/platform_files.h	enumerator	ssg::DirectoryTraversal::Recursive
 ssg/platform_files.h	enumerator	ssg::FileIoStatus::AlreadyExists
@@ -4258,6 +4259,8 @@ ssg/platform_files.h	enumerator	ssg::PathError::TrailingDotOrSpace
 ssg/platform_files.h	enumerator	ssg::PathError::Traversal
 ssg/platform_files.h	enumerator	ssg::PathSyntax::Linux
 ssg/platform_files.h	enumerator	ssg::PathSyntax::Windows
+ssg/platform_files.h	enumerator	ssg::SymlinkMode::Follow
+ssg/platform_files.h	enumerator	ssg::SymlinkMode::Preserve
 ssg/platform_files.h	func	ssg::DirectoryListResult::ok	bool () const noexcept
 ssg/platform_files.h	func	ssg::ExclusiveFileLock::ExclusiveFileLock	void (ExclusiveFileLock &&) noexcept
 ssg/platform_files.h	func	ssg::ExclusiveFileLock::ExclusiveFileLock	void (const ExclusiveFileLock &)
@@ -4268,6 +4271,8 @@ ssg/platform_files.h	func	ssg::FileIoResult::ok	bool () const noexcept
 ssg/platform_files.h	func	ssg::FileReadResult::ok	bool () const noexcept
 ssg/platform_files.h	func	ssg::PathValidation::valid	bool () const noexcept
 ssg/platform_files.h	func	ssg::appendFileDurably	FileIoResult (const std::filesystem::path &, std::span<const std::byte>)
+ssg/platform_files.h	func	ssg::canonicalPath	std::filesystem::path (const std::filesystem::path &)
+ssg/platform_files.h	func	ssg::canonicalPath	std::filesystem::path (const std::filesystem::path &, std::error_code &)
 ssg/platform_files.h	func	ssg::copyFileDurably	FileIoResult (const std::filesystem::path &, const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::createDirectoriesDurably	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::createFileExclusively	FileIoResult (const std::filesystem::path &, std::span<const std::byte>)
@@ -4283,7 +4288,7 @@ ssg/platform_files.h	func	ssg::renameFileNoClobber	FileIoResult (const std::file
 ssg/platform_files.h	func	ssg::renamePathDurably	FileIoResult (const std::filesystem::path &, const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::replaceFileAtomically	void (const std::filesystem::path &, std::span<const std::byte>)
 ssg/platform_files.h	func	ssg::setOwnerOnlyPermissions	void (const std::filesystem::path &)
-ssg/platform_files.h	func	ssg::statFile	std::optional<FileStat> (const std::filesystem::path &)
+ssg/platform_files.h	func	ssg::statFile	std::optional<FileStat> (const std::filesystem::path &, SymlinkMode)
 ssg/platform_files.h	func	ssg::syncDirectory	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::syncFile	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::treeBytes	std::uintmax_t (const std::filesystem::path &)
@@ -4292,6 +4297,8 @@ ssg/platform_files.h	func	ssg::userCacheRoot	std::filesystem::path (std::string_
 ssg/platform_files.h	func	ssg::userConfigRoot	std::filesystem::path (std::string_view)
 ssg/platform_files.h	func	ssg::userStateRoot	std::filesystem::path (std::string_view)
 ssg/platform_files.h	func	ssg::validateWorkspaceRelativePath	PathValidation (std::string_view, PathSyntax, LongPathPolicy) noexcept
+ssg/platform_files.h	func	ssg::weaklyCanonicalPath	std::filesystem::path (const std::filesystem::path &)
+ssg/platform_files.h	func	ssg::weaklyCanonicalPath	std::filesystem::path (const std::filesystem::path &, std::error_code &)
 ssg/platform_files.h	struct	ssg::DirectoryListResult
 ssg/platform_files.h	struct	ssg::FileIdentity
 ssg/platform_files.h	struct	ssg::FileIoResult

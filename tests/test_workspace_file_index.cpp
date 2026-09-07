@@ -238,6 +238,11 @@ TEST(indexOffersSymlinkedFilesThatTheEditorCanOpen) {
         fs::remove_all(root);
         return;
     }
+    fs::create_symlink("linked.txt", workspace / "chained.txt", error);
+    if (error) {
+        fs::remove_all(root);
+        return;
+    }
 
     auto matcher = makePlatformGitIgnoreMatcher(workspace);
     auto result = buildWorkspaceFileIndex(workspace, *matcher);
@@ -247,6 +252,11 @@ TEST(indexOffersSymlinkedFilesThatTheEditorCanOpen) {
             return candidate.id == "linked.txt";
         });
     ASSERT_TRUE(linked != result.candidates.end());
+    ASSERT_TRUE(std::any_of(
+        result.candidates.begin(), result.candidates.end(),
+        [](const PaletteCandidate& candidate) {
+            return candidate.id == "chained.txt";
+        }));
 
     auto created = createEditor(
         {workspace, root / "scratch", root / "recovery"});
@@ -256,6 +266,23 @@ TEST(indexOffersSymlinkedFilesThatTheEditorCanOpen) {
             created.session->dispatch({"file.open", linked->id}).accepted());
         ASSERT_EQ(created.session->activeDocumentText(), std::string{"linked\n"});
     }
+    fs::remove_all(root);
+}
+
+TEST(indexSkipsSymlinkCyclesWithoutDroppingRegularFiles) {
+    auto root = makeUniqueRoot("index-symlink-cycle");
+    writeFile(root / "kept.txt", "kept\n");
+    std::error_code error;
+    fs::create_symlink("second", root / "first", error);
+    if (!error) fs::create_symlink("first", root / "second", error);
+    if (error) {
+        fs::remove_all(root);
+        return;
+    }
+
+    auto matcher = makePlatformGitIgnoreMatcher(root);
+    const auto result = buildWorkspaceFileIndex(root, *matcher);
+    ASSERT_EQ(ids(result), (std::vector<std::string>{"kept.txt"}));
     fs::remove_all(root);
 }
 
@@ -271,6 +298,7 @@ SSG_TEST_SUITE(test_workspace_file_index) {
     RUN(indexOutsideAGitRepositoryListsEverything);
     RUN(indexDoesNotDescendIntoSymlinkedDirectories);
     RUN(indexOffersSymlinkedFilesThatTheEditorCanOpen);
+    RUN(indexSkipsSymlinkCyclesWithoutDroppingRegularFiles);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }

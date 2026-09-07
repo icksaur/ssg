@@ -8,10 +8,12 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <string>
 #include <system_error>
 #include <thread>
+#include <utility>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -41,6 +43,23 @@ public:
 
 private:
     std::filesystem::path path_;
+};
+
+class FailTreeListing : public ssg::FileIoFaultInjector {
+public:
+    explicit FailTreeListing(std::filesystem::path root)
+        : root_(std::move(root)) {}
+
+    ssg::FileIoStatus beforeOperation(
+        std::string_view operation,
+        const std::filesystem::path& path) override {
+        return operation == "listDirectory" && path == root_
+                   ? ssg::FileIoStatus::IoError
+                   : ssg::FileIoStatus::Ok;
+    }
+
+private:
+    std::filesystem::path root_;
 };
 
 void writeText(const std::filesystem::path& path, std::string_view text) {
@@ -163,9 +182,21 @@ TEST(identityIsStableAcrossReopenAndRename) {
               ssg::FileKind::Directory);
 #ifndef _WIN32
     const auto link = temporary.path() / "link";
+    const auto chained = temporary.path() / "chained";
     std::filesystem::create_symlink(original, link);
+    std::filesystem::create_symlink(link.filename(), chained);
     ASSERT_EQ(ssg::statFile(link)->kind, ssg::FileKind::Symlink);
     ASSERT_NE(ssg::statFile(link)->identity, initial->identity);
+    ASSERT_EQ(ssg::statFile(link, ssg::SymlinkMode::Follow)->identity,
+              initial->identity);
+    ASSERT_EQ(ssg::statFile(chained, ssg::SymlinkMode::Follow)->identity,
+              initial->identity);
+    const auto cycleA = temporary.path() / "cycle-a";
+    const auto cycleB = temporary.path() / "cycle-b";
+    std::filesystem::create_symlink(cycleB.filename(), cycleA);
+    std::filesystem::create_symlink(cycleA.filename(), cycleB);
+    ASSERT_FALSE(
+        ssg::statFile(cycleA, ssg::SymlinkMode::Follow).has_value());
 #endif
     const auto before = initial->identity;
     ASSERT_EQ(ssg::statFile(original)->identity, before);
@@ -442,6 +473,20 @@ TEST(treeBytesCountsRegularFilesWithoutFollowingSymlinks) {
     ASSERT_EQ(ssg::treeBytes(temporary.path() / "missing"), std::uintmax_t{0});
 }
 
+TEST(treeBytesSaturatesWhenTheTreeCannotBeListed) {
+    TemporaryDirectory temporary;
+    const auto tree = temporary.path() / "tree";
+    ASSERT_TRUE(ssg::ensureDirectory(tree).ok());
+    writeText(tree / "file.txt", "bytes");
+
+    FailTreeListing injector{tree};
+    auto* previous = ssg::installFileIoFaultInjector(&injector);
+    const auto measured = ssg::treeBytes(tree);
+    (void)ssg::installFileIoFaultInjector(previous);
+
+    ASSERT_EQ(measured, std::numeric_limits<std::uintmax_t>::max());
+}
+
 TEST(directoryCreationHasOneLeafWinner) {
     TemporaryDirectory temporary;
     const auto leaf = temporary.path() / "claimed";
@@ -513,6 +558,7 @@ SSG_TEST_SUITE(test_platform_files) {
     RUN(atomicReplacementNeverExposesPartialBytes);
     RUN(directorySeamCreatesListsBoundsAndRemovesTrees);
     RUN(treeBytesCountsRegularFilesWithoutFollowingSymlinks);
+    RUN(treeBytesSaturatesWhenTheTreeCannotBeListed);
     RUN(directoryCreationHasOneLeafWinner);
 #ifndef _WIN32
     RUN(configRootPrefersXdgConfigHomeWhenSetAndAbsolute);

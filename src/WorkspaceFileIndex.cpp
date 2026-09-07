@@ -27,10 +27,8 @@ std::vector<Entry> sortedEntries(const fs::path& directory) {
         if (!status) continue;
         auto kind = status->kind;
         if (status->kind == FileKind::Symlink) {
-            std::error_code error;
-            const auto target = fs::canonical(entry.path(), error);
             const auto targetStatus =
-                error ? std::optional<FileStat>{} : statFile(target);
+                statFile(entry.path(), SymlinkMode::Follow);
             // Directory links may leave the workspace that file.open contains.
             if (!targetStatus || targetStatus->kind != FileKind::Regular) {
                 continue;

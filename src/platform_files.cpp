@@ -4,8 +4,8 @@
 #include <array>
 #include <cctype>
 #include <limits>
-#include <stdexcept>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace ssg {
@@ -173,6 +173,25 @@ PathValidation validateWorkspaceRelativePath(std::string_view path,
     return {};
 }
 
+std::filesystem::path canonicalPath(const std::filesystem::path& path) {
+    return std::filesystem::canonical(path);
+}
+
+std::filesystem::path canonicalPath(const std::filesystem::path& path,
+                                    std::error_code& error) {
+    return std::filesystem::canonical(path, error);
+}
+
+std::filesystem::path weaklyCanonicalPath(
+    const std::filesystem::path& path) {
+    return std::filesystem::weakly_canonical(path);
+}
+
+std::filesystem::path weaklyCanonicalPath(
+    const std::filesystem::path& path, std::error_code& error) {
+    return std::filesystem::weakly_canonical(path, error);
+}
+
 FileIoResult ensureDirectory(const std::filesystem::path& path) {
     auto result = createDirectoriesDurably(path);
     if (result.status == FileIoStatus::AlreadyExists) {
@@ -192,26 +211,31 @@ FileIoResult removeTreeIfPresent(const std::filesystem::path& path) {
 }
 
 std::uintmax_t treeBytes(const std::filesystem::path& path) {
-    const auto root = statFile(path);
+    constexpr auto saturated = std::numeric_limits<std::uintmax_t>::max();
+    std::optional<FileStat> root;
+    try {
+        root = statFile(path);
+    } catch (const std::system_error&) {
+        return saturated;
+    }
     if (!root) return 0;
     if (root->kind == FileKind::Regular) return root->size;
     if (root->kind != FileKind::Directory) return 0;
 
     const auto listed = listDirectory(path, DirectoryTraversal::Recursive);
     if (listed.status == FileIoStatus::NotFound) return 0;
-    if (!listed.ok() || !listed.complete) {
-        throw std::runtime_error("failed to measure filesystem tree: " +
-                                 listed.message);
-    }
+    if (!listed.ok() || !listed.complete) return saturated;
 
     std::uintmax_t total = 0;
     for (const auto& entry : listed.entries) {
-        const auto status = statFile(entry.path());
-        if (!status || status->kind != FileKind::Regular) continue;
-        if (status->size >
-            std::numeric_limits<std::uintmax_t>::max() - total) {
-            return std::numeric_limits<std::uintmax_t>::max();
+        std::optional<FileStat> status;
+        try {
+            status = statFile(entry.path());
+        } catch (const std::system_error&) {
+            return saturated;
         }
+        if (!status || status->kind != FileKind::Regular) continue;
+        if (status->size > saturated - total) return saturated;
         total += status->size;
     }
     return total;

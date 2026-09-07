@@ -314,7 +314,7 @@ public:
                 continue;
             }
             std::error_code error;
-            auto directory = std::filesystem::canonical(raw, error);
+            auto directory = canonicalPath(raw, error);
             const auto status =
                 error ? std::optional<FileStat>{} : statFile(directory);
             if (!error && status && status->kind == FileKind::Directory) {

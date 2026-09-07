@@ -86,10 +86,16 @@ private:
 
 } // namespace
 
-std::optional<FileStat> statFile(const std::filesystem::path& path) {
+std::optional<FileStat> statFile(const std::filesystem::path& path,
+                                 SymlinkMode symlinks) {
     struct stat status {};
-    if (lstat(path.c_str(), &status) != 0) {
+    const auto inspect =
+        symlinks == SymlinkMode::Follow ? ::stat : ::lstat;
+    if (inspect(path.c_str(), &status) != 0) {
         if (errno == ENOENT || errno == ENOTDIR) return std::nullopt;
+        if (symlinks == SymlinkMode::Follow && errno == ELOOP) {
+            return std::nullopt;
+        }
         throwErrno("read file metadata", path);
     }
     FileKind kind = FileKind::Other;
