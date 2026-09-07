@@ -359,6 +359,7 @@ PaletteViewState Editor::paletteView() const {
         keymap != commandCandidateKeymap) {
         commandCandidateCache.clear();
         for (auto const* command : catalog.commands()) {
+            if (command->argument.required) continue;
             std::string detail;
             if (auto sequence =
                     KeymapMatcher{keymap}.preferredBinding(command->id)) {

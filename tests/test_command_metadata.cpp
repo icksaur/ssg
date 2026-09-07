@@ -6,7 +6,9 @@
 #include "test_helpers.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <string>
+#include <unistd.h>
 
 TEST(commandLabelUsesAuthoredLabelsAndHumanizesTheRest) {
     // Built here rather than taken from a runtime: the rule under test is how a
@@ -99,11 +101,35 @@ TEST(inputRoutingCommandNamesExistInTheRuntimeCatalog) {
     }
 }
 
+TEST(commandPalettePublishesOnlyInvocableCommands) {
+    auto root = testRuntimePath(
+        "palette_command_metadata_" + std::to_string(::getpid()));
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    auto created = ssg::createEditor({root});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+
+    auto const palette = created.session->paletteView();
+    bool foundFileSave = false;
+    for (auto const& candidate : palette.commandCandidates) {
+        auto const* command =
+            created.session->commandCatalog().find(candidate.id);
+        ASSERT_TRUE(command != nullptr);
+        if (!command) continue;
+        ASSERT_FALSE(command->argument.required);
+        if (candidate.id == "file.save") foundFileSave = true;
+    }
+    ASSERT_TRUE(foundFileSave);
+    std::filesystem::remove_all(root);
+}
+
 SSG_TEST_SUITE(test_command_metadata) {
     RUN(commandLabelUsesAuthoredLabelsAndHumanizesTheRest);
     RUN(formatKeySequenceIsCompactAndHuman);
     RUN(preferredBindingIsDeterministic);
     RUN(inputRoutingCommandNamesExistInTheRuntimeCatalog);
+    RUN(commandPalettePublishesOnlyInvocableCommands);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }
