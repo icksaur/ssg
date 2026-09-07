@@ -1,8 +1,11 @@
 #include <ssg/CommandCatalog.h>
+#include <ssg/InputCommandNames.h>
 #include <ssg/Keymap.h>
 
+#include "all_command_ids.h"
 #include "test_helpers.h"
 
+#include <algorithm>
 #include <string>
 
 TEST(commandLabelUsesAuthoredLabelsAndHumanizesTheRest) {
@@ -87,10 +90,20 @@ TEST(preferredBindingIsDeterministic) {
     ASSERT_FALSE(ssg::KeymapMatcher{a}.preferredBinding("other").has_value());
 }
 
+TEST(inputRoutingCommandNamesExistInTheRuntimeCatalog) {
+    auto const& commands = ssg::testing::allCommandFacts();
+    for (auto const name : ssg::input_command_names::kAll) {
+        ASSERT_TRUE(std::any_of(
+            commands.begin(), commands.end(),
+            [&](auto const& command) { return command.id == name; }));
+    }
+}
+
 SSG_TEST_SUITE(test_command_metadata) {
     RUN(commandLabelUsesAuthoredLabelsAndHumanizesTheRest);
     RUN(formatKeySequenceIsCompactAndHuman);
     RUN(preferredBindingIsDeterministic);
+    RUN(inputRoutingCommandNamesExistInTheRuntimeCatalog);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }

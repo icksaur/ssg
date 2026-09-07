@@ -1,4 +1,5 @@
 #include <ssg/InputRouting.h>
+#include <ssg/InputCommandNames.h>
 
 #include <algorithm>
 #include <array>
@@ -6,6 +7,8 @@
 
 namespace ssg {
 namespace {
+
+using namespace input_command_names;
 
 RoutedInput unhandled() {
     return {RouteUnhandled{}, KeepGesture{}, false};
@@ -76,20 +79,20 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
             auto const& command = resolved.command;
             switch (routing.prompt) {
             case ActivePrompt::Palette:
-                if (command == "prompt.submit") {
+                if (command == kPromptSubmit) {
                     return clientOwned(ClientOwnedInputKind::Submit);
                 }
-                if (command == "prompt.next" || command == "palette.next") {
+                if (command == kPromptNext || command == kPaletteNext) {
                     return clientOwned(ClientOwnedInputKind::SelectNext);
                 }
-                if (command == "prompt.previous" ||
-                    command == "palette.previous") {
+                if (command == kPromptPrevious ||
+                    command == kPalettePrevious) {
                     return clientOwned(ClientOwnedInputKind::SelectPrevious);
                 }
-                if (command == "prompt.cancel") {
-                    return dispatch("palette.close");
+                if (command == kPromptCancel) {
+                    return dispatch(kPaletteClose);
                 }
-                if (command == "clipboard.paste") {
+                if (command == kClipboardPaste) {
                     if (snapshot.clipboardText.empty()) return unhandled();
                     return routeTextEdit(
                         {PromptTextEdit::Kind::Append,
@@ -99,7 +102,7 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
             case ActivePrompt::Find:
             case ActivePrompt::Replace:
             case ActivePrompt::TextPrompt:
-                if (command == "clipboard.paste") {
+                if (command == kClipboardPaste) {
                     if (snapshot.clipboardText.empty()) return unhandled();
                     return routeTextEdit(
                         {PromptTextEdit::Kind::Append,
@@ -131,10 +134,10 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
     }
     switch (input.action.target) {
     case ScrollTarget::Document:
-        return dispatch("view.scroll_lines",
+        return dispatch(kViewScrollLines,
                         ScrollLinesArguments{input.action.rows});
     case ScrollTarget::Tree:
-        return dispatch("tree.scroll",
+        return dispatch(kTreeScroll,
                         ScrollLinesArguments{input.action.rows});
     }
     return rejected("line-scroll target is invalid");
@@ -150,9 +153,9 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
         input.action.numerator, input.action.denominator};
     switch (input.action.target) {
     case ScrollTarget::Document:
-        return dispatch("view.scroll_to_fraction", fraction);
+        return dispatch(kViewScrollToFraction, fraction);
     case ScrollTarget::Tree:
-        return dispatch("tree.scroll_to_fraction", fraction);
+        return dispatch(kTreeScrollToFraction, fraction);
     }
     return rejected("fraction-scroll target is invalid");
 }
@@ -177,7 +180,7 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
         }
         if (input.selectWord) {
             return dispatch(
-                "select.word_at_position",
+                kSelectWordAtPosition,
                 SelectionCommandArguments{*position, std::nullopt},
                 ClearGesture{}, true);
         }
@@ -196,7 +199,7 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
             if (hit != baseline.end()) {
                 baseline.erase(hit);
                 return dispatch(
-                    "select.set_ranges",
+                    kSelectSetRanges,
                     SelectionCommandArguments{
                         std::nullopt, std::nullopt, std::move(baseline)},
                     ClearGesture{}, true);
@@ -206,7 +209,7 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
         gesture.begin(*snapshot.activeDocument, snapshot.documentRevision,
                       *position, input.additive, std::move(baseline));
         return dispatch(
-            input.additive ? "select.add_range" : "cursor.set_position",
+            input.additive ? kSelectAddRange : kCursorSetPosition,
             input.additive
                 ? std::any{SelectionCommandArguments{
                       std::nullopt, Selection{*position, *position}}}
@@ -242,7 +245,7 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
 
     auto const arguments = gesture.selectionThrough(*position);
     auto const command =
-        gesture.additive() ? "select.set_ranges" : "select.set_range";
+        gesture.additive() ? kSelectSetRanges : kSelectSetRange;
     gesture.moveTo(*position);
     return dispatch(command, arguments,
                     input.phase == InputPointerPhase::Release
@@ -256,7 +259,7 @@ RoutedInput routeTransition(InputRoutingSnapshot const& snapshot,
     if (snapshot.followMode == FollowMode::Paused) {
         return unhandled();
     }
-    return dispatch("follow_edits.pause");
+    return dispatch(kFollowEditsPause);
 }
 
 RoutedInput routeTransition(InputRoutingSnapshot const& snapshot,
@@ -327,9 +330,9 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
     }
     switch (input.button) {
     case InputPointerButton::Primary:
-        return dispatch("tab.activate", input.tabId);
+        return dispatch(kTabActivate, input.tabId);
     case InputPointerButton::Auxiliary:
-        return dispatch("tab.close", input.tabId);
+        return dispatch(kTabClose, input.tabId);
     case InputPointerButton::Secondary:
         return unhandled();
     }
@@ -341,7 +344,7 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
     if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
-    return dispatch("tree.activate_node", TreeSelectArguments{input.nodeId});
+    return dispatch(kTreeActivateNode, TreeSelectArguments{input.nodeId});
 }
 
 RoutedInput routeInput(InputRoutingSnapshot const&,
@@ -350,7 +353,7 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
         return unhandled();
     }
     return dispatch(
-        "picker.submit",
+        kPickerSubmit,
         PickerSubmitArguments{input.activation, input.candidateId});
 }
 
@@ -359,7 +362,7 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
     if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
-    return dispatch("external.invoke_action", input.invocation);
+    return dispatch(kExternalInvokeAction, input.invocation);
 }
 
 RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
