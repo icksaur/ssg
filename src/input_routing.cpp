@@ -38,6 +38,11 @@ ClientInputResult clientOwned(ClientOwnedInputKind kind, std::string text = {}) 
             ClientOwnedInput{kind, std::move(text)}, std::nullopt};
 }
 
+bool isPrimaryPress(InputPointerPhase phase, InputPointerButton button) {
+    return phase == InputPointerPhase::Press &&
+           button == InputPointerButton::Primary;
+}
+
 ClientInputResult routeInput(Editor& editor, ClientKeyInput const& input) {
     PromptRoutingState routing;
     routing.focus = editor.screen.effectiveFocus();
@@ -394,8 +399,7 @@ ClientInputResult routeInput(Editor& editor, TabPointerInput const& input) {
 }
 
 ClientInputResult routeInput(Editor& editor, TreePointerInput const& input) {
-    if (input.phase != InputPointerPhase::Press ||
-        input.button != InputPointerButton::Primary) {
+    if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
     return dispatchInput(editor, "tree.activate_node",
@@ -403,8 +407,7 @@ ClientInputResult routeInput(Editor& editor, TreePointerInput const& input) {
 }
 
 ClientInputResult routeInput(Editor& editor, PickerPointerInput const& input) {
-    if (input.phase != InputPointerPhase::Press ||
-        input.button != InputPointerButton::Primary) {
+    if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
     return dispatchInput(
@@ -414,8 +417,7 @@ ClientInputResult routeInput(Editor& editor, PickerPointerInput const& input) {
 
 ClientInputResult routeInput(Editor& editor,
                              ExternalActionPointerInput const& input) {
-    if (input.phase != InputPointerPhase::Press ||
-        input.button != InputPointerButton::Primary) {
+    if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
     return dispatchInput(editor, "external.invoke_action", input.invocation);
@@ -423,8 +425,7 @@ ClientInputResult routeInput(Editor& editor,
 
 ClientInputResult routeInput(Editor& editor,
                              NoticeActionPointerInput const& input) {
-    if (input.phase != InputPointerPhase::Press ||
-        input.button != InputPointerButton::Primary) {
+    if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
     const auto notice = editor.noticeView();
