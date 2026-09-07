@@ -42,6 +42,7 @@ struct CommandFacts {
     // no codec, so a stand-in that claimed one would make the command
     // unencodable.
     bool wire = false;
+    bool required = false;
 };
 
 inline std::vector<CommandFacts> const& allCommandFacts() {
@@ -59,7 +60,8 @@ inline std::vector<CommandFacts> const& allCommandFacts() {
                     {command->id, command->owner, command->luaApi,
                      command->initScript,
                      command->effect == ssg::CommandEffect::Mutation,
-                     command->argument.type, command->argument.wire});
+                     command->argument.type, command->argument.wire,
+                     command->argument.required});
             }
         }
         created.session.reset();

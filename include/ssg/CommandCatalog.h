@@ -156,6 +156,9 @@ struct CommandArgumentType {
     // in-process only: the handler unwraps it, the protocol never sees it, and
     // no codec is required for its type.
     bool wire = false;
+    // Required payloads cannot be invoked from a command palette, which has no
+    // argument value to supply.
+    bool required = false;
 };
 
 // A command's argument type and the handler that consumes it, always produced
@@ -215,7 +218,7 @@ CommandHandler makeOptionalTypedHandler(Fn&& fn) {
 // `bindInProcessHandler` instead.
 template <typename Arguments, typename Fn>
 CommandHandlerBinding bindWireHandler(Fn&& fn) {
-    return {{std::type_index{typeid(Arguments)}, true},
+    return {{std::type_index{typeid(Arguments)}, true, true},
             detail::makeTypedHandler<Arguments>(std::forward<Fn>(fn))};
 }
 
@@ -229,7 +232,7 @@ CommandHandlerBinding bindWireHandler(Fn&& fn) {
 // the third case: typed for the handler, absent from the protocol.
 template <typename Arguments, typename Fn>
 CommandHandlerBinding bindInProcessHandler(Fn&& fn) {
-    return {{std::type_index{typeid(Arguments)}, false},
+    return {{std::type_index{typeid(Arguments)}, false, true},
             detail::makeTypedHandler<Arguments>(std::forward<Fn>(fn))};
 }
 
@@ -242,7 +245,7 @@ CommandHandlerBinding bindInProcessHandler(Fn&& fn) {
 // that used to work.
 template <typename Arguments, typename Fn>
 CommandHandlerBinding bindOptionalWireHandler(Fn&& fn) {
-    return {{std::type_index{typeid(Arguments)}, true},
+    return {{std::type_index{typeid(Arguments)}, true, false},
             detail::makeOptionalTypedHandler<Arguments>(std::forward<Fn>(fn))};
 }
 
@@ -256,14 +259,14 @@ CommandHandlerBinding bindOptionalWireHandler(Fn&& fn) {
 // distinguishable from a real value.
 template <typename Arguments, typename Fn>
 CommandHandlerBinding bindOptionalInProcessHandler(Fn&& fn) {
-    return {{std::type_index{typeid(Arguments)}, false},
+    return {{std::type_index{typeid(Arguments)}, false, false},
             detail::makeOptionalTypedHandler<Arguments>(std::forward<Fn>(fn))};
 }
 
 // The implementation of a command that takes no arguments.
 template <typename Fn>
 CommandHandlerBinding bindNoArgumentHandler(Fn&& fn) {
-    return {{},
+    return {{std::nullopt, false, false},
             [call = std::forward<Fn>(fn)](
                 CommandContext& context,
                 std::any const&) -> CommandHandlerResult {
@@ -282,8 +285,9 @@ CommandHandlerBinding bindNoArgumentHandler(Fn&& fn) {
 // what make a handler and its codec impossible to disagree, and this gives
 // that up.
 inline CommandHandlerBinding bindUntypedHandler(
-    CommandHandler handler, std::optional<std::type_index> wireType) {
-    return {{wireType, wireType.has_value()}, std::move(handler)};
+    CommandHandler handler, std::optional<std::type_index> wireType,
+    bool required) {
+    return {{wireType, wireType.has_value(), required}, std::move(handler)};
 }
 
 // A command, described where it is implemented, and handed to

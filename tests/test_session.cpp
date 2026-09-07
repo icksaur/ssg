@@ -37,7 +37,7 @@ std::shared_ptr<ssg::CommandCatalog> catalogOf(
             .summary = "a command",
             .effect = entry.effect,
             .binding = ssg::bindUntypedHandler(std::move(entry.handler),
-                                               std::nullopt),
+                                               std::nullopt, false),
         });
     }
     return catalog;
