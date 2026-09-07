@@ -1523,6 +1523,77 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
               ssg::ClientInputOutcome::Rejected);
 }
 
+TEST(documentPointerGestureEndsWhenSelectionCommandIsRejected) {
+    auto root = uniqueRoot();
+    std::filesystem::create_directories(root / "workspace");
+    std::ofstream{root / "workspace" / "words.txt"} << "alpha beta gamma\n";
+
+    const auto makeRuntime = [&](std::string_view name) {
+        auto instanceRoot = root / name;
+        auto created = ssg::createEditor(
+            {root / "workspace", instanceRoot / "scratch",
+             instanceRoot / "recovery"});
+        if (created.accepted()) {
+            (void)created.session->dispatch(
+                {"file.open", std::string{"words.txt"}});
+        }
+        return created;
+    };
+    const auto rejectSelectionCommand = [](ssg::Editor& runtime,
+                                           std::string id) {
+        const auto replaced = runtime.commandCatalog().handleFor(id);
+        ASSERT_TRUE(replaced.valid());
+        if (!replaced.valid()) return;
+        std::array retire{replaced};
+        (void)runtime.replaceCommandGeneration(
+            retire,
+            {ssg::CommandSpec{
+                .id = std::move(id),
+                .owner = "test-oracle",
+                .summary = "rejects pointer selection",
+                .effect = ssg::CommandEffect::Mutation,
+                .binding =
+                    ssg::bindWireHandler<ssg::SelectionCommandArguments>(
+                        [](ssg::CommandContext&,
+                           ssg::SelectionCommandArguments const&) {
+                            return ssg::CommandHandlerResult::failure(
+                                "selection refused");
+                        }),
+            }});
+    };
+
+    auto pressCreated = makeRuntime("press");
+    ASSERT_TRUE(pressCreated.accepted());
+    if (!pressCreated.accepted()) return;
+    rejectSelectionCommand(*pressCreated.session, "cursor.set_position");
+    auto refusedPress = pressCreated.session->input(
+        ssg::DocumentPointerInput{ssg::ByteOffset{1}});
+    ASSERT_EQ(refusedPress.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_FALSE(pressCreated.session->documentPointerGesture.has_value());
+    auto moveAfterPress = pressCreated.session->input(ssg::DocumentPointerInput{
+        ssg::ByteOffset{2}, false, false, ssg::InputPointerButton::Primary,
+        ssg::InputPointerPhase::Move});
+    ASSERT_EQ(moveAfterPress.outcome, ssg::ClientInputOutcome::Unhandled);
+
+    auto moveCreated = makeRuntime("move");
+    ASSERT_TRUE(moveCreated.accepted());
+    if (!moveCreated.accepted()) return;
+    auto acceptedPress = moveCreated.session->input(
+        ssg::DocumentPointerInput{ssg::ByteOffset{1}});
+    ASSERT_TRUE(acceptedPress.command && acceptedPress.command->accepted());
+    rejectSelectionCommand(*moveCreated.session, "select.set_range");
+    auto refusedMove = moveCreated.session->input(ssg::DocumentPointerInput{
+        ssg::ByteOffset{9}, false, false, ssg::InputPointerButton::Primary,
+        ssg::InputPointerPhase::Move});
+    ASSERT_EQ(refusedMove.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_FALSE(moveCreated.session->documentPointerGesture.has_value());
+    auto moveAfterRejection =
+        moveCreated.session->input(ssg::DocumentPointerInput{
+            ssg::ByteOffset{3}, false, false,
+            ssg::InputPointerButton::Primary, ssg::InputPointerPhase::Move});
+    ASSERT_EQ(moveAfterRejection.outcome, ssg::ClientInputOutcome::Unhandled);
+}
+
 TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     auto root = uniqueRoot();
     std::filesystem::create_directories(root / "workspace");
@@ -2594,6 +2665,7 @@ SSG_TEST_SUITE(test_session_interaction) {
     RUN(simpleSemanticInputsLowerThroughAuthoritativeTransactions);
     RUN(resolvedSelectionInputRejectsMalformedModelIdentity);
     RUN(documentPointerInputOwnsSelectionGesturePolicy);
+    RUN(documentPointerGestureEndsWhenSelectionCommandIsRejected);
     RUN(documentEdgeMovesResolveThroughPresenterAndReveal);
     RUN(documentEdgeContinuationPreservesAdditiveBaseline);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

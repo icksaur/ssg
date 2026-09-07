@@ -285,6 +285,8 @@ ClientInputResult routeInput(Editor& editor,
         }
         if (result.command && result.command->accepted()) {
             gesture.active = *position;
+        } else {
+            editor.documentPointerGesture.reset();
         }
     }
     if (input.phase == InputPointerPhase::Release) {
