@@ -1523,6 +1523,97 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
               ssg::ClientInputOutcome::Rejected);
 }
 
+TEST(keyInputRoutingBranchesByPromptMode) {
+    auto root = uniqueRoot();
+    std::filesystem::create_directories(root / "workspace");
+    std::ofstream{root / "workspace" / "lines.txt"} << "one\ntwo\nthree\n";
+    auto created = ssg::createEditor(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(
+        runtime.dispatch({"file.open", std::string{"lines.txt"}}).accepted());
+
+    const auto key = [&](ssg::KeyCode code, bool alt = false) {
+        ssg::KeyStroke stroke;
+        stroke.code = code;
+        stroke.alt = alt;
+        return runtime.input(ssg::ClientKeyInput{stroke, {}});
+    };
+    const auto activePromptValue = [&]() {
+        auto controls = runtime.resolvedPromptControls();
+        if (!controls) return std::string{};
+        std::size_t index = 0;
+        for (auto const& control : controls->controls) {
+            if (control.kind != ssg::PromptControlKind::Input) continue;
+            if (index++ == controls->activeInput) return control.value;
+        }
+        return std::string{};
+    };
+
+    ASSERT_TRUE(runtime.dispatch({"palette.open", {}}).accepted());
+    struct PaletteCase {
+        ssg::KeyCode code;
+        ssg::ClientOwnedInputKind expected;
+    };
+    for (auto const test : {
+             PaletteCase{ssg::KeyCode::Enter,
+                         ssg::ClientOwnedInputKind::Submit},
+             PaletteCase{ssg::KeyCode::ArrowDown,
+                         ssg::ClientOwnedInputKind::SelectNext},
+             PaletteCase{ssg::KeyCode::ArrowUp,
+                         ssg::ClientOwnedInputKind::SelectPrevious},
+             PaletteCase{ssg::KeyCode::Backspace,
+                         ssg::ClientOwnedInputKind::DeleteGraphemeBackward},
+         }) {
+        auto result = key(test.code);
+        ASSERT_EQ(result.outcome, ssg::ClientInputOutcome::ClientOwned);
+        ASSERT_TRUE(result.clientOwned.has_value());
+        if (result.clientOwned) {
+            ASSERT_EQ(result.clientOwned->kind, test.expected);
+        }
+    }
+    auto deleteWord = key(ssg::KeyCode::Backspace, true);
+    ASSERT_EQ(deleteWord.outcome, ssg::ClientInputOutcome::ClientOwned);
+    ASSERT_TRUE(deleteWord.clientOwned.has_value());
+    if (deleteWord.clientOwned) {
+        ASSERT_EQ(deleteWord.clientOwned->kind,
+                  ssg::ClientOwnedInputKind::DeleteWordBackward);
+    }
+    auto append = runtime.input(ssg::ClientKeyInput{{}, "query"});
+    ASSERT_EQ(append.outcome, ssg::ClientInputOutcome::ClientOwned);
+    ASSERT_TRUE(append.clientOwned.has_value());
+    if (append.clientOwned) {
+        ASSERT_EQ(append.clientOwned->kind,
+                  ssg::ClientOwnedInputKind::AppendText);
+        ASSERT_EQ(append.clientOwned->text, std::string{"query"});
+    }
+    ASSERT_EQ(key(ssg::KeyCode::Escape).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+
+    struct PromptCase {
+        char const* openCommand;
+        char const* text;
+    };
+    for (auto const test :
+         {PromptCase{"find.open", "needle"},
+          PromptCase{"replace.open", "replacement"},
+          PromptCase{"goto.line", "3"}}) {
+        ASSERT_TRUE(runtime.dispatch({test.openCommand, {}}).accepted());
+        auto typed = runtime.input(ssg::ClientKeyInput{{}, test.text});
+        ASSERT_EQ(typed.outcome, ssg::ClientInputOutcome::Dispatched);
+        ASSERT_EQ(activePromptValue(), std::string{test.text});
+        auto erased = key(ssg::KeyCode::Backspace);
+        ASSERT_EQ(erased.outcome, ssg::ClientInputOutcome::Dispatched);
+        ASSERT_EQ(activePromptValue(),
+                  std::string{test.text}.substr(
+                      0, std::string{test.text}.size() - 1));
+        ASSERT_EQ(key(ssg::KeyCode::Escape).outcome,
+                  ssg::ClientInputOutcome::Dispatched);
+    }
+}
+
 TEST(documentPointerGestureEndsWhenSelectionCommandIsRejected) {
     auto root = uniqueRoot();
     std::filesystem::create_directories(root / "workspace");
@@ -2664,6 +2755,7 @@ SSG_TEST_SUITE(test_session_pickers) {
 SSG_TEST_SUITE(test_session_interaction) {
     RUN(simpleSemanticInputsLowerThroughAuthoritativeTransactions);
     RUN(resolvedSelectionInputRejectsMalformedModelIdentity);
+    RUN(keyInputRoutingBranchesByPromptMode);
     RUN(documentPointerInputOwnsSelectionGesturePolicy);
     RUN(documentPointerGestureEndsWhenSelectionCommandIsRejected);
     RUN(documentEdgeMovesResolveThroughPresenterAndReveal);

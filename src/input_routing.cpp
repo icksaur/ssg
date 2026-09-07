@@ -43,7 +43,7 @@ bool isPrimaryPress(InputPointerPhase phase, InputPointerButton button) {
            button == InputPointerButton::Primary;
 }
 
-ClientInputResult routeInput(Editor& editor, ClientKeyInput const& input) {
+PromptRoutingState promptRoutingState(Editor const& editor) {
     PromptRoutingState routing;
     routing.focus = editor.screen.effectiveFocus();
     auto const promptStatus = editor.promptStatusView();
@@ -76,7 +76,11 @@ ClientInputResult routeInput(Editor& editor, ClientKeyInput const& input) {
             }
         }
     }
+    return routing;
+}
 
+ClientInputResult routeInput(Editor& editor, ClientKeyInput const& input) {
+    auto const routing = promptRoutingState(editor);
     auto routeTextEdit = [&](PromptTextEdit edit) -> ClientInputResult {
         auto const route = routePromptTextEdit(routing, edit);
         if (route.kind == PromptTextRoute::Kind::Dispatch) {
@@ -102,7 +106,8 @@ ClientInputResult routeInput(Editor& editor, ClientKeyInput const& input) {
             std::array{CompiledKeymap::compile(input.stroke)}, routing.focus);
         if (resolved.kind == KeymapMatchKind::Resolved) {
             auto const& command = resolved.command;
-            if (routing.prompt == ActivePrompt::Palette) {
+            switch (routing.prompt) {
+            case ActivePrompt::Palette:
                 if (command == "prompt.submit") {
                     return clientOwned(ClientOwnedInputKind::Submit);
                 }
@@ -116,18 +121,26 @@ ClientInputResult routeInput(Editor& editor, ClientKeyInput const& input) {
                 if (command == "prompt.cancel") {
                     return dispatchInput(editor, "palette.close");
                 }
-            }
-            if (routing.focus == FocusTarget::Prompt &&
-                command == "clipboard.paste") {
-                auto const text = editor.clipboard.viewState().plainText;
-                if (text.empty()) {
-                    return {ClientInputOutcome::Unhandled, std::nullopt,
-                            std::nullopt};
+                if (command == "clipboard.paste") {
+                    auto const text = editor.clipboard.viewState().plainText;
+                    if (text.empty()) return unhandled();
+                    return routeTextEdit(
+                        {PromptTextEdit::Kind::Append, std::move(text)});
                 }
-                return routeTextEdit(
-                    {PromptTextEdit::Kind::Append, std::move(text)});
+                return dispatchInput(editor, command);
+            case ActivePrompt::Find:
+            case ActivePrompt::Replace:
+            case ActivePrompt::TextPrompt:
+                if (command == "clipboard.paste") {
+                    auto const text = editor.clipboard.viewState().plainText;
+                    if (text.empty()) return unhandled();
+                    return routeTextEdit(
+                        {PromptTextEdit::Kind::Append, std::move(text)});
+                }
+                return dispatchInput(editor, command);
+            case ActivePrompt::None:
+                return dispatchInput(editor, command);
             }
-            return dispatchInput(editor, command);
         }
         if (input.stroke.code == KeyCode::Backspace) {
             return routeTextEdit(
