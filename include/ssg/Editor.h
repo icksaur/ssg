@@ -14,6 +14,7 @@
 #include <ssg/FindReplace.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/GitDiffIngress.h>
+#include <ssg/InputRouting.h>
 #include <ssg/Keymap.h>
 #include <ssg/LineLayoutCache.h>
 #include <ssg/LspFeatureController.h>
@@ -586,7 +587,5 @@ public:
 [[nodiscard]] std::string workspaceMessage(WorkspaceResult const& result);
 [[nodiscard]] std::string tabMessage(TabResult const& result);
 [[nodiscard]] std::string wrongPayload(std::string_view commandId);
-
-ClientInputResult inputLocked(Editor&, ClientInput const&);
 
 } // namespace ssg

@@ -266,6 +266,171 @@ std::optional<std::filesystem::path> workspaceChangePath(
     return candidate;
 }
 
+PromptRoutingState inputPromptState(Editor const& editor) {
+    PromptRoutingState routing;
+    routing.focus = editor.screen.effectiveFocus();
+    auto const promptStatus = editor.promptStatusView();
+    if (promptStatus.activeKind == PromptKind::Palette) {
+        routing.prompt = ActivePrompt::Palette;
+        return routing;
+    }
+    auto const controls = editor.resolvedPromptControls();
+    if (!controls) return routing;
+
+    switch (editor.screen.prompt().request()->kind) {
+    case PromptKind::Find:
+        routing.prompt = ActivePrompt::Find;
+        break;
+    case PromptKind::Replace:
+        routing.prompt = ActivePrompt::Replace;
+        break;
+    case PromptKind::Path:
+    case PromptKind::Settings:
+    case PromptKind::CommandArgument:
+        routing.prompt = ActivePrompt::TextPrompt;
+        break;
+    case PromptKind::Palette:
+        break;
+    }
+    routing.activeInput = controls->activeInput;
+    std::size_t inputIndex = 0;
+    for (auto const& control : controls->controls) {
+        if (control.kind != PromptControlKind::Input) continue;
+        if (inputIndex++ == controls->activeInput) {
+            routing.currentValue = control.value;
+            break;
+        }
+    }
+    return routing;
+}
+
+InputRoutingSnapshot inputRoutingSnapshot(Editor& editor) {
+    auto const* document = editor.activeDocument();
+    auto const* tab = editor.activeTabState();
+    auto notice = editor.noticeView();
+    std::optional<std::vector<InputRoutingNoticeAction>> noticeActions;
+    if (notice) {
+        noticeActions.emplace();
+        noticeActions->reserve(notice->actions.size());
+        for (auto const& action : notice->actions) {
+            noticeActions->push_back({action.id, action.commandId});
+        }
+    }
+    return {
+        .keymap = std::cref(editor.resolveInputKeymap()),
+        .prompt = inputPromptState(editor),
+        .clipboardText = editor.clipboard.plainText(),
+        .activeText = editor.activeText(),
+        .activeDocument = editor.activeDocumentId(),
+        .documentRevision = document ? document->revision() : 0,
+        .activeTab = tab ? std::optional{tab->id} : std::nullopt,
+        .activeTabKind = tab ? std::optional{tab->kind} : std::nullopt,
+        .diffRevision = editor.diff.viewState().revision,
+        .selections = std::cref(editor.selection.selections),
+        .followMode = editor.follow.viewState().mode,
+        .noticeActions = std::move(noticeActions),
+        .panes = editor.paneTopology.panes(),
+        .gesture = editor.documentPointerGesture,
+    };
+}
+
+void applyGesture(Editor& editor, GestureOnAccepted gesture) {
+    if (std::holds_alternative<KeepGesture>(gesture)) return;
+    if (std::holds_alternative<ClearGesture>(gesture)) {
+        editor.documentPointerGesture.clear();
+        return;
+    }
+    editor.documentPointerGesture =
+        std::move(std::get<SetGesture>(gesture).gesture);
+}
+
+std::optional<std::string> applyInputMutation(
+    Editor& editor, std::optional<EditorMutation> mutation) {
+    if (!mutation) return std::nullopt;
+    if (auto* selections = std::get_if<ApplySelections>(&*mutation)) {
+        editor.selection.selections = std::move(selections->selections);
+        editor.historyFor(selections->document).breakCoalescing();
+        editor.recordNavigation(NavigationClass::User);
+        return std::nullopt;
+    }
+    auto const pane = std::get<FocusPane>(*mutation).pane;
+    if (!editor.focusPane(pane)) {
+        return "pane focus target changed before execution";
+    }
+    if (editor.screen.effectiveFocus() != FocusTarget::Editor) {
+        editor.screen.focusEditor();
+    }
+    editor.recordNavigation(NavigationClass::User);
+    return std::nullopt;
+}
+
+ClientInputResult executeInputRoute(Editor&, RouteUnhandled,
+                                    RoutedInput const&) {
+    return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt,
+            std::nullopt};
+}
+
+ClientInputResult executeInputRoute(Editor& editor, RouteRejected route,
+                                    RoutedInput const& routed) {
+    if (routed.clearGestureOnRejection) {
+        editor.documentPointerGesture.clear();
+    }
+    return {
+        ClientInputOutcome::Rejected, std::nullopt,
+        CommandResult{CommandError::HandlerFailed, std::move(route.message), {}},
+        std::nullopt};
+}
+
+ClientInputResult executeInputRoute(Editor& editor, RouteAccepted route,
+                                    RoutedInput routed) {
+    if (auto error =
+            applyInputMutation(editor, std::move(route.mutation))) {
+        if (routed.clearGestureOnRejection) {
+            editor.documentPointerGesture.clear();
+        }
+        return {
+            ClientInputOutcome::Rejected, std::nullopt,
+            CommandResult{CommandError::HandlerFailed, std::move(*error), {}},
+            std::nullopt};
+    }
+    applyGesture(editor, std::move(routed.gestureOnAccepted));
+    return {ClientInputOutcome::Dispatched, std::nullopt,
+            CommandResult{CommandError::None, {}, {}}, std::nullopt};
+}
+
+ClientInputResult executeInputRoute(Editor& editor, RouteClientOwned route,
+                                    RoutedInput routed) {
+    applyGesture(editor, std::move(routed.gestureOnAccepted));
+    return {ClientInputOutcome::ClientOwned, std::move(route.input),
+            std::nullopt, std::nullopt};
+}
+
+ClientInputResult executeInputRoute(Editor& editor, RouteViewAction route,
+                                    RoutedInput routed) {
+    applyGesture(editor, std::move(routed.gestureOnAccepted));
+    return {
+        ClientInputOutcome::ViewOwned, std::nullopt,
+        CommandResult{CommandError::None, {}, std::move(route.action)},
+        std::nullopt};
+}
+
+ClientInputResult executeInputRoute(Editor& editor, RouteDispatch route,
+                                    RoutedInput routed) {
+    auto result = editor.dispatchLocked(route.command);
+    if (result.accepted()) {
+        applyGesture(editor, std::move(routed.gestureOnAccepted));
+    } else if (routed.clearGestureOnRejection) {
+        editor.documentPointerGesture.clear();
+    }
+    auto const activation =
+        result.accepted() ? editor.screen.openPickerActivation() : std::nullopt;
+    auto const outcome =
+        !result.accepted() ? ClientInputOutcome::Rejected
+        : result.viewAction ? ClientInputOutcome::ViewOwned
+                            : ClientInputOutcome::Dispatched;
+    return {outcome, std::nullopt, std::move(result), activation};
+}
+
 } // namespace
 
 CommandHandlerResult success() { return CommandHandlerResult::success(); }
@@ -1424,7 +1589,13 @@ ClientInputResult Editor::input(ClientInput const& input) {
                               {}}};
     }
     std::lock_guard operationLock{operationMutex};
-    return inputLocked(*this, input);
+    auto routed = routeInput(inputRoutingSnapshot(*this), input);
+    return std::visit(
+        [&](auto route) {
+            return executeInputRoute(*this, std::move(route),
+                                     std::move(routed));
+        },
+        std::move(routed.action));
 }
 
 CommandResult Editor::dispatch(ClientCommand const& command) {

@@ -1,41 +1,44 @@
-#include <ssg/Editor.h>
+#include <ssg/InputRouting.h>
 
+#include <algorithm>
 #include <array>
+#include <utility>
 
 namespace ssg {
 namespace {
 
-ClientInputResult unhandled() {
-    return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
+RoutedInput unhandled() {
+    return {RouteUnhandled{}, KeepGesture{}, false};
 }
 
-ClientInputResult rejected(std::string message) {
-    return {
-        ClientInputOutcome::Rejected, std::nullopt,
-        CommandResult{CommandError::HandlerFailed, std::move(message), {}}};
+RoutedInput rejected(std::string message,
+                     bool clearGestureOnRejection = false) {
+    return {RouteRejected{std::move(message)}, KeepGesture{},
+            clearGestureOnRejection};
 }
 
-ClientInputResult handled() {
-    return {ClientInputOutcome::Dispatched, std::nullopt,
-            CommandResult{CommandError::None, {}, {}}};
+RoutedInput accepted(GestureOnAccepted gesture = KeepGesture{}) {
+    return {RouteAccepted{}, std::move(gesture), false};
 }
 
-ClientInputResult dispatchInput(Editor& editor, CommandName command,
-                               std::any payload = {}) {
-    auto result =
-        editor.dispatchLocked({std::move(command), std::move(payload)});
-    const auto activation =
-        result.accepted() ? editor.screen.openPickerActivation() : std::nullopt;
-    const auto outcome =
-        !result.accepted() ? ClientInputOutcome::Rejected
-        : result.viewAction ? ClientInputOutcome::ViewOwned
-                           : ClientInputOutcome::Dispatched;
-    return {outcome, std::nullopt, std::move(result), activation};
+RoutedInput accepted(EditorMutation mutation) {
+    return {RouteAccepted{std::move(mutation)}, KeepGesture{}, false};
 }
 
-ClientInputResult clientOwned(ClientOwnedInputKind kind, std::string text = {}) {
-    return {ClientInputOutcome::ClientOwned,
-            ClientOwnedInput{kind, std::move(text)}, std::nullopt};
+RoutedInput dispatch(CommandName command, std::any payload = {},
+                     GestureOnAccepted gesture = KeepGesture{},
+                     bool clearGestureOnRejection = false) {
+    return {RouteDispatch{ClientCommand{std::move(command), std::move(payload)}},
+            std::move(gesture), clearGestureOnRejection};
+}
+
+RoutedInput clientOwned(ClientOwnedInputKind kind, std::string text = {}) {
+    return {RouteClientOwned{ClientOwnedInput{kind, std::move(text)}},
+            KeepGesture{}, false};
+}
+
+RoutedInput viewAction(ViewAction action) {
+    return {RouteViewAction{std::move(action)}, KeepGesture{}, false};
 }
 
 bool isPrimaryPress(InputPointerPhase phase, InputPointerButton button) {
@@ -43,48 +46,13 @@ bool isPrimaryPress(InputPointerPhase phase, InputPointerButton button) {
            button == InputPointerButton::Primary;
 }
 
-PromptRoutingState promptRoutingState(Editor const& editor) {
-    PromptRoutingState routing;
-    routing.focus = editor.screen.effectiveFocus();
-    auto const promptStatus = editor.promptStatusView();
-    if (promptStatus.activeKind == PromptKind::Palette) {
-        routing.prompt = ActivePrompt::Palette;
-    } else if (auto const view = editor.resolvedPromptControls()) {
-        const auto kind = editor.screen.prompt().request()->kind;
-        switch (kind) {
-        case PromptKind::Find:
-            routing.prompt = ActivePrompt::Find;
-            break;
-        case PromptKind::Replace:
-            routing.prompt = ActivePrompt::Replace;
-            break;
-        case PromptKind::Path:
-        case PromptKind::Settings:
-        case PromptKind::CommandArgument:
-            routing.prompt = ActivePrompt::TextPrompt;
-            break;
-        case PromptKind::Palette:
-            break;
-        }
-        routing.activeInput = view->activeInput;
-        std::size_t inputIndex = 0;
-        for (auto const& control : view->controls) {
-            if (control.kind != PromptControlKind::Input) continue;
-            if (inputIndex++ == view->activeInput) {
-                routing.currentValue = control.value;
-                break;
-            }
-        }
-    }
-    return routing;
-}
-
-ClientInputResult routeInput(Editor& editor, ClientKeyInput const& input) {
-    auto const routing = promptRoutingState(editor);
-    auto routeTextEdit = [&](PromptTextEdit edit) -> ClientInputResult {
+RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
+                       ClientKeyInput const& input) {
+    auto const& routing = snapshot.prompt;
+    auto routeTextEdit = [&](PromptTextEdit edit) -> RoutedInput {
         auto const route = routePromptTextEdit(routing, edit);
         if (route.kind == PromptTextRoute::Kind::Dispatch) {
-            return dispatchInput(editor, route.command, route.payload);
+            return dispatch(route.command, route.payload);
         }
         if (routing.prompt == ActivePrompt::Palette) {
             switch (edit.kind) {
@@ -98,11 +66,11 @@ ClientInputResult routeInput(Editor& editor, ClientKeyInput const& input) {
                 return clientOwned(ClientOwnedInputKind::DeleteWordBackward);
             }
         }
-        return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
+        return unhandled();
     };
 
     if (input.stroke.code != KeyCode::None) {
-        auto const resolved = editor.resolveInputKeymap().resolve(
+        auto const resolved = snapshot.keymap.get().resolve(
             std::array{CompiledKeymap::compile(input.stroke)}, routing.focus);
         if (resolved.kind == KeymapMatchKind::Resolved) {
             auto const& command = resolved.command;
@@ -119,27 +87,27 @@ ClientInputResult routeInput(Editor& editor, ClientKeyInput const& input) {
                     return clientOwned(ClientOwnedInputKind::SelectPrevious);
                 }
                 if (command == "prompt.cancel") {
-                    return dispatchInput(editor, "palette.close");
+                    return dispatch("palette.close");
                 }
                 if (command == "clipboard.paste") {
-                    auto const text = editor.clipboard.viewState().plainText;
-                    if (text.empty()) return unhandled();
+                    if (snapshot.clipboardText.empty()) return unhandled();
                     return routeTextEdit(
-                        {PromptTextEdit::Kind::Append, std::move(text)});
+                        {PromptTextEdit::Kind::Append,
+                         std::string{snapshot.clipboardText}});
                 }
-                return dispatchInput(editor, command);
+                return dispatch(command);
             case ActivePrompt::Find:
             case ActivePrompt::Replace:
             case ActivePrompt::TextPrompt:
                 if (command == "clipboard.paste") {
-                    auto const text = editor.clipboard.viewState().plainText;
-                    if (text.empty()) return unhandled();
+                    if (snapshot.clipboardText.empty()) return unhandled();
                     return routeTextEdit(
-                        {PromptTextEdit::Kind::Append, std::move(text)});
+                        {PromptTextEdit::Kind::Append,
+                         std::string{snapshot.clipboardText}});
                 }
-                return dispatchInput(editor, command);
+                return dispatch(command);
             case ActivePrompt::None:
-                return dispatchInput(editor, command);
+                return dispatch(command);
             }
         }
         if (input.stroke.code == KeyCode::Backspace) {
@@ -153,26 +121,27 @@ ClientInputResult routeInput(Editor& editor, ClientKeyInput const& input) {
         return routeTextEdit(
             {PromptTextEdit::Kind::Append, input.committedText});
     }
-    return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
+    return unhandled();
 }
 
-ClientInputResult routeInput(Editor& editor, ScrollLinesInput const& input) {
+RoutedInput routeInput(InputRoutingSnapshot const&,
+                       ScrollLinesInput const& input) {
     if (input.action.rows == 0) {
         return rejected("line-scroll input must move at least one row");
     }
     switch (input.action.target) {
     case ScrollTarget::Document:
-        return dispatchInput(
-            editor, "view.scroll_lines",
-            ScrollLinesArguments{input.action.rows});
+        return dispatch("view.scroll_lines",
+                        ScrollLinesArguments{input.action.rows});
     case ScrollTarget::Tree:
-        return dispatchInput(editor, "tree.scroll",
-                             ScrollLinesArguments{input.action.rows});
+        return dispatch("tree.scroll",
+                        ScrollLinesArguments{input.action.rows});
     }
     return rejected("line-scroll target is invalid");
 }
 
-ClientInputResult routeInput(Editor& editor, ScrollFractionInput const& input) {
+RoutedInput routeInput(InputRoutingSnapshot const&,
+                       ScrollFractionInput const& input) {
     if (input.action.denominator == 0 ||
         input.action.numerator > input.action.denominator) {
         return rejected("fraction-scroll input is invalid");
@@ -181,42 +150,38 @@ ClientInputResult routeInput(Editor& editor, ScrollFractionInput const& input) {
         input.action.numerator, input.action.denominator};
     switch (input.action.target) {
     case ScrollTarget::Document:
-        return dispatchInput(editor, "view.scroll_to_fraction", fraction);
+        return dispatch("view.scroll_to_fraction", fraction);
     case ScrollTarget::Tree:
-        return dispatchInput(editor, "tree.scroll_to_fraction", fraction);
+        return dispatch("tree.scroll_to_fraction", fraction);
     }
     return rejected("fraction-scroll target is invalid");
 }
 
-ClientInputResult routeInput(Editor& editor,
-                             DocumentPointerInput const& input) {
+RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
+                       DocumentPointerInput const& input) {
     if (input.button != InputPointerButton::Primary) {
         return unhandled();
     }
-    if (input.phase == InputPointerPhase::Press ||
-        input.phase == InputPointerPhase::Cancel) {
-        editor.documentPointerGesture.clear();
-    }
     if (input.phase == InputPointerPhase::Cancel) {
-        return handled();
+        return accepted(ClearGesture{});
     }
 
     const auto resolvePosition = [&]() -> std::optional<DocumentPosition> {
         if (!input.position) return std::nullopt;
-        return resolveSelectionPosition(editor.activeText(), *input.position);
+        return resolveSelectionPosition(snapshot.activeText, *input.position);
     };
     if (input.phase == InputPointerPhase::Press) {
         auto position = resolvePosition();
-        auto documentId = editor.activeDocumentId();
-        if (!position || !documentId) {
-            return rejected("document pointer target is not actionable");
+        if (!position || !snapshot.activeDocument) {
+            return rejected("document pointer target is not actionable", true);
         }
         if (input.selectWord) {
-            return dispatchInput(
-                editor, "select.word_at_position",
-                SelectionCommandArguments{*position, std::nullopt});
+            return dispatch(
+                "select.word_at_position",
+                SelectionCommandArguments{*position, std::nullopt},
+                ClearGesture{}, true);
         }
-        auto const& items = editor.selection.selections.items();
+        auto const& items = snapshot.selections.get().items();
         std::vector<Selection> baseline{items.begin(), items.end()};
         if (input.additive && baseline.size() > 1) {
             auto const hit = std::find_if(
@@ -230,104 +195,89 @@ ClientInputResult routeInput(Editor& editor,
                 });
             if (hit != baseline.end()) {
                 baseline.erase(hit);
-                return dispatchInput(
-                    editor, "select.set_ranges",
+                return dispatch(
+                    "select.set_ranges",
                     SelectionCommandArguments{
-                        std::nullopt, std::nullopt, std::move(baseline)});
+                        std::nullopt, std::nullopt, std::move(baseline)},
+                    ClearGesture{}, true);
             }
         }
-        editor.documentPointerGesture.begin(
-            *documentId, editor.activeDocument()->revision(), *position,
-            input.additive, std::move(baseline));
-        auto result =
+        DocumentPointerGesture gesture;
+        gesture.begin(*snapshot.activeDocument, snapshot.documentRevision,
+                      *position, input.additive, std::move(baseline));
+        return dispatch(
+            input.additive ? "select.add_range" : "cursor.set_position",
             input.additive
-                ? dispatchInput(
-                      editor, "select.add_range",
-                      SelectionCommandArguments{
-                          std::nullopt, Selection{*position, *position}})
-                : dispatchInput(
-                      editor, "cursor.set_position",
-                      SelectionCommandArguments{*position, std::nullopt});
-        if (!result.command || !result.command->accepted()) {
-            editor.documentPointerGesture.clear();
-        }
-        return result;
+                ? std::any{SelectionCommandArguments{
+                      std::nullopt, Selection{*position, *position}}}
+                : std::any{
+                      SelectionCommandArguments{*position, std::nullopt}},
+            SetGesture{std::move(gesture)}, true);
     }
-    if (!editor.documentPointerGesture.has_value()) {
+    if (!snapshot.gesture.has_value()) {
         return unhandled();
     }
 
-    auto const target = editor.documentPointerGesture.validateTarget(
-        editor.activeDocumentId(),
-        editor.activeDocument() ? editor.activeDocument()->revision() : 0);
+    auto gesture = snapshot.gesture;
+    auto const target = gesture.validateTarget(
+        snapshot.activeDocument, snapshot.documentRevision);
     if (target == DocumentPointerTargetState::DocumentChanged) {
-        return rejected("document pointer gesture target changed");
+        return rejected("document pointer gesture target changed", true);
     }
     if (target == DocumentPointerTargetState::RevisionChanged) {
-        return rejected("document changed during pointer gesture");
+        return rejected("document changed during pointer gesture", true);
     }
     auto position = resolvePosition();
     if (input.edge != DocumentPointerEdge::None) {
-        auto result = CommandResult{CommandError::None, {}};
-        result.viewAction = ContinuePointerEdge{input.edge};
-        return {ClientInputOutcome::ViewOwned, std::nullopt,
-                std::move(result)};
+        return viewAction(ContinuePointerEdge{input.edge});
     }
     if (!position && input.phase == InputPointerPhase::Move) {
         return rejected("document pointer target is not actionable");
     }
-    ClientInputResult result = handled();
-    if (position) {
-        result = dispatchInput(
-            editor,
-            editor.documentPointerGesture.additive() ? "select.set_ranges"
-                                                     : "select.set_range",
-            editor.documentPointerGesture.selectionThrough(*position));
-        if (result.command && result.command->accepted()) {
-            editor.documentPointerGesture.moveTo(*position);
-        } else {
-            editor.documentPointerGesture.clear();
-        }
+    if (!position) {
+        return accepted(input.phase == InputPointerPhase::Release
+                            ? GestureOnAccepted{ClearGesture{}}
+                            : GestureOnAccepted{KeepGesture{}});
     }
-    if (input.phase == InputPointerPhase::Release) {
-        editor.documentPointerGesture.clear();
-    }
-    return result;
+
+    auto const arguments = gesture.selectionThrough(*position);
+    auto const command =
+        gesture.additive() ? "select.set_ranges" : "select.set_range";
+    gesture.moveTo(*position);
+    return dispatch(command, arguments,
+                    input.phase == InputPointerPhase::Release
+                        ? GestureOnAccepted{ClearGesture{}}
+                        : GestureOnAccepted{SetGesture{std::move(gesture)}},
+                    true);
 }
 
-ClientInputResult routeTransition(Editor& editor,
-                                  PauseFollowTransition const&) {
-    if (editor.follow.viewState().mode == FollowMode::Paused) {
+RoutedInput routeTransition(InputRoutingSnapshot const& snapshot,
+                            PauseFollowTransition const&) {
+    if (snapshot.followMode == FollowMode::Paused) {
         return unhandled();
     }
-    return dispatchInput(editor, "follow_edits.pause");
+    return dispatch("follow_edits.pause");
 }
 
-ClientInputResult routeTransition(Editor& editor,
-                                  PaneFocusTransition const& transition) {
-    if (!editor.focusPane(transition.pane)) {
+RoutedInput routeTransition(InputRoutingSnapshot const& snapshot,
+                            PaneFocusTransition const& transition) {
+    if (std::find(snapshot.panes.begin(), snapshot.panes.end(),
+                  transition.pane) == snapshot.panes.end()) {
         return rejected("pane focus target is not in this attachment");
     }
-    if (editor.screen.effectiveFocus() != FocusTarget::Editor) {
-        editor.screen.focusEditor();
-    }
-    editor.recordNavigation(NavigationClass::User);
-    return handled();
+    return accepted(FocusPane{transition.pane});
 }
 
-ClientInputResult routeTransition(Editor& editor,
-                                  SelectionTransition const& transition) {
-    const auto* tab = editor.activeTabState();
-    const auto* document = editor.activeDocument();
-    if (tab == nullptr || tab->id != transition.activeTab) {
+RoutedInput routeTransition(InputRoutingSnapshot const& snapshot,
+                            SelectionTransition const& transition) {
+    if (!snapshot.activeTab || *snapshot.activeTab != transition.activeTab) {
         return rejected("resolved selection active tab is stale");
     }
-    auto documentRevision = document ? document->revision() : 0;
-    if (const auto* activeTab = editor.activeTabState();
-        activeTab && activeTab->kind == TabKind::LiveDiff) {
-        documentRevision = editor.diff.viewState().revision;
+    auto documentRevision = snapshot.documentRevision;
+    if (snapshot.activeTabKind == TabKind::LiveDiff) {
+        documentRevision = snapshot.diffRevision;
     }
-    if (document == nullptr ||
+    if (!snapshot.activeDocument ||
         documentRevision != transition.documentRevision) {
         return rejected("resolved selection document is stale");
     }
@@ -337,109 +287,106 @@ ClientInputResult routeTransition(Editor& editor,
 
     std::vector<Selection> selections;
     selections.reserve(transition.selections.size());
-    const auto& text = editor.activeText();
-    for (const auto& range : transition.selections) {
-        auto anchor = resolveSelectionPosition(text, range.anchor);
-        auto active = resolveSelectionPosition(text, range.active);
+    for (auto const& range : transition.selections) {
+        auto anchor = resolveSelectionPosition(snapshot.activeText, range.anchor);
+        auto active = resolveSelectionPosition(snapshot.activeText, range.active);
         if (!anchor || !active) {
             return rejected("resolved selection range is invalid");
         }
         selections.push_back({*anchor, *active});
     }
-    editor.selection.selections = SelectionSet{std::move(selections)};
-    if (const auto documentId = editor.activeDocumentId()) {
-        editor.historyFor(*documentId).breakCoalescing();
-    }
-    editor.recordNavigation(NavigationClass::User);
-    return handled();
+    return accepted(ApplySelections{
+        *snapshot.activeDocument, SelectionSet{std::move(selections)}});
 }
 
-ClientInputResult routeTransition(
-    Editor& editor, PointerSelectionTransition const& transition) {
-    if (!editor.documentPointerGesture.has_value()) {
+RoutedInput routeTransition(InputRoutingSnapshot const& snapshot,
+                            PointerSelectionTransition const& transition) {
+    if (!snapshot.gesture.has_value()) {
         return rejected("pointer selection has no active gesture");
     }
     return routeInput(
-        editor,
+        snapshot,
         DocumentPointerInput{
             transition.position, false, false, InputPointerButton::Primary,
             InputPointerPhase::Move, DocumentPointerEdge::None});
 }
 
-ClientInputResult routeInput(Editor& editor,
-                             ViewTransitionInput const& input) {
+RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
+                       ViewTransitionInput const& input) {
     return std::visit(
         [&](auto const& transition) {
-            return routeTransition(editor, transition);
+            return routeTransition(snapshot, transition);
         },
         input.transition);
 }
 
-ClientInputResult routeInput(Editor& editor, TabPointerInput const& input) {
+RoutedInput routeInput(InputRoutingSnapshot const&,
+                       TabPointerInput const& input) {
     if (input.phase != InputPointerPhase::Press) {
         return unhandled();
     }
     switch (input.button) {
     case InputPointerButton::Primary:
-        return dispatchInput(editor, "tab.activate", input.tabId);
+        return dispatch("tab.activate", input.tabId);
     case InputPointerButton::Auxiliary:
-        return dispatchInput(editor, "tab.close", input.tabId);
+        return dispatch("tab.close", input.tabId);
     case InputPointerButton::Secondary:
         return unhandled();
     }
     return unhandled();
 }
 
-ClientInputResult routeInput(Editor& editor, TreePointerInput const& input) {
+RoutedInput routeInput(InputRoutingSnapshot const&,
+                       TreePointerInput const& input) {
     if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
-    return dispatchInput(editor, "tree.activate_node",
-                         TreeSelectArguments{input.nodeId});
+    return dispatch("tree.activate_node", TreeSelectArguments{input.nodeId});
 }
 
-ClientInputResult routeInput(Editor& editor, PickerPointerInput const& input) {
+RoutedInput routeInput(InputRoutingSnapshot const&,
+                       PickerPointerInput const& input) {
     if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
-    return dispatchInput(
-        editor, "picker.submit",
+    return dispatch(
+        "picker.submit",
         PickerSubmitArguments{input.activation, input.candidateId});
 }
 
-ClientInputResult routeInput(Editor& editor,
-                             ExternalActionPointerInput const& input) {
+RoutedInput routeInput(InputRoutingSnapshot const&,
+                       ExternalActionPointerInput const& input) {
     if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
-    return dispatchInput(editor, "external.invoke_action", input.invocation);
+    return dispatch("external.invoke_action", input.invocation);
 }
 
-ClientInputResult routeInput(Editor& editor,
-                             NoticeActionPointerInput const& input) {
+RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
+                       NoticeActionPointerInput const& input) {
     if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
-    const auto notice = editor.noticeView();
-    if (!notice) {
+    if (!snapshot.noticeActions) {
         return rejected("notice action target is not present");
     }
-    for (const auto& action : notice->actions) {
+    for (auto const& action : *snapshot.noticeActions) {
         if (action.id == input.actionId) {
-            return dispatchInput(editor, action.commandId);
+            return dispatch(action.command);
         }
     }
     return rejected("notice action target is not actionable");
 }
 
-} // namespace
+}  // namespace
 
-ClientInputResult inputLocked(Editor& editor, ClientInput const& input) {
+RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
+                       ClientInput const& input) {
     return std::visit(
         [&](auto const& semantic) {
-            return routeInput(editor, semantic);
+            return routeInput(snapshot, semantic);
         },
         input);
 }
 
-} // namespace ssg
+}  // namespace ssg

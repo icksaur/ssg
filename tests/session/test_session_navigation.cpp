@@ -1614,6 +1614,40 @@ TEST(keyInputRoutingBranchesByPromptMode) {
     }
 }
 
+TEST(viewTransitionsExecuteTypedEditorMutations) {
+    auto root = uniqueRoot();
+    auto created = ssg::createEditor(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+
+    auto missingNotice =
+        runtime.input(ssg::NoticeActionPointerInput{"missing"});
+    ASSERT_EQ(missingNotice.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_TRUE(missingNotice.command.has_value());
+    if (missingNotice.command) {
+        ASSERT_EQ(missingNotice.command->message,
+                  std::string{"notice action target is not present"});
+    }
+
+    ASSERT_TRUE(runtime.dispatch({"panel.toggle", {}}).accepted());
+    ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Panel);
+    ASSERT_TRUE(runtime.dispatch({"palette.open", {}}).accepted());
+    ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Prompt);
+
+    auto paneFocus = runtime.input(ssg::ViewTransitionInput{
+        ssg::PaneFocusTransition{runtime.paneTopology.activePane()}});
+    ASSERT_EQ(paneFocus.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Prompt);
+    ASSERT_TRUE(runtime.dispatch({"palette.close", {}}).accepted());
+    ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Editor);
+
+    auto missingPane = runtime.input(ssg::ViewTransitionInput{
+        ssg::PaneFocusTransition{ssg::PaneId{999}}});
+    ASSERT_EQ(missingPane.outcome, ssg::ClientInputOutcome::Rejected);
+}
+
 TEST(documentPointerGestureEndsWhenSelectionCommandIsRejected) {
     auto root = uniqueRoot();
     std::filesystem::create_directories(root / "workspace");
@@ -2756,6 +2790,7 @@ SSG_TEST_SUITE(test_session_interaction) {
     RUN(simpleSemanticInputsLowerThroughAuthoritativeTransactions);
     RUN(resolvedSelectionInputRejectsMalformedModelIdentity);
     RUN(keyInputRoutingBranchesByPromptMode);
+    RUN(viewTransitionsExecuteTypedEditorMutations);
     RUN(documentPointerInputOwnsSelectionGesturePolicy);
     RUN(documentPointerGestureEndsWhenSelectionCommandIsRejected);
     RUN(documentEdgeMovesResolveThroughPresenterAndReveal);

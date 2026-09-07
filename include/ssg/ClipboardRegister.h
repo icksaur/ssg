@@ -91,6 +91,7 @@ public:
         const SelectionSet& selections, std::uint64_t timestampMs);
 
     [[nodiscard]] ClipboardViewState viewState() const;
+    [[nodiscard]] std::string_view plainText() const noexcept;
 
     // A monotonic counter that advances on every copy/cut (each mints a new
     // write id). A host reads it to detect that the register's content changed --
