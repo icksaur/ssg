@@ -134,10 +134,10 @@ TEST(helpDocumentContainsProseAndTheLiveKeybinding) {
     const auto text = runtime.activeDocumentText();
     ASSERT_TRUE(contains(text, "SSG Help"));
     ASSERT_TRUE(contains(text, "Mouse"));
-    // The default Alt+H binding for help.open is generated into the keybindings
-    // section (display format lowercases a non-shifted letter: "Alt+h").
+    // The default Mod+H binding for help.open is generated into the keybindings
+    // section (display format lowercases a non-shifted letter: "Mod+h").
     ASSERT_TRUE(contains(text, "Open Help"));
-    ASSERT_TRUE(contains(text, "Alt+h"));
+    ASSERT_TRUE(contains(text, "Mod+h"));
     // The help content mentions clicking the header path to show the file tree.
     ASSERT_TRUE(contains(text, "header"));
     // Multiple-cursor usage is documented in prose (not only in the generated
@@ -147,6 +147,10 @@ TEST(helpDocumentContainsProseAndTheLiveKeybinding) {
     ASSERT_TRUE(contains(text, "Line numbers"));
     ASSERT_TRUE(contains(text, "view.toggle_line_numbers"));
     ASSERT_TRUE(contains(text, "Alt+click adds a cursor"));
+    // The Mod rule is stated up front, not left to be inferred from the
+    // generated keybinding table.
+    ASSERT_TRUE(contains(text, "How keys work"));
+    ASSERT_TRUE(contains(text, "Mod is Ctrl or Alt"));
     // Double-click word selection is mentioned in the mouse section.
     ASSERT_TRUE(contains(text, "Double-click a word"));
     // Middle-clicking a tab closes it (mirrors the README note).
@@ -201,14 +205,14 @@ TEST(helpKeybindingSectionReflectsACustomBind) {
     ASSERT_TRUE(
         runtime
             .dispatch({"keymap.bind",
-                       ssg::KeymapBindArguments{"Alt+KeyG", "file.save", "*"}})
+                       ssg::KeymapBindArguments{"Mod+KeyG", "file.save", "*"}})
             .accepted());
     ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
     const auto text = runtime.activeDocumentText();
     // A user's custom binding appears because help reads the live keymap
-    // (display format lowercases the non-shifted letter: "Alt+g").
-    ASSERT_TRUE(contains(text, "Alt+g"));
+    // (display format lowercases the non-shifted letter: "Mod+g").
+    ASSERT_TRUE(contains(text, "Mod+g"));
 }
 
 TEST(helpOpenIsIdempotentAndRefreshes) {
@@ -315,7 +319,7 @@ TEST(footerHelpShowsTheHelpKeyAndYieldsWhenUnbound) {
     auto hint = footerHelpNode(runtime);
     ASSERT_TRUE(hint.has_value());
     if (hint) {
-        ASSERT_TRUE(contains(hint->content, "Alt+h"));
+        ASSERT_TRUE(contains(hint->content, "Mod+h"));
         ASSERT_TRUE(contains(hint->content, "help"));
         ASSERT_TRUE(hint->command.has_value());
         if (hint->command) ASSERT_EQ(*hint->command, std::string{"help.open"});
@@ -323,12 +327,12 @@ TEST(footerHelpShowsTheHelpKeyAndYieldsWhenUnbound) {
     // Unbinding help.open drops the key label from the hint.
     ASSERT_TRUE(runtime
                     .dispatch({"keymap.unbind",
-                               ssg::KeymapUnbindArguments{"Alt+KeyH", "*"}})
+                               ssg::KeymapUnbindArguments{"Mod+KeyH", "*"}})
                     .accepted());
     auto unbound = footerHelpNode(runtime);
     ASSERT_TRUE(unbound.has_value());
     if (unbound) {
-        ASSERT_FALSE(contains(unbound->content, "Alt+h"));
+        ASSERT_FALSE(contains(unbound->content, "Mod+h"));
         ASSERT_TRUE(contains(unbound->content, "help"));
     }
 }

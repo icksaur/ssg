@@ -51,19 +51,19 @@ TEST(commandLabelUsesAuthoredLabelsAndHumanizesTheRest) {
 }
 
 TEST(formatKeySequenceIsCompactAndHuman) {
-    // A letter with no Shift is lowercased, because in a terminal Alt+letter
-    // transmits the lowercase character; Alt+S (uppercase) would need Shift.
-    ASSERT_EQ(ssg::formatKeySequence(*ssg::parseKeySequence({"Alt+KeyS"})),
-              std::string{"Alt+s"});
+    // A letter with no Shift is lowercased, because in a terminal Mod+letter
+    // transmits the lowercase character; Mod+S (uppercase) would need Shift.
+    ASSERT_EQ(ssg::formatKeySequence(*ssg::parseKeySequence({"Mod+KeyS"})),
+              std::string{"Mod+s"});
     ASSERT_EQ(ssg::formatKeySequence(*ssg::parseKeySequence({"ArrowDown"})),
               std::string{"Down"});
     // With Shift the letter stays uppercase.
     ASSERT_EQ(ssg::formatKeySequence(
-                  *ssg::parseKeySequence({"Alt+Shift+KeyZ"})),
-              std::string{"Alt+Shift+Z"});
+                  *ssg::parseKeySequence({"Mod+Shift+KeyZ"})),
+              std::string{"Mod+Shift+Z"});
     ASSERT_EQ(ssg::formatKeySequence(
-                  *ssg::parseKeySequence({"Alt+BracketRight"})),
-              std::string{"Alt+]"});
+                  *ssg::parseKeySequence({"Mod+BracketRight"})),
+              std::string{"Mod+]"});
     ASSERT_TRUE(ssg::formatKeySequence({}).empty());
 }
 

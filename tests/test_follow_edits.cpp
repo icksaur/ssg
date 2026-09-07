@@ -154,7 +154,7 @@ TEST(independentTransitionTableCoversSharedFollowPolicy) {
     ASSERT_TRUE(input.good());
 
     FollowEditsModel model{{.queueCapacity = 4,
-                            .resumeBinding = "Ctrl+Shift+F"}};
+                            .resumeBinding = "Mod+Shift+F"}};
     std::string line;
     while (std::getline(input, line)) {
         if (line.empty() || line.front() == '#') {
@@ -217,7 +217,7 @@ TEST(dirtyConflictUsesDiskDiffTargetWithoutBufferPolicy) {
 
 TEST(queueIsBoundedAndSameFileReplacesInPlace) {
     FollowEditsModel model{{.queueCapacity = 2,
-                            .resumeBinding = "Ctrl+Shift+F"}};
+                            .resumeBinding = "Mod+Shift+F"}};
     ASSERT_TRUE(model.pause().accepted());
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("a", "a", 1),
@@ -336,7 +336,7 @@ TEST(staleChangesAreFailureAtomic) {
 
 TEST(footerProjectionTracksPauseAndResume) {
     FollowEditsModel model{{.queueCapacity = 2,
-                            .resumeBinding = "Ctrl+Shift+F"}};
+                            .resumeBinding = "Mod+Shift+F"}};
     const auto followingFooter = model.footerProjection();
     ASSERT_EQ(followingFooter.mode, "following");
     ASSERT_EQ(followingFooter.resumeCommand,
@@ -346,7 +346,7 @@ TEST(footerProjectionTracksPauseAndResume) {
 
     const auto footer = model.footerProjection();
     ASSERT_EQ(footer.mode, "paused");
-    ASSERT_EQ(footer.resumeBinding, std::optional<std::string>{"Ctrl+Shift+F"});
+    ASSERT_EQ(footer.resumeBinding, std::optional<std::string>{"Mod+Shift+F"});
     ASSERT_EQ(footer.resumeCommand,
               std::optional<std::string>{"follow_edits.toggle"});
 }
@@ -354,7 +354,7 @@ TEST(footerProjectionTracksPauseAndResume) {
 TEST(configurationRejectsInvalidQueueCapacity) {
     ASSERT_THROWS(FollowEditsModel(
                       {.queueCapacity = 0,
-                       .resumeBinding = "Ctrl+Shift+F"}),
+                       .resumeBinding = "Mod+Shift+F"}),
                   std::invalid_argument);
 }
 

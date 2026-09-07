@@ -43,7 +43,7 @@ TEST(terminalEventsResolveThroughRuntimeInput) {
     ASSERT_EQ(fixture.runtime->activeDocumentText(), std::string{"hello"});
 
     auto close = fixture.runtime->input(ssg::ClientKeyInput{
-        ssg::KeyStroke{ssg::KeyCode::KeyW, false, true, false, false}, {}});
+        ssg::KeyStroke{ssg::KeyCode::KeyW, true, false, false}, {}});
     ASSERT_EQ(close.outcome, ssg::ClientInputOutcome::Dispatched);
     auto presentation = ssg::test::projectGridFrame(*fixture.runtime);
     ASSERT_TRUE(presentation && presentation->tabs.tabs.empty());

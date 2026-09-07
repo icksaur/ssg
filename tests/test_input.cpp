@@ -27,8 +27,8 @@ std::string readFile(const std::filesystem::path& path) {
 }
 
 TEST(keyStrokesHaveACanonicalRoundTrip) {
-    for (const auto text : {"KeyA", "Ctrl+Shift+KeyM", "Meta+BracketLeft",
-                            "Alt+ArrowRight", "F5"}) {
+    for (const auto text : {"KeyA", "Mod+Shift+KeyM", "Meta+BracketLeft",
+                            "Mod+ArrowRight", "F5"}) {
         const auto parsed = ssg::parseKeyStroke(text);
         ASSERT_TRUE(parsed.has_value());
         if (parsed) {
@@ -36,14 +36,19 @@ TEST(keyStrokesHaveACanonicalRoundTrip) {
         }
     }
     ASSERT_FALSE(ssg::parseKeyStroke("").has_value());
-    ASSERT_FALSE(ssg::parseKeyStroke("Ctrl+Ctrl+KeyA").has_value());
+    ASSERT_FALSE(ssg::parseKeyStroke("Mod+Mod+KeyA").has_value());
     ASSERT_FALSE(ssg::parseKeyStroke("Hyper+KeyA").has_value());
-    ASSERT_FALSE(ssg::parseKeyStroke("Ctrl+").has_value());
+    ASSERT_FALSE(ssg::parseKeyStroke("Mod+").has_value());
+    // Ctrl and Alt are no longer modifier names: both physical keys reach the
+    // one Mod modifier, so a binding naming either is a mistake worth reporting
+    // rather than an alias that silently means something new.
+    ASSERT_FALSE(ssg::parseKeyStroke("Ctrl+KeyA").has_value());
+    ASSERT_FALSE(ssg::parseKeyStroke("Alt+KeyA").has_value());
 }
 
 TEST(validateKeymapFlagsDuplicateAndUnreachableBindings) {
     const auto sequence = *ssg::parseKeySequence(
-        {"Ctrl+Shift+KeyM", "KeyA", "KeyA"});
+        {"Mod+Shift+KeyM", "KeyA", "KeyA"});
     ssg::KeymapViewState duplicate{
         "bad", {{sequence, "cursor.left", "editor"},
                 {sequence, "cursor.right", "editor"}}};
@@ -97,7 +102,7 @@ TEST(validateKeymapRejectsModifiedEnterBindings) {
     ASSERT_FALSE(hasError(ssg::KeymapMatcher{ok}.validate(),
                           ssg::KeymapErrorCode::ModifiedEnterBinding));
 
-    for (const auto* modified : {"Shift+Enter", "Ctrl+Enter", "Alt+Enter",
+    for (const auto* modified : {"Shift+Enter", "Mod+Enter", "Mod+Enter",
                                  "Meta+Enter"}) {
         const auto sequence = *ssg::parseKeySequence({modified});
         ssg::KeymapViewState bad{"m", {{sequence, "text.newline", "editor"}}};
@@ -106,7 +111,7 @@ TEST(validateKeymapRejectsModifiedEnterBindings) {
     }
 
     // The live rebind path (keymap.bind) surfaces the same rejection.
-    const auto settingsSeq = *ssg::parseKeySequence({"Alt+KeyS"});
+    const auto settingsSeq = *ssg::parseKeySequence({"Mod+KeyS"});
     ssg::KeymapViewState base{"m", {{settingsSeq, "settings.open", "*"}}};
     ASSERT_FALSE(
         ssg::applyKeymapBind(base, {"Shift+Enter", "text.newline", "editor"})
@@ -130,7 +135,7 @@ TEST(validateKeymapRejectsUnknownContext) {
 }
 
 TEST(validateKeymapRejectsMultiStrokeBindings) {
-    const auto single = *ssg::parseKeySequence({"Alt+KeyF"});
+    const auto single = *ssg::parseKeySequence({"Mod+KeyF"});
     const auto multi = *ssg::parseKeySequence({"Escape", "KeyF"});
 
     // A single-stroke binding is fine; any longer sequence is rejected -- the
@@ -181,8 +186,8 @@ TEST(resolveKeySequenceStarBeatsFocusAndResolvesEverywhere) {
 }
 
 TEST(resolveKeySequenceResolvesOrReportsNone) {
-    const auto save = *ssg::parseKeySequence({"Alt+KeyS"});
-    const auto other = *ssg::parseKeySequence({"Alt+KeyX"});
+    const auto save = *ssg::parseKeySequence({"Mod+KeyS"});
+    const auto other = *ssg::parseKeySequence({"Mod+KeyX"});
     ssg::KeymapViewState keymap{"m", {{save, "file.save", "*"}}};
 
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(save, "editor").kind,
@@ -268,15 +273,15 @@ TEST(imeAcceptsOnlyCommittedUtf8Text) {
 }
 
 TEST(applyKeymapBindAddsRebindsAndRejectsInvalidRequests) {
-    const auto settingsSeq = *ssg::parseKeySequence({"Alt+KeyS"});
+    const auto settingsSeq = *ssg::parseKeySequence({"Mod+KeyS"});
     ssg::KeymapViewState base{"m", {{settingsSeq, "settings.open", "*"}}};
 
     // Fresh bind: adds a new global binding.
     {
         auto result = ssg::applyKeymapBind(
-            base, {"Alt+KeyG", "find.open", ""});
+            base, {"Mod+KeyG", "find.open", ""});
         ASSERT_TRUE(result.accepted());
-        const auto boundSeq = *ssg::parseKeySequence({"Alt+KeyG"});
+        const auto boundSeq = *ssg::parseKeySequence({"Mod+KeyG"});
         ssg::KeymapViewState expected{
             "m", {{settingsSeq, "settings.open", "*"},
                   {boundSeq, "find.open", "*"}}};
@@ -286,12 +291,12 @@ TEST(applyKeymapBindAddsRebindsAndRejectsInvalidRequests) {
     // Rebind: same (context, sequence) replaces rather than duplicates.
     {
         auto once = ssg::applyKeymapBind(
-            base, {"Alt+KeyG", "find.open", "editor"});
+            base, {"Mod+KeyG", "find.open", "editor"});
         ASSERT_TRUE(once.accepted());
         auto twice = ssg::applyKeymapBind(
-            once.keymap, {"Alt+KeyG", "find.replace", "editor"});
+            once.keymap, {"Mod+KeyG", "find.replace", "editor"});
         ASSERT_TRUE(twice.accepted());
-        const auto boundSeq = *ssg::parseKeySequence({"Alt+KeyG"});
+        const auto boundSeq = *ssg::parseKeySequence({"Mod+KeyG"});
         ssg::KeymapViewState expected{
             "m", {{settingsSeq, "settings.open", "*"},
                   {boundSeq, "find.replace", "editor"}}};
@@ -303,44 +308,44 @@ TEST(applyKeymapBindAddsRebindsAndRejectsInvalidRequests) {
     ASSERT_FALSE(ssg::applyKeymapBind(base, {"NotAKey", "find.open", ""})
                      .accepted());
     // A multi-stroke sequence no longer parses -- the chord model is gone.
-    ASSERT_FALSE(ssg::applyKeymapBind(base, {"Alt+KeyF KeyT", "find.open", ""})
+    ASSERT_FALSE(ssg::applyKeymapBind(base, {"Mod+KeyF KeyT", "find.open", ""})
                      .accepted());
-    ASSERT_FALSE(ssg::applyKeymapBind(base, {"Alt+KeyF", "", ""})
+    ASSERT_FALSE(ssg::applyKeymapBind(base, {"Mod+KeyF", "", ""})
                      .accepted());
     ASSERT_FALSE(
-        ssg::applyKeymapBind(base, {"Alt+KeyF", "find.open", "bogus"})
+        ssg::applyKeymapBind(base, {"Mod+KeyF", "find.open", "bogus"})
             .accepted());
     // Rebinding the sole settings.open global binding to something else
     // must reject: K6's escape hatch must survive.
     ASSERT_FALSE(
-        ssg::applyKeymapBind(base, {"Alt+KeyS", "other.command", ""})
+        ssg::applyKeymapBind(base, {"Mod+KeyS", "other.command", ""})
             .accepted());
 }
 
 TEST(applyKeymapUnbindRemovesOrNoOpsAndRejectsBadSequence) {
-    const auto settingsSeq = *ssg::parseKeySequence({"Alt+KeyS"});
-    const auto findSeq = *ssg::parseKeySequence({"Alt+KeyG"});
+    const auto settingsSeq = *ssg::parseKeySequence({"Mod+KeyS"});
+    const auto findSeq = *ssg::parseKeySequence({"Mod+KeyG"});
     ssg::KeymapViewState base{
         "m", {{settingsSeq, "settings.open", "*"},
               {findSeq, "find.open", "editor"}}};
 
-    auto removed = ssg::applyKeymapUnbind(base, {"Alt+KeyG", "editor"});
+    auto removed = ssg::applyKeymapUnbind(base, {"Mod+KeyG", "editor"});
     ASSERT_TRUE(removed.accepted());
     ssg::KeymapViewState expected{"m", {{settingsSeq, "settings.open", "*"}}};
     ASSERT_EQ(removed.keymap, expected);
 
     // Absent binding: no-op success, unchanged keymap.
-    auto noOp = ssg::applyKeymapUnbind(base, {"Alt+KeyQ", ""});
+    auto noOp = ssg::applyKeymapUnbind(base, {"Mod+KeyQ", ""});
     ASSERT_TRUE(noOp.accepted());
     ASSERT_EQ(noOp.keymap, base);
 
     ASSERT_FALSE(ssg::applyKeymapUnbind(base, {"NotAKey", ""}).accepted());
     ASSERT_FALSE(
-        ssg::applyKeymapUnbind(base, {"Alt+KeyF", "bogus"}).accepted());
+        ssg::applyKeymapUnbind(base, {"Mod+KeyF", "bogus"}).accepted());
     // Removing the sole settings.open global binding must reject: K6's
     // escape hatch must survive unbind, same as bind.
     ASSERT_FALSE(
-        ssg::applyKeymapUnbind(base, {"Alt+KeyS", ""}).accepted());
+        ssg::applyKeymapUnbind(base, {"Mod+KeyS", ""}).accepted());
 }
 
 TEST(backendHasNoPlatformInputCaptureDependency) {
@@ -375,7 +380,7 @@ TEST(compiledKeymapResolvesIdenticallyToTheAuthoredMatcher) {
     const auto stroke = [](ssg::KeyCode code, bool control = false) {
         ssg::KeyStroke result;
         result.code = code;
-        result.control = control;
+        result.mod = control;
         return result;
     };
     const auto binding = [](ssg::KeySequence sequence, std::string command,

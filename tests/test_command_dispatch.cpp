@@ -66,7 +66,7 @@ TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
     ASSERT_TRUE(
         runtime
             ->dispatch({"keymap.bind",
-                 ssg::KeymapBindArguments{"Ctrl+KeyG",
+                 ssg::KeymapBindArguments{"Mod+KeyG",
                                           "oracle.view_action", "editor"}})
             .accepted());
     auto result = runtime->dispatch({"oracle.view_action", {}});
@@ -82,7 +82,7 @@ TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
 
     ssg::KeyStroke stroke;
     stroke.code = ssg::KeyCode::KeyG;
-    stroke.control = true;
+    stroke.mod = true;
     auto input = runtime->input(ssg::ClientKeyInput{stroke, {}});
     ASSERT_EQ(input.outcome, ssg::ClientInputOutcome::ViewOwned);
     ASSERT_TRUE(input.command.has_value());
@@ -103,12 +103,12 @@ TEST(inputKeymapRebuildsForKeymapAndCatalogChanges) {
         runtime
             ->dispatch({"keymap.bind",
                         ssg::KeymapBindArguments{
-                            "Ctrl+KeyG", "oracle.late_command", "editor"}})
+                            "Mod+KeyG", "oracle.late_command", "editor"}})
             .accepted());
 
     ssg::KeyStroke firstStroke;
     firstStroke.code = ssg::KeyCode::KeyG;
-    firstStroke.control = true;
+    firstStroke.mod = true;
     auto missing = runtime->input(ssg::ClientKeyInput{firstStroke, {}});
     ASSERT_EQ(missing.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_TRUE(missing.command.has_value());
@@ -137,11 +137,11 @@ TEST(inputKeymapRebuildsForKeymapAndCatalogChanges) {
         runtime
             ->dispatch({"keymap.bind",
                         ssg::KeymapBindArguments{
-                            "Ctrl+KeyH", "oracle.late_command", "editor"}})
+                            "Mod+KeyY", "oracle.late_command", "editor"}})
             .accepted());
     ssg::KeyStroke secondStroke;
-    secondStroke.code = ssg::KeyCode::KeyH;
-    secondStroke.control = true;
+    secondStroke.code = ssg::KeyCode::KeyY;
+    secondStroke.mod = true;
     auto rebound = runtime->input(ssg::ClientKeyInput{secondStroke, {}});
     ASSERT_EQ(rebound.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_EQ(calls, 2);

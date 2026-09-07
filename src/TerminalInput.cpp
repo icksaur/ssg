@@ -123,6 +123,10 @@ enum class ModifierMode { Legacy, Kitty };
 // bit3 Super, bit4 Hyper, bit5 Meta, bit6 CapsLock, bit7 NumLock).  `modifier` is
 // the raw parameter as sent (1-based; 1 or absent means no modifiers).
 //
+// Ctrl and Alt both mean SSG's single `mod`, and Ctrl+Alt together means NOTHING:
+// that combination belongs to the windowing system, so a stroke carrying both is
+// decoded as the plain key rather than as a chord SSG would swallow.
+//
 // Legacy callers IGNORE any bit outside Shift/Alt/Ctrl: an unknown modifier falls
 // back to the plain key, preserving the pre-Kitty behaviour.  Kitty callers
 // additionally map Meta to the bindable `meta` modifier.  Super and Hyper are
@@ -140,17 +144,21 @@ void applyModifierBitmask(ssg::KeyStroke& stroke, std::int64_t modifier,
     // and a terminal speaking the Kitty protocol reports them in the modifier
     // field of even the legacy letter/tilde functional-key forms (Home/End/etc.).
     // Strip them first so they neither enter the stroke nor trip the Legacy
-    // "unknown modifier" guard below -- otherwise Alt+Home with NumLock on
+    // "unknown modifier" guard below -- otherwise Mod+Home with NumLock on
     // (bitmask 130 = NumLock|Alt) would be discarded as unsupported and lose its
-    // Alt, and the binding would never resolve.
+    // modifier, and the binding would never resolve.
     constexpr std::int64_t kLockBits = 0b11000000;  // CapsLock | NumLock
     auto const bitmask = (modifier - 1) & ~kLockBits;
     if (mode == ModifierMode::Legacy && (bitmask & ~std::int64_t{0b111}) != 0) {
         return;  // Unknown modifier -> plain key, as before.
     }
+    bool const alt = (bitmask & 0b010) != 0;
+    bool const control = (bitmask & 0b100) != 0;
+    if (alt && control) {
+        return;  // Ctrl+Alt is the windowing system's; decode as the plain key.
+    }
     stroke.shift = (bitmask & 0b001) != 0;
-    stroke.alt = (bitmask & 0b010) != 0;
-    stroke.control = (bitmask & 0b100) != 0;
+    stroke.mod = alt || control;
     if (mode == ModifierMode::Kitty) {
         stroke.meta = (bitmask & 0b100000) != 0;
     }
@@ -270,7 +278,12 @@ Decoded decodeInputRaw(std::string_view bytes, bool inputExhausted,
                     return {DecodeStatus::incomplete, {}, {}, 0};
                 }
                 if (inner.status == DecodeStatus::key) {
-                    inner.stroke.alt = true;
+                    // The ESC prefix IS Alt.  If the inner sequence already
+                    // carried a modifier, that modifier was Ctrl, so this is
+                    // Ctrl+Alt -- the windowing system's, not ours.  Drop the
+                    // modifier rather than reporting a Mod chord SSG would then
+                    // swallow.
+                    inner.stroke.mod = !inner.stroke.mod;
                     consumed = 1 + innerConsumed;
                     return inner;
                 }
@@ -279,18 +292,21 @@ Decoded decodeInputRaw(std::string_view bytes, bool inputExhausted,
                 consumed = 1;
                 return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Escape}, {}, 0};
             }
-            // Legacy meta-prefix: Alt+<key> transmits as ESC then the key's
-            // byte, so ESC followed by a printable coalesces into one Alt stroke.
+            // Legacy meta-prefix: Mod+<key> transmits as ESC then the key's
+            // byte, so ESC followed by a printable coalesces into one Mod stroke.
             // ESC [ and ESC O are excluded above as the CSI/SS3 introducers.  The
             // DCS/OSC/APC/PM/SOS string introducers (ESC P/]/X/^/_) are
-            // byte-identical to Alt+<key> chords; that is safe only because SSG
+            // byte-identical to Mod+<key> chords; that is safe only because SSG
             // solicits no DCS/OSC reply (noDcsOrOscQueryMaySolicitAnUnparsedReply),
             // so those bytes reach the decoder only from the keyboard.
-            // Alt+<named key> whose byte is not a graphic printable: Backspace
+            // Ctrl+Alt+<key> transmits as ESC then a C0 byte, which the
+            // control-byte arm at the bottom of this branch already decodes as a
+            // bare Escape -- so this path needs no separate Ctrl+Alt rejection.
+            // Mod+<named key> whose byte is not a graphic printable: Backspace
             // (0x7f/0x08), Enter (0x0d/0x0a), Tab (0x09).  These carry no text
             // and must map to the named key, not fall into the printable branch
             // (where 0x7f would become a keycode-less text stroke and the
-            // Alt+Backspace = delete-word binding would never resolve).
+            // Mod+Backspace = delete-word binding would never resolve).
             auto const metaNamed = [&]() -> ssg::KeyCode {
                 if (second == 0x7f || second == 0x08) return ssg::KeyCode::Backspace;
                 if (second == '\r' || second == '\n') return ssg::KeyCode::Enter;
@@ -300,7 +316,7 @@ Decoded decodeInputRaw(std::string_view bytes, bool inputExhausted,
             if (metaNamed != ssg::KeyCode::None) {
                 consumed = 2;
                 ssg::KeyStroke stroke{metaNamed};
-                stroke.alt = true;
+                stroke.mod = true;
                 return {DecodeStatus::key, stroke, {}, 0};
             }
             if (second >= 0x20) {
@@ -314,7 +330,7 @@ Decoded decodeInputRaw(std::string_view bytes, bool inputExhausted,
                 auto text = std::string{bytes.substr(1, length)};
                 consumed = 1 + length;
                 ssg::KeyStroke stroke;
-                stroke.alt = true;
+                stroke.mod = true;
                 if (length == 1) {
                     stroke.code = asciiKeyCode(second);
                     stroke.shift = second >= 'A' && second <= 'Z';
@@ -580,12 +596,15 @@ Decoded decodeInputRaw(std::string_view bytes, bool inputExhausted,
         return {DecodeStatus::key, stroke, std::move(text), 0};
     }
     if (first >= 0x01 && first <= 0x1a) {
-        // C0 control byte -> Ctrl+<letter>.  The bytes that name a key
+        // C0 control byte -> Mod+<letter>.  The bytes that name a key
         // (0x08 Backspace, 0x09 Tab, 0x0a/0x0d Enter, 0x1b Escape) are handled
         // above and never reach here, so what remains maps cleanly onto A..Z.
+        // Those four are why Mod+I, Mod+M, Mod+H and Mod+[ are unreachable from
+        // the Ctrl key under the legacy encoding: the terminal sends the named
+        // key's byte and no Ctrl-ness survives.  They remain reachable from Alt.
         consumed = 1;
         ssg::KeyStroke stroke;
-        stroke.control = true;
+        stroke.mod = true;
         stroke.code = static_cast<ssg::KeyCode>(
             static_cast<std::uint16_t>(ssg::KeyCode::KeyA) + (first - 1));
         return {DecodeStatus::key, stroke, {}, 0};
@@ -607,8 +626,7 @@ Decoded decodeInput(std::string_view bytes, bool inputExhausted,
     if (decoded.status == DecodeStatus::key &&
         decoded.stroke.code == ssg::KeyCode::Enter) {
         decoded.stroke.shift = false;
-        decoded.stroke.alt = false;
-        decoded.stroke.control = false;
+        decoded.stroke.mod = false;
         decoded.stroke.meta = false;
     }
     return decoded;

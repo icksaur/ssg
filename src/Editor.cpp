@@ -77,37 +77,37 @@ KeymapViewState defaultTerminalKeymap() {
             {std::move(sequence), std::move(command), std::move(context)});
     };
 
-    bind(seq({"Alt+KeyS"}), "file.save", "*");
-    bind(seq({"Alt+KeyN"}), "file.new", "*");
-    bind(seq({"Alt+KeyZ"}), "edit.undo", "*");
-    bind(seq({"Alt+Shift+KeyZ"}), "edit.redo", "*");
-    bind(seq({"Alt+KeyP"}), "file_finder.open", "*");
-    bind(seq({"Alt+Shift+KeyP"}), "palette.open", "*");
-    bind(seq({"Alt+KeyB"}), "panel.toggle", "*");
-    bind(seq({"Alt+KeyH"}), "help.open", "*");
-    bind(seq({"Alt+KeyO"}), "panel.focus", "*");
-    // Tab cycling: Alt+BracketRight/Left cannot be used -- ESC ] / ESC [ are
+    bind(seq({"Mod+KeyS"}), "file.save", "*");
+    bind(seq({"Mod+KeyN"}), "file.new", "*");
+    bind(seq({"Mod+KeyZ"}), "edit.undo", "*");
+    bind(seq({"Mod+Shift+KeyZ"}), "edit.redo", "*");
+    bind(seq({"Mod+KeyP"}), "file_finder.open", "*");
+    bind(seq({"Mod+Shift+KeyP"}), "palette.open", "*");
+    bind(seq({"Mod+KeyB"}), "panel.toggle", "*");
+    bind(seq({"Mod+KeyH"}), "help.open", "*");
+    bind(seq({"Mod+KeyO"}), "panel.focus", "*");
+    // Tab cycling: Mod+BracketRight/Left cannot be used -- ESC ] / ESC [ are
     // the OSC / CSI introducers -- so the brackets give way to
-    // Alt+Period/Comma.
-    bind(seq({"Alt+Period"}), "tab.next", "*");
-    bind(seq({"Alt+Comma"}), "tab.previous", "*");
-    bind(seq({"Alt+KeyW"}), "tab.close", "*");
-    bind(seq({"Alt+Shift+KeyT"}), "settings.open", "*");
-    bind(seq({"Alt+KeyA"}), "select.all", "*");
-    bind(seq({"Alt+KeyD"}), "select.add_next_occurrence", "*");
-    bind(seq({"Alt+KeyI"}), "select.split_into_lines", "*");
-    bind(seq({"Alt+KeyK"}), "select.add_cursor_up", "*");
-    bind(seq({"Alt+KeyJ"}), "select.add_cursor_down", "*");
-    bind(seq({"Alt+Slash"}), "find.open", "*");
-    bind(seq({"Alt+Digit8"}), "find.word_under_cursor", "editor");
-    bind(seq({"Alt+KeyR"}), "replace.open", "*");
-    bind(seq({"Alt+Shift+KeyD"}), "draft.discard", "editor");
+    // Mod+Period/Comma.
+    bind(seq({"Mod+Period"}), "tab.next", "*");
+    bind(seq({"Mod+Comma"}), "tab.previous", "*");
+    bind(seq({"Mod+KeyW"}), "tab.close", "*");
+    bind(seq({"Mod+Shift+KeyT"}), "settings.open", "*");
+    bind(seq({"Mod+KeyA"}), "select.all", "*");
+    bind(seq({"Mod+KeyD"}), "select.add_next_occurrence", "*");
+    bind(seq({"Mod+KeyI"}), "select.split_into_lines", "*");
+    bind(seq({"Mod+KeyK"}), "select.add_cursor_up", "*");
+    bind(seq({"Mod+KeyJ"}), "select.add_cursor_down", "*");
+    bind(seq({"Mod+Slash"}), "find.open", "*");
+    bind(seq({"Mod+Digit8"}), "find.word_under_cursor", "editor");
+    bind(seq({"Mod+KeyR"}), "replace.open", "*");
+    bind(seq({"Mod+Shift+KeyD"}), "draft.discard", "editor");
 
-    bind(seq({"Alt+KeyX"}), "clipboard.cut", "editor");
-    bind(seq({"Alt+KeyC"}), "clipboard.copy", "editor");
-    bind(seq({"Alt+KeyV"}), "clipboard.paste", "editor");
+    bind(seq({"Mod+KeyX"}), "clipboard.cut", "editor");
+    bind(seq({"Mod+KeyC"}), "clipboard.copy", "editor");
+    bind(seq({"Mod+KeyV"}), "clipboard.paste", "editor");
     // Prompts have no selection to cut or copy.
-    bind(seq({"Alt+KeyV"}), "clipboard.paste", "prompt");
+    bind(seq({"Mod+KeyV"}), "clipboard.paste", "prompt");
 
     bind(seq({"ArrowDown"}), "cursor.line_down", "editor");
     bind(seq({"ArrowUp"}), "cursor.line_up", "editor");
@@ -121,13 +121,11 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"End"}), "cursor.line_end", "editor");
     bind(seq({"Shift+Home"}), "select.line_start", "editor");
     bind(seq({"Shift+End"}), "select.line_end", "editor");
-    bind(seq({"Ctrl+Home"}), "cursor.document_start", "editor");
-    bind(seq({"Ctrl+End"}), "cursor.document_end", "editor");
-    bind(seq({"Alt+Home"}), "cursor.document_start", "editor");
-    bind(seq({"Alt+End"}), "cursor.document_end", "editor");
-    bind(seq({"Alt+Shift+KeyG"}), "goto.line", "editor");
-    bind(seq({"Ctrl+Shift+Home"}), "select.document_start", "editor");
-    bind(seq({"Ctrl+Shift+End"}), "select.document_end", "editor");
+    bind(seq({"Mod+Home"}), "cursor.document_start", "editor");
+    bind(seq({"Mod+End"}), "cursor.document_end", "editor");
+    bind(seq({"Mod+Shift+KeyG"}), "goto.line", "editor");
+    bind(seq({"Mod+Shift+Home"}), "select.document_start", "editor");
+    bind(seq({"Mod+Shift+End"}), "select.document_end", "editor");
     bind(seq({"PageUp"}), "cursor.page_up", "editor");
     bind(seq({"PageDown"}), "cursor.page_down", "editor");
     bind(seq({"Shift+PageUp"}), "select.page_up", "editor");
@@ -135,11 +133,11 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Enter"}), "text.newline", "editor");
     bind(seq({"Backspace"}), "text.delete_backward", "editor");
     bind(seq({"Delete"}), "text.delete_forward", "editor");
-    bind(seq({"Alt+Backspace"}), "text.delete_word_backward", "editor");
-    bind(seq({"Alt+ArrowLeft"}), "cursor.word_left", "editor");
-    bind(seq({"Alt+ArrowRight"}), "cursor.word_right", "editor");
-    bind(seq({"Alt+Shift+ArrowLeft"}), "select.word_left", "editor");
-    bind(seq({"Alt+Shift+ArrowRight"}), "select.word_right", "editor");
+    bind(seq({"Mod+Backspace"}), "text.delete_word_backward", "editor");
+    bind(seq({"Mod+ArrowLeft"}), "cursor.word_left", "editor");
+    bind(seq({"Mod+ArrowRight"}), "cursor.word_right", "editor");
+    bind(seq({"Mod+Shift+ArrowLeft"}), "select.word_left", "editor");
+    bind(seq({"Mod+Shift+ArrowRight"}), "select.word_right", "editor");
 
     bind(seq({"ArrowDown"}), "tree.select_next", "panel");
     bind(seq({"ArrowUp"}), "tree.select_previous", "panel");
@@ -150,7 +148,7 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"ArrowDown"}), "prompt.next", "prompt");
     bind(seq({"ArrowUp"}), "prompt.previous", "prompt");
     bind(seq({"Tab"}), "prompt.focus_next_control", "prompt");
-    bind(seq({"Alt+KeyE"}), "external.focus", "*");
+    bind(seq({"Mod+KeyE"}), "external.focus", "*");
     bind(seq({"ArrowDown"}), "external.select_next", "external");
     bind(seq({"ArrowUp"}), "external.select_previous", "external");
     bind(seq({"Enter"}), "external.reload", "external");

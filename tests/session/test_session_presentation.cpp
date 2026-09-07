@@ -175,18 +175,18 @@ TEST(curatedKeymapResolvesPerContext) {
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(down, "prompt").commandId,
               std::string{"prompt.next"});
 
-    const auto save = *ssg::parseKeySequence({"Alt+KeyS"});
+    const auto save = *ssg::parseKeySequence({"Mod+KeyS"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(save, "editor").commandId,
               std::string{"file.save"});
 
-    const auto altHome = *ssg::parseKeySequence({"Alt+Home"});
+    const auto altHome = *ssg::parseKeySequence({"Mod+Home"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altHome, "editor").commandId,
               std::string{"cursor.document_start"});
-    const auto altEnd = *ssg::parseKeySequence({"Alt+End"});
+    const auto altEnd = *ssg::parseKeySequence({"Mod+End"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altEnd, "editor").commandId,
               std::string{"cursor.document_end"});
 
-    const auto settings = *ssg::parseKeySequence({"Alt+Shift+KeyT"});
+    const auto settings = *ssg::parseKeySequence({"Mod+Shift+KeyT"});
     for (const auto context : {"editor", "panel", "prompt"}) {
         ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(settings, context).commandId,
                   std::string{"settings.open"});
@@ -196,16 +196,16 @@ TEST(curatedKeymapResolvesPerContext) {
         char const* key;
         char const* command;
     };
-    for (auto const& binding : {ClipboardBinding{"Alt+KeyX", "clipboard.cut"},
-                                ClipboardBinding{"Alt+KeyC", "clipboard.copy"},
-                                ClipboardBinding{"Alt+KeyV", "clipboard.paste"}}) {
+    for (auto const& binding : {ClipboardBinding{"Mod+KeyX", "clipboard.cut"},
+                                ClipboardBinding{"Mod+KeyC", "clipboard.copy"},
+                                ClipboardBinding{"Mod+KeyV", "clipboard.paste"}}) {
         const auto sequence = *ssg::parseKeySequence({binding.key});
         ASSERT_EQ(
             ssg::KeymapMatcher{keymap}.resolveSequence(sequence, "editor").commandId,
             std::string{binding.command});
     }
 
-    for (auto const* const key : {"Alt+KeyX", "Alt+KeyC"}) {
+    for (auto const* const key : {"Mod+KeyX", "Mod+KeyC"}) {
         const auto sequence = *ssg::parseKeySequence({key});
         for (auto const* const context : {"panel", "prompt"}) {
             const auto resolved =
@@ -213,7 +213,7 @@ TEST(curatedKeymapResolvesPerContext) {
             ASSERT_TRUE(resolved.commandId.rfind("clipboard.", 0) != 0);
         }
     }
-    const auto paste = *ssg::parseKeySequence({"Alt+KeyV"});
+    const auto paste = *ssg::parseKeySequence({"Mod+KeyV"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(paste, "prompt").commandId,
               std::string{"clipboard.paste"});
     ASSERT_TRUE(ssg::KeymapMatcher{keymap}
@@ -233,43 +233,43 @@ TEST(curatedKeymapResolvesPerContext) {
     const auto plainRight = *ssg::parseKeySequence({"ArrowRight"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(plainRight, "editor").commandId,
               std::string{"cursor.right"});
-    const auto addNext = *ssg::parseKeySequence({"Alt+KeyD"});
+    const auto addNext = *ssg::parseKeySequence({"Mod+KeyD"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(addNext, "editor").commandId,
               std::string{"select.add_next_occurrence"});
-    const auto findOpen = *ssg::parseKeySequence({"Alt+Slash"});
+    const auto findOpen = *ssg::parseKeySequence({"Mod+Slash"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(findOpen, "editor").commandId,
               std::string{"find.open"});
-    const auto findWord = *ssg::parseKeySequence({"Alt+Digit8"});
+    const auto findWord = *ssg::parseKeySequence({"Mod+Digit8"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(findWord, "editor").commandId,
               std::string{"find.word_under_cursor"});
-    const auto replaceOpen = *ssg::parseKeySequence({"Alt+KeyR"});
+    const auto replaceOpen = *ssg::parseKeySequence({"Mod+KeyR"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(replaceOpen, "editor").commandId,
               std::string{"replace.open"});
-    const auto tabNext = *ssg::parseKeySequence({"Alt+Period"});
+    const auto tabNext = *ssg::parseKeySequence({"Mod+Period"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(tabNext, "editor").commandId,
               std::string{"tab.next"});
-    const auto tabPrev = *ssg::parseKeySequence({"Alt+Comma"});
+    const auto tabPrev = *ssg::parseKeySequence({"Mod+Comma"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(tabPrev, "editor").commandId,
               std::string{"tab.previous"});
 
     const auto del = *ssg::parseKeySequence({"Delete"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(del, "editor").commandId,
               std::string{"text.delete_forward"});
-    const auto deleteWord = *ssg::parseKeySequence({"Alt+Backspace"});
+    const auto deleteWord = *ssg::parseKeySequence({"Mod+Backspace"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(deleteWord, "editor").commandId,
               std::string{"text.delete_word_backward"});
-    const auto altWordLeft = *ssg::parseKeySequence({"Alt+ArrowLeft"});
+    const auto altWordLeft = *ssg::parseKeySequence({"Mod+ArrowLeft"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altWordLeft, "editor").commandId,
               std::string{"cursor.word_left"});
-    const auto altWordRight = *ssg::parseKeySequence({"Alt+ArrowRight"});
+    const auto altWordRight = *ssg::parseKeySequence({"Mod+ArrowRight"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altWordRight, "editor").commandId,
               std::string{"cursor.word_right"});
     const auto altSelectWordLeft =
-        *ssg::parseKeySequence({"Alt+Shift+ArrowLeft"});
+        *ssg::parseKeySequence({"Mod+Shift+ArrowLeft"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altSelectWordLeft, "editor").commandId,
               std::string{"select.word_left"});
     const auto altSelectWordRight =
-        *ssg::parseKeySequence({"Alt+Shift+ArrowRight"});
+        *ssg::parseKeySequence({"Mod+Shift+ArrowRight"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altSelectWordRight, "editor").commandId,
               std::string{"select.word_right"});
 }
@@ -555,7 +555,7 @@ TEST(addCursorChordProducesMultipleSelections) {
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"m.txt"}}).accepted());
 
     // Drive the curated binding through the real input path.
-    const auto chord = *ssg::parseKeySequence({"Alt+KeyJ"});
+    const auto chord = *ssg::parseKeySequence({"Mod+KeyJ"});
     const auto input = runtime.input({ssg::ClientKeyInput{chord.front(), {}}});
     ASSERT_EQ(input.outcome, ssg::ClientInputOutcome::Dispatched);
 

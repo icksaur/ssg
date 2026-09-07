@@ -18,10 +18,13 @@
 
 namespace ssg {
 
+// `mod` is SSG's single chord modifier: Ctrl OR Alt, never both. The decoder
+// collapses the two physical keys onto it and discards Ctrl+Alt entirely, so
+// nothing above the decoder knows which key was pressed. Shift is orthogonal;
+// meta is a distinct physical key only the Kitty protocol reports.
 struct KeyStroke {
     KeyCode code = KeyCode::None;
-    bool control = false;
-    bool alt = false;
+    bool mod = false;
     bool meta = false;
     bool shift = false;
 

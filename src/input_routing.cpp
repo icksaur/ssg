@@ -115,7 +115,7 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
         }
         if (input.stroke.code == KeyCode::Backspace) {
             return routeTextEdit(
-                {input.stroke.alt ? PromptTextEdit::Kind::DeleteWordBack
+                {input.stroke.mod ? PromptTextEdit::Kind::DeleteWordBack
                                   : PromptTextEdit::Kind::DeleteGraphemeBack,
                  {}});
         }

@@ -105,28 +105,39 @@ ssg.command("keymap.bind", {
     command = "find.open",
 })
 ssg.command("keymap.unbind", {
-    sequence = "Alt+KeyS",
+    sequence = "Mod+KeyS",
 })
 ```
 
-Frequent actions bind to single `Alt+<key>` chords, which a terminal transmits
-as the same bytes as pressing Escape then the key -- so `Alt+S` saves, `Alt+P`
-opens the file finder, `Alt+Shift+P` the command palette.  Escape is a plain key
+SSG has exactly one chord modifier, written `Mod`, and **`Mod` means Ctrl or
+Alt**: both produce the same stroke, so a binding written once answers to
+either.  Ctrl and Alt pressed together is deliberately not a chord -- it is
+discarded (Shift included) and left to the window manager.  There is no setting
+that selects the modifier; `Ctrl+` and `Alt+` are not accepted as `sequence`
+prefixes and a binding using them is rejected.
+
+Four chords are reachable only from Alt.  A terminal transmits `Ctrl+I`,
+`Ctrl+M`, `Ctrl+H` and `Ctrl+[` as the bytes for Tab, Enter, Backspace and
+Escape, so no evidence of the Ctrl press survives for SSG to read.
+
+Frequent actions bind to single `Mod+<key>` chords -- `Mod+S` saves, `Mod+P`
+opens the file finder, `Mod+Shift+P` the command palette.  Escape is a plain key
 that cancels a prompt or closes find in one press.  On macOS the terminal must
 be set to treat Option as Meta (iTerm2: "Use Option as Meta"; Terminal.app: "Use
-Option as Meta key"), or `Option+<letter>` inserts a composed character instead.
+Option as Meta key"), or `Option+<letter>` inserts a composed character instead
+-- or use Ctrl, which needs no such setting.
 
 On a terminal that supports the keyboard protocol (kitty, foot, WezTerm,
 ghostty, recent xterm.js and others), ssg enables it automatically and decodes
 these chords from the terminal's exact modifier report instead of the
-Escape-prefix bytes.  This makes `Alt+Shift+<letter>` and `Ctrl+<letter>`
-bindings unambiguous and immune to Caps Lock -- with the legacy encoding, Caps
-Lock inverts letter case and could swap `Alt+P` and `Alt+Shift+P`.  It is enabled
+Escape-prefix bytes.  This makes `Mod+Shift+<letter>` bindings unambiguous and
+immune to Caps Lock -- with the legacy encoding, Caps Lock inverts letter case
+and could swap `Mod+P` and `Mod+Shift+P`.  It is enabled
 only when the terminal answers the capability query; `SSG_TERM_KEYBOARD_PROTOCOL=off`
 forces the legacy path if a terminal advertises it but behaves badly.
 
-- `sequence` is a single key stroke, e.g. `"Alt+KeyS"` or `"Ctrl+Shift+KeyM"`.
-  It is an optional `Ctrl+`/`Alt+`/`Meta+`/`Shift+` prefix followed by one key
+- `sequence` is a single key stroke, e.g. `"Mod+KeyS"` or `"Mod+Shift+KeyM"`.
+  It is an optional `Mod+`/`Meta+`/`Shift+` prefix followed by one key
   name: `KeyA`-`KeyZ`, `Digit0`-`Digit9`, `F1`-`F24`, or a named key (`Escape`,
   `Enter`, `Tab`, `Space`, `Backspace`, `Delete`, the arrow keys,
   `Home`/`End`/`PageUp`/`PageDown`, and punctuation names like

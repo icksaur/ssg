@@ -78,9 +78,9 @@ class CompiledStroke {
 public:
     CompiledStroke() = default;
     explicit CompiledStroke(KeyStroke const& stroke) noexcept
-        : bits_{static_cast<std::uint32_t>(stroke.code) << 4U |
-                (stroke.control ? 1U : 0U) | (stroke.alt ? 2U : 0U) |
-                (stroke.meta ? 4U : 0U) | (stroke.shift ? 8U : 0U)} {}
+        : bits_{static_cast<std::uint32_t>(stroke.code) << 3U |
+                (stroke.mod ? 1U : 0U) | (stroke.meta ? 2U : 0U) |
+                (stroke.shift ? 4U : 0U)} {}
 
     bool operator==(CompiledStroke const&) const noexcept = default;
 

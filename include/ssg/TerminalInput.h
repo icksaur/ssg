@@ -11,7 +11,7 @@ namespace ssg {
 
 [[nodiscard]] inline bool
 applicationQuitRequested(const KeyStroke& stroke) noexcept {
-    return stroke.code == KeyCode::KeyQ && stroke.alt && !stroke.control;
+    return stroke.code == KeyCode::KeyQ && stroke.mod;
 }
 
 enum class DecodeStatus : std::uint8_t {

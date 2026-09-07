@@ -91,10 +91,8 @@ std::optional<KeyStroke> parseKeyStroke(std::string_view encoded) {
         const bool final = separator == std::string_view::npos;
         if (final) {
             result.code = keyCodeFromName(token);
-        } else if (token == "Ctrl" && !result.control) {
-            result.control = true;
-        } else if (token == "Alt" && !result.alt) {
-            result.alt = true;
+        } else if (token == "Mod" && !result.mod) {
+            result.mod = true;
         } else if (token == "Meta" && !result.meta) {
             result.meta = true;
         } else if (token == "Shift" && !result.shift) {
@@ -122,11 +120,8 @@ std::string formatKeyStroke(const KeyStroke& stroke) {
         }
         result += part;
     };
-    if (stroke.control) {
-        append("Ctrl");
-    }
-    if (stroke.alt) {
-        append("Alt");
+    if (stroke.mod) {
+        append("Mod");
     }
     if (stroke.meta) {
         append("Meta");
@@ -195,13 +190,12 @@ std::string formatKeySequence(const KeySequence& sequence) {
     std::string result;
     for (const auto& stroke : sequence) {
         if (!result.empty()) result += ' ';
-        if (stroke.control) result += "Ctrl+";
-        if (stroke.alt) result += "Alt+";
+        if (stroke.mod) result += "Mod+";
         if (stroke.shift) result += "Shift+";
         if (stroke.meta) result += "Meta+";
         auto const display = keyCodeDisplay(stroke.code);
         // A letter key without Shift transmits as a LOWERCASE character in a
-        // terminal (Alt+H is really ESC h); rendering it uppercase implies a
+        // terminal (Mod+H is really ESC h); rendering it uppercase implies a
         // Shift that is not bound and does not work. So a single A-Z display
         // with no Shift modifier is lowercased. Shift+, digits, and named keys
         // keep their table display.
@@ -242,8 +236,7 @@ std::vector<KeymapError> KeymapMatcher::validate() const {
         // Enter could never fire.  Reject it rather than accept a dead binding.
         if (std::ranges::any_of(binding.sequence, [](const KeyStroke& stroke) {
                 return stroke.code == KeyCode::Enter &&
-                       (stroke.shift || stroke.control || stroke.alt ||
-                        stroke.meta);
+                       (stroke.shift || stroke.mod || stroke.meta);
             })) {
             errors.push_back(
                 {KeymapErrorCode::ModifiedEnterBinding, index,

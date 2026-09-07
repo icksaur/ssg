@@ -28,36 +28,42 @@ use no CPU while idle.
 
 ## Editing
 
+**One modifier: `Mod` is `Ctrl` or `Alt`.** Press whichever your terminal passes
+through — both do the same thing. `Ctrl+Alt` together is never an SSG chord; that
+combination belongs to your window manager. Every binding is **remappable** — see
+Configuration.
+
 The things you reach for in a modern editor, in the terminal:
 
-- **Multiple cursors** — add the next occurrence of the selection (`Alt+D`),
-  add a cursor on the line above/below (`Alt+K` / `Alt+J`), or split a selection
-  into one cursor per line (`Alt+I`). Type once, edit everywhere.
-- **Command palette** (`Alt+Shift+P`) — fuzzy-search every command by name, the
+- **Multiple cursors** — add the next occurrence of the selection (`Mod+D`),
+  add a cursor on the line above/below (`Mod+K` / `Mod+J`), or split a selection
+  into one cursor per line (`Mod+I`). Type once, edit everywhere.
+- **Command palette** (`Mod+Shift+P`) — fuzzy-search every command by name, the
   way `Ctrl+Shift+P` works elsewhere.
-- **Fuzzy file finder** (`Alt+P`) — jump to any file in the workspace by typing
+- **Fuzzy file finder** (`Mod+P`) — jump to any file in the workspace by typing
   part of its name.
-- **Find & replace** (`Alt+/` find, `Alt+R` replace) — incremental, with
-  literal / regex / whole-word toggles, plus find-word-under-cursor (`Alt+8`)
+- **Find & replace** (`Mod+/` find, `Mod+R` replace) — incremental, with
+  literal / regex / whole-word toggles, plus find-word-under-cursor (`Mod+8`)
   and replace across the whole workspace.
-- **Undo / redo** (`Alt+Z` / `Alt+Shift+Z`) with word-granular history, and
-  cut / copy / paste (`Alt+X` / `Alt+C` / `Alt+V`) with multi-cursor-aware
+- **Undo / redo** (`Mod+Z` / `Mod+Shift+Z`) with word-granular history, and
+  cut / copy / paste (`Mod+X` / `Mod+C` / `Mod+V`) with multi-cursor-aware
   clipboard registers.
 - **Selection & movement** — arrows and `Shift`+arrows, `Home`/`End`,
-  `Ctrl+Home`/`Ctrl+End`, select-all (`Alt+A`).
-- **Tabs & panes** — next/previous tab (`Alt+.` / `Alt+,`), close (`Alt+W`),
-  split panes, and a collapsible left panel (`Alt+B`) that switches between the
+  `Mod+Home`/`Mod+End`, select-all (`Mod+A`).
+- **Tabs & panes** — next/previous tab (`Mod+.` / `Mod+,`), close (`Mod+W`),
+  split panes, and a collapsible left panel (`Mod+B`) that switches between the
   filesystem tree and Git status.
 
-Modern editors lean on `Ctrl` for these, but terminals reserve most `Ctrl`
-combinations, so SSG's default scheme is `Alt`-based and leans on an escape
-key for the rest. Every binding is **remappable** — see Configuration.
+A handful of chords are Alt-only: a terminal transmits `Ctrl+I`, `Ctrl+M`,
+`Ctrl+H` and `Ctrl+[` as Tab, Enter, Backspace and Escape, so nothing survives
+for SSG to tell apart.
 
 ## Mouse, too
 
 SSG isn't keyboard-only. Click to place the cursor, double-click to select a
 word, drag to select a range, use the wheel and scrollbar to scroll, and
-middle-click a tab to close it. `Alt`+click adds or removes a cursor.
+middle-click a tab to close it. `Alt`+click adds or removes a cursor — that one
+is `Alt` specifically, a mouse chord rather than a `Mod` chord.
 
 ## Under the hood
 

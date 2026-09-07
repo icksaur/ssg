@@ -1439,7 +1439,7 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
         }
         const auto missing = runtime.dispatch({"ui.activate",
              ssg::UiNodeActivationArguments{
-                 ssg::UiNodeId{"missing.control"}}});
+                 ssg::UiNodeId{"missing.mod"}}});
         ASSERT_FALSE(missing.accepted());
         ASSERT_TRUE(runtime
                         .dispatch({"prompt.cancel",  {}})
@@ -1538,7 +1538,7 @@ TEST(keyInputRoutingBranchesByPromptMode) {
     const auto key = [&](ssg::KeyCode code, bool alt = false) {
         ssg::KeyStroke stroke;
         stroke.code = code;
-        stroke.alt = alt;
+        stroke.mod = alt;
         return runtime.input(ssg::ClientKeyInput{stroke, {}});
     };
     const auto activePromptValue = [&]() {
@@ -2120,10 +2120,10 @@ TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
     ASSERT_TRUE(undo != nullptr);
     if (save) {
         ASSERT_EQ(save->label, std::string{"Save File"});
-        ASSERT_EQ(save->detail, std::string{"Alt+s"});  // Its bound chord.
+        ASSERT_EQ(save->detail, std::string{"Mod+s"});  // Its bound chord.
     }
     if (undo) {
-        ASSERT_EQ(undo->detail, std::string{"Alt+z"});
+        ASSERT_EQ(undo->detail, std::string{"Mod+z"});
     }
 
     // An unbound command shows a label but no key detail.
