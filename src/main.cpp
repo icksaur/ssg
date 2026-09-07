@@ -612,8 +612,16 @@ int main(int argc, char** argv) {
 
     bool startsWithAnEditableDocument = false;
     bool openedNamedFile = false;
-    if (target.file && ssg::statFile(target.cwd / *target.file)) {
-        auto const openResult = runtime.dispatch({"file.open", *target.file});
+    if (target.file) {
+        // A named file that exists is opened; a named file that does not is
+        // created as an unsaved buffer claiming that name, so the user can type
+        // and save without naming it again.
+        auto const openResult = ssg::statFile(target.cwd / *target.file)
+                                    ? runtime.dispatch({"file.open", *target.file})
+                                    : runtime.dispatch({"file.new", *target.file});
+        if (!openResult.accepted()) {
+            std::fprintf(stderr, "ssg: %s\n", openResult.message.c_str());
+        }
         startsWithAnEditableDocument = openResult.accepted();
         openedNamedFile = openResult.accepted();
     }

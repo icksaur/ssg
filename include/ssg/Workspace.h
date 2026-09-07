@@ -160,6 +160,10 @@ public:
 
     [[nodiscard]] WorkspaceResult newDocument(
         std::string_view suggestedLabel = {});
+    // A buffer that already carries a workspace-relative path but no file: the
+    // path is claimed, nothing is written. The document is unsaved until its
+    // first save, which creates the file exclusively.
+    [[nodiscard]] WorkspaceResult newFile(std::string_view path);
     [[nodiscard]] WorkspaceResult openVirtualDocument(
         std::string_view suggestedLabel, std::string_view initialText,
         DocumentMode mode);

@@ -117,8 +117,57 @@ TEST(untitledIdentityChangesOnlyAfterSuccessfulSave) {
     ASSERT_FALSE(afterSave->dirty);
 }
 
-TEST(recentFilesAreBoundedMruAndDropMissingEntries) {
+TEST(newFileClaimsANameAndStaysUnsavedUntilItIsWritten) {
     TemporaryDirectory temporary;
+    auto recovery =
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
+    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
+
+    const auto created = workspace.newFile("fresh.txt");
+    ASSERT_TRUE(created.accepted());
+    const auto id = *created.document;
+    const auto before = workspace.state(id);
+    ASSERT_EQ(before->key.kind(), ssg::JournalDocumentKeyKind::Saved);
+    ASSERT_EQ(before->key.savedPath(), std::string{"fresh.txt"});
+    // Empty, but nothing is on disk yet, so the file only exists if it is saved.
+    ASSERT_TRUE(before->dirty);
+    ASSERT_FALSE(std::filesystem::exists(temporary.path() / "fresh.txt"));
+
+    ASSERT_TRUE(workspace
+                    .apply(id, {workspace.document(id).revision(),
+                                {{ssg::ByteOffset{0}, 0, "typed"}}})
+                    .accepted());
+    ASSERT_TRUE(workspace.save(id).accepted());
+    ASSERT_FALSE(workspace.state(id)->dirty);
+    ASSERT_EQ(readBytes(temporary.path() / "fresh.txt"), std::string{"typed"});
+}
+
+TEST(newFileRefusesANameThatIsAlreadyTaken) {
+    TemporaryDirectory temporary;
+    auto recovery =
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
+    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
+    writeBytes(temporary.path() / "taken.txt", "on disk");
+    ASSERT_FALSE(workspace.newFile("taken.txt").accepted());
+    ASSERT_FALSE(workspace.newFile("../outside.txt").accepted());
+}
+
+// The claimed name may be taken by something else between launch and the first
+// save, and that file must survive.
+TEST(firstSaveOfANewFileDoesNotClobberAFileCreatedMeanwhile) {
+    TemporaryDirectory temporary;
+    auto recovery =
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
+    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
+    const auto created = workspace.newFile("racy.txt");
+    ASSERT_TRUE(created.accepted());
+    writeBytes(temporary.path() / "racy.txt", "someone else");
+    ASSERT_FALSE(workspace.save(*created.document).accepted());
+    ASSERT_EQ(readBytes(temporary.path() / "racy.txt"),
+              std::string{"someone else"});
+}
+
+TEST(recentFilesAreBoundedMruAndDropMissingEntries) {    TemporaryDirectory temporary;
     auto recovery =
         ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);

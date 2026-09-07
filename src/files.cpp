@@ -129,9 +129,12 @@ CommandHandlerResult bindFile(Editor& runtime,
             return success();
         }
         case FileCommand::Create: {
-            // No payload means an unnamed buffer; the workspace supplies the label.
-            auto label = stringPayload(payload).value_or(std::string{});
-            result = runtime.workspace.newDocument(label);
+            // A payload names the file to create; the file itself is not written
+            // until the first save. No payload means an unnamed buffer and the
+            // workspace supplies the label.
+            auto path = stringPayload(payload);
+            result = path && !path->empty() ? runtime.workspace.newFile(*path)
+                                            : runtime.workspace.newDocument();
             return openDocumentResult(runtime, result);
         }
         case FileCommand::Open: {

@@ -297,6 +297,11 @@ public:
         Document document;
         TextEncodingStatus persistedStatus;
         ExternalBaseline baseline;
+        // False for a document named on the command line whose file does not
+        // exist yet: it has a path but has never been written. Such a document
+        // is unsaved regardless of content, and its first write must not clobber
+        // a file that appeared at that path in the meantime.
+        bool persisted = true;
     };
 
     struct CompensationState {
@@ -489,6 +494,7 @@ public:
                 replaceFileAtomically(absolute, asBytes(encoded.bytes));
             }
             entry.key = JournalDocumentKey::saved(path);
+            entry.persisted = true;
             entry.displayLabel =
                 std::filesystem::path{path}.filename().string();
             entry.decoded = std::move(decoded);
@@ -575,7 +581,7 @@ std::optional<WorkspaceDocumentState> Workspace::state(
     // An untitled buffer is unsaved exactly when it holds something to lose.
     const bool dirty =
         untitled ? !text.empty()
-                 : (text != entry->decoded.utf8 ||
+                 : (!entry->persisted || text != entry->decoded.utf8 ||
                     entry->decoded.status != entry->persistedStatus);
     return WorkspaceDocumentState{
         entry->id,
@@ -721,6 +727,30 @@ WorkspaceResult Workspace::newDocument(std::string_view suggestedLabel) {
         DocumentMode::Edit);
 }
 
+WorkspaceResult Workspace::newFile(std::string_view rawPath) {
+    WorkspaceResult pathError;
+    const auto absolute = impl_->resolve(rawPath, false, pathError);
+    if (!absolute) {
+        return pathError;
+    }
+    const auto path = normalizedRelative(rawPath);
+    if (impl_->findPath(path)) {
+        return failure(WorkspaceError::AlreadyOpen,
+                       "destination is already open");
+    }
+    if (const auto status = statFile(*absolute); status) {
+        return failure(WorkspaceError::AlreadyOpen, "path already exists");
+    }
+    auto result = impl_->addBytes({}, JournalDocumentKey::saved(path),
+                                  absolute->filename().string());
+    if (result.accepted() && result.document) {
+        if (auto* entry = impl_->find(*result.document)) {
+            entry->persisted = false;
+        }
+    }
+    return result;
+}
+
 WorkspaceResult Workspace::openVirtualDocument(std::string_view suggestedLabel,
                                                std::string_view initialText,
                                                DocumentMode mode) {
@@ -808,8 +838,11 @@ WorkspaceResult Workspace::save(FileDocumentId id) {
     if (!absolute) {
         return pathError;
     }
-    // Saving a document over its own path is the one permitted overwrite.
-    return impl_->saveTo(*entry, entry->key.savedPath(), *absolute, true);
+    // Saving a document over its own path is the one permitted overwrite. A
+    // named-but-never-written document has no own file yet, so its first write
+    // must not clobber one that appeared in the meantime.
+    return impl_->saveTo(*entry, entry->key.savedPath(), *absolute,
+                         entry->persisted);
 }
 
 WorkspaceResult Workspace::saveAll() {
@@ -855,7 +888,7 @@ WorkspaceResult Workspace::saveAs(FileDocumentId id,
     // Save-as to the document's OWN current path is just a save, so it keeps
     // the self-overwrite permission. Any other name must not clobber.
     const bool ownPath = entry->key.kind() == JournalDocumentKeyKind::Saved &&
-                         entry->key.savedPath() == path;
+                         entry->persisted && entry->key.savedPath() == path;
     return impl_->saveTo(*entry, path, *absolute, ownPath);
 }
 
