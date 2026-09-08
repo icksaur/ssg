@@ -40,6 +40,9 @@ enum class FileContentKind : std::uint8_t {
     DecodeFailure,
 };
 
+[[nodiscard]] bool containsBinaryNul(
+    std::span<const std::uint8_t> bytes) noexcept;
+
 enum class WorkspaceError : std::uint8_t {
     None,
     InvalidWorkspace,

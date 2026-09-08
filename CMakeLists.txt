@@ -1718,10 +1718,20 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_core PRIVATE
+    ${SSG_SOURCE_DIR}/src/WorkspaceCorpus.cpp
     ${SSG_SOURCE_DIR}/src/WorkspaceFileIndex.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    ssg_add_test_suite(
+        NAME test_workspace_corpus
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_workspace_corpus.cpp
+        SYMBOL test_workspace_corpus)
+    ssg_test_include_directories(test_workspace_corpus PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
+    ssg_test_link_libraries(test_workspace_corpus PRIVATE ssg_core)
+
     ssg_add_test_suite(
         NAME test_workspace_file_index
         ENTRY ${SSG_SOURCE_DIR}/tests/test_workspace_file_index.cpp

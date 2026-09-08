@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ssg/WorkspaceCorpus.h>
 #include <ssg/types.h>
 #include <array>
 #include <atomic>
@@ -60,6 +61,8 @@ struct WorkspaceSymbol {
 };
 
 struct WorkspaceSnapshot {
+    // Replace preview is intentionally the sole eager consumer. Interactive
+    // workspace search reads through WorkspaceCorpus instead.
     std::uint64_t revision{0};
     std::vector<WorkspaceFile> files;
     std::vector<WorkspaceSymbol> symbols;
@@ -116,17 +119,28 @@ struct WorkspaceSearchRequest {
 struct WorkspaceSearchBatch {
     std::uint64_t generation = 0;
     std::uint64_t sourceRevision{0};
+    // Partial batches carry no results; the accumulated set is published only
+    // when finished is true.
     std::vector<SearchResult> results;
     bool cancelled = false;
+    bool finished = false;
+};
+
+struct WorkspaceSearchState {
+    WorkspaceSearchRequest request;
+    std::size_t cursor = 0;
+    std::vector<SearchResult> results;
+    bool finished = false;
 };
 
 [[nodiscard]] ParsedSearchQuery parseWorkspaceSearchQuery(
     std::string_view query);
-[[nodiscard]] std::vector<SearchResult> rankWorkspaceSearch(
-    const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
-    const SearchCancellationToken& cancellation);
+[[nodiscard]] bool rankWorkspaceSearch(
+    const WorkspaceCorpus& corpus, WorkspaceSearchState& state,
+    std::uint64_t workBudget);
 [[nodiscard]] WorkspaceSearchBatch evaluateWorkspaceSearch(
-    const WorkspaceSnapshot& workspace, const WorkspaceSearchRequest& request);
+    const WorkspaceCorpus& corpus, WorkspaceSearchState& state,
+    std::uint64_t workBudget);
 
 enum class NavigationOrigin : std::uint8_t { User, Programmatic };
 
@@ -200,11 +214,11 @@ public:
     void selectPrevious();
     [[nodiscard]] PaletteExecutionResult executePalette();
 
-    [[nodiscard]] WorkspaceSearchRequest beginWorkspaceSearch(
+    [[nodiscard]] WorkspaceSearchState beginWorkspaceSearch(
         std::string query, std::uint64_t sourceRevision);
     [[nodiscard]] WorkspaceSearchBatch evaluate(
-        const WorkspaceSearchRequest& request,
-        const WorkspaceSnapshot& workspace) const;
+        WorkspaceSearchState& state, const WorkspaceCorpus& corpus,
+        std::uint64_t workBudget) const;
     void cancelWorkspaceSearch() noexcept;
     [[nodiscard]] SearchPublishResult publish(
         const WorkspaceSearchBatch& batch, std::uint64_t currentRevision);

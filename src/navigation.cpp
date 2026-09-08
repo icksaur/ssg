@@ -94,11 +94,7 @@ CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::an
         std::string query;
         if (auto const* text = payloadAs<std::string>(payload)) query = *text;
         const auto sourceGeneration = ++runtime.workspaceSearchGeneration;
-        auto request = runtime.search.beginWorkspaceSearch(
-            std::move(query), sourceGeneration);
-        auto batch = runtime.search.evaluate(
-            request, runtime.snapshot(request.sourceRevision));
-        (void)runtime.search.publish(batch, sourceGeneration);
+        runtime.startWorkspaceSearch(std::move(query), sourceGeneration);
     } else if (id == "goto.back") {
         (void)runtime.navigation.back();
     } else if (id == "goto.forward") {

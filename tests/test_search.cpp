@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -15,6 +16,15 @@
 namespace {
 
 using namespace ssg;
+
+class NoIgnore final : public GitIgnoreMatcher {
+public:
+    [[nodiscard]] bool usable() const override { return false; }
+    [[nodiscard]] bool ignores(
+        const std::filesystem::path&) const override {
+        return false;
+    }
+};
 
 WorkspaceSnapshot fixtureWorkspace(std::uint64_t revision) {
     return {
@@ -42,6 +52,39 @@ WorkspaceSnapshot fixtureWorkspace(std::uint64_t revision) {
          .column = 1},
         },
     };
+}
+
+WorkspaceCorpus corpusFor(
+    const WorkspaceSnapshot& snapshot,
+    WorkspaceCorpusReader reader = readFile) {
+    const auto root =
+        std::filesystem::temp_directory_path() / "ssg-search-open-buffers";
+    std::filesystem::create_directories(root);
+    std::vector<WorkspaceCorpusBuffer> buffers;
+    buffers.reserve(snapshot.files.size());
+    for (const auto& file : snapshot.files) {
+        buffers.push_back(
+            {std::optional<std::string>{file.path},
+             [text = file.text] {
+                 return std::optional<std::string>{text};
+             }});
+    }
+    NoIgnore ignore;
+    WorkspaceCorpus corpus{root, std::move(buffers), ignore,
+                           std::move(reader)};
+    std::filesystem::remove_all(root);
+    return corpus;
+}
+
+std::vector<SearchResult> rank(const WorkspaceCorpus& corpus,
+                               std::string_view query) {
+    WorkspaceSearchState state{
+        .request = WorkspaceSearchRequest{
+            .query = parseWorkspaceSearchQuery(query)}};
+    while (!rankWorkspaceSearch(
+        corpus, state, std::numeric_limits<std::uint64_t>::max())) {
+    }
+    return state.results;
 }
 
 SearchCommands fixtureCommands(std::vector<std::string>& executed) {
@@ -135,9 +178,12 @@ TEST(acceptedRankingGoldensMatch) {
         } else if (fields[0] == "text") {
             query.insert(query.begin(), '#');
         }
-        const auto results = rankWorkspaceSearch(
-            snapshot, parseWorkspaceSearchQuery(query), SearchCancellationToken{});
-        ASSERT_EQ(labels(results), split(fields[2], ','));
+        const auto corpus = corpusFor(snapshot);
+        const auto results = rank(corpus, query);
+        const auto expected =
+            fields[2] == "-" ? std::vector<std::string>{}
+                             : split(fields[2], ',');
+        ASSERT_EQ(labels(results), expected);
     }
 }
 
@@ -145,30 +191,92 @@ TEST(cancellationSupersessionAndStaleRevisionAreRejected) {
     std::vector<std::string> executed;
     SearchController controller{fixtureCommands(executed)};
 
-    const auto first = controller.beginWorkspaceSearch("#search", std::uint64_t{8});
-    const auto second = controller.beginWorkspaceSearch("#cancel", std::uint64_t{8});
-    ASSERT_TRUE(first.cancellation.cancelled());
+    auto first =
+        controller.beginWorkspaceSearch("#search", std::uint64_t{8});
+    auto second =
+        controller.beginWorkspaceSearch("#cancel", std::uint64_t{8});
+    ASSERT_TRUE(first.request.cancellation.cancelled());
 
-    const auto cancelled =
-        controller.evaluate(first, fixtureWorkspace(first.sourceRevision));
+    const auto firstCorpus =
+        corpusFor(fixtureWorkspace(first.request.sourceRevision));
+    const auto cancelled = controller.evaluate(
+        first, firstCorpus, std::numeric_limits<std::uint64_t>::max());
     ASSERT_TRUE(cancelled.cancelled);
     ASSERT_EQ(controller.publish(cancelled, std::uint64_t{8}),
               SearchPublishResult::Cancelled);
 
-    auto superseded =
-        controller.evaluate(second, fixtureWorkspace(second.sourceRevision));
-    superseded.generation = first.generation;
+    const auto secondCorpus =
+        corpusFor(fixtureWorkspace(second.request.sourceRevision));
+    auto superseded = controller.evaluate(
+        second, secondCorpus, std::numeric_limits<std::uint64_t>::max());
+    superseded.generation = first.request.generation;
     ASSERT_EQ(controller.publish(superseded, std::uint64_t{8}),
               SearchPublishResult::Superseded);
 
-    const auto completed =
-        controller.evaluate(second, fixtureWorkspace(second.sourceRevision));
+    second = controller.beginWorkspaceSearch("#cancel", std::uint64_t{8});
+    const auto completed = controller.evaluate(
+        second, secondCorpus, std::numeric_limits<std::uint64_t>::max());
     ASSERT_EQ(controller.publish(completed, std::uint64_t{9}),
               SearchPublishResult::StaleRevision);
     ASSERT_EQ(controller.publish(completed, std::uint64_t{8}),
               SearchPublishResult::Accepted);
     ASSERT_EQ(labels(controller.viewState().results),
               std::vector<std::string>{"src/search.cpp:3"});
+}
+
+TEST(slicedTextSearchMatchesUnslicedAndStopsWhenCancelled) {
+    const auto root =
+        std::filesystem::temp_directory_path() / "ssg-search-slices";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    for (int index = 0; index < 4; ++index) {
+        std::ofstream{root / ("file-" + std::to_string(index) + ".txt")}
+            << "needle\n";
+    }
+    NoIgnore ignore;
+    std::size_t reads = 0;
+    WorkspaceCorpus corpus{
+        root, {}, ignore,
+        [&](const std::filesystem::path& path) {
+            ++reads;
+            return readFile(path);
+        }};
+    WorkspaceSearchState sliced{
+        .request = WorkspaceSearchRequest{
+            .query = parseWorkspaceSearchQuery("#needle")}};
+    ASSERT_FALSE(rankWorkspaceSearch(corpus, sliced, 1));
+    ASSERT_EQ(reads, std::size_t{1});
+    ASSERT_FALSE(rankWorkspaceSearch(corpus, sliced, 1));
+    ASSERT_EQ(reads, std::size_t{2});
+
+    const auto unsliced = rank(corpus, "#needle");
+    while (!rankWorkspaceSearch(corpus, sliced, 1)) {
+    }
+    ASSERT_EQ(sliced.results, unsliced);
+
+    reads = 0;
+    WorkspaceSearchState cancelled{
+        .request = WorkspaceSearchRequest{
+            .query = parseWorkspaceSearchQuery("#needle")}};
+    ASSERT_FALSE(rankWorkspaceSearch(corpus, cancelled, 1));
+    cancelled.request.cancellation.cancel();
+    ASSERT_TRUE(rankWorkspaceSearch(corpus, cancelled, 1));
+    ASSERT_EQ(reads, std::size_t{1});
+    std::filesystem::remove_all(root);
+}
+
+TEST(pathOnlyModesNeverReadFileContents) {
+    const auto snapshot = fixtureWorkspace(1);
+    std::size_t reads = 0;
+    const auto corpus = corpusFor(
+        snapshot,
+        [&](const std::filesystem::path&) -> FileReadResult {
+            ++reads;
+            return {};
+        });
+    ASSERT_FALSE(rank(corpus, "search").empty());
+    ASSERT_TRUE(rank(corpus, "@Search").empty());
+    ASSERT_EQ(reads, std::size_t{0});
 }
 
 TEST(navigationHistoryMatchesTransitionTable) {
@@ -231,6 +339,8 @@ SSG_TEST_SUITE(test_search) {
     RUN(queryModesAreUnambiguousAndLinesAreValidated);
     RUN(acceptedRankingGoldensMatch);
     RUN(cancellationSupersessionAndStaleRevisionAreRejected);
+    RUN(slicedTextSearchMatchesUnslicedAndStopsWhenCancelled);
+    RUN(pathOnlyModesNeverReadFileContents);
     RUN(navigationHistoryMatchesTransitionTable);
     RUN(paletteUsesInjectedCatalogAndDispatch);
     return failed == 0 ? 0 : 1;

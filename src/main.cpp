@@ -723,31 +723,35 @@ int main(int argc, char** argv) {
             // An autosave timeout repaints only when a draft was written.
             FdReadiness wait;
             while (true) {
-                wait = waitReadiness(kAutosaveTickMs, context.signalReadFd, context.gitDiffWakeFd, initScriptWatcher ? initScriptWatcher->wakeDescriptor() : -1);
+                const auto timeout =
+                    runtime.workspaceSearchPending() ? 0 : kAutosaveTickMs;
+                wait = waitReadiness(timeout, context.signalReadFd, context.gitDiffWakeFd, initScriptWatcher ? initScriptWatcher->wakeDescriptor() : -1);
                 if (wait.input || wait.signal || wait.gitDiff || wait.initScript) {
                     break;
                 }
+                if (runtime.workspaceSearchPending()) break;
                 if (runtime.flushDueAutosaveDrafts() > 0) break;
             }
             if (wait.signal) {
                 drainSignals(context);
-                if (!wait.input) continue;
+                if (!wait.input && !runtime.workspaceSearchPending()) continue;
             }
             if (wait.initScript) {
                 // ScriptHost belongs to the main thread.
                 initScriptWatcher->drainAndEvaluate(scripts, runtime);
-                if (!wait.input) continue;
+                if (!wait.input && !runtime.workspaceSearchPending()) continue;
             }
             if (wait.gitDiff) {
                 (void)runtime.pump();
-                if (!wait.input) continue;
+                if (!wait.input && !runtime.workspaceSearchPending()) continue;
             }
-            if (!wait.input) continue;
-            auto readBytes = ::read(STDIN_FILENO, bytes, sizeof bytes);
-            if (readBytes <= 0) break;
-            buffer.append(bytes, static_cast<std::size_t>(readBytes));
-
-            dispatchBufferedInput(context, buffer, pointer, quit);
+            if (wait.input) {
+                auto readBytes = ::read(STDIN_FILENO, bytes, sizeof bytes);
+                if (readBytes <= 0) break;
+                buffer.append(bytes, static_cast<std::size_t>(readBytes));
+                dispatchBufferedInput(context, buffer, pointer, quit);
+            }
+            runtime.advanceWorkspaceSearch();
         }
     } catch (std::exception const& error) {
         mode.restore();

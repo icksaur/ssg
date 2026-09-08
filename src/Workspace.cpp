@@ -73,11 +73,6 @@ std::span<const std::uint8_t> asUnsignedBytes(
     return {bytes.data(), bytes.size()};
 }
 
-bool containsNul(std::span<const std::uint8_t> bytes) {
-    return std::find(bytes.begin(), bytes.end(), std::uint8_t{0}) !=
-           bytes.end();
-}
-
 bool containsNul(std::string_view text) {
     return text.find('\0') != std::string_view::npos;
 }
@@ -258,6 +253,12 @@ std::string sanitizeLabel(std::string_view suggested) {
 
 }  // namespace
 
+bool containsBinaryNul(
+    std::span<const std::uint8_t> bytes) noexcept {
+    return std::find(bytes.begin(), bytes.end(), std::uint8_t{0}) !=
+           bytes.end();
+}
+
 class Workspace::Impl {
 public:
     // The document's authoritative external baseline: the disk state its edits
@@ -428,7 +429,7 @@ public:
                               std::string label,
                               DocumentMode mode = DocumentMode::Edit) {
         const auto id = FileDocumentId{nextDocument++};
-        const bool hasNul = containsNul(asUnsignedBytes(bytes));
+        const bool hasNul = containsBinaryNul(asUnsignedBytes(bytes));
         if (hasNul) {
             entries.push_back({id, std::move(key), std::move(label),
                                FileContentKind::Binary, {}, std::move(bytes),
@@ -906,7 +907,7 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
     }
     try {
         const auto bytes = readFileBytes(*absolute);
-        if (containsNul(asUnsignedBytes(bytes))) {
+        if (containsBinaryNul(asUnsignedBytes(bytes))) {
             return failure(WorkspaceError::DecodeFailed,
                            "binary file cannot replace an editable document");
         }
@@ -1043,7 +1044,7 @@ WorkspaceResult Workspace::reopenWithEncoding(FileDocumentId id,
         return failure(WorkspaceError::ReadOnly,
                        "dirty document cannot be reopened with encoding");
     }
-    if (containsNul(asUnsignedBytes(entry->rawBytes))) {
+    if (containsBinaryNul(asUnsignedBytes(entry->rawBytes))) {
         return failure(WorkspaceError::DecodeFailed,
                        "binary file cannot be reopened with encoding");
     }

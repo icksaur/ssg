@@ -10,6 +10,7 @@
 #include <ssg/TextInputCommands.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -220,6 +221,55 @@ TEST(workspaceSearchAndReplaceExcludeRuntimeStateRoots) {
     ASSERT_EQ(readText(workspace / "visible.txt"), std::string{"public"});
     ASSERT_EQ(readText(workspace / ".ssg" / "scratch" / "hidden.txt"), std::string{"secret"});
     ASSERT_EQ(readText(workspace / ".ssg" / "recovery" / "journal.txt"), std::string{"secret"});
+}
+
+TEST(workspaceSearchAndReplaceHonorIgnoreWithOpenBufferPrecedence) {
+    auto root = uniqueRoot();
+    auto workspace = root / "workspace";
+    std::ofstream{workspace / ".gitignore"} << "ignored-*.txt\n";
+    std::ofstream{workspace / "visible.txt"} << "secret";
+    std::ofstream{workspace / "ignored-closed.txt"} << "secret";
+    std::ofstream{workspace / "ignored-open.txt"} << "secret";
+    const auto init =
+        "git -C \"" + workspace.string() + "\" init -q";
+    ASSERT_EQ(std::system(init.c_str()), 0);
+
+    auto created = ssg::createEditor(
+        {workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(runtime.dispatch(
+        {"file.open", std::string{"ignored-open.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(
+        {"text.insert", ssg::TextInputArguments{"unsaved "}}).accepted());
+
+    ASSERT_TRUE(runtime.dispatch(
+        {"search.workspace", std::string{"#secret"}}).accepted());
+    while (runtime.workspaceSearchPending()) {
+        runtime.advanceWorkspaceSearch();
+    }
+    std::vector<std::string> paths;
+    for (const auto& result : runtime.search.viewState().results) {
+        paths.push_back(result.path);
+    }
+    ASSERT_EQ(paths, (std::vector<std::string>{
+                         "ignored-open.txt", "visible.txt"}));
+
+    ssg::FindRequest request{"secret", {}, std::nullopt,
+                             100000, nullptr};
+    ASSERT_TRUE(runtime.dispatch(
+        {"replace.workspace_preview",
+         ssg::WorkspaceReplaceArguments{request, "public"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(
+        {"replace.workspace_apply", {}}).accepted());
+    ASSERT_EQ(readText(workspace / "visible.txt"),
+              std::string{"public"});
+    ASSERT_EQ(readText(workspace / "ignored-closed.txt"),
+              std::string{"secret"});
+    ASSERT_EQ(readText(workspace / "ignored-open.txt"),
+              std::string{"unsaved public"});
+    std::filesystem::remove_all(root);
 }
 
 TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
@@ -1183,6 +1233,7 @@ SSG_TEST_SUITE(test_session_editing) {
     RUN(workspaceReplaceRejectsStaleAndOutOfBoundsPreview);
     RUN(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk);
     RUN(workspaceSearchAndReplaceExcludeRuntimeStateRoots);
+    RUN(workspaceSearchAndReplaceHonorIgnoreWithOpenBufferPrecedence);
     RUN(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot);
     RUN(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary);
     RUN(undoAndPasteRevealTheCaret);

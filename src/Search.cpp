@@ -50,107 +50,52 @@ std::optional<int> fuzzyScore(std::string_view candidate,
     return score;
 }
 
-std::vector<SearchResult> rankFiles(const WorkspaceSnapshot& workspace,
-                                     std::string_view query,
-                                     const SearchCancellationToken& token) {
-    std::vector<SearchResult> results;
-    for (const auto& file : workspace.files) {
-        if (token.cancelled()) {
-            return {};
-        }
-        const auto score = fuzzyScore(file.path, query);
-        if (score) {
-            results.push_back({.mode = SearchMode::File,
-                               .path = file.path,
-                               .label = file.path,
-                               .score = *score});
-        }
-    }
+void sortFiles(std::vector<SearchResult>& results) {
     std::ranges::sort(results, [](const auto& left, const auto& right) {
         if (left.score != right.score) {
             return left.score > right.score;
         }
         return left.path < right.path;
     });
-    return results;
 }
 
-std::vector<SearchResult> rankSymbols(const WorkspaceSnapshot& workspace,
-                                       std::string_view query,
-                                       const SearchCancellationToken& token) {
-    std::vector<SearchResult> results;
-    for (const auto& symbol : workspace.symbols) {
-        if (token.cancelled()) {
-            return {};
-        }
-        const auto score = fuzzyScore(symbol.name, query);
-        if (score) {
-            results.push_back(
-                {.mode = SearchMode::Symbol,
-                 .path = symbol.path,
-                 .label = symbol.path + ":" + symbol.name,
-                 .line = LineIndex{symbol.line == 0 ? 0 : symbol.line - 1},
-                 .column = symbol.column,
-                 .score = *score});
-        }
-    }
-    std::ranges::sort(results, [](const auto& left, const auto& right) {
-        if (left.score != right.score) {
-            return left.score > right.score;
-        }
-        const auto leftName = left.label.substr(left.label.find(':') + 1);
-        const auto rightName = right.label.substr(right.label.find(':') + 1);
-        if (leftName != rightName) {
-            return leftName < rightName;
-        }
-        return left.path < right.path;
-    });
-    return results;
-}
-
-std::vector<SearchResult> rankText(const WorkspaceSnapshot& workspace,
-                                    std::string_view query,
-                                    const SearchCancellationToken& token) {
-    std::vector<SearchResult> results;
-    if (query.empty()) {
-        return results;
-    }
-    for (const auto& file : workspace.files) {
-        std::size_t lineStart = 0;
-        std::size_t lineNumber = 0;
-        while (lineStart <= file.text.size()) {
-            if (token.cancelled()) {
-                return {};
-            }
-            const auto lineEnd = file.text.find('\n', lineStart);
-            const auto line = std::string_view{file.text}.substr(
-                lineStart, lineEnd == std::string::npos
-                                ? file.text.size() - lineStart
-                                : lineEnd - lineStart);
-            const auto match = line.find(query);
-            if (match != std::string_view::npos) {
-                results.push_back(
-                    {.mode = SearchMode::Text,
-                     .path = file.path,
-                     .label = file.path + ":" + std::to_string(lineNumber + 1),
-                     .line = LineIndex{lineNumber},
-                     .column = match + 1,
-                     .score = 0});
-            }
-            if (lineEnd == std::string::npos) {
-                break;
-            }
-            lineStart = lineEnd + 1;
-            ++lineNumber;
-        }
-    }
+void sortText(std::vector<SearchResult>& results) {
     std::ranges::sort(results, [](const auto& left, const auto& right) {
         if (left.path != right.path) {
             return left.path < right.path;
         }
         return left.line < right.line;
     });
-    return results;
+}
+
+void rankText(const WorkspaceCorpusFile& file, std::string_view query,
+              const SearchCancellationToken& token,
+              std::vector<SearchResult>& results) {
+    // Workspace palette text search is exact and case-sensitive. It deliberately
+    // does not share the regex, whole-word, or case options of findTextMatches.
+    std::size_t lineStart = 0;
+    std::size_t lineNumber = 0;
+    while (lineStart <= file.text.size()) {
+        if (token.cancelled()) return;
+        const auto lineEnd = file.text.find('\n', lineStart);
+        const auto line = std::string_view{file.text}.substr(
+            lineStart, lineEnd == std::string::npos
+                           ? file.text.size() - lineStart
+                           : lineEnd - lineStart);
+        const auto match = line.find(query);
+        if (match != std::string_view::npos) {
+            results.push_back(
+                {.mode = SearchMode::Text,
+                 .path = file.path,
+                 .label = file.path + ":" + std::to_string(lineNumber + 1),
+                 .line = LineIndex{lineNumber},
+                 .column = match + 1,
+                 .score = 0});
+        }
+        if (lineEnd == std::string::npos) break;
+        lineStart = lineEnd + 1;
+        ++lineNumber;
+    }
 }
 
 NavigationTransition emptyTransition() { return {}; }
@@ -202,38 +147,85 @@ void SearchCancellationToken::cancel() const noexcept {
     cancelled_->store(true, std::memory_order_relaxed);
 }
 
-std::vector<SearchResult> rankWorkspaceSearch(
-    const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
-    const SearchCancellationToken& cancellation) {
-    if (query.error != SearchQueryError::None || cancellation.cancelled()) {
-        return {};
+bool rankWorkspaceSearch(const WorkspaceCorpus& corpus,
+                         WorkspaceSearchState& state,
+                         std::uint64_t workBudget) {
+    const auto& request = state.request;
+    if (state.finished ||
+        request.query.error != SearchQueryError::None ||
+        request.cancellation.cancelled()) {
+        state.finished = true;
+        return true;
     }
-    switch (query.mode) {
-    case SearchMode::File:
-        return rankFiles(workspace, query.text, cancellation);
-    case SearchMode::Symbol:
-        return rankSymbols(workspace, query.text, cancellation);
-    case SearchMode::Text:
-        return rankText(workspace, query.text, cancellation);
-    case SearchMode::Line:
-    case SearchMode::Command:
-        return {};
+    if (request.query.mode == SearchMode::Line ||
+        request.query.mode == SearchMode::Command ||
+        request.query.mode == SearchMode::Symbol ||
+        (request.query.mode == SearchMode::Text &&
+         request.query.text.empty())) {
+        state.cursor = corpus.paths().size();
+        state.finished = true;
+        return true;
     }
-    return {};
+
+    std::uint64_t consumed = 0;
+    bool processed = false;
+    while (state.cursor < corpus.paths().size()) {
+        if (request.cancellation.cancelled()) {
+            state.finished = true;
+            return true;
+        }
+        if (processed && consumed >= workBudget) break;
+
+        const auto index = state.cursor++;
+        processed = true;
+        if (request.query.mode == SearchMode::File) {
+            const auto& path = corpus.paths()[index];
+            const auto score = fuzzyScore(path, request.query.text);
+            if (score) {
+                state.results.push_back({.mode = SearchMode::File,
+                                         .path = path,
+                                         .label = path,
+                                         .score = *score});
+            }
+            consumed += std::max<std::size_t>(path.size(), 1);
+            continue;
+        }
+
+        auto file = corpus.read(index);
+        if (!file) {
+            ++consumed;
+            continue;
+        }
+        rankText(*file, request.query.text, request.cancellation,
+                 state.results);
+        consumed += std::max<std::size_t>(file->text.size(), 1);
+    }
+
+    state.finished = state.cursor == corpus.paths().size() ||
+                     request.cancellation.cancelled();
+    if (state.finished && !request.cancellation.cancelled()) {
+        if (request.query.mode == SearchMode::File) {
+            sortFiles(state.results);
+        } else if (request.query.mode == SearchMode::Text) {
+            sortText(state.results);
+        }
+    }
+    return state.finished;
 }
 
 WorkspaceSearchBatch evaluateWorkspaceSearch(
-    const WorkspaceSnapshot& workspace,
-    const WorkspaceSearchRequest& request) {
+    const WorkspaceCorpus& corpus, WorkspaceSearchState& state,
+    std::uint64_t workBudget) {
+    auto& request = state.request;
     WorkspaceSearchBatch batch{.generation = request.generation,
                                .sourceRevision = request.sourceRevision};
     if (request.cancellation.cancelled()) {
         batch.cancelled = true;
+        batch.finished = true;
         return batch;
     }
-    batch.sourceRevision = workspace.revision;
-    batch.results =
-        rankWorkspaceSearch(workspace, request.query, request.cancellation);
+    batch.finished = rankWorkspaceSearch(corpus, state, workBudget);
+    if (batch.finished) batch.results = state.results;
     batch.cancelled = request.cancellation.cancelled();
     return batch;
 }
@@ -392,7 +384,7 @@ PaletteExecutionResult SearchController::executePalette() {
     return commands_.execute(state_.results[*state_.selectedIndex].path);
 }
 
-WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
+WorkspaceSearchState SearchController::beginWorkspaceSearch(
     std::string query, std::uint64_t sourceRevision) {
     cancelWorkspaceSearch();
     WorkspaceSearchRequest request{
@@ -407,25 +399,31 @@ WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
     state_.searchGeneration = request.generation;
     state_.searching = true;
     activeRequest_ = request;
-    return request;
+    return WorkspaceSearchState{.request = std::move(request)};
 }
 
 WorkspaceSearchBatch SearchController::evaluate(
-    const WorkspaceSearchRequest& request,
-    const WorkspaceSnapshot& workspace) const {
-    return evaluateWorkspaceSearch(workspace, request);
+    WorkspaceSearchState& state, const WorkspaceCorpus& corpus,
+    std::uint64_t workBudget) const {
+    return evaluateWorkspaceSearch(corpus, state, workBudget);
 }
 
 void SearchController::cancelWorkspaceSearch() noexcept {
     if (activeRequest_) {
         activeRequest_->cancellation.cancel();
         state_.searching = false;
+        activeRequest_.reset();
     }
 }
 
 SearchPublishResult SearchController::publish(
     const WorkspaceSearchBatch& batch, std::uint64_t currentRevision) {
     if (batch.cancelled) {
+        if (activeRequest_ &&
+            batch.generation == activeRequest_->generation) {
+            state_.searching = false;
+            activeRequest_.reset();
+        }
         return SearchPublishResult::Cancelled;
     }
     if (!activeRequest_ || batch.generation != activeRequest_->generation) {
@@ -438,8 +436,8 @@ SearchPublishResult SearchController::publish(
     state_.results = batch.results;
     state_.selectedIndex =
         state_.results.empty() ? std::nullopt : std::optional<std::size_t>{0};
-    state_.searching = false;
-    activeRequest_.reset();
+    state_.searching = !batch.finished;
+    if (batch.finished) activeRequest_.reset();
     return SearchPublishResult::Accepted;
 }
 

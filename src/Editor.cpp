@@ -215,16 +215,6 @@ bool existingDocumentMutated(
     return false;
 }
 
-std::optional<std::string> relativeToRoot(std::filesystem::path const& root,
-                                            std::filesystem::path const& path) {
-    auto relative = path.lexically_relative(root);
-    if (relative.empty()) return std::nullopt;
-    for (auto const& part : relative) {
-        if (part == "..") return std::nullopt;
-    }
-    return relative.generic_string();
-}
-
 bool pathContains(std::filesystem::path const& root,
                    std::filesystem::path const& candidate) {
     auto rootIt = root.begin();
@@ -457,6 +447,7 @@ Editor::Editor(std::filesystem::path canonicalCwd,
                bool enableGitDiffWorker,
                bool enableFilesystemWatcher)
     : root{std::move(canonicalCwd)},
+      workspaceIgnore{makePlatformGitIgnoreMatcher(root)},
       scratchRoot{weaklyCanonicalPath(scratchRoot)},
       recoveryRoot{weaklyCanonicalPath(recoveryRoot)},
       archiveRoot{weaklyCanonicalPath(archiveRoot)},
@@ -676,48 +667,69 @@ TabLifecycleResult Editor::reopenTab(
             reopenedState->key, true};
 }
 
+WorkspaceCorpus Editor::workspaceCorpus() const {
+    std::vector<WorkspaceCorpusBuffer> buffers;
+    buffers.reserve(workspace.documents().size());
+    for (auto const id : workspace.documents()) {
+        auto state = workspace.state(id);
+        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved ||
+            state->contentKind != FileContentKind::Text) {
+            continue;
+        }
+        buffers.push_back(
+            {std::optional<std::string>{state->key.savedPath()},
+             [this, id]() -> std::optional<std::string> {
+                 const auto current = workspace.state(id);
+                 if (!current ||
+                     current->contentKind != FileContentKind::Text) {
+                     return std::nullopt;
+                 }
+                 return workspace.document(id).snapshot().text;
+             }});
+    }
+
+    WorkspaceCorpusOptions options;
+    options.excludedDirectories = {scratchRoot, recoveryRoot, archiveRoot};
+    return WorkspaceCorpus{root, std::move(buffers), *workspaceIgnore, readFile,
+                           std::move(options)};
+}
+
 WorkspaceSnapshot Editor::snapshot(std::uint64_t revision) const {
     WorkspaceSnapshot result;
     result.revision = revision;
-    for (auto const id : workspace.documents()) {
-        auto state = workspace.state(id);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
-        result.files.push_back({state->key.savedPath(), workspace.document(id).snapshot().text});
-    }
-    std::vector<std::filesystem::path> directories{root};
-    while (!directories.empty()) {
-        const auto directory = std::move(directories.back());
-        directories.pop_back();
-        const auto listed = listDirectory(directory);
-        if (!listed.ok() || !listed.complete) return result;
-        for (const auto& entry : listed.entries) {
-            const auto status = statFile(entry.path());
-            if (!status) continue;
-            if (status->kind == FileKind::Directory &&
-                (pathContains(scratchRoot, entry.path()) ||
-                 pathContains(recoveryRoot, entry.path()) ||
-                 pathContains(archiveRoot, entry.path()))) {
-                continue;
-            }
-            if (status->kind == FileKind::Directory) {
-                directories.push_back(entry.path());
-                continue;
-            }
-            if (status->kind != FileKind::Regular) continue;
-            auto relative = relativeToRoot(root, entry.path());
-            if (!relative) continue;
-            if (std::find_if(result.files.begin(), result.files.end(),
-                             [&](WorkspaceFile const& file) {
-                                 return file.path == *relative;
-                             }) != result.files.end()) {
-                continue;
-            }
-            auto content = readFileText(entry.path());
-            if (!content) continue;
-            result.files.push_back({*relative, std::move(*content)});
-        }
+    auto corpus = workspaceCorpus();
+    result.files.reserve(corpus.paths().size());
+    for (std::size_t index = 0; index < corpus.paths().size(); ++index) {
+        auto file = corpus.read(index);
+        if (!file) continue;
+        result.files.push_back(
+            {std::move(file->path), std::move(file->text)});
     }
     return result;
+}
+
+void Editor::startWorkspaceSearch(std::string query,
+                                  std::uint64_t sourceRevision) {
+    workspaceSearchState =
+        search.beginWorkspaceSearch(std::move(query), sourceRevision);
+    workspaceSearchCorpus = workspaceCorpus();
+}
+
+bool Editor::workspaceSearchPending() const noexcept {
+    return workspaceSearchState.has_value() &&
+           !workspaceSearchState->finished;
+}
+
+void Editor::advanceWorkspaceSearch() {
+    if (!workspaceSearchCorpus || !workspaceSearchState) return;
+    auto batch = search.evaluate(*workspaceSearchState,
+                                 *workspaceSearchCorpus,
+                                 kDefaultFindWorkBudget);
+    if (!batch.finished) return;
+    (void)search.publish(batch,
+                         workspaceSearchState->request.sourceRevision);
+    workspaceSearchState.reset();
+    workspaceSearchCorpus.reset();
 }
 
 WorkspaceApplyResult Editor::applyWorkspaceReplace(
@@ -1171,16 +1183,15 @@ bool Editor::openPickerPrompt(PickerKind kind) {
     return screen.openFinder(kind);
 }
 
-// The index opens its OWN repository handle rather than sharing the git-diff
-// worker's: that one is owned by its thread, and libgit2 handles are not safe
-// to use from two threads.
+// Main-thread workspace walks share one matcher. The git-diff worker owns a
+// separate repository handle because libgit2 handles are not cross-thread safe.
 void Editor::rebuildFileCandidates() {
-    auto matcher = makePlatformGitIgnoreMatcher(root);
+    workspaceIgnore = makePlatformGitIgnoreMatcher(root);
     WorkspaceFileIndexOptions options;
     options.respectGitignore =
         boolSetting(settings, SettingKey::FileFinderRespectGitignore, true);
-    fileCandidates =
-        std::move(buildWorkspaceFileIndex(root, *matcher, options).candidates);
+    fileCandidates = std::move(
+        buildWorkspaceFileIndex(root, *workspaceIgnore, options).candidates);
 }
 
 void Editor::reconcileFindDocument() {
@@ -1485,6 +1496,11 @@ bool Editor::deferDispatch(ClientCommand command) {
 }
 
 CommandResult Editor::dispatchLocked(ClientCommand const& command) {
+    if (workspaceSearchPending() && command.id != "search.workspace") {
+        search.cancelWorkspaceSearch();
+        workspaceSearchState.reset();
+        workspaceSearchCorpus.reset();
+    }
     const auto dispatchAndReconcile = [&](const ClientCommand& dispatched) {
         const auto revisionsBefore = documentRevisions(workspace);
         screen.refreshExternalModificationPresence(

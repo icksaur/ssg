@@ -210,6 +210,9 @@ public:
         std::span<CommandHandle const> retire,
         std::vector<CommandSpec> commands);
     [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
+    void startWorkspaceSearch(std::string query, std::uint64_t sourceRevision);
+    [[nodiscard]] bool workspaceSearchPending() const noexcept;
+    void advanceWorkspaceSearch();
     void resetKeymapToDefault();
     [[nodiscard]] CompiledKeymap const& resolveInputKeymap();
     void focusEditor();
@@ -231,6 +234,7 @@ public:
     };
 
     std::filesystem::path root;
+    std::unique_ptr<GitIgnoreMatcher> workspaceIgnore;
     std::filesystem::path scratchRoot;
     std::filesystem::path recoveryRoot;
     std::filesystem::path archiveRoot;
@@ -388,6 +392,8 @@ public:
     mutable CatalogRevision commandCandidateCatalogRevision = 0;
     mutable KeymapViewState commandCandidateKeymap;
     mutable bool commandCandidateCacheValid = false;
+    std::optional<WorkspaceCorpus> workspaceSearchCorpus;
+    std::optional<WorkspaceSearchState> workspaceSearchState;
     PaneTopology paneTopology = PaneTopology::initial();
     DocumentPointerGesture documentPointerGesture;
     bool wordWrap = false;
@@ -408,6 +414,7 @@ public:
         const TabState& tab, const RecoveryRecordId& compensation);
 
     [[nodiscard]] WorkspaceSnapshot snapshot(std::uint64_t revision) const;
+    [[nodiscard]] WorkspaceCorpus workspaceCorpus() const;
     [[nodiscard]] WorkspaceApplyResult applyWorkspaceReplace(
         const WorkspaceReplacePreview& preview);
     [[nodiscard]] std::optional<FileDocumentId> activeDocumentId() const;

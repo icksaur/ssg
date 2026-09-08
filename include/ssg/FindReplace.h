@@ -28,6 +28,8 @@ struct FindOptions {
     bool operator==(const FindOptions&) const noexcept = default;
 };
 
+inline constexpr std::uint64_t kDefaultFindWorkBudget = 1'000'000;
+
 struct FindMatch {
     ByteOffset begin;
     ByteOffset end;
@@ -51,7 +53,7 @@ struct FindRequest {
     std::string query;
     FindOptions options;
     std::optional<ByteRange> selection;
-    std::uint64_t workBudget = 1'000'000;
+    std::uint64_t workBudget = kDefaultFindWorkBudget;
     const std::atomic_bool* cancelled = nullptr;
 };
 
