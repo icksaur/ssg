@@ -22,6 +22,8 @@ first (cmake --preset dev) or pass --builddir.
 
 Usage:
     tools/reach.py                     # every concept, least-used first
+    tools/reach.py --write reach.txt   # the committed report
+    tools/reach.py --check reach.txt   # exit 1 if reach.txt is stale
     tools/reach.py --max-users 1       # only the single-user concepts
     tools/reach.py --kinds struct,class
     tools/reach.py --tests             # count tests/ as users too
@@ -31,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import ctypes
 import functools
 import json
 import multiprocessing
@@ -41,6 +44,11 @@ import subprocess
 import sys
 
 import clang.cindex as ci
+
+# The python bindings do not wrap the overload-set accessors, and ctypes
+# defaults to an int return, so declare them before first use.
+ci.conf.lib.clang_getNumOverloadedDecls.restype = ctypes.c_uint
+ci.conf.lib.clang_getOverloadedDecl.restype = ci.Cursor
 
 INCLUDE_ROOT = "include"
 SKIP_NAMES = ("detail::", "std::", "__")
@@ -125,7 +133,11 @@ def declarations(repo: pathlib.Path) -> dict[str, tuple[str, str]]:
         unit = index.parse(str(header), args=args)
         for cursor in unit.cursor.walk_preorder():
             kind = KINDS.get(cursor.kind)
-            if kind is None or not cursor.is_definition():
+            if kind is None:
+                continue
+            # A free function declared in a header has no definition there, so
+            # requiring one would report only the few defined inline.
+            if kind != "func" and not cursor.is_definition():
                 continue
             if not is_public_header(
                 cursor.location.file.name if cursor.location.file else None, root
@@ -157,25 +169,13 @@ def references(entry: dict, root: pathlib.Path) -> tuple[str, set[str]]:
         return pathlib.Path(entry["file"]).name, set()
     source = pathlib.Path(entry["file"]).resolve()
     seen: set[str] = set()
-    for cursor in unit.cursor.walk_preorder():
-        # Only an explicit reference counts. Using cursor.type.get_declaration()
-        # as a fallback would count every type merely *declared* in an included
-        # header, which makes each TU look like it uses the whole project.
-        target = cursor.referenced
-        if target is None or not target.spelling:
-            continue
+
+    def record(target: ci.Cursor) -> None:
+        target = target.canonical
         if target.location.file is None:
-            continue
-        # A declaration is only "used" here if the reference itself is in this
-        # TU's own source, not in another header it happens to include.
-        if cursor.location.file is None:
-            continue
-        if pathlib.Path(cursor.location.file.name).resolve() != source:
-            continue
-        if not is_public_header(
-            target.location.file.name, root
-        ):
-            continue
+            return
+        if not is_public_header(target.location.file.name, root):
+            return
         usr = target.get_usr()
         if usr:
             seen.add(usr)
@@ -185,6 +185,35 @@ def references(entry: dict, root: pathlib.Path) -> tuple[str, set[str]]:
             parent_usr = parent.get_usr()
             if parent_usr:
                 seen.add(parent_usr)
+
+    for cursor in unit.cursor.walk_preorder():
+        # Only an explicit reference counts. Using cursor.type.get_declaration()
+        # as a fallback would count every type merely *declared* in an included
+        # header, which makes each TU look like it uses the whole project.
+        target = cursor.referenced
+        if target is None or not target.spelling:
+            continue
+        if cursor.location.file is None:
+            continue
+        # A declaration is only "used" here if the reference itself is in this
+        # TU's own source, not in another header it happens to include.
+        if pathlib.Path(cursor.location.file.name).resolve() != source:
+            continue
+        # A call to an overloaded name resolves to the overload set, which
+        # points at the call site rather than any declaration; its candidates
+        # are the declarations actually named. The python bindings do not wrap
+        # these two, so call libclang directly.
+        if target.kind == ci.CursorKind.OVERLOADED_DECL_REF:
+            for index_ in range(ci.conf.lib.clang_getNumOverloadedDecls(target)):
+                overload = ci.conf.lib.clang_getOverloadedDecl(target, index_)
+                # A cursor built by raw ctypes lacks the translation unit the
+                # bindings attach, which its location and USR accessors need.
+                overload._tu = target._tu
+                record(overload)
+            continue
+        if target.location.file is None:
+            continue
+        record(target)
     return pathlib.Path(entry["file"]).name, seen
 
 
@@ -196,6 +225,8 @@ def main() -> int:
     parser.add_argument("--kinds", default=None)
     parser.add_argument("--tests", action="store_true")
     parser.add_argument("--jobs", type=int, default=multiprocessing.cpu_count())
+    parser.add_argument("--write", type=pathlib.Path, default=None)
+    parser.add_argument("--check", type=pathlib.Path, default=None)
     options = parser.parse_args()
 
     repo = options.repo.resolve()
@@ -233,8 +264,25 @@ def main() -> int:
             continue
         rows.append((len(who), header, kind, name, ",".join(who)))
 
-    for row in sorted(rows, key=lambda r: (r[0], r[3])):
-        print("\t".join(str(field) for field in row))
+    report = "".join(
+        "\t".join(str(field) for field in row) + "\n"
+        for row in sorted(rows, key=lambda r: (r[0], r[3]))
+    )
+
+    if options.check is not None:
+        existing = options.check.read_text() if options.check.is_file() else ""
+        if existing != report:
+            print(
+                f"reach: {options.check} is stale; regenerate with "
+                f"tools/reach.py --write {options.check}",
+                file=sys.stderr,
+            )
+            return 1
+        return 0
+    if options.write is not None:
+        options.write.write_text(report)
+        return 0
+    sys.stdout.write(report)
     return 0
 
 
