@@ -94,18 +94,12 @@ using InputRouteAction =
     std::variant<RouteUnhandled, RouteRejected, RouteAccepted,
                  RouteClientOwned, RouteViewAction, RouteDispatch>;
 
-struct KeepGesture {};
-struct ClearGesture {};
-struct SetGesture {
-    DocumentPointerGesture gesture;
-};
-
-using GestureOnAccepted =
-    std::variant<KeepGesture, ClearGesture, SetGesture>;
-
 struct RoutedInput {
     InputRouteAction action;
-    GestureOnAccepted gestureOnAccepted;
+    // Engaged means "replace the editor's pointer gesture with this one" on
+    // acceptance; a default-constructed gesture therefore clears it.  Empty
+    // means the gesture is left alone.
+    std::optional<DocumentPointerGesture> gestureOnAccepted;
     bool clearGestureOnRejection = false;
 };
 

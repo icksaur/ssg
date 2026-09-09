@@ -332,14 +332,10 @@ InputRoutingSnapshot inputRoutingSnapshot(Editor& editor) {
     };
 }
 
-void applyGesture(Editor& editor, GestureOnAccepted gesture) {
-    if (std::holds_alternative<KeepGesture>(gesture)) return;
-    if (std::holds_alternative<ClearGesture>(gesture)) {
-        editor.documentPointerGesture.clear();
-        return;
-    }
-    editor.documentPointerGesture =
-        std::move(std::get<SetGesture>(gesture).gesture);
+void applyGesture(Editor& editor,
+                  std::optional<DocumentPointerGesture> gesture) {
+    if (!gesture) return;
+    editor.documentPointerGesture = std::move(*gesture);
 }
 
 std::optional<std::string> applyInputMutation(

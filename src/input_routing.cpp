@@ -10,26 +10,31 @@ namespace {
 
 using namespace input_command_names;
 
+// An engaged, empty gesture assigns "no gesture" on acceptance.
+std::optional<DocumentPointerGesture> clearGesture() {
+    return DocumentPointerGesture{};
+}
+
 RoutedInput unhandled() {
-    return {RouteUnhandled{}, KeepGesture{}, false};
+    return {RouteUnhandled{}, std::nullopt, false};
 }
 
 RoutedInput rejected(std::string message,
                      bool clearGestureOnRejection = false) {
-    return {RouteRejected{std::move(message)}, KeepGesture{},
+    return {RouteRejected{std::move(message)}, std::nullopt,
             clearGestureOnRejection};
 }
 
-RoutedInput accepted(GestureOnAccepted gesture = KeepGesture{}) {
+RoutedInput accepted(std::optional<DocumentPointerGesture> gesture = std::nullopt) {
     return {RouteAccepted{}, std::move(gesture), false};
 }
 
 RoutedInput accepted(EditorMutation mutation) {
-    return {RouteAccepted{std::move(mutation)}, KeepGesture{}, false};
+    return {RouteAccepted{std::move(mutation)}, std::nullopt, false};
 }
 
 RoutedInput dispatch(CommandName command, std::any payload = {},
-                     GestureOnAccepted gesture = KeepGesture{},
+                     std::optional<DocumentPointerGesture> gesture = std::nullopt,
                      bool clearGestureOnRejection = false) {
     return {RouteDispatch{ClientCommand{std::move(command), std::move(payload)}},
             std::move(gesture), clearGestureOnRejection};
@@ -37,11 +42,11 @@ RoutedInput dispatch(CommandName command, std::any payload = {},
 
 RoutedInput clientOwned(ClientOwnedInputKind kind, std::string text = {}) {
     return {RouteClientOwned{ClientOwnedInput{kind, std::move(text)}},
-            KeepGesture{}, false};
+            std::nullopt, false};
 }
 
 RoutedInput viewAction(ViewAction action) {
-    return {RouteViewAction{std::move(action)}, KeepGesture{}, false};
+    return {RouteViewAction{std::move(action)}, std::nullopt, false};
 }
 
 bool isPrimaryPress(InputPointerPhase phase, InputPointerButton button) {
@@ -192,7 +197,7 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
         return unhandled();
     }
     if (input.phase == InputPointerPhase::Cancel) {
-        return accepted(ClearGesture{});
+        return accepted(clearGesture());
     }
 
     const auto resolvePosition = [&]() -> std::optional<DocumentPosition> {
@@ -208,7 +213,7 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
             return dispatch(
                 kSelectWordAtPosition,
                 SelectionCommandArguments{*position, std::nullopt},
-                ClearGesture{}, true);
+                clearGesture(), true);
         }
         auto const& items = snapshot.selections.get().items();
         std::vector<Selection> baseline{items.begin(), items.end()};
@@ -228,7 +233,7 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
                     kSelectSetRanges,
                     SelectionCommandArguments{
                         std::nullopt, std::nullopt, std::move(baseline)},
-                    ClearGesture{}, true);
+                    clearGesture(), true);
             }
         }
         DocumentPointerGesture gesture;
@@ -241,7 +246,7 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
                       std::nullopt, Selection{*position, *position}}}
                 : std::any{
                       SelectionCommandArguments{*position, std::nullopt}},
-            SetGesture{std::move(gesture)}, true);
+            std::move(gesture), true);
     }
     if (!snapshot.gesture.has_value()) {
         return unhandled();
@@ -265,8 +270,8 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
     }
     if (!position) {
         return accepted(input.phase == InputPointerPhase::Release
-                            ? GestureOnAccepted{ClearGesture{}}
-                            : GestureOnAccepted{KeepGesture{}});
+                            ? clearGesture()
+                            : std::nullopt);
     }
 
     auto const arguments = gesture.selectionThrough(*position);
@@ -275,8 +280,9 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
     gesture.moveTo(*position);
     return dispatch(command, arguments,
                     input.phase == InputPointerPhase::Release
-                        ? GestureOnAccepted{ClearGesture{}}
-                        : GestureOnAccepted{SetGesture{std::move(gesture)}},
+                        ? clearGesture()
+                        : std::optional<DocumentPointerGesture>{
+                              std::move(gesture)},
                     true);
 }
 
