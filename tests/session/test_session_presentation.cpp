@@ -179,6 +179,32 @@ TEST(curatedKeymapResolvesPerContext) {
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(save, "editor").commandId,
               std::string{"file.save"});
 
+    const auto panelFocus = *ssg::parseKeySequence({"Mod+KeyO"});
+    for (const auto context : {"editor", "panel"}) {
+        ASSERT_EQ(
+            ssg::KeymapMatcher{keymap}
+               .resolveSequence(panelFocus, context)
+               .commandId,
+            std::string{"panel.toggle_focus"});
+    }
+    ASSERT_EQ(
+        ssg::KeymapMatcher{keymap}
+            .resolveSequence(*ssg::parseKeySequence({"Mod+BracketLeft"}),
+                             "editor")
+            .commandId,
+        std::string{"panel.shrink"});
+    ASSERT_EQ(
+        ssg::KeymapMatcher{keymap}
+            .resolveSequence(*ssg::parseKeySequence({"Mod+BracketRight"}),
+                             "editor")
+            .commandId,
+        std::string{"panel.grow"});
+    ASSERT_EQ(
+        ssg::KeymapMatcher{keymap}
+            .resolveSequence(*ssg::parseKeySequence({"Tab"}), "editor")
+            .commandId,
+        std::string{"text.tab"});
+
     const auto altHome = *ssg::parseKeySequence({"Mod+Home"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altHome, "editor").commandId,
               std::string{"cursor.document_start"});

@@ -306,7 +306,12 @@ CommandHandlerResult treeCommand(Editor& runtime,
                     : std::nullopt;
         auto selected = runtime.tree.selectedNode();
         if (!selected) return failure("no tree node is selected");
-        if (selected->expandable) { (void)runtime.tree.toggleSelected(); return success(); }
+        if (selected->expandable) {
+            if (!binding) {
+                return failure("tree node is not expandable");
+            }
+            return runtime.toggleTreeExpanded(binding->id, selected->id);
+        }
         if (providerKind == TreeProviderKind::Git && selected->workspacePath) {
             const auto diffView = runtime.diff.viewState();
             auto file = std::find_if(
@@ -362,9 +367,8 @@ CommandHandlerResult treeCommand(Editor& runtime,
     auto const* invocation = payloadAs<TreeCommandInvocation>(payload);
     if (invocation == nullptr) return failure(std::string{id} + " requires a tree invocation payload");
     if (id == "tree.toggle_expanded") {
-        auto toggled = runtime.tree.toggleExpanded(invocation->providerId, invocation->nodeId);
-
-        return toggled ? success() : failure("tree node does not exist");
+        return runtime.toggleTreeExpanded(
+            invocation->providerId, invocation->nodeId);
     }
     auto command = runtime.tree.invokeNodeCommand(invocation->providerId, invocation->nodeId, invocation->commandId);
     return command ? success() : failure("tree node command does not exist");

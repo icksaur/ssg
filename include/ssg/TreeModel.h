@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -125,6 +126,12 @@ public:
                          std::vector<TreeNode> nodes);
     static TreeProviderSnapshot fromFilesystem(
         TreeProviderId providerId, const std::filesystem::path& canonicalCwd);
+    // Lists root entries and direct children of root/requested directories.
+    // Requested paths are relative, ancestor-closed during traversal, and
+    // never followed when their no-follow status is a symlink.
+    static TreeProviderSnapshot fromFilesystemDirectories(
+        TreeProviderId providerId, const std::filesystem::path& canonicalCwd,
+        std::span<const std::string> loadedDirectories);
     static TreeProviderSnapshot fromGit(TreeProviderId providerId,
                                         std::vector<GitTreeRecord> records);
     static TreeProviderSnapshot fromSymbols(

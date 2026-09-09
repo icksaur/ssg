@@ -443,6 +443,28 @@ ViewActionResult GridPresenter::apply(ViewAction const& request,
                 "view action presentation is stale"};
     }
     const auto* presentation = &frame;
+    const DiffFileView* activeDiff = nullptr;
+    if (frame.diffFileIdentity) {
+        const auto found = std::ranges::find(
+            frame.diff.files, *frame.diffFileIdentity,
+            [](const DiffFileView& file) { return file.id.value(); });
+        if (found != frame.diff.files.end()) activeDiff = &*found;
+    }
+    const auto* activeDocumentPane =
+        frame.document
+            ? &frame.document->panes[frame.document->activePaneIndex]
+            : nullptr;
+    const auto paneColumns =
+        activeDocumentPane
+            ? static_cast<std::uint32_t>(
+                  std::max(activeDocumentPane->content.width, 1))
+            : presentation->viewport.dimensions.columns;
+    const auto paneRows =
+        activeDocumentPane
+            ? static_cast<std::uint32_t>(
+                  std::max(activeDocumentPane->content.height, 1))
+            : std::max(presentation->viewport.scrollbar.viewportRows,
+                       std::uint32_t{1});
 
     bool supported = true;
     bool changed = false;
@@ -460,30 +482,6 @@ ViewActionResult GridPresenter::apply(ViewAction const& request,
             state.navigation.firstVisualRow,
             state.navigation.firstVisualColumn,
             state.navigation.desiredCell};
-        const DiffFileView* activeDiff = nullptr;
-        if (frame.diffFileIdentity) {
-            const auto found = std::ranges::find(
-                frame.diff.files,
-                *frame.diffFileIdentity,
-                [](const DiffFileView& file) {
-                    return file.id.value();
-                });
-            if (found != frame.diff.files.end()) {
-                activeDiff = &*found;
-            }
-        }
-        const auto* activeDocumentPane = frame.document
-            ? &frame.document->panes[frame.document->activePaneIndex]
-            : nullptr;
-        const auto paneColumns = activeDocumentPane
-            ? static_cast<std::uint32_t>(
-                  std::max(activeDocumentPane->content.width, 1))
-            : presentation->viewport.dimensions.columns;
-        const auto paneRows = activeDocumentPane
-            ? static_cast<std::uint32_t>(
-                  std::max(activeDocumentPane->content.height, 1))
-            : std::max(presentation->viewport.scrollbar.viewportRows,
-                       std::uint32_t{1});
         auto result = navigateSelection(
             frame.documentText, before, command,
             {paneColumns, paneRows}, {}, {}, 4,
@@ -604,33 +602,28 @@ ViewActionResult GridPresenter::apply(ViewAction const& request,
             } else if constexpr (std::same_as<Action, RevealSelection> ||
                                  std::same_as<Action, CenterSelection>) {
                 pausesFollow = true;
-                auto const& selections = frame.selections;
-                RowProjection rows{presentation->viewport.rowProjection};
-                const auto selected =
-                    rows.visualRowForPosition(selections.primary().active);
-                const auto viewportRows =
-                    presentation->viewport.scrollbar.viewportRows;
-                auto next = state.navigation.firstVisualRow;
-                if constexpr (std::same_as<Action, RevealSelection>) {
-                    ScrollOffset offset{next};
-                    offset.revealSelection(
-                        selected, presentation->viewport.totalVisualRows,
-                        viewportRows);
-                    next = offset.firstVisible();
-                } else {
-                    const auto centered =
-                        selected > viewportRows / 2
-                            ? selected - viewportRows / 2
-                            : 0;
-                    const auto maximum =
-                        presentation->viewport.totalVisualRows > viewportRows
-                            ? presentation->viewport.totalVisualRows -
-                                  viewportRows
-                            : 0;
-                    next = std::min(centered, maximum);
+                const auto before = SelectionViewState{
+                    frame.selections, state.navigation.firstVisualRow,
+                    state.navigation.firstVisualColumn,
+                    state.navigation.desiredCell};
+                const auto result = navigateSelection(
+                    frame.documentText, before,
+                    std::same_as<Action, RevealSelection>
+                        ? SelectionCommand::ViewRevealCaret
+                        : SelectionCommand::ViewCenterCaret,
+                    {paneColumns, paneRows}, {}, {}, 4, frame.wordWrap,
+                    activeDiff);
+                if (!result.accepted()) {
+                    supported = false;
+                    return;
                 }
-                changed = next != state.navigation.firstVisualRow;
-                state.navigation.firstVisualRow = next;
+                if (result.delta.replacement) {
+                    const auto& next = *result.delta.replacement;
+                    changed = true;
+                    state.navigation = {
+                        next.firstVisualRow, next.firstVisualColumn,
+                        next.desiredCell};
+                }
             } else if constexpr (std::same_as<Action,
                                               MoveVisualSelection>) {
                 if (!frame.tabs.active) {

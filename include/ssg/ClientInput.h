@@ -55,6 +55,14 @@ struct TreePointerInput {
                            const TreePointerInput&) = default;
 };
 
+struct SearchQueryPointerInput {
+    InputPointerButton button = InputPointerButton::Primary;
+    InputPointerPhase phase = InputPointerPhase::Press;
+
+    friend bool operator==(const SearchQueryPointerInput&,
+                           const SearchQueryPointerInput&) = default;
+};
+
 struct PickerPointerInput {
     PickerActivation activation;
     std::string candidateId;
@@ -158,8 +166,8 @@ struct ViewTransitionInput {
 
 using ClientInput =
     std::variant<ClientKeyInput, TabPointerInput, TreePointerInput,
-                 PickerPointerInput, ExternalActionPointerInput,
-                 NoticeActionPointerInput,
+                 SearchQueryPointerInput, PickerPointerInput,
+                 ExternalActionPointerInput, NoticeActionPointerInput,
                  DocumentPointerInput, ScrollLinesInput,
                  ScrollFractionInput, ViewTransitionInput>;
 

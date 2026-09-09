@@ -299,6 +299,63 @@ TreeProviderSnapshot TreeProviderSnapshot::fromFilesystem(
                                 TreeProviderKind::Filesystem, std::move(nodes)};
 }
 
+TreeProviderSnapshot TreeProviderSnapshot::fromFilesystemDirectories(
+    TreeProviderId providerId, const std::filesystem::path& canonicalCwd,
+    std::span<const std::string> loadedDirectories) {
+    std::error_code error;
+    const auto root = canonicalPath(canonicalCwd, error);
+    const auto rootStat = error ? std::optional<FileStat>{} : statFile(root);
+    if (error || !rootStat || rootStat->kind != FileKind::Directory) {
+        throw std::invalid_argument(
+            "filesystem tree CWD must be an existing accessible directory");
+    }
+
+    std::vector<TreeNode> nodes;
+    std::set<std::string> directories;
+    const auto append = [&](const std::filesystem::path& directory,
+                            bool rootDirectory) {
+        const auto listed =
+            listDirectory(directory, DirectoryTraversal::Children);
+        if (listed.status == FileIoStatus::NotFound && !rootDirectory) {
+            return;
+        }
+        if (!listed.ok() || !listed.complete) {
+            throw std::runtime_error(
+                "failed to scan filesystem tree directory " +
+                directory.generic_string() + ": " + listed.message);
+        }
+        for (const auto& entry : listed.entries) {
+            auto node =
+                detail::inspectFilesystemTreeEntry(providerId, root, entry);
+            if (!node) continue;
+            if (rootDirectory && node->kind == TreeNodeKind::Directory &&
+                node->workspacePath) {
+                directories.insert(*node->workspacePath);
+            }
+            nodes.push_back(std::move(*node));
+        }
+    };
+
+    append(root, true);
+    for (const auto& requested : loadedDirectories) {
+        const auto normalized = normalizeWorkspacePath(requested);
+        std::filesystem::path ancestor;
+        for (const auto& component : std::filesystem::path{normalized}) {
+            ancestor /= component;
+            directories.insert(ancestor.generic_string());
+        }
+    }
+    for (const auto& relative : directories) {
+        const auto path = root / relative;
+        const auto status = statFile(path);
+        if (!status || status->kind != FileKind::Directory) continue;
+        append(path, false);
+    }
+    return TreeProviderSnapshot{std::move(providerId),
+                                TreeProviderKind::Filesystem,
+                                std::move(nodes)};
+}
+
 TreeProviderSnapshot TreeProviderSnapshot::fromGit(
     TreeProviderId providerId, std::vector<GitTreeRecord> records) {
     std::vector<TreeNode> nodes;

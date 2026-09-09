@@ -344,6 +344,13 @@ TEST(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork) {
     ASSERT_EQ(runtime.tree.selectedNode()->workspacePath,
               std::optional<std::string>{"other.txt"});
 
+    runtime.screen.focusEditor();
+    ASSERT_EQ(runtime.input(ssg::SearchQueryPointerInput{}).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    state = runtime.tree.searchState(ssg::TreeProviderId{"search"});
+    ASSERT_TRUE(state->editing);
+    ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Panel);
+
     ASSERT_EQ(type("z").outcome, ssg::ClientInputOutcome::Dispatched);
     state = runtime.tree.searchState(ssg::TreeProviderId{"search"});
     ASSERT_TRUE(state->editing);
@@ -396,6 +403,52 @@ TEST(searchPanelActivatesTheSelectedResultAtItsMatchColumn) {
     ASSERT_EQ(runtime.selection.selections.primary().active.byteOffset,
               ssg::ByteOffset{7});
     ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Editor);
+    std::filesystem::remove_all(root);
+}
+
+TEST(searchPanelPointerActivationRevealsTheMatch) {
+    auto root = uniqueRoot();
+    auto workspace = root / "workspace";
+    std::string text;
+    for (int line = 0; line < 30; ++line) text += "line\n";
+    text += "needle\n";
+    std::ofstream{workspace / "target.txt"} << text;
+    auto created = ssg::createEditor(
+        {workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ssg::GridPresenter presenter;
+    ASSERT_TRUE(presenter.project(runtime, {{40, 8}, {}}).has_value());
+    ASSERT_TRUE(runtime.dispatch({"panel.show_search", {}}).accepted());
+    ASSERT_EQ(runtime.input(ssg::ClientKeyInput{{}, "needle"}).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(runtime.input(ssg::ClientKeyInput{
+                  ssg::KeyStroke{.code = ssg::KeyCode::Enter}, {}}).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    while (runtime.workspaceSearchPending()) runtime.advanceWorkspaceSearch();
+    const auto tree = runtime.tree.viewState();
+    const auto* provider = ssg::activeTreeProvider(tree);
+    ASSERT_TRUE(provider != nullptr && provider->nodes.size() == 1);
+    if (provider == nullptr || provider->nodes.size() != 1) return;
+
+    const auto activation =
+        runtime.input(ssg::TreePointerInput{provider->nodes.front().node.id});
+    ASSERT_EQ(activation.outcome, ssg::ClientInputOutcome::ViewOwned);
+    ASSERT_TRUE(activation.command && activation.command->viewAction);
+    if (!activation.command || !activation.command->viewAction) return;
+    auto frame = presenter.project(runtime, {{40, 8}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    ASSERT_EQ(frame->selections.primary().active.line, ssg::LineIndex{30});
+    ASSERT_TRUE(frame->viewport.totalVisualRows > 30);
+    ASSERT_TRUE(frame->viewport.scrollbar.viewportRows < 30);
+    ASSERT_TRUE(frame->viewport.firstVisualRow > 0);
+    ASSERT_TRUE(
+        presenter.apply(*activation.command->viewAction, *frame).accepted());
+    frame = presenter.project(runtime, {{40, 8}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (frame) ASSERT_TRUE(frame->viewport.firstVisualRow > 0);
     std::filesystem::remove_all(root);
 }
 
@@ -819,6 +872,66 @@ TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     ASSERT_TRUE(runtime.dispatch({"select.line_down",  {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
+}
+
+TEST(panelFocusShortcutTogglesBetweenPanelAndEditor) {
+    auto root = uniqueRoot();
+    auto created = ssg::createEditor(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(runtime.dispatch({"panel.toggle_focus", {}}).accepted());
+    ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Panel);
+    ASSERT_TRUE(runtime.dispatch({"panel.toggle_focus", {}}).accepted());
+    ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Editor);
+    std::filesystem::remove_all(root);
+}
+
+TEST(panelWidthCommandsResizeAndClampTheSidebar) {
+    auto root = uniqueRoot();
+    auto created = ssg::createEditor(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(runtime.dispatch({"panel.show_files", {}}).accepted());
+    const auto initial = projectFrame(runtime, {80, 24});
+    ASSERT_TRUE(initial && initial->panel);
+    if (!initial || !initial->panel) return;
+    const auto initialWidth = initial->panel->rect.width;
+    const auto grow = runtime.dispatch({"panel.grow", {}});
+    ASSERT_TRUE(grow.accepted());
+    const auto grown = projectFrame(runtime, {80, 24});
+    ASSERT_TRUE(grown && grown->panel);
+    if (!grown || !grown->panel) return;
+    ASSERT_EQ(grown->panel->rect.width, initialWidth + 1);
+    for (int width = 0; width < initialWidth + 10; ++width) {
+        ASSERT_TRUE(runtime.dispatch({"panel.shrink", {}}).accepted());
+    }
+    const auto clamped = projectFrame(runtime, {80, 24});
+    ASSERT_TRUE(clamped && clamped->panel);
+    if (clamped && clamped->panel) {
+        ASSERT_EQ(clamped->panel->rect.width, ssg::kPanelMinimumWidth);
+    }
+    std::filesystem::remove_all(root);
+}
+
+TEST(tabKeyInsertsATabInTheEditor) {
+    auto root = uniqueRoot();
+    std::filesystem::create_directories(root / "workspace");
+    std::ofstream{root / "workspace" / "tab.txt"};
+    auto created = ssg::createEditor(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(runtime.dispatch({"file.open", std::string{"tab.txt"}}).accepted());
+    const auto tab = runtime.input(ssg::ClientKeyInput{
+        ssg::KeyStroke{.code = ssg::KeyCode::Tab}, {}});
+    ASSERT_EQ(tab.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"\t"});
+    std::filesystem::remove_all(root);
 }
 
 TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
@@ -1363,7 +1476,11 @@ SSG_TEST_SUITE(test_session_editing) {
     RUN(workspaceSearchAndReplaceHonorIgnoreWithOpenBufferPrecedence);
     RUN(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork);
     RUN(searchPanelActivatesTheSelectedResultAtItsMatchColumn);
+    RUN(searchPanelPointerActivationRevealsTheMatch);
     RUN(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot);
+    RUN(panelFocusShortcutTogglesBetweenPanelAndEditor);
+    RUN(panelWidthCommandsResizeAndClampTheSidebar);
+    RUN(tabKeyInsertsATabInTheEditor);
     RUN(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary);
     RUN(undoAndPasteRevealTheCaret);
     RUN(multiCursorPastePreservesAllCursors);

@@ -40,6 +40,10 @@ std::vector<std::string_view> keyboardRoutes(
     return {"panel.focus", "tree.activate"};
 }
 std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::SearchQueryPointerInput>) {
+    return {};
+}
+std::vector<std::string_view> keyboardRoutes(
     std::type_identity<ssg::PickerPointerInput>) {
     return {"prompt.submit"};
 }
@@ -1005,7 +1009,7 @@ TEST(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute) {
     ASSERT_TRUE(closed.has_value());
     if (!closed) return;
     ASSERT_FALSE(closed->paletteView.activePicker.has_value());
-    ASSERT_FALSE(closed->paletteView.fileCandidates.empty());
+    ASSERT_TRUE(closed->paletteView.fileCandidates.empty());
 
     ASSERT_TRUE(runtime.dispatch({"file_finder.open",  {}}).accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -1087,6 +1091,7 @@ TEST(workerFilesystemRefreshPublishesChangedFileCandidates) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
+    ASSERT_TRUE(runtime.dispatch({"file_finder.open", {}}).accepted());
     std::ofstream{root / "workspace" / "arrived.txt"} << "new\n";
 
     runtime.refreshTreeForPublication();
@@ -2771,6 +2776,68 @@ std::uint64_t caretByteOffset(ssg::Editor& runtime) {
     return runtime.selection.selections.primary().active.byteOffset.value();
 }
 
+TEST(filesTreeLoadsOneLevelBelowVisibleDirectories) {
+    auto root = uniqueRoot();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace / "a" / "b" / "c");
+    std::ofstream{workspace / "a" / "b" / "c" / "deep.txt"} << "x";
+    ASSERT_EQ(
+        std::system(("git -C \"" + workspace.string() +
+                     "\" init -q >/dev/null 2>&1")
+                        .c_str()),
+        0);
+    auto created = ssg::createEditor(
+        {.cwd = workspace,
+         .scratchRoot = root / "scratch",
+         .recoveryRoot = root / "recovery",
+         .enableGitDiffWorker = false,
+         .enableFilesystemWatcher = false});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const auto hasNode = [&](std::string_view id) {
+        const auto view = runtime.tree.viewState();
+        const auto provider = std::ranges::find(
+            view.providers, ssg::TreeProviderId{"filesystem"},
+            [](const ssg::TreeProviderView& candidate) {
+                return candidate.providerId;
+            });
+        return provider != view.providers.end() &&
+               std::ranges::any_of(
+                   provider->nodes, [&](const ssg::TreeNodeView& node) {
+                       return node.node.id.value() == id;
+                   });
+    };
+
+    ASSERT_TRUE(hasNode("filesystem:a"));
+    ASSERT_FALSE(hasNode("filesystem:a/b"));
+    ASSERT_FALSE(hasNode("filesystem:a/b/c"));
+    ASSERT_TRUE(runtime.paletteView().fileCandidates.empty());
+
+    ASSERT_TRUE(runtime.tree.select(ssg::TreeNodeId{"filesystem:a"}));
+    ASSERT_TRUE(runtime.dispatch({"tree.activate", {}}).accepted());
+    ASSERT_TRUE(hasNode("filesystem:a/b"));
+    ASSERT_FALSE(hasNode("filesystem:a/b/c"));
+    ASSERT_FALSE(hasNode("filesystem:a/b/c/deep.txt"));
+
+    ASSERT_TRUE(runtime.tree.select(ssg::TreeNodeId{"filesystem:a/b"}));
+    ASSERT_TRUE(runtime.dispatch({"tree.activate", {}}).accepted());
+    ASSERT_TRUE(hasNode("filesystem:a/b/c"));
+    ASSERT_FALSE(hasNode("filesystem:a/b/c/deep.txt"));
+
+    ASSERT_TRUE(runtime.tree.select(ssg::TreeNodeId{"filesystem:a/b/c"}));
+    ASSERT_TRUE(runtime.dispatch({"tree.activate", {}}).accepted());
+    ASSERT_TRUE(hasNode("filesystem:a/b/c/deep.txt"));
+
+    ASSERT_TRUE(runtime.dispatch({"file_finder.open", {}}).accepted());
+    ASSERT_TRUE(std::ranges::any_of(
+        runtime.paletteView().fileCandidates,
+        [](const ssg::PaletteCandidate& candidate) {
+            return candidate.id == "a/b/c/deep.txt";
+        }));
+    std::filesystem::remove_all(root);
+}
+
 ssg::ClientCommand gotoFile(std::string path, std::size_t line,
                             std::size_t column) {
     return {"goto.file",
@@ -2881,6 +2948,7 @@ TEST(gotoBackAndForwardApplyTransitions) {
 } // namespace
 
 SSG_TEST_SUITE(test_session_navigation) {
+    RUN(filesTreeLoadsOneLevelBelowVisibleDirectories);
     RUN(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow);
     RUN(followPauseQueuesMultipleChangesAndResumeAdoptsTheNewest);
     RUN(gitDiffScanUpdatesDiffAndRejectsStaleBatches);

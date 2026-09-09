@@ -173,6 +173,10 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                    *targets.notice_action_id};
                 return dispatch;
             }
+            if (hit.region == ssg::HitRegion::PanelQuery) {
+                dispatch.semantic_input = ssg::SearchQueryPointerInput{};
+                return dispatch;
+            }
             // A left press on a tree row selects that node and then activates it
             // (opens a file / toggles a directory), matching the keyboard
             // select-then-Enter behavior. The node id travels on the hit.

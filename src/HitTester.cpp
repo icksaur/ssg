@@ -73,6 +73,11 @@ RegionHit paletteHit(SolvedPaletteSurface const& palette, int column, int row) {
 }
 
 RegionHit panelHit(SolvedPanelSurface const& panel, int column, int row) {
+    if (contains(panel.query, column, row)) {
+        RegionHit hit;
+        hit.region = HitRegion::PanelQuery;
+        return hit;
+    }
     if (panel.scrollbarGutter &&
         contains(*panel.scrollbarGutter, column, row)) {
         return scrollbarHit(HitRegion::PanelScrollbar,

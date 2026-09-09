@@ -384,8 +384,9 @@ public:
 
     CommandResult dispatchLocked(ClientCommand const& command);
     // The open file picker's candidate set, built when the picker opens and
-    // Published continuously and rebuilt with the workspace tree.
+    // rebuilt on filesystem refresh only while that picker remains open.
     std::vector<PaletteCandidate> fileCandidates;
+    std::vector<std::string> loadedFilesystemDirectories;
     // Command-mode palette candidates are the whole catalog with each command's
     // key hint resolved -- O(bindings x commands) -- so they are cached and
     // rebuilt only when the catalog or keymap changes, keeping the palette off
@@ -544,14 +545,14 @@ public:
     [[nodiscard]] bool focusPane(PaneId pane);
     [[nodiscard]] bool refreshTree();
     void refreshTreeForPublication();
+    [[nodiscard]] CommandHandlerResult toggleTreeExpanded(
+        const TreeProviderId& providerId, const TreeNodeId& nodeId);
     // Re-assemble the authority-owned screen schema from the given UI inputs
     // and migrate the interaction over it. Takes the inputs as parameters (not
     // members) so a caller can build and migrate before adopting the new style.
     void rebuildInteractionSchema(const StyleDimensions& dimensions,
                                   std::string_view promptSigil);
-    // Refresh the file picker's candidates off the authority's picker epoch: a
-    // newly (re)opened File picker rebuilds synchronously, any other picker
-    // state clears.
+    // A newly (re)opened File picker rebuilds synchronously before publication.
     [[nodiscard]] bool openPickerPrompt(PickerKind kind);
     // Walks the workspace into `fileCandidates`, honoring the gitignore
     // setting.

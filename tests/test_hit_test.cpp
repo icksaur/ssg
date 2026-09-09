@@ -449,6 +449,7 @@ TEST(panelRowMapsToItsTreeNodeId) {
         std::snprintf(name, sizeof name, "file-%02d.txt", i);
         std::ofstream{root / name} << "x";
     }
+
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
@@ -498,6 +499,22 @@ TEST(panelRowMapsToItsTreeNodeId) {
     auto corruptLegacy =
         ssg::HitTester{*frame}.at(60, 3);
     ASSERT_NE(corruptLegacy.region, ssg::HitRegion::Panel);
+}
+
+TEST(searchPanelQueryMapsToItsInputRegion) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime->dispatch({"panel.show_search", {}}).accepted());
+    auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame || !frame->panel) return;
+
+    const auto& query = frame->panel->query;
+    auto hit = ssg::HitTester{*frame}.at(query.x, query.y);
+    ASSERT_EQ(hit.region, ssg::HitRegion::PanelQuery);
+    std::filesystem::remove_all(root);
 }
 
 TEST(paletteRowMapsToItsAbsoluteRankIndex) {

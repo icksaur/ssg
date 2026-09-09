@@ -382,6 +382,15 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
 }
 
 RoutedInput routeInput(InputRoutingSnapshot const&,
+                       SearchQueryPointerInput const& input) {
+    if (!isPrimaryPress(input.phase, input.button)) {
+        return unhandled();
+    }
+    return accepted(
+        SearchQueryChange{SearchQueryChange::Kind::Focus, {}});
+}
+
+RoutedInput routeInput(InputRoutingSnapshot const&,
                        PickerPointerInput const& input) {
     if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();

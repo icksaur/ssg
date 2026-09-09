@@ -534,6 +534,19 @@ void registerTextInputCommands(CommandCatalog& catalog,
                                 TextInputCommand::Insert, arguments);
             }),
     });
+    catalog.add(CommandSpec{
+            .id = "text.tab",
+            .owner = "text-input-commands",
+            .label = "Insert Tab",
+            .summary = "Insert Tab",
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+            .binding = bindNoArgumentHandler(
+                [&runtime](CommandContext&) {
+                    return bindText(runtime, TextInputCommand::Insert,
+                                    TextInputArguments{"\t"});
+                }),
+    });
     declareTextless("text.newline", "Newline", "Newline",
                     TextInputCommand::Newline);
     declareTextless("text.delete_backward", "Delete Backward",

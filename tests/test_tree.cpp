@@ -89,6 +89,24 @@ TEST(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks) {
     ASSERT_EQ(first.nodes().front().id, second.nodes().front().id);
 }
 
+TEST(filesystemDirectorySnapshotLoadsOnlyRequestedBranches) {
+    TemporaryDirectory temporary;
+    std::filesystem::create_directories(
+        temporary.path() / "a" / "b" / "c");
+    std::filesystem::create_directories(temporary.path() / "other" / "deep");
+    std::ofstream(temporary.path() / "a" / "b" / "c" / "hit.txt") << "x";
+    std::ofstream(temporary.path() / "other" / "deep" / "hidden.txt") << "x";
+
+    const std::vector<std::string> loaded{"a/b"};
+    const auto snapshot =
+        TreeProviderSnapshot::fromFilesystemDirectories(
+            TreeProviderId{"files"}, temporary.path(), loaded);
+    ASSERT_EQ(nodeIds(snapshot),
+              (std::vector<std::string>{
+                  "files:a", "files:a/b", "files:a/b/c", "files:other",
+                  "files:other/deep"}));
+}
+
 TEST(filesystemSnapshotIgnoresAnEntryThatDisappearsDuringInspection) {
     TemporaryDirectory temporary;
     const auto transient = temporary.path() / "transient.txt";
@@ -425,6 +443,7 @@ TEST(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation) {
 
 SSG_TEST_SUITE(test_tree) {
     RUN(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks);
+    RUN(filesystemDirectorySnapshotLoadsOnlyRequestedBranches);
     RUN(filesystemSnapshotIgnoresAnEntryThatDisappearsDuringInspection);
     RUN(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys);
     RUN(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned);

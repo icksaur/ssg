@@ -22,6 +22,7 @@ enum class HitRegion : std::uint8_t {
                         // (byte_offset = the row's end, byte_len = 0), so clicking
                         // anywhere on an editor row places the caret at the line end.
     Panel,              // a tree row: node_id is set
+    PanelQuery,
     Palette,            // a palette row: item_index is the absolute rank index
     Tab,                // a tab-bar tab: tab_index selects sections().tabs.tabs
     HeaderField,        // a shell header status field

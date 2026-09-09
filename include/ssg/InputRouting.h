@@ -60,6 +60,7 @@ struct SearchQueryChange {
         MoveFirst,
         MoveLast,
         Submit,
+        Focus,
     } kind = Kind::Append;
     std::string text;
 };

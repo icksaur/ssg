@@ -323,7 +323,7 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
     if (provider->search) {
         solved.query = {panel.rect.x, panel.rect.y + 1, panel.rect.width,
                         queryRows};
-        solved.queryText = provider->search->query;
+        solved.queryText = "> " + provider->search->query;
         solved.queryEditing = provider->search->editing;
     }
     const auto contentRows =

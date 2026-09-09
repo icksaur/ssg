@@ -2,6 +2,7 @@
 
 
 #include <algorithm>
+#include <limits>
 #include <array>
 #include <stdexcept>
 #include <variant>
@@ -66,10 +67,38 @@ CommandHandlerResult setLineNumbers(Editor& runtime) {
     return success();
 }
 
+CommandHandlerResult resizePanel(Editor& runtime, bool grow) {
+    const int minimumWidth = std::max(
+        runtime.style.dimensions.panelMinimumWidth, kPanelMinimumWidth);
+    const int current = std::max(runtime.style.dimensions.panelTargetWidth,
+                                 minimumWidth);
+    const int next =
+        grow ? (current == std::numeric_limits<int>::max() ? current
+                                                           : current + 1)
+             : std::max(current - 1, minimumWidth);
+    if (next == runtime.style.dimensions.panelTargetWidth) return success();
+    runtime.style.dimensions.panelTargetWidth = next;
+    runtime.rebuildInteractionSchema(runtime.style.dimensions,
+                                     runtime.style.inputLineSigil);
+    return success();
+}
+
 CommandHandlerResult shellCommand(Editor& runtime,
                                   std::string_view id) {
     if (id == "panel.toggle") (void)runtime.screen.togglePanel();
     else if (id == "panel.focus") (void)runtime.screen.focusPanel();
+    else if (id == "panel.toggle_focus") {
+        if (runtime.screen.effectiveFocus() == FocusTarget::Panel) {
+            runtime.screen.focusEditor();
+        } else if (!runtime.screen.focusPanel()) {
+            (void)runtime.screen.togglePanel();
+            if (!runtime.screen.focusPanel()) {
+                return failure("sidebar is unavailable");
+            }
+        }
+    }
+    else if (id == "panel.shrink") return resizePanel(runtime, false);
+    else if (id == "panel.grow") return resizePanel(runtime, true);
     else if (id == "panel.show_files") {
         if (!runtime.screen.showPanelProvider(TreeProviderKind::Filesystem)) {
             return failure("files tree provider is unavailable");
@@ -656,6 +685,10 @@ void registerShellLayoutCommands(CommandCatalog& catalog,
 
     declare("panel.toggle", "Toggle Sidebar", "Toggle Sidebar");
     declare("panel.focus", "Focus Sidebar", "Focus Sidebar");
+    declare("panel.toggle_focus", "Toggle Sidebar Focus",
+            "Toggle Sidebar Focus");
+    declare("panel.shrink", "Shrink Sidebar", "Shrink Sidebar");
+    declare("panel.grow", "Grow Sidebar", "Grow Sidebar");
     declare("panel.show_files", "Show Files Sidebar", "Show Files Sidebar");
     declare("panel.show_git_status", "Show Git Sidebar", "Show Git Sidebar");
     declare("panel.show_search", "Show Search Sidebar", "Show Search Sidebar");

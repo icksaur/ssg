@@ -1752,6 +1752,19 @@ TEST(routePointerPanelPressSelectsAndActivatesTheNode) {
     ASSERT_FALSE(inert.semantic_input.has_value());
 }
 
+TEST(routePointerSearchQueryPressFocusesTheQuery) {
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::PanelQuery;
+    ssg::PointerTargets const empty;
+
+    auto plan = ssg::route_pointer(
+        hit, ssg::PointerButton::left, ssg::PointerKind::press, false,
+        false, std::nullopt, empty);
+    ASSERT_TRUE(plan.semantic_input.has_value());
+    ASSERT_TRUE(std::holds_alternative<ssg::SearchQueryPointerInput>(
+        *plan.semantic_input));
+}
+
 TEST(routeWheelMapsRegionToScrollTarget) {
     using ssg::WheelTarget;
     // The side panel and its gutter scroll the tree.
@@ -1857,4 +1870,3 @@ SSG_TEST_SUITE(test_terminal_input) {
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
-

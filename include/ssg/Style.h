@@ -69,11 +69,13 @@ struct ToggleGlyphs {
 
 // Sizes in terminal cells.  There is no unit system and no scaling factor: the
 // unit is a cell.
+inline constexpr int kPanelMinimumWidth = 16;
+
 struct StyleDimensions {
     int minimumColumns = 20;
     int minimumRows = 4;
     int panelTargetWidth = 24;
-    int panelMinimumWidth = 12;
+    int panelMinimumWidth = kPanelMinimumWidth;
     int editorMinimumWidth = 20;
     int scrollbarGutterWidth = 1;
     int headerHeight = 1;

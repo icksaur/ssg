@@ -86,10 +86,9 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Mod+Shift+KeyF"}), "panel.show_search", "*");
     bind(seq({"Mod+KeyB"}), "panel.toggle", "*");
     bind(seq({"Mod+KeyH"}), "help.open", "*");
-    bind(seq({"Mod+KeyO"}), "panel.focus", "*");
-    // Tab cycling: Mod+BracketRight/Left cannot be used -- ESC ] / ESC [ are
-    // the OSC / CSI introducers -- so the brackets give way to
-    // Mod+Period/Comma.
+    bind(seq({"Mod+KeyO"}), "panel.toggle_focus", "*");
+    bind(seq({"Mod+BracketLeft"}), "panel.shrink", "*");
+    bind(seq({"Mod+BracketRight"}), "panel.grow", "*");
     bind(seq({"Mod+Period"}), "tab.next", "*");
     bind(seq({"Mod+Comma"}), "tab.previous", "*");
     bind(seq({"Mod+KeyW"}), "tab.close", "*");
@@ -132,6 +131,7 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Shift+PageUp"}), "select.page_up", "editor");
     bind(seq({"Shift+PageDown"}), "select.page_down", "editor");
     bind(seq({"Enter"}), "text.newline", "editor");
+    bind(seq({"Tab"}), "text.tab", "editor");
     bind(seq({"Backspace"}), "text.delete_backward", "editor");
     bind(seq({"Delete"}), "text.delete_forward", "editor");
     bind(seq({"Mod+Backspace"}), "text.delete_word_backward", "editor");
@@ -414,6 +414,12 @@ std::optional<std::string> applyInputMutation(
                                   .text = state->query},
                 sourceGeneration);
         }
+        break;
+    case SearchQueryChange::Kind::Focus:
+        if (!editor.screen.focusPanel()) {
+            return "search query panel is unavailable";
+        }
+        state->editing = true;
         break;
     }
     if (!editor.tree.setSearchState(binding->id, std::move(*state))) {
@@ -1275,14 +1281,57 @@ bool Editor::refreshTree() {
         return false;
     }
     ++treeScanCount;
-    tree.replaceProvider(TreeProviderSnapshot::fromFilesystem(
-        TreeProviderId{"filesystem"}, root));
-    rebuildFileCandidates();
+    tree.replaceProvider(TreeProviderSnapshot::fromFilesystemDirectories(
+        TreeProviderId{"filesystem"}, root, loadedFilesystemDirectories));
+    if (screen.openPicker() == PickerKind::File) rebuildFileCandidates();
     return true;
 }
 
 void Editor::refreshTreeForPublication() {
     (void)refreshTree();
+}
+
+CommandHandlerResult Editor::toggleTreeExpanded(
+    const TreeProviderId& providerId, const TreeNodeId& nodeId) {
+    const bool expanding = !tree.isExpanded(providerId, nodeId);
+    if (!tree.toggleExpanded(providerId, nodeId)) {
+        return failure("tree node is not expandable");
+    }
+    if (!expanding || providerId != TreeProviderId{"filesystem"}) {
+        return success();
+    }
+
+    const auto loadedBefore = loadedFilesystemDirectories;
+    try {
+        const auto view = tree.viewState();
+        const auto provider = std::ranges::find(
+            view.providers, providerId,
+            [](const TreeProviderView& candidate) {
+                return candidate.providerId;
+            });
+        if (provider != view.providers.end()) {
+            for (const auto& node : provider->nodes) {
+                if (node.node.kind == TreeNodeKind::Directory &&
+                    node.node.parentId == nodeId &&
+                    node.node.workspacePath) {
+                    loadedFilesystemDirectories.push_back(
+                        *node.node.workspacePath);
+                }
+            }
+            std::ranges::sort(loadedFilesystemDirectories);
+            const auto unique = std::ranges::unique(
+                loadedFilesystemDirectories);
+            loadedFilesystemDirectories.erase(unique.begin(),
+                                               unique.end());
+        }
+        (void)refreshTree();
+        return success();
+    } catch (const std::exception& exception) {
+        loadedFilesystemDirectories = loadedBefore;
+        (void)tree.toggleExpanded(providerId, nodeId);
+        return failure("failed to expand filesystem tree: " +
+                       std::string{exception.what()});
+    }
 }
 
 void Editor::rebuildInteractionSchema(
@@ -1293,6 +1342,7 @@ void Editor::rebuildInteractionSchema(
 }
 
 bool Editor::openPickerPrompt(PickerKind kind) {
+    if (kind == PickerKind::File) rebuildFileCandidates();
     return screen.openFinder(kind);
 }
 

@@ -302,7 +302,7 @@ TEST(searchPanelKeepsItsQueryOutsideTheScrolledResultWindow) {
     const auto solved = solvePanelSurface(tree, panel, 99, true, Style{});
     ASSERT_EQ(solved.providerLabel, (Rect{3, 2, 12, 1}));
     ASSERT_EQ(solved.query, (Rect{3, 3, 12, 1}));
-    ASSERT_EQ(solved.queryText, std::string{"needle"});
+    ASSERT_EQ(solved.queryText, std::string{"> needle"});
     ASSERT_TRUE(solved.queryEditing);
     ASSERT_EQ(solved.rows.size(), std::size_t{3});
     ASSERT_EQ(solved.rows.back().absoluteIndex, std::uint32_t{5});
