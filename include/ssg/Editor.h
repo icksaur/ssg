@@ -201,7 +201,7 @@ public:
     [[nodiscard]] PumpResult pump();
     [[nodiscard]] CommandResult dispatch(ClientCommand const& command);
     [[nodiscard]] ClientInputResult input(ClientInput const& input);
-    [[nodiscard]] SessionTopology topology() const;
+    [[nodiscard]] std::optional<WorkspaceId> activeWorkspace() const;
     [[nodiscard]] bool deferDispatch(ClientCommand command);
     [[nodiscard]] bool dispatchInProgress() const noexcept;
     [[nodiscard]] CommandCatalog const& commandCatalog() const;
@@ -315,7 +315,7 @@ public:
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
     std::uint64_t workspaceReplaceGeneration = 0;
     mutable std::mutex operationMutex;
-    SessionTopology sessionTopology;
+    std::optional<WorkspaceId> activeWorkspace_;
     CommandCatalog catalog;
     // Commands a running handler asked to dispatch, run in order once the
     // operation lock releases. The operation mutex is not reentrant, so a

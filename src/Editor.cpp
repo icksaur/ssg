@@ -1676,7 +1676,7 @@ CommandResult Editor::dispatchLocked(ClientCommand const& command) {
             externalModificationPresent());
         auto result = catalog.dispatch(dispatched);
         if (result.activeWorkspace) {
-            sessionTopology.activeWorkspace = result.activeWorkspace;
+            activeWorkspace_ = result.activeWorkspace;
         }
         reconcileFindDocument();
         screen.refreshNoticePresence(noticePresent());
@@ -1791,9 +1791,9 @@ CommandResult Editor::dispatch(ClientCommand const& command) {
     return dispatchLocked(command);
 }
 
-SessionTopology Editor::topology() const {
+std::optional<WorkspaceId> Editor::activeWorkspace() const {
     std::lock_guard operationLock{operationMutex};
-    return sessionTopology;
+    return activeWorkspace_;
 }
 
 CommandCatalog const& Editor::commandCatalog() const {

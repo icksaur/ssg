@@ -367,7 +367,7 @@ TEST(editorSessionAbsorbsSuccessfulWorkspaceChanges) {
     });
 
     ASSERT_TRUE(runtime->dispatch({"oracle.workspace", {}}).accepted());
-    ASSERT_EQ(runtime->topology().activeWorkspace,
+    ASSERT_EQ(runtime->activeWorkspace(),
               std::optional<ssg::WorkspaceId>{ssg::WorkspaceId{7}});
     fs::remove_all(root);
 }
