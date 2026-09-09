@@ -178,6 +178,9 @@ enum class ClientOwnedInputKind : std::uint8_t {
     SelectNext = 3,
     SelectPrevious = 4,
     Submit = 5,
+    // The TUI services these only after a resolved clipboard.paste gesture.
+    SystemClipboardPasteIntoEditor = 6,
+    SystemClipboardPasteIntoText = 7,
 };
 
 struct ClientOwnedInput {

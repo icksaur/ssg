@@ -1540,12 +1540,21 @@ TEST(keyInputRoutingBranchesByPromptMode) {
     ASSERT_TRUE(
         runtime.dispatch({"file.open", std::string{"lines.txt"}}).accepted());
 
-    const auto key = [&](ssg::KeyCode code, bool alt = false) {
+    const auto key = [&](ssg::KeyCode code, bool mod = false) {
         ssg::KeyStroke stroke;
         stroke.code = code;
-        stroke.mod = alt;
+        stroke.mod = mod;
         return runtime.input(ssg::ClientKeyInput{stroke, {}});
     };
+    const auto assertClipboardRequest =
+        [&](ssg::ClientOwnedInputKind expected) {
+            auto paste = key(ssg::KeyCode::KeyV, true);
+            ASSERT_EQ(paste.outcome, ssg::ClientInputOutcome::ClientOwned);
+            ASSERT_TRUE(paste.clientOwned.has_value());
+            if (paste.clientOwned) {
+                ASSERT_EQ(paste.clientOwned->kind, expected);
+            }
+        };
     const auto activePromptValue = [&]() {
         auto controls = runtime.resolvedPromptControls();
         if (!controls) return std::string{};
@@ -1557,7 +1566,12 @@ TEST(keyInputRoutingBranchesByPromptMode) {
         return std::string{};
     };
 
+    assertClipboardRequest(
+        ssg::ClientOwnedInputKind::SystemClipboardPasteIntoEditor);
+
     ASSERT_TRUE(runtime.dispatch({"palette.open", {}}).accepted());
+    assertClipboardRequest(
+        ssg::ClientOwnedInputKind::SystemClipboardPasteIntoText);
     struct PaletteCase {
         ssg::KeyCode code;
         ssg::ClientOwnedInputKind expected;
@@ -1606,6 +1620,8 @@ TEST(keyInputRoutingBranchesByPromptMode) {
           PromptCase{"replace.open", "replacement"},
           PromptCase{"goto.line", "3"}}) {
         ASSERT_TRUE(runtime.dispatch({test.openCommand, {}}).accepted());
+        assertClipboardRequest(
+            ssg::ClientOwnedInputKind::SystemClipboardPasteIntoText);
         auto typed = runtime.input(ssg::ClientKeyInput{{}, test.text});
         ASSERT_EQ(typed.outcome, ssg::ClientInputOutcome::Dispatched);
         ASSERT_EQ(activePromptValue(), std::string{test.text});
@@ -1617,6 +1633,13 @@ TEST(keyInputRoutingBranchesByPromptMode) {
         ASSERT_EQ(key(ssg::KeyCode::Escape).outcome,
                   ssg::ClientInputOutcome::Dispatched);
     }
+
+    ASSERT_TRUE(runtime.dispatch({"panel.show_files", {}}).accepted());
+    ASSERT_EQ(key(ssg::KeyCode::KeyV, true).outcome,
+              ssg::ClientInputOutcome::Unhandled);
+    ASSERT_TRUE(runtime.dispatch({"panel.show_search", {}}).accepted());
+    assertClipboardRequest(
+        ssg::ClientOwnedInputKind::SystemClipboardPasteIntoText);
 }
 
 TEST(viewTransitionsExecuteTypedEditorMutations) {

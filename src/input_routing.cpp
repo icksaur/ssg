@@ -85,13 +85,17 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
             std::array{CompiledKeymap::compile(input.stroke)}, routing.focus);
         if (resolved.kind == KeymapMatchKind::Resolved) {
             auto const& command = resolved.command;
-            if (searchPanel) {
-                if (command == kClipboardPaste) {
-                    if (snapshot.clipboardText.empty()) return unhandled();
-                    return accepted(SearchQueryChange{
-                        SearchQueryChange::Kind::Append,
-                        std::string{snapshot.clipboardText}});
+            if (command == kClipboardPaste) {
+                if (routing.focus == FocusTarget::Panel && !searchPanel) {
+                    return unhandled();
                 }
+                const auto kind =
+                    routing.prompt != ActivePrompt::None || searchPanel
+                        ? ClientOwnedInputKind::SystemClipboardPasteIntoText
+                        : ClientOwnedInputKind::SystemClipboardPasteIntoEditor;
+                return clientOwned(kind, std::string{snapshot.clipboardText});
+            }
+            if (searchPanel) {
                 if (snapshot.searchEditing &&
                     command == "tree.select_next") {
                     return accepted(SearchQueryChange{
@@ -122,22 +126,10 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
                 if (command == kPromptCancel) {
                     return dispatch(kPaletteClose);
                 }
-                if (command == kClipboardPaste) {
-                    if (snapshot.clipboardText.empty()) return unhandled();
-                    return routeTextEdit(
-                        {PromptTextEdit::Kind::Append,
-                         std::string{snapshot.clipboardText}});
-                }
                 return dispatch(command);
             case ActivePrompt::Find:
             case ActivePrompt::Replace:
             case ActivePrompt::TextPrompt:
-                if (command == kClipboardPaste) {
-                    if (snapshot.clipboardText.empty()) return unhandled();
-                    return routeTextEdit(
-                        {PromptTextEdit::Kind::Append,
-                         std::string{snapshot.clipboardText}});
-                }
                 return dispatch(command);
             case ActivePrompt::None:
                 return dispatch(command);
@@ -300,7 +292,7 @@ RoutedInput routeTransition(InputRoutingSnapshot const& snapshot,
                             PaneFocusTransition const& transition) {
     if (std::find(snapshot.panes.begin(), snapshot.panes.end(),
                   transition.pane) == snapshot.panes.end()) {
-        return rejected("pane focus target is not in this attachment");
+        return rejected("editor pane focus target is not in this attachment");
     }
     return accepted(FocusPane{transition.pane});
 }

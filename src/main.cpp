@@ -14,6 +14,7 @@
 #include <ssg/Picker.h>
 #include <ssg/platform_files.h>
 #include <ssg/TextInputCommands.h>
+#include <ssg/SystemClipboardReader.h>
 
 #include <ssg/InitScriptWatcher.h>
 
@@ -171,6 +172,7 @@ struct SsgContext {
     std::optional<GridPresentation> activeSnapshot;
     FocusTarget focus = FocusTarget::Editor;
     SystemClipboardWriter clipboardWriter;
+    SystemClipboardReader clipboardReader;
     TerminalCapabilities capabilities{environmentVariable};
 };
 
@@ -247,6 +249,9 @@ class PaletteView {
             break;
         case ClientOwnedInputKind::Submit:
             submitSelectedCandidate();
+            break;
+        case ClientOwnedInputKind::SystemClipboardPasteIntoEditor:
+        case ClientOwnedInputKind::SystemClipboardPasteIntoText:
             break;
         }
     }
@@ -345,7 +350,22 @@ std::optional<GridPresentation> projectFrame(SsgContext& context) {
 
 ClientInputOutcome handleInputResult(SsgContext& context, ClientInputResult result) {
     if (result.command) context.activeSnapshot.reset();
-    if (result.clientOwned) context.palette->apply(*result.clientOwned);
+    if (result.clientOwned &&
+        (result.clientOwned->kind ==
+             ClientOwnedInputKind::SystemClipboardPasteIntoEditor ||
+         result.clientOwned->kind ==
+             ClientOwnedInputKind::SystemClipboardPasteIntoText)) {
+        const auto paste = planSystemClipboardPaste(
+            *result.clientOwned, context.clipboardReader.read());
+        if (paste.kind == SystemClipboardPasteKind::CommittedText) {
+            (void)routeInput(context, KeyStroke{}, paste.text);
+        } else if (paste.kind == SystemClipboardPasteKind::InternalRegister) {
+            (void)context.runtime.dispatch({"clipboard.paste", {}});
+            context.activeSnapshot.reset();
+        }
+    } else if (result.clientOwned) {
+        context.palette->apply(*result.clientOwned);
+    }
     if (result.outcome != ClientInputOutcome::ViewOwned || !result.command || !result.command->viewAction) {
         return result.outcome;
     }

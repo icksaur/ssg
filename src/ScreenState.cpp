@@ -34,7 +34,7 @@ TreeProviderBinding cyclePanelTreeProvider(
     const TreeProviderBinding& provider, CycleDirection direction) {
     const auto at = std::ranges::find(kPanelTreeProviders, provider);
     if (at == kPanelTreeProviders.end()) {
-        throw std::logic_error("active tree provider is outside the panel cycle");
+        throw std::logic_error("active tree provider is outside the sidebar cycle");
     }
     const std::size_t step = direction == CycleDirection::Next
                                  ? 1
@@ -302,6 +302,16 @@ void ScreenState::toggleDistractionFree() {
 void ScreenState::focusEditor() {
     auto& state = *this;
     state.baseFocus_ = BaseFocus::Editor;
+}
+
+bool ScreenState::showPanel() {
+    auto& state = *this;
+    state.distractionFree_ = false;
+    if (state.panelPresent_) return true;
+    state.panelReturnFocus_ = state.baseFocus_;
+    state.panelPresent_ = true;
+    state.baseFocus_ = BaseFocus::Panel;
+    return true;
 }
 
 bool ScreenState::focusPanel() {

@@ -203,7 +203,7 @@ UiSchemaValidation validatePublishedUiTree(const UiSchema& schema) {
     if (auto error = validateUiSchema(schema); !error.ok()) return error;
     if (!validFocusPath(schema)) {
         return {std::string{"focusPath: must name declared focus hosts, start "
-                            "at an editor or panel host, and end at an "
+                            "at an editor or sidebar host, and end at an "
                             "effectively visible node"}};
     }
     return {};

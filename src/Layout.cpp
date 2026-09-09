@@ -22,7 +22,7 @@ struct PaneCellFrame {
 void requireSplitNode(const PaneTopologyNode& node) {
     if (node.children.size() != 2) {
         throw std::logic_error{
-            "pane topology split must have exactly two children"};
+            "editor pane topology split must have exactly two children"};
     }
 }
 

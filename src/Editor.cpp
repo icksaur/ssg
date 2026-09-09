@@ -108,6 +108,7 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Mod+KeyV"}), "clipboard.paste", "editor");
     // Prompts have no selection to cut or copy.
     bind(seq({"Mod+KeyV"}), "clipboard.paste", "prompt");
+    bind(seq({"Mod+KeyV"}), "clipboard.paste", "panel");
 
     bind(seq({"ArrowDown"}), "cursor.line_down", "editor");
     bind(seq({"ArrowUp"}), "cursor.line_up", "editor");
@@ -352,7 +353,7 @@ std::optional<std::string> applyInputMutation(
     }
     if (auto* pane = std::get_if<FocusPane>(&*mutation)) {
         if (!editor.focusPane(pane->pane)) {
-            return "pane focus target changed before execution";
+            return "editor pane focus target changed before execution";
         }
         if (editor.screen.effectiveFocus() != FocusTarget::Editor) {
             editor.screen.focusEditor();
@@ -417,7 +418,7 @@ std::optional<std::string> applyInputMutation(
         break;
     case SearchQueryChange::Kind::Focus:
         if (!editor.screen.focusPanel()) {
-            return "search query panel is unavailable";
+            return "search query sidebar is unavailable";
         }
         state->editing = true;
         break;
@@ -1557,7 +1558,7 @@ CommandHandlerResult Editor::splitPane(SplitAxis axis) {
 
 CommandHandlerResult Editor::closePane() {
     if (!paneTopology.closeActive()) {
-        return failure("the only pane cannot be closed");
+        return failure("the only editor pane cannot be closed");
     }
     return success();
 }

@@ -1254,6 +1254,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/src/TerminalCapabilities.cpp
         ${SSG_SOURCE_DIR}/src/TerminalInput.cpp
         ${SSG_SOURCE_DIR}/src/TerminalOutput.cpp
+        ${SSG_SOURCE_DIR}/src/SystemClipboardReader.cpp
         ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
     )
     target_include_directories(ssg_terminal_objects PUBLIC
@@ -1286,12 +1287,17 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         NAME test_terminal_output
         ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_output.cpp
         SYMBOL test_terminal_output)
+    ssg_add_test_suite(
+        NAME test_system_clipboard_reader
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_system_clipboard_reader.cpp
+        SYMBOL test_system_clipboard_reader)
 
     foreach(test_target
             test_terminal
             test_terminal_capabilities
             test_terminal_input
-            test_terminal_output)
+            test_terminal_output
+            test_system_clipboard_reader)
         ssg_test_include_directories(${test_target} PRIVATE
             ${SSG_SOURCE_DIR}/tests)
         ssg_test_compile_definitions(${test_target} PRIVATE

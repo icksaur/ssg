@@ -26,6 +26,7 @@ public:
 
     void toggleDistractionFree();
     void focusEditor();
+    bool showPanel();
     bool focusPanel();
 
     bool refreshNoticePresence(bool present);

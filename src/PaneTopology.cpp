@@ -67,7 +67,7 @@ bool PaneTopology::contains(PaneId pane) const noexcept {
 PaneId PaneTopology::splitActive(SplitAxis axis) {
     auto* leaf = find(root_, active_);
     if (leaf == nullptr) {
-        throw std::logic_error{"active pane is not in topology"};
+        throw std::logic_error{"active editor pane is not in topology"};
     }
     const PaneId original = leaf->id;
     const PaneId created{nextId_++};

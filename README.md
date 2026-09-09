@@ -51,8 +51,11 @@ The things you reach for in a modern editor, in the terminal:
 - **Selection & movement** — arrows and `Shift`+arrows, `Home`/`End`,
   `Mod+Home`/`Mod+End`, select-all (`Mod+A`).
 - **Tabs & panes** — next/previous tab (`Mod+.` / `Mod+,`), close (`Mod+W`),
-  split panes, and a collapsible left panel (`Mod+B`) that switches between the
+  split editor panes, and a collapsible left sidebar (`Mod+B`) that switches between the
   filesystem tree and Git status.
+- **Full-text search** (`Mod+Shift+F`)
+- **Desktop clipboard paste** — `Mod+V` reads through `wl-paste` on Wayland or
+  `xclip` on X11 when available; terminal paste shortcuts also work.
 
 A handful of chords are Alt-only: a terminal transmits `Ctrl+I`, `Ctrl+M`,
 `Ctrl+H` and `Ctrl+[` as Tab, Enter, Backspace and Escape, so nothing survives

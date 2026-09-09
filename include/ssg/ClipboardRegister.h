@@ -65,10 +65,9 @@ struct ClipboardViewState {
 };
 
 // CONTRACT
-// ClipboardRegister: the register is authoritative for every editor operation;
-//   the system clipboard is best-effort export only. There is no system
-//   clipboard read and no acknowledgement of a write — both were tried and
-//   retired — so no behavior may depend on either.
+// ClipboardRegister is authoritative for copy, cut, and internal paste. System
+// export is best-effort; TUI-owned desktop reads arrive as committed input and
+// never populate this register. No behavior may depend on write acknowledgement.
 class ClipboardRegister {
 public:
     explicit ClipboardRegister(int tabWidth = 4);

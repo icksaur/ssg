@@ -68,6 +68,9 @@ CommandHandlerResult setLineNumbers(Editor& runtime) {
 }
 
 CommandHandlerResult resizePanel(Editor& runtime, bool grow) {
+    if (!runtime.screen.showPanel()) {
+        return failure("sidebar is unavailable");
+    }
     const int minimumWidth = std::max(
         runtime.style.dimensions.panelMinimumWidth, kPanelMinimumWidth);
     const int current = std::max(runtime.style.dimensions.panelTargetWidth,
@@ -101,24 +104,24 @@ CommandHandlerResult shellCommand(Editor& runtime,
     else if (id == "panel.grow") return resizePanel(runtime, true);
     else if (id == "panel.show_files") {
         if (!runtime.screen.showPanelProvider(TreeProviderKind::Filesystem)) {
-            return failure("files tree provider is unavailable");
+            return failure("Files sidebar is unavailable");
         }
     } else if (id == "panel.show_git_status") {
         if (!runtime.screen.showPanelProvider(TreeProviderKind::Git)) {
-            return failure("git tree provider is unavailable");
+            return failure("Git sidebar is unavailable");
         }
     } else if (id == "panel.show_search") {
         if (!runtime.screen.showPanelProvider(TreeProviderKind::Search)) {
-            return failure("search tree provider is unavailable");
+            return failure("Search sidebar is unavailable");
         }
     }
     else if (id == "panel.next_provider") {
         if (!runtime.screen.switchPanelProvider(CycleDirection::Next)) {
-            return failure("next tree provider is unavailable");
+            return failure("next sidebar view is unavailable");
         }
     } else if (id == "panel.previous_provider") {
         if (!runtime.screen.switchPanelProvider(CycleDirection::Previous)) {
-            return failure("previous tree provider is unavailable");
+            return failure("previous sidebar view is unavailable");
         }
     }
     else if (id == "view.toggle_distraction_free")
@@ -600,15 +603,15 @@ void registerShellLayoutCommands(CommandCatalog& catalog,
         } kind;
     };
     const std::array paneMutations{
-        PaneMutationCommand{"pane.split_horizontal", "Split Horizontal",
+        PaneMutationCommand{"pane.split_horizontal", "Split Editor Horizontally",
                            PaneMutationCommand::Kind::SplitHorizontal},
-        PaneMutationCommand{"pane.split_vertical", "Split Vertical",
+        PaneMutationCommand{"pane.split_vertical", "Split Editor Vertically",
                            PaneMutationCommand::Kind::SplitVertical},
-        PaneMutationCommand{"pane.close", "Close",
+        PaneMutationCommand{"pane.close", "Close Editor Pane",
                            PaneMutationCommand::Kind::Close},
-        PaneMutationCommand{"pane.next", "Next",
+        PaneMutationCommand{"pane.next", "Next Editor Pane",
                            PaneMutationCommand::Kind::Next},
-        PaneMutationCommand{"pane.previous", "Previous",
+        PaneMutationCommand{"pane.previous", "Previous Editor Pane",
                            PaneMutationCommand::Kind::Previous},
     };
     for (const auto& command : paneMutations) {
@@ -633,7 +636,7 @@ void registerShellLayoutCommands(CommandCatalog& catalog,
                             return runtime.cyclePane(
                                 CycleDirection::Previous);
                     }
-                    return failure("unknown pane mutation");
+                    return failure("unknown editor pane mutation");
                 }),
         });
     }
@@ -644,12 +647,13 @@ void registerShellLayoutCommands(CommandCatalog& catalog,
         PaneDirection direction;
     };
     const std::array paneFocusCommands{
-        PaneFocusCommand{"pane.focus_left", "Focus Left",
+        PaneFocusCommand{"pane.focus_left", "Focus Editor Pane Left",
                         PaneDirection::Left},
-        PaneFocusCommand{"pane.focus_right", "Focus Right",
+        PaneFocusCommand{"pane.focus_right", "Focus Editor Pane Right",
                         PaneDirection::Right},
-        PaneFocusCommand{"pane.focus_up", "Focus Up", PaneDirection::Up},
-        PaneFocusCommand{"pane.focus_down", "Focus Down",
+        PaneFocusCommand{"pane.focus_up", "Focus Editor Pane Up",
+                        PaneDirection::Up},
+        PaneFocusCommand{"pane.focus_down", "Focus Editor Pane Down",
                         PaneDirection::Down},
     };
     for (const auto& command : paneFocusCommands) {
@@ -692,8 +696,8 @@ void registerShellLayoutCommands(CommandCatalog& catalog,
     declare("panel.show_files", "Show Files Sidebar", "Show Files Sidebar");
     declare("panel.show_git_status", "Show Git Sidebar", "Show Git Sidebar");
     declare("panel.show_search", "Show Search Sidebar", "Show Search Sidebar");
-    declare("panel.next_provider", "", "Next Provider");
-    declare("panel.previous_provider", "", "Previous Provider");
+    declare("panel.next_provider", "", "Next Sidebar View");
+    declare("panel.previous_provider", "", "Previous Sidebar View");
     declare("view.toggle_distraction_free", "", "Toggle Distraction Free");
 }
 

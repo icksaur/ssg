@@ -171,7 +171,7 @@ forces the legacy path if a terminal advertises it but behaves badly.
 `style.define` changes the glyphs ssg draws its own furniture with -- the
 scrollbar track and thumb, the tree's expand/collapse arrows, the tab dirty
 marker, and so on -- and the sizes of the header, footer, tab bar, scrollbar
-gutter, and panel:
+gutter, and sidebar:
 
 ```lua
 ssg.command("style.define", {
@@ -274,6 +274,10 @@ what the terminal reports:
 - `SSG_TERM_SYNCHRONIZED_OUTPUT` -- tear-free full-frame redraw.
 - `SSG_TERM_KEYBOARD_PROTOCOL` -- disambiguated key reporting.
 - `SSG_TERM_CLIPBOARD_WRITE` -- copying to your system clipboard.
+
+`Mod+V` reads the desktop clipboard with `wl-paste` on Wayland or `xclip` on
+X11 when the corresponding helper is available. These are optional runtime
+helpers, not terminal capability overrides.
 
 Each takes `on`/`off` (`1`/`0`, `yes`/`no`, `true`/`false` also work). A
 value that isn't one of those is ignored, and the terminal's own answer

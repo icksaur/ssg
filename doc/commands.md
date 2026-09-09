@@ -241,15 +241,15 @@ There are 203 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `pane.split_horizontal` | Split Horizontal | none | lua |
-| `pane.split_vertical` | Split Vertical | none | lua |
-| `pane.close` | Close | none | lua |
-| `pane.next` | Next | none | lua |
-| `pane.previous` | Previous | none | lua |
-| `pane.focus_left` | Focus Left | none | — |
-| `pane.focus_right` | Focus Right | none | — |
-| `pane.focus_up` | Focus Up | none | — |
-| `pane.focus_down` | Focus Down | none | — |
+| `pane.split_horizontal` | Split Editor Horizontally | none | lua |
+| `pane.split_vertical` | Split Editor Vertically | none | lua |
+| `pane.close` | Close Editor Pane | none | lua |
+| `pane.next` | Next Editor Pane | none | lua |
+| `pane.previous` | Previous Editor Pane | none | lua |
+| `pane.focus_left` | Focus Editor Pane Left | none | — |
+| `pane.focus_right` | Focus Editor Pane Right | none | — |
+| `pane.focus_up` | Focus Editor Pane Up | none | — |
+| `pane.focus_down` | Focus Editor Pane Down | none | — |
 | `panel.toggle` | Toggle Sidebar | none | lua |
 | `panel.focus` | Focus Sidebar | none | lua |
 | `panel.toggle_focus` | Toggle Sidebar Focus | none | lua |
@@ -258,8 +258,8 @@ There are 203 commands.
 | `panel.show_files` | Show Files Sidebar | none | lua |
 | `panel.show_git_status` | Show Git Sidebar | none | lua |
 | `panel.show_search` | Show Search Sidebar | none | lua |
-| `panel.next_provider` | Next Provider | none | lua |
-| `panel.previous_provider` | Previous Provider | none | lua |
+| `panel.next_provider` | Next Sidebar View | none | lua |
+| `panel.previous_provider` | Previous Sidebar View | none | lua |
 | `view.toggle_distraction_free` | Toggle Distraction Free | none | lua |
 
 ## style-model

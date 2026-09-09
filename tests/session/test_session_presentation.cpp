@@ -242,9 +242,8 @@ TEST(curatedKeymapResolvesPerContext) {
     const auto paste = *ssg::parseKeySequence({"Mod+KeyV"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(paste, "prompt").commandId,
               std::string{"clipboard.paste"});
-    ASSERT_TRUE(ssg::KeymapMatcher{keymap}
-                    .resolveSequence(paste, "panel")
-                    .commandId.rfind("clipboard.", 0) != 0);
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(paste, "panel").commandId,
+              std::string{"clipboard.paste"});
 
     const auto escape = *ssg::parseKeySequence({"Escape"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(escape, "prompt").commandId,

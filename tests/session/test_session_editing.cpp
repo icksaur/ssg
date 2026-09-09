@@ -895,17 +895,28 @@ TEST(panelWidthCommandsResizeAndClampTheSidebar) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"panel.show_files", {}}).accepted());
+    ASSERT_FALSE(projectFrame(runtime, {80, 24})->panel.has_value());
+    ASSERT_TRUE(runtime.dispatch({"panel.grow", {}}).accepted());
     const auto initial = projectFrame(runtime, {80, 24});
     ASSERT_TRUE(initial && initial->panel);
     if (!initial || !initial->panel) return;
     const auto initialWidth = initial->panel->rect.width;
-    const auto grow = runtime.dispatch({"panel.grow", {}});
-    ASSERT_TRUE(grow.accepted());
+    ASSERT_TRUE(runtime.dispatch({"panel.grow", {}}).accepted());
     const auto grown = projectFrame(runtime, {80, 24});
     ASSERT_TRUE(grown && grown->panel);
     if (!grown || !grown->panel) return;
     ASSERT_EQ(grown->panel->rect.width, initialWidth + 1);
+
+    runtime.focusEditor();
+    ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Editor);
+    ASSERT_TRUE(runtime.dispatch({"panel.shrink", {}}).accepted());
+    ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Editor);
+
+    runtime.screen.toggleDistractionFree();
+    ASSERT_FALSE(projectFrame(runtime, {80, 24})->panel.has_value());
+    ASSERT_TRUE(runtime.dispatch({"panel.grow", {}}).accepted());
+    ASSERT_TRUE(projectFrame(runtime, {80, 24})->panel.has_value());
+
     for (int width = 0; width < initialWidth + 10; ++width) {
         ASSERT_TRUE(runtime.dispatch({"panel.shrink", {}}).accepted());
     }
