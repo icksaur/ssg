@@ -78,6 +78,10 @@ CommandHandlerResult shellCommand(Editor& runtime,
         if (!runtime.screen.showPanelProvider(TreeProviderKind::Git)) {
             return failure("git tree provider is unavailable");
         }
+    } else if (id == "panel.show_search") {
+        if (!runtime.screen.showPanelProvider(TreeProviderKind::Search)) {
+            return failure("search tree provider is unavailable");
+        }
     }
     else if (id == "panel.next_provider") {
         if (!runtime.screen.switchPanelProvider(CycleDirection::Next)) {
@@ -654,6 +658,7 @@ void registerShellLayoutCommands(CommandCatalog& catalog,
     declare("panel.focus", "Focus Sidebar", "Focus Sidebar");
     declare("panel.show_files", "Show Files Sidebar", "Show Files Sidebar");
     declare("panel.show_git_status", "Show Git Sidebar", "Show Git Sidebar");
+    declare("panel.show_search", "Show Search Sidebar", "Show Search Sidebar");
     declare("panel.next_provider", "", "Next Provider");
     declare("panel.previous_provider", "", "Previous Provider");
     declare("view.toggle_distraction_free", "", "Toggle Distraction Free");

@@ -198,6 +198,11 @@ struct SolvedPanelSurface {
     Rect rect;
     Rect providerLabel;
     std::string providerText;
+    Rect query;
+    std::string queryText;
+    bool queryEditing = false;
+    Rect status;
+    std::string statusText;
     std::optional<Rect> scrollbarGutter;
     std::uint32_t firstVisible = 0;
     ScrollbarMetrics scrollbar;

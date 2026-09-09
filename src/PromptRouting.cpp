@@ -7,9 +7,8 @@
 
 namespace ssg {
 
-namespace {
-
-std::string applyEdit(std::string_view value, PromptTextEdit const& change) {
+std::string applyPromptTextEdit(std::string_view value,
+                                const PromptTextEdit& change) {
     switch (change.kind) {
     case PromptTextEdit::Kind::Append:
         return std::string(value) + change.text;
@@ -37,6 +36,8 @@ std::string applyEdit(std::string_view value, PromptTextEdit const& change) {
     }
     return std::string(value);
 }
+
+namespace {
 
 // The command carrying the active input's new full value. Replace's query input
 // (0) routes to find.update_query; its replacement input (1) to
@@ -91,7 +92,8 @@ PromptTextRoute routePromptTextEdit(const PromptRoutingState& state,
                     change.text};
         }
         return dispatchActiveInput(state.prompt, state.activeInput,
-                                   applyEdit(state.currentValue, change));
+                                   applyPromptTextEdit(state.currentValue,
+                                                       change));
     case TextRouting::Ignore:
         return {};
     }

@@ -211,6 +211,8 @@ public:
         std::vector<CommandSpec> commands);
     [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
     void startWorkspaceSearch(std::string query, std::uint64_t sourceRevision);
+    void startWorkspaceSearch(ParsedSearchQuery query,
+                              std::uint64_t sourceRevision);
     [[nodiscard]] bool workspaceSearchPending() const noexcept;
     void advanceWorkspaceSearch();
     void resetKeymapToDefault();
@@ -394,6 +396,7 @@ public:
     mutable bool commandCandidateCacheValid = false;
     std::optional<WorkspaceCorpus> workspaceSearchCorpus;
     std::optional<WorkspaceSearchState> workspaceSearchState;
+    std::optional<std::uint64_t> panelWorkspaceSearchGeneration;
     PaneTopology paneTopology = PaneTopology::initial();
     DocumentPointerGesture documentPointerGesture;
     bool wordWrap = false;

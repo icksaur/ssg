@@ -272,6 +272,133 @@ TEST(workspaceSearchAndReplaceHonorIgnoreWithOpenBufferPrecedence) {
     std::filesystem::remove_all(root);
 }
 
+TEST(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork) {
+    auto root = uniqueRoot();
+    auto workspace = root / "workspace";
+    std::ofstream{workspace / "other.txt"} << "alpha\nbeta\n";
+    auto created = ssg::createEditor(
+        {workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const auto open = runtime.input(ssg::ClientKeyInput{
+        ssg::KeyStroke{.code = ssg::KeyCode::KeyF,
+                       .mod = true,
+                       .shift = true},
+        {}});
+    ASSERT_EQ(open.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(runtime.tree.activeProviderBinding()->kind,
+              ssg::TreeProviderKind::Search);
+    auto type = [&](std::string text) {
+        return runtime.input(ssg::ClientKeyInput{{}, std::move(text)});
+    };
+    auto key = [&](ssg::KeyCode code) {
+        return runtime.input(
+            ssg::ClientKeyInput{ssg::KeyStroke{.code = code}, {}});
+    };
+
+    ASSERT_EQ(type("a").outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(type("e\xCC\x81").outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(key(ssg::KeyCode::Backspace).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    auto state = runtime.tree.searchState(ssg::TreeProviderId{"search"});
+    ASSERT_EQ(state->query, std::string{"a"});
+    ASSERT_TRUE(state->editing);
+    ASSERT_FALSE(runtime.workspaceSearchPending());
+
+    ASSERT_EQ(key(ssg::KeyCode::Enter).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    ASSERT_TRUE(runtime.workspaceSearchPending());
+    ASSERT_EQ(runtime.search.viewState().mode, ssg::SearchMode::Text);
+    auto treeView = runtime.tree.viewState();
+    auto active = ssg::activeTreeProvider(treeView);
+    ASSERT_TRUE(active->nodes.empty());
+    ASSERT_FALSE(active->selected.has_value());
+
+    while (runtime.workspaceSearchPending()) runtime.advanceWorkspaceSearch();
+    treeView = runtime.tree.viewState();
+    active = ssg::activeTreeProvider(treeView);
+    ASSERT_EQ(active->nodes.size(), std::size_t{3});
+    ASSERT_EQ(active->nodes[0].node.workspacePath,
+              std::optional<std::string>{"edit.txt"});
+    ASSERT_EQ(active->nodes[0].node.sourceLine,
+              std::optional<std::uint64_t>{0});
+    ASSERT_EQ(active->nodes[0].node.sourceColumn,
+              std::optional<std::uint64_t>{1});
+    ASSERT_EQ(active->nodes[1].node.workspacePath,
+              std::optional<std::string>{"other.txt"});
+    ASSERT_EQ(active->nodes[2].node.workspacePath,
+              std::optional<std::string>{"other.txt"});
+
+    ASSERT_TRUE(
+        runtime.dispatch({"search.workspace", std::string{"a"}}).accepted());
+    while (runtime.workspaceSearchPending()) runtime.advanceWorkspaceSearch();
+    active = ssg::activeTreeProvider(runtime.tree.viewState());
+    ASSERT_EQ(active->nodes.size(), std::size_t{3});
+
+    ASSERT_EQ(key(ssg::KeyCode::ArrowUp).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    state = runtime.tree.searchState(ssg::TreeProviderId{"search"});
+    ASSERT_FALSE(state->editing);
+    ASSERT_EQ(runtime.tree.selectedNode()->workspacePath,
+              std::optional<std::string>{"other.txt"});
+
+    ASSERT_EQ(type("z").outcome, ssg::ClientInputOutcome::Dispatched);
+    state = runtime.tree.searchState(ssg::TreeProviderId{"search"});
+    ASSERT_TRUE(state->editing);
+    ASSERT_EQ(key(ssg::KeyCode::Enter).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    ASSERT_TRUE(runtime.workspaceSearchPending());
+    ASSERT_TRUE(ssg::activeTreeProvider(runtime.tree.viewState())->nodes.empty());
+    ASSERT_TRUE(runtime.dispatch({"panel.show_files", {}}).accepted());
+    ASSERT_FALSE(runtime.workspaceSearchPending());
+    state = runtime.tree.searchState(ssg::TreeProviderId{"search"});
+    ASSERT_FALSE(state->submittedQuery.has_value());
+    ASSERT_FALSE(state->searching);
+
+    ASSERT_TRUE(runtime.dispatch({"panel.show_search", {}}).accepted());
+    state->query.clear();
+    state->editing = true;
+    ASSERT_TRUE(runtime.tree.setSearchState(
+        ssg::TreeProviderId{"search"}, *state));
+    ASSERT_EQ(key(ssg::KeyCode::Enter).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    ASSERT_FALSE(runtime.workspaceSearchPending());
+    state = runtime.tree.searchState(ssg::TreeProviderId{"search"});
+    ASSERT_FALSE(state->submittedQuery.has_value());
+    std::filesystem::remove_all(root);
+}
+
+TEST(searchPanelActivatesTheSelectedResultAtItsMatchColumn) {
+    auto root = uniqueRoot();
+    auto workspace = root / "workspace";
+    std::ofstream{workspace / "target.txt"} << "zero\nalpha here\n";
+    auto created = ssg::createEditor(
+        {workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(runtime.dispatch({"panel.show_search", {}}).accepted());
+    ASSERT_EQ(runtime.input(ssg::ClientKeyInput{{}, "pha"}).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    const auto activation = runtime.input(ssg::ClientKeyInput{
+        ssg::KeyStroke{.code = ssg::KeyCode::Enter}, {}});
+    ASSERT_EQ(activation.outcome, ssg::ClientInputOutcome::Dispatched);
+    while (runtime.workspaceSearchPending()) runtime.advanceWorkspaceSearch();
+    ASSERT_EQ(runtime.input(ssg::ClientKeyInput{
+                  ssg::KeyStroke{.code = ssg::KeyCode::ArrowDown}, {}}).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    const auto resultActivation = runtime.input(ssg::ClientKeyInput{
+        ssg::KeyStroke{.code = ssg::KeyCode::Enter}, {}});
+    ASSERT_EQ(resultActivation.outcome, ssg::ClientInputOutcome::ViewOwned);
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"zero\nalpha here\n"});
+    ASSERT_EQ(runtime.selection.selections.primary().active.byteOffset,
+              ssg::ByteOffset{7});
+    ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Editor);
+    std::filesystem::remove_all(root);
+}
+
 TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     auto root = uniqueRoot();
     auto workspace = root / "workspace";
@@ -1234,6 +1361,8 @@ SSG_TEST_SUITE(test_session_editing) {
     RUN(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk);
     RUN(workspaceSearchAndReplaceExcludeRuntimeStateRoots);
     RUN(workspaceSearchAndReplaceHonorIgnoreWithOpenBufferPrecedence);
+    RUN(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork);
+    RUN(searchPanelActivatesTheSelectedResultAtItsMatchColumn);
     RUN(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot);
     RUN(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary);
     RUN(undoAndPasteRevealTheCaret);

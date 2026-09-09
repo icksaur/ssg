@@ -188,6 +188,8 @@ struct PromptTextRoute {
     std::string appendText;
 };
 
+[[nodiscard]] std::string applyPromptTextEdit(
+    std::string_view value, const PromptTextEdit& edit);
 [[nodiscard]] PromptTextRoute routePromptTextEdit(
     const PromptRoutingState& state, const PromptTextEdit& edit);
 

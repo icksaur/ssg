@@ -13,11 +13,12 @@ namespace ssg {
 
 namespace {
 
-const std::array<TreeProviderBinding, 3> kPanelTreeProviders{
+const std::array<TreeProviderBinding, 4> kPanelTreeProviders{
     TreeProviderBinding{TreeProviderId{"filesystem"},
                         TreeProviderKind::Filesystem},
     TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
     TreeProviderBinding{TreeProviderId{"symbols"}, TreeProviderKind::Symbols},
+    TreeProviderBinding{TreeProviderId{"search"}, TreeProviderKind::Search},
 };
 
 TreeProviderBinding panelTreeProvider(TreeProviderKind kind) {

@@ -304,6 +304,11 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
         {panel.rect.x, panel.rect.y, panel.rect.width,
          panel.rect.height > 0 ? 1 : 0},
         {},
+        {panel.rect.x, panel.rect.y, panel.rect.width, 0},
+        {},
+        false,
+        {panel.rect.x, panel.rect.y, panel.rect.width, 0},
+        {},
         std::nullopt,
         0,
         {},
@@ -314,8 +319,27 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
     }
 
     solved.providerText = std::string{treeProviderLabel(provider->kind)};
+    const int queryRows = provider->search && panel.rect.height > 1 ? 1 : 0;
+    if (provider->search) {
+        solved.query = {panel.rect.x, panel.rect.y + 1, panel.rect.width,
+                        queryRows};
+        solved.queryText = provider->search->query;
+        solved.queryEditing = provider->search->editing;
+    }
     const auto contentRows =
-        static_cast<std::uint32_t>(std::max(panel.rect.height - 1, 0));
+        static_cast<std::uint32_t>(
+            std::max(panel.rect.height - 1 - queryRows, 0));
+    if (provider->search && provider->nodes.empty() && contentRows > 0) {
+        if (provider->search->searching) {
+            solved.statusText = "searching...";
+        } else if (provider->search->submittedQuery) {
+            solved.statusText = "no matches";
+        }
+        if (!solved.statusText.empty()) {
+            solved.status = {panel.rect.x, panel.rect.y + 1 + queryRows,
+                             panel.rect.width, 1};
+        }
+    }
     const int gutterWidth =
         panel.scroll == ScrollAxis::Vertical
             ? std::clamp(style.dimensions.scrollbarGutterWidth, 0,
@@ -324,7 +348,8 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
     if (contentRows > 0 && gutterWidth > 0 &&
         panel.rect.width > gutterWidth) {
         solved.scrollbarGutter =
-            Rect{panel.rect.right() - gutterWidth, panel.rect.y + 1,
+            Rect{panel.rect.right() - gutterWidth,
+                 panel.rect.y + 1 + queryRows,
                  gutterWidth, static_cast<int>(contentRows)};
     }
     const int contentRight = solved.scrollbarGutter
@@ -358,7 +383,8 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
             {absolute,
              view.node.id,
              std::move(text),
-             {panel.rect.x, panel.rect.y + 1 + static_cast<int>(row),
+             {panel.rect.x,
+              panel.rect.y + 1 + queryRows + static_cast<int>(row),
               contentRight - panel.rect.x, 1},
              provider->selected && view.node.id == *provider->selected,
              view.node.kind == TreeNodeKind::Directory});

@@ -52,6 +52,14 @@ bool isPrimaryPress(InputPointerPhase phase, InputPointerButton button) {
 RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
                        ClientKeyInput const& input) {
     auto const& routing = snapshot.prompt;
+    const bool searchPanel =
+        routing.prompt == ActivePrompt::None &&
+        routing.focus == FocusTarget::Panel &&
+        snapshot.activeTreeProvider == TreeProviderKind::Search;
+    if (searchPanel && !input.committedText.empty()) {
+        return accepted(SearchQueryChange{
+            SearchQueryChange::Kind::Append, input.committedText});
+    }
     auto routeTextEdit = [&](PromptTextEdit edit) -> RoutedInput {
         auto const route = routePromptTextEdit(routing, edit);
         if (route.kind == PromptTextRoute::Kind::Dispatch) {
@@ -77,6 +85,28 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
             std::array{CompiledKeymap::compile(input.stroke)}, routing.focus);
         if (resolved.kind == KeymapMatchKind::Resolved) {
             auto const& command = resolved.command;
+            if (searchPanel) {
+                if (command == kClipboardPaste) {
+                    if (snapshot.clipboardText.empty()) return unhandled();
+                    return accepted(SearchQueryChange{
+                        SearchQueryChange::Kind::Append,
+                        std::string{snapshot.clipboardText}});
+                }
+                if (snapshot.searchEditing &&
+                    command == "tree.select_next") {
+                    return accepted(SearchQueryChange{
+                        SearchQueryChange::Kind::MoveFirst, {}});
+                }
+                if (snapshot.searchEditing &&
+                    command == "tree.select_previous") {
+                    return accepted(SearchQueryChange{
+                        SearchQueryChange::Kind::MoveLast, {}});
+                }
+                if (snapshot.searchEditing && command == "tree.activate") {
+                    return accepted(SearchQueryChange{
+                        SearchQueryChange::Kind::Submit, {}});
+                }
+            }
             switch (routing.prompt) {
             case ActivePrompt::Palette:
                 if (command == kPromptSubmit) {
@@ -114,6 +144,10 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
             }
         }
         if (input.stroke.code == KeyCode::Backspace) {
+            if (searchPanel) {
+                return accepted(SearchQueryChange{
+                    SearchQueryChange::Kind::DeleteGraphemeBack, {}});
+            }
             return routeTextEdit(
                 {input.stroke.mod ? PromptTextEdit::Kind::DeleteWordBack
                                   : PromptTextEdit::Kind::DeleteGraphemeBack,

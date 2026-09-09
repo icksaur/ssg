@@ -20,6 +20,8 @@ std::string_view treeProviderLabel(TreeProviderKind kind) {
         return "git";
     case TreeProviderKind::Symbols:
         return "symbols";
+    case TreeProviderKind::Search:
+        return "search";
     }
     throw std::logic_error{"corrupt TreeProviderKind enumerator"};
 }
@@ -30,6 +32,7 @@ bool treeProviderCanBeCreatedEmpty(TreeProviderKind kind) {
         return false;
     case TreeProviderKind::Git:
     case TreeProviderKind::Symbols:
+    case TreeProviderKind::Search:
         return true;
     }
     throw std::logic_error{"corrupt TreeProviderKind enumerator"};
@@ -225,7 +228,13 @@ std::optional<TreeNode> detail::inspectFilesystemTreeEntry(
         {},
         std::nullopt,
         relative,
+        std::nullopt,
         std::nullopt};
+}
+
+TreeModel::ProviderState::ProviderState(TreeProviderSnapshot value)
+    : snapshot{std::move(value)} {
+    if (snapshot.kind() == TreeProviderKind::Search) search.emplace();
 }
 
 const std::vector<TreeNodeView>& TreeModel::ProviderState::visibleNodes() const {
@@ -307,6 +316,7 @@ TreeProviderSnapshot TreeProviderSnapshot::fromGit(
                                  std::move(record.commands),
                                  gitTreeAffordance(record.status),
                                  path,
+                                 std::nullopt,
                                  std::nullopt});
     }
     return TreeProviderSnapshot{std::move(providerId), TreeProviderKind::Git,
@@ -338,10 +348,39 @@ TreeProviderSnapshot TreeProviderSnapshot::fromSymbols(
                                  std::move(record.commands),
                                  std::nullopt,
                                  std::move(path),
-                                 record.sourceLine});
+                                 record.sourceLine,
+                                 std::nullopt});
     }
     return TreeProviderSnapshot{std::move(providerId),
                                 TreeProviderKind::Symbols, std::move(nodes)};
+}
+
+TreeProviderSnapshot TreeProviderSnapshot::fromSearch(
+    TreeProviderId providerId, std::vector<SearchTreeRecord> records) {
+    std::vector<TreeNode> nodes;
+    nodes.reserve(records.size());
+    for (auto& record : records) {
+        const auto path = normalizeWorkspacePath(std::move(record.workspacePath));
+        if (record.label.empty() || record.sourceColumn == 0) {
+            throw std::invalid_argument(
+                "search tree results require a label and one-based column");
+        }
+        auto lineKey = std::to_string(record.sourceLine);
+        lineKey.insert(0, 20 - lineKey.size(), '0');
+        nodes.push_back(TreeNode{
+            nodeId(providerId, path + ":" + lineKey),
+            std::nullopt,
+            std::move(record.label),
+            TreeNodeKind::SearchResult,
+            std::nullopt,
+            {},
+            std::nullopt,
+            path,
+            record.sourceLine,
+            record.sourceColumn});
+    }
+    return TreeProviderSnapshot{std::move(providerId),
+                                TreeProviderKind::Search, std::move(nodes)};
 }
 
 void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
@@ -361,27 +400,22 @@ void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
         iterator->bumpExpanded();
         iterator->snapshot = std::move(snapshot);
     } else {
-        providers_.insert(
-            iterator, ProviderState{std::move(snapshot), {}});
+        iterator = providers_.insert(
+            iterator, ProviderState{std::move(snapshot)});
     }
     if (!activeProviderId_) activeProviderId_ = providerId;
-    // Keep the selection valid against the active provider; default to its
-    // first visible node so the tree always has a focus once populated.
-    auto* active = activeProvider();
-    if (active == nullptr) {
-        selected_.reset();
-        return;
-    }
-    const auto& visible = active->visibleNodes();
+    const auto& visible = iterator->visibleNodes();
     const bool stillValid =
-        selected_ && std::any_of(visible.begin(), visible.end(),
-                                 [&](const TreeNodeView& view) {
-                                     return view.node.id == *selected_;
-                                 });
+        iterator->selected &&
+        std::any_of(visible.begin(), visible.end(),
+                    [&](const TreeNodeView& view) {
+                        return view.node.id == *iterator->selected;
+                    });
     if (!stillValid) {
-        selected_ = visible.empty()
-                        ? std::nullopt
-                        : std::optional<TreeNodeId>{visible.front().node.id};
+        iterator->selected =
+            visible.empty()
+                ? std::nullopt
+                : std::optional<TreeNodeId>{visible.front().node.id};
     }
 }
 
@@ -410,19 +444,19 @@ bool TreeModel::selectNext() {
     if (provider == nullptr) return false;
     const auto& visible = provider->visibleNodes();
     if (visible.empty()) {
-        selected_.reset();
+        provider->selected.reset();
         return false;
     }
     std::size_t index = 0;
-    if (selected_) {
+    if (provider->selected) {
         for (std::size_t i = 0; i < visible.size(); ++i) {
-            if (visible[i].node.id == *selected_) {
+            if (visible[i].node.id == *provider->selected) {
                 index = std::min(visible.size() - 1, i + 1);
                 break;
             }
         }
     }
-    selected_ = visible[index].node.id;
+    provider->selected = visible[index].node.id;
     revision_ = TreeRevision{revision_.value() + 1};
     return true;
 }
@@ -432,19 +466,19 @@ bool TreeModel::selectPrevious() {
     if (provider == nullptr) return false;
     const auto& visible = provider->visibleNodes();
     if (visible.empty()) {
-        selected_.reset();
+        provider->selected.reset();
         return false;
     }
     std::size_t index = 0;
-    if (selected_) {
+    if (provider->selected) {
         for (std::size_t i = 0; i < visible.size(); ++i) {
-            if (visible[i].node.id == *selected_) {
+            if (visible[i].node.id == *provider->selected) {
                 index = (i == 0) ? 0 : i - 1;
                 break;
             }
         }
     }
-    selected_ = visible[index].node.id;
+    provider->selected = visible[index].node.id;
     revision_ = TreeRevision{revision_.value() + 1};
     return true;
 }
@@ -458,22 +492,22 @@ bool TreeModel::select(const TreeNodeId& nodeId) {
             return view.node.id == nodeId;
         });
     if (!present) return false;
-    if (selected_ && *selected_ == nodeId) return true;
-    selected_ = nodeId;
+    if (provider->selected && *provider->selected == nodeId) return true;
+    provider->selected = nodeId;
     revision_ = TreeRevision{revision_.value() + 1};
     return true;
 }
 
 bool TreeModel::toggleSelected() {
     auto* provider = activeProvider();
-    if (provider == nullptr || !selected_) return false;
-    return toggleExpanded(provider->snapshot.providerId(), *selected_);
+    if (provider == nullptr || !provider->selected) return false;
+    return toggleExpanded(provider->snapshot.providerId(), *provider->selected);
 }
 
 std::optional<TreeNode> TreeModel::selectedNode() const {
     const auto* provider = activeProvider();
-    if (provider == nullptr || !selected_) return std::nullopt;
-    const auto* node = findNode(provider->snapshot, *selected_);
+    if (provider == nullptr || !provider->selected) return std::nullopt;
+    const auto* node = findNode(provider->snapshot, *provider->selected);
     return node ? std::optional<TreeNode>{*node} : std::nullopt;
 }
 
@@ -546,21 +580,6 @@ bool TreeModel::activateProvider(const TreeProviderId& providerId) {
     }
     if (!activeProviderId_ || *activeProviderId_ != providerId) {
         activeProviderId_ = providerId;
-        if (const auto* active = activeProvider()) {
-            const auto& visible = active->visibleNodes();
-            const bool stillValid =
-                selected_ &&
-                std::any_of(visible.begin(), visible.end(),
-                            [&](const TreeNodeView& view) {
-                                return view.node.id == *selected_;
-                            });
-            if (!stillValid) {
-                selected_ = visible.empty()
-                                ? std::nullopt
-                                : std::optional<TreeNodeId>{
-                                      visible.front().node.id};
-            }
-        }
         revision_ = TreeRevision{revision_.value() + 1};
     }
     return true;
@@ -579,6 +598,38 @@ bool TreeModel::activateOrCreate(const TreeProviderBinding& binding) {
     if (!treeProviderCanBeCreatedEmpty(binding.kind)) return false;
     replaceProvider(TreeProviderSnapshot{binding.id, binding.kind, {}});
     return activateProvider(binding.id);
+}
+
+std::optional<SearchTreeState> TreeModel::searchState(
+    const TreeProviderId& providerId) const {
+    const auto provider = std::lower_bound(
+        providers_.begin(), providers_.end(), providerId,
+        [](const ProviderState& state, const TreeProviderId& id) {
+            return state.snapshot.providerId() < id;
+        });
+    if (provider == providers_.end() ||
+        provider->snapshot.providerId() != providerId) {
+        return std::nullopt;
+    }
+    return provider->search;
+}
+
+bool TreeModel::setSearchState(const TreeProviderId& providerId,
+                               SearchTreeState state) {
+    const auto provider = std::lower_bound(
+        providers_.begin(), providers_.end(), providerId,
+        [](const ProviderState& candidate, const TreeProviderId& id) {
+            return candidate.snapshot.providerId() < id;
+        });
+    if (provider == providers_.end() ||
+        provider->snapshot.providerId() != providerId ||
+        !provider->search) {
+        return false;
+    }
+    if (*provider->search == state) return true;
+    provider->search = std::move(state);
+    revision_ = TreeRevision{revision_.value() + 1};
+    return true;
 }
 
 std::optional<TreeCommandInvocation> TreeModel::invokeNodeCommand(
@@ -630,16 +681,11 @@ TreeViewState TreeModel::viewState() const {
         ordered.push_back(&provider);
     }
     for (const auto* provider : ordered) {
-        std::optional<TreeNodeId> providerSelected;
-        if (selected_ &&
-            selected_->value().starts_with(
-                provider->snapshot.providerId().value() + ":")) {
-            providerSelected = selected_;
-        }
         result.providers.push_back(TreeProviderView{
             provider->snapshot.providerId(), provider->snapshot.kind(),
             provider->visibleNodes(),
-            providerSelected});
+            provider->selected,
+            provider->search});
     }
     return result;
 }

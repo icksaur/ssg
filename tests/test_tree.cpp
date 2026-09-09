@@ -273,6 +273,52 @@ TEST(treeViewStateRejectsMissingMismatchedAndDuplicateActiveBindings) {
 
 }
 
+TEST(selectionPersistsIndependentlyForEachProvider) {
+    TreeModel model;
+    model.replaceProvider(TreeProviderSnapshot::fromSymbols(
+        TreeProviderId{"symbols"},
+        {{.stableKey = "A", .label = "A"},
+         {.stableKey = "B", .label = "B"}}));
+    model.replaceProvider(TreeProviderSnapshot::fromGit(
+        TreeProviderId{"git"},
+        {{.workspacePath = "one.cpp", .label = "one.cpp"},
+         {.workspacePath = "two.cpp", .label = "two.cpp"}}));
+    ASSERT_TRUE(model.activateProvider(TreeProviderId{"symbols"}));
+    ASSERT_TRUE(model.select(TreeNodeId{"symbols:B"}));
+    ASSERT_TRUE(model.activateProvider(TreeProviderId{"git"}));
+    ASSERT_TRUE(model.select(TreeNodeId{"git:two.cpp"}));
+    ASSERT_TRUE(model.activateProvider(TreeProviderId{"symbols"}));
+    ASSERT_EQ(model.selectedNode()->id, TreeNodeId{"symbols:B"});
+    ASSERT_TRUE(model.activateProvider(TreeProviderId{"git"}));
+    ASSERT_EQ(model.selectedNode()->id, TreeNodeId{"git:two.cpp"});
+}
+
+TEST(searchProviderStateIsInitializedProjectedAndPersists) {
+    TreeModel model;
+    ASSERT_TRUE(model.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"search"},
+                            TreeProviderKind::Search}));
+    auto state = model.searchState(TreeProviderId{"search"});
+    ASSERT_TRUE(state.has_value());
+    ASSERT_TRUE(state->editing);
+    ASSERT_TRUE(state->query.empty());
+    ASSERT_FALSE(state->submittedQuery.has_value());
+    ASSERT_FALSE(state->searching);
+    state->query = "needle";
+    state->editing = false;
+    state->submittedQuery = "needle";
+    state->searching = true;
+    ASSERT_TRUE(model.setSearchState(TreeProviderId{"search"}, *state));
+    ASSERT_TRUE(model.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git}));
+    ASSERT_TRUE(model.activateProvider(TreeProviderId{"search"}));
+    const auto view = model.viewState();
+    const auto* active = activeTreeProvider(view);
+    ASSERT_TRUE(active != nullptr);
+    ASSERT_TRUE(active->search.has_value());
+    ASSERT_EQ(*active->search, *state);
+}
+
 } // namespace
 
 TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
@@ -386,6 +432,8 @@ SSG_TEST_SUITE(test_tree) {
     RUN(selectionNavigatesExpandsAndReportsSelectedNode);
     RUN(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes);
     RUN(treeViewStateRejectsMissingMismatchedAndDuplicateActiveBindings);
+    RUN(selectionPersistsIndependentlyForEachProvider);
+    RUN(searchProviderStateIsInitializedProjectedAndPersists);
     RUN(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem);
     RUN(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation);
     return failed == 0 ? 0 : 1;

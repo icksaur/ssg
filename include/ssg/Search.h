@@ -147,6 +147,8 @@ enum class NavigationOrigin : std::uint8_t { User, Programmatic };
 struct NavigationTarget {
     std::string path;
     LineIndex line{0};
+    // One-based byte position within the line; navigation snaps it to a
+    // grapheme boundary before constructing a caret.
     std::size_t column = 1;
     std::optional<std::string> symbol;
     friend bool operator==(const NavigationTarget&,
@@ -161,6 +163,12 @@ struct NavigationTransition {
                            const NavigationTransition&) = default;
 };
 
+// The single source of the transition policy: what a visit/back/forward to
+// `target` asks the editor to do. Shared by NavigationHistory and by the
+// goto.* handlers, which build a transition before any history is recorded.
+[[nodiscard]] NavigationTransition navigationTransition(
+    const NavigationTarget& target, NavigationOrigin origin);
+
 [[nodiscard]] std::optional<NavigationTarget> searchNavigationTarget(
     const SearchResult& result);
 [[nodiscard]] std::optional<NavigationTarget> searchGotoLine(
@@ -173,11 +181,13 @@ public:
         NavigationTarget target, NavigationOrigin origin);
     [[nodiscard]] NavigationTransition back();
     [[nodiscard]] NavigationTransition forward();
+    // The transition back()/forward() would return, without moving the cursor.
+    // Navigation must validate and apply before it records, so the caller peeks,
+    // applies, and only then commits with back()/forward().
+    [[nodiscard]] NavigationTransition peekBack() const;
+    [[nodiscard]] NavigationTransition peekForward() const;
 
 private:
-    [[nodiscard]] static NavigationTransition transition(
-        const NavigationTarget& target, NavigationOrigin origin);
-
     std::size_t capacity_;
     std::vector<NavigationTarget> entries_;
     std::optional<std::size_t> cursor_;
@@ -216,6 +226,8 @@ public:
 
     [[nodiscard]] WorkspaceSearchState beginWorkspaceSearch(
         std::string query, std::uint64_t sourceRevision);
+    [[nodiscard]] WorkspaceSearchState beginWorkspaceSearch(
+        ParsedSearchQuery query, std::uint64_t sourceRevision);
     [[nodiscard]] WorkspaceSearchBatch evaluate(
         WorkspaceSearchState& state, const WorkspaceCorpus& corpus,
         std::uint64_t workBudget) const;
@@ -228,6 +240,9 @@ public:
     }
 
 private:
+    [[nodiscard]] WorkspaceSearchState beginWorkspaceSearch(
+        ParsedSearchQuery query, std::string displayQuery,
+        std::uint64_t sourceRevision);
     void rankPalette();
 
     SearchCommands commands_;

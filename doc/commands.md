@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 198 commands.
+There are 199 commands.
 
 ## clipboard-register
 
@@ -254,6 +254,7 @@ There are 198 commands.
 | `panel.focus` | Focus Sidebar | none | lua |
 | `panel.show_files` | Show Files Sidebar | none | lua |
 | `panel.show_git_status` | Show Git Sidebar | none | lua |
+| `panel.show_search` | Show Search Sidebar | none | lua |
 | `panel.next_provider` | Next Provider | none | lua |
 | `panel.previous_provider` | Previous Provider | none | lua |
 | `view.toggle_distraction_free` | Toggle Distraction Free | none | lua |

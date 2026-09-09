@@ -239,6 +239,20 @@ TEST(switchPanelProviderPreservesPanelTruth) {
     ASSERT_TRUE(present(shown, kPanelNodeId));
 }
 
+TEST(providerCycleIncludesSearchInBothDirections) {
+    TreeModel tree = seededTree();
+    ScreenState screen{assemble(StyleDimensions{}), tree};
+    ASSERT_TRUE(screen.showPanelProvider(TreeProviderKind::Filesystem));
+    for (const auto kind : {TreeProviderKind::Git, TreeProviderKind::Symbols,
+                            TreeProviderKind::Search,
+                            TreeProviderKind::Filesystem}) {
+        ASSERT_TRUE(screen.switchPanelProvider(CycleDirection::Next));
+        ASSERT_EQ(tree.activeProviderBinding()->kind, kind);
+    }
+    ASSERT_TRUE(screen.switchPanelProvider(CycleDirection::Previous));
+    ASSERT_EQ(tree.activeProviderBinding()->kind, TreeProviderKind::Search);
+}
+
 // --- Live migration -----------------------------------------------------------------
 
 TEST(updateCompositionMigratesPreservingPanelAndPromptTruth) {
@@ -465,6 +479,7 @@ SSG_TEST_SUITE(test_screen_state) {
     RUN(valueEditKeepsPromptFocusAndUpdatesTheInput);
     RUN(promptFocusUsesControlIdentityAndRejectsNonInputs);
     RUN(switchPanelProviderPreservesPanelTruth);
+    RUN(providerCycleIncludesSearchInBothDirections);
     RUN(updateCompositionMigratesPreservingPanelAndPromptTruth);
     RUN(updateCompositionWithoutStructuralChangeDoesNotAdvance);
     RUN(statusOverlaySurvivesPromptAndEquivalentRebuilds);

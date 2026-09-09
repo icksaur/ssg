@@ -9,6 +9,7 @@
 #include <ssg/PromptSurface.h>
 #include <ssg/Selection.h>
 #include <ssg/TabManager.h>
+#include <ssg/TreeModel.h>
 
 #include <functional>
 #include <optional>
@@ -39,6 +40,8 @@ struct InputRoutingSnapshot {
     std::optional<std::vector<InputRoutingNoticeAction>> noticeActions;
     std::vector<PaneId> panes;
     DocumentPointerGesture gesture;
+    std::optional<TreeProviderKind> activeTreeProvider;
+    bool searchEditing = false;
 };
 
 struct ApplySelections {
@@ -50,7 +53,19 @@ struct FocusPane {
     PaneId pane;
 };
 
-using EditorMutation = std::variant<ApplySelections, FocusPane>;
+struct SearchQueryChange {
+    enum class Kind : std::uint8_t {
+        Append,
+        DeleteGraphemeBack,
+        MoveFirst,
+        MoveLast,
+        Submit,
+    } kind = Kind::Append;
+    std::string text;
+};
+
+using EditorMutation =
+    std::variant<ApplySelections, FocusPane, SearchQueryChange>;
 
 struct RouteUnhandled {};
 

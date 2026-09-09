@@ -49,6 +49,7 @@ enum class TreeProviderKind {
     Filesystem = 0,
     Git = 1,
     Symbols = 2,
+    Search = 3,
 };
 
 [[nodiscard]] std::string_view treeProviderLabel(TreeProviderKind kind);
@@ -71,6 +72,7 @@ enum class TreeNodeKind {
     Symlink = 2,
     GitEntry = 3,
     Symbol = 4,
+    SearchResult = 5,
 };
 struct GitTreeAffordance {
     DiffFileStatus status = DiffFileStatus::Modified;
@@ -83,6 +85,7 @@ struct GitTreeAffordance {
 
 struct GitTreeRecord;
 struct SymbolTreeRecord;
+struct SearchTreeRecord;
 
 struct TreeNodeCommand {
     std::string id;
@@ -99,7 +102,8 @@ struct TreeNode {
     std::vector<TreeNodeCommand> commands;
     std::optional<GitTreeAffordance> gitStatus;
     std::optional<std::string> workspacePath;
-    std::optional<std::uint32_t> sourceLine;
+    std::optional<std::uint64_t> sourceLine;
+    std::optional<std::uint64_t> sourceColumn;
     bool expandable = false;
     bool operator==(const TreeNode&) const = default;
 };
@@ -125,6 +129,8 @@ public:
                                         std::vector<GitTreeRecord> records);
     static TreeProviderSnapshot fromSymbols(
         TreeProviderId providerId, std::vector<SymbolTreeRecord> records);
+    static TreeProviderSnapshot fromSearch(
+        TreeProviderId providerId, std::vector<SearchTreeRecord> records);
 
     const TreeProviderId& providerId() const noexcept { return providerId_; }
     TreeProviderKind kind() const noexcept { return kind_; }
@@ -156,6 +162,13 @@ struct SymbolTreeRecord {
     std::vector<TreeNodeCommand> commands;
 };
 
+struct SearchTreeRecord {
+    std::string workspacePath;
+    std::string label;
+    std::uint64_t sourceLine = 0;
+    std::uint64_t sourceColumn = 1;
+};
+
 struct TreeNodeView {
     TreeNode node;
     std::size_t depth = 0;
@@ -163,11 +176,20 @@ struct TreeNodeView {
     bool operator==(const TreeNodeView&) const = default;
 };
 
+struct SearchTreeState {
+    std::string query;
+    bool editing = true;
+    std::optional<std::string> submittedQuery;
+    bool searching = false;
+    bool operator==(const SearchTreeState&) const = default;
+};
+
 struct TreeProviderView {
     TreeProviderId providerId;
     TreeProviderKind kind;
     std::vector<TreeNodeView> nodes;
     std::optional<TreeNodeId> selected;
+    std::optional<SearchTreeState> search;
     bool operator==(const TreeProviderView&) const = default;
 };
 
@@ -227,6 +249,10 @@ public:
     // nothing was created.
     //
     bool activateOrCreate(const TreeProviderBinding& binding);
+    [[nodiscard]] std::optional<SearchTreeState> searchState(
+        const TreeProviderId& providerId) const;
+    bool setSearchState(const TreeProviderId& providerId,
+                        SearchTreeState state);
     std::optional<TreeCommandInvocation> invokeNodeCommand(
         const TreeProviderId& providerId, const TreeNodeId& nodeId,
         std::string_view commandId) const;
@@ -262,8 +288,12 @@ public:
 
 private:
     struct ProviderState {
+        explicit ProviderState(TreeProviderSnapshot value);
+
         TreeProviderSnapshot snapshot;
         std::vector<TreeNodeId> expanded;
+        std::optional<TreeNodeId> selected;
+        std::optional<SearchTreeState> search;
 
         // Memoization of the visible-node list. The list is a pure function of
         // (snapshot, expanded); it is recomputed only when the snapshot revision
@@ -291,7 +321,6 @@ private:
     TreeRevision revision_{0};
     std::vector<ProviderState> providers_;
     std::optional<TreeProviderId> activeProviderId_;
-    std::optional<TreeNodeId> selected_;
 };
 
 } // namespace ssg

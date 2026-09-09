@@ -317,6 +317,49 @@ TEST(navigationHistoryMatchesTransitionTable) {
     ASSERT_THROWS(NavigationHistory{0}, std::invalid_argument);
 }
 
+TEST(navigationHistoryPeekBackDoesNotMutateCursor) {
+    const NavigationTarget a{.path = "a.cpp", .line = LineIndex{1}};
+    const NavigationTarget b{.path = "b.cpp", .line = LineIndex{2}};
+    const NavigationTransition toA{.target = a,
+                                    .pauseFollowEdits = true,
+                                    .revealPrimaryCaret = true};
+    NavigationHistory history{4};
+    const auto visitA = history.visit(a, NavigationOrigin::User);
+    const auto visitB = history.visit(b, NavigationOrigin::User);
+    ASSERT_TRUE(visitA.target.has_value());
+    ASSERT_TRUE(visitB.target.has_value());
+
+    // Repeated peeks answer the same thing: the cursor is still on b.
+    ASSERT_EQ(history.peekBack(), toA);
+    ASSERT_EQ(history.peekBack(), toA);
+    ASSERT_FALSE(history.peekForward().target.has_value());
+
+    // Committing with back() is what moves the cursor.
+    ASSERT_EQ(history.back(), toA);
+    ASSERT_FALSE(history.peekBack().target.has_value());
+}
+
+TEST(navigationHistoryPeekForwardDoesNotMutateCursor) {
+    const NavigationTarget a{.path = "a.cpp", .line = LineIndex{1}};
+    const NavigationTarget b{.path = "b.cpp", .line = LineIndex{2}};
+    const NavigationTransition toB{.target = b,
+                                    .pauseFollowEdits = true,
+                                    .revealPrimaryCaret = true};
+    NavigationHistory history{4};
+    const auto visitA = history.visit(a, NavigationOrigin::User);
+    const auto visitB = history.visit(b, NavigationOrigin::User);
+    ASSERT_TRUE(visitA.target.has_value());
+    ASSERT_TRUE(visitB.target.has_value());
+    ASSERT_EQ(history.back().target, std::optional<NavigationTarget>{a});
+
+    ASSERT_EQ(history.peekForward(), toB);
+    ASSERT_EQ(history.peekForward(), toB);
+    ASSERT_FALSE(history.peekBack().target.has_value());
+
+    ASSERT_EQ(history.forward(), toB);
+    ASSERT_FALSE(history.peekForward().target.has_value());
+}
+
 TEST(paletteUsesInjectedCatalogAndDispatch) {
     std::vector<std::string> executed;
     SearchController controller{fixtureCommands(executed)};
@@ -342,6 +385,8 @@ SSG_TEST_SUITE(test_search) {
     RUN(slicedTextSearchMatchesUnslicedAndStopsWhenCancelled);
     RUN(pathOnlyModesNeverReadFileContents);
     RUN(navigationHistoryMatchesTransitionTable);
+    RUN(navigationHistoryPeekBackDoesNotMutateCursor);
+    RUN(navigationHistoryPeekForwardDoesNotMutateCursor);
     RUN(paletteUsesInjectedCatalogAndDispatch);
     return failed == 0 ? 0 : 1;
 }

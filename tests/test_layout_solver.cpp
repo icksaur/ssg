@@ -262,10 +262,84 @@ TEST(panelSurfaceWithoutAProviderIsEmptyAndBounded) {
         solvePanelSurface(TreeViewState{}, panel, 99, true, Style{});
     ASSERT_EQ(solved.rect, panel.rect);
     ASSERT_EQ(solved.providerLabel, (Rect{3, 2, 12, 1}));
+    ASSERT_EQ(solved.query, (Rect{3, 2, 12, 0}));
     ASSERT_TRUE(solved.providerText.empty());
     ASSERT_TRUE(solved.rows.empty());
     ASSERT_FALSE(solved.scrollbarGutter.has_value());
     ASSERT_EQ(solved.firstVisible, std::uint32_t{0});
+}
+
+TEST(searchPanelKeepsItsQueryOutsideTheScrolledResultWindow) {
+    TreeProviderView provider{
+        TreeProviderId{"search"},
+        TreeProviderKind::Search,
+        {},
+        TreeNodeId{"search:file.cpp:00000000000000000005"},
+        SearchTreeState{.query = "needle", .editing = true}};
+    for (std::uint64_t line = 0; line < 6; ++line) {
+        auto key = std::to_string(line);
+        key.insert(0, 20 - key.size(), '0');
+        provider.nodes.push_back(TreeNodeView{
+            TreeNode{TreeNodeId{"search:file.cpp:" + key},
+                     std::nullopt,
+                     "file.cpp:" + std::to_string(line + 1),
+                     TreeNodeKind::SearchResult,
+                     std::nullopt,
+                     {},
+                     std::nullopt,
+                     "file.cpp",
+                     line,
+                     1}});
+    }
+    TreeViewState tree{
+        TreeRevision{1},
+        {provider},
+        TreeProviderBinding{TreeProviderId{"search"},
+                            TreeProviderKind::Search}};
+    SolvedGridNode panel{
+        UiNodeId{"panel"}, {3, 2, 12, 5}, {3, 2, 12, 5},
+        ScrollAxis::Vertical};
+    const auto solved = solvePanelSurface(tree, panel, 99, true, Style{});
+    ASSERT_EQ(solved.providerLabel, (Rect{3, 2, 12, 1}));
+    ASSERT_EQ(solved.query, (Rect{3, 3, 12, 1}));
+    ASSERT_EQ(solved.queryText, std::string{"needle"});
+    ASSERT_TRUE(solved.queryEditing);
+    ASSERT_EQ(solved.rows.size(), std::size_t{3});
+    ASSERT_EQ(solved.rows.back().absoluteIndex, std::uint32_t{5});
+    ASSERT_EQ(solved.rows.front().rect.y, 4);
+    ASSERT_TRUE(solved.providerLabel.bottom() <= solved.query.y);
+    ASSERT_TRUE(solved.query.bottom() <= solved.rows.front().rect.y);
+}
+
+TEST(searchPanelStatusDistinguishesRunningEmptyAndCleared) {
+    const auto solve = [](SearchTreeState search) {
+        TreeProviderView provider{
+            TreeProviderId{"search"}, TreeProviderKind::Search, {},
+            std::nullopt, std::move(search)};
+        TreeViewState tree{
+            TreeRevision{1},
+            {std::move(provider)},
+            TreeProviderBinding{TreeProviderId{"search"},
+                                TreeProviderKind::Search}};
+        return solvePanelSurface(
+            tree,
+            SolvedGridNode{UiNodeId{"panel"}, {0, 0, 20, 5},
+                           {0, 0, 20, 5}, ScrollAxis::Vertical},
+            0, false, Style{});
+    };
+    const auto running = solve(SearchTreeState{
+        .query = "needle",
+        .submittedQuery = std::string{"needle"},
+        .searching = true});
+    ASSERT_EQ(running.statusText, std::string{"searching..."});
+    ASSERT_EQ(running.status, (Rect{0, 2, 20, 1}));
+    const auto empty = solve(SearchTreeState{
+        .query = "needle",
+        .submittedQuery = std::string{"needle"}});
+    ASSERT_EQ(empty.statusText, std::string{"no matches"});
+    const auto cleared = solve(SearchTreeState{.query = "needle"});
+    ASSERT_TRUE(cleared.statusText.empty());
+    ASSERT_EQ(cleared.status.height, 0);
 }
 
 TEST(documentSurfaceCarvesGuttersAndProtectsMinimumContentWidth) {
@@ -672,6 +746,8 @@ SSG_TEST_SUITE(test_layout_solver) {
     RUN(paletteSurfaceClipsRowsToItsHeight);
     RUN(zeroSizePaletteSurfaceProducesNoPaintableGeometry);
     RUN(panelSurfaceWithoutAProviderIsEmptyAndBounded);
+    RUN(searchPanelKeepsItsQueryOutsideTheScrolledResultWindow);
+    RUN(searchPanelStatusDistinguishesRunningEmptyAndCleared);
     RUN(documentSurfaceCarvesGuttersAndProtectsMinimumContentWidth);
     RUN(documentSurfaceCarvesEachSplitPaneAndIdentifiesTheActiveOne);
     RUN(documentSurfaceFallsBackToTheActivePaneWhenSplitsDoNotFit);

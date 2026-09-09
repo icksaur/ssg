@@ -19,6 +19,25 @@ void paintPanelTree(CellGrid& grid, SolvedPanelSurface const& panel,
               panel.providerLabel.right(), panel.providerText,
               semanticIndex(theme, providerRole), background, providerRole,
               style);
+    if (panel.query.height > 0) {
+        paintText(grid, panel.query.x, panel.query.y, panel.query.right(),
+                  panel.queryText,
+                  semanticIndex(theme, SemanticRole::Prompt), background,
+                  SemanticRole::Prompt, style);
+        if (focused && panel.queryEditing && panel.query.width > 0) {
+            const auto cells = computeCellRun(panel.queryText).totalCells;
+            grid.caret = GridPosition{
+                std::min(panel.query.x + static_cast<int>(cells),
+                         panel.query.right() - 1),
+                panel.query.y};
+        }
+    }
+    if (panel.status.height > 0) {
+        paintText(grid, panel.status.x, panel.status.y, panel.status.right(),
+                  panel.statusText,
+                  semanticIndex(theme, SemanticRole::PanelInactive),
+                  background, SemanticRole::PanelInactive, style);
+    }
     for (const auto& row : panel.rows) {
         auto const rowBackground = row.selected ? selectedBg : background;
         if (row.selected) {

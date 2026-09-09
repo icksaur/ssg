@@ -1,11 +1,16 @@
 #include <ssg/Editor.h>
 
 #include <ssg/CommandCatalog.h>
+#include <ssg/GraphemeLayout.h>
 #include <ssg/Selection.h>
+#include <ssg/platform_files.h>
 
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <filesystem>
+#include <optional>
+#include <string>
 
 namespace ssg {
 namespace {
@@ -41,6 +46,101 @@ CommandHandlerResult validatePaletteTarget(Editor& runtime,
         return failure("palette.execute requires the command palette to be open");
     }
     return validatePublishedCommand(runtime, commandId);
+}
+
+// The authoritative text a navigation target is validated against: the buffer
+// when the file is already open, so an unsaved edit is not validated against a
+// stale disk copy, and the file otherwise.
+std::optional<std::string> navigationTargetText(Editor& runtime,
+                                                std::string const& path) {
+    for (auto const document : runtime.workspace.documents()) {
+        auto const state = runtime.workspace.state(document);
+        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
+        if (state->key.savedPath() != path) continue;
+        auto const* opened = runtime.workspace.tryDocument(document);
+        if (opened == nullptr) return std::nullopt;
+        return opened->snapshot().text;
+    }
+    auto read = readFile(runtime.workspace.root() / path);
+    if (!read.ok()) return std::nullopt;
+    return std::string{read.bytes.begin(), read.bytes.end()};
+}
+
+// The largest grapheme-cluster start at or before `columnOffset`, so a target
+// column landing inside a multi-byte cluster resolves to the cluster's start.
+std::size_t graphemeBoundaryAtOrBefore(std::string_view lineText,
+                                       std::size_t columnOffset) {
+    if (columnOffset == 0 || columnOffset >= lineText.size()) return columnOffset;
+    auto const run = computeCellRun(lineText);
+    std::size_t boundary = 0;
+    for (auto const& span : run.spans) {
+        if (span.byteOffset > columnOffset) break;
+        boundary = span.byteOffset;
+    }
+    return boundary;
+}
+
+std::optional<std::size_t> navigationByteOffset(std::string_view text,
+                                                NavigationTarget const& target) {
+    if (target.column == 0) return std::nullopt;
+    std::size_t lineStart = 0;
+    for (std::size_t line = 0; line < target.line.value(); ++line) {
+        auto const newline = text.find('\n', lineStart);
+        if (newline == std::string_view::npos) return std::nullopt;
+        lineStart = newline + 1;
+    }
+    auto lineEnd = text.find('\n', lineStart);
+    if (lineEnd == std::string_view::npos) lineEnd = text.size();
+    auto const lineText = text.substr(lineStart, lineEnd - lineStart);
+    std::size_t const columnOffset = target.column - 1;
+    if (columnOffset > lineText.size()) return std::nullopt;
+    return lineStart + graphemeBoundaryAtOrBefore(lineText, columnOffset);
+}
+
+// Validates the whole transition before it mutates anything: a target that does
+// not resolve leaves the active document, the cursor, the open-document set and
+// the navigation history exactly as they were. Recording history is the
+// caller's job, and must happen only after this succeeds.
+CommandHandlerResult applyNavigationTransition(
+    Editor& runtime, NavigationTransition const& transition) {
+    if (!transition.target) return failure("navigation has no target");
+    auto const& target = *transition.target;
+    auto const text = navigationTargetText(runtime, target.path);
+    if (!text) return failure("navigation target is unreadable: " + target.path);
+    auto const offset = navigationByteOffset(*text, target);
+    if (!offset) {
+        return failure("navigation target is outside the file: " + target.path);
+    }
+    auto const position = resolveSelectionPosition(*text, ByteOffset{*offset}, 4);
+    if (!position) return failure("navigation target could not be resolved");
+
+    auto opened = runtime.workspace.openFile(target.path);
+    if (!opened.accepted() || !opened.document) {
+        return failure("navigation target could not be opened: " + target.path);
+    }
+    runtime.ensureDocumentRuntimeState(*opened.document);
+    auto activated = runtime.activateDocument(*opened.document);
+    if (!activated.accepted) return activated;
+    runtime.screen.focusEditor();
+
+    if (transition.pauseFollowEdits &&
+        runtime.follow.viewState().mode == FollowMode::Following) {
+        (void)runtime.follow.pause();
+    }
+    SelectionCommandArguments arguments;
+    arguments.position = *position;
+    // Placing and revealing the caret is owned by cursor.set_position and
+    // view.reveal_caret; route through them (deferred, since the session lock is
+    // non-reentrant) rather than duplicating their contracts here.
+    if (!runtime.deferDispatch(
+            ClientCommand{"cursor.set_position", std::any{arguments}})) {
+        return failure("could not queue cursor.set_position");
+    }
+    if (transition.revealPrimaryCaret &&
+        !runtime.deferDispatch(ClientCommand{"view.reveal_caret", {}})) {
+        return failure("could not queue view.reveal_caret");
+    }
+    return success();
 }
 
 CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::any const& payload) {
@@ -95,14 +195,25 @@ CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::an
         if (auto const* text = payloadAs<std::string>(payload)) query = *text;
         const auto sourceGeneration = ++runtime.workspaceSearchGeneration;
         runtime.startWorkspaceSearch(std::move(query), sourceGeneration);
-    } else if (id == "goto.back") {
-        (void)runtime.navigation.back();
-    } else if (id == "goto.forward") {
-        (void)runtime.navigation.forward();
+    } else if (id == "goto.back" || id == "goto.forward") {
+        bool const backward = id == "goto.back";
+        auto const transition = backward ? runtime.navigation.peekBack()
+                                         : runtime.navigation.peekForward();
+        if (!transition.target) return success();
+        auto applied = applyNavigationTransition(runtime, transition);
+        if (!applied.accepted) return applied;
+        // The history cursor moves only once the destination is really open.
+        if (backward) (void)runtime.navigation.back();
+        else (void)runtime.navigation.forward();
     } else if (id == "goto.file" || id == "goto.symbol") {
         auto const* target = payloadAs<NavigationTarget>(payload);
-        if (target != nullptr) (void)runtime.navigation.visit(*target, NavigationOrigin::User);
-        else return failure(std::string{id} + " requires a navigation target payload");
+        if (target == nullptr) {
+            return failure(std::string{id} + " requires a navigation target payload");
+        }
+        auto applied = applyNavigationTransition(
+            runtime, navigationTransition(*target, NavigationOrigin::User));
+        if (!applied.accepted) return applied;
+        (void)runtime.navigation.visit(*target, NavigationOrigin::User);
     } else if (id == "goto.line") {
         // No payload means the command was invoked directly (keybinding or
         // palette): open a one-field prompt that re-dispatches goto.line with the
@@ -212,6 +323,21 @@ CommandHandlerResult treeCommand(Editor& runtime,
                 return runtime.openOrFocusLiveDiffTab(*file,
                                                        NavigationClass::User);
             }
+        }
+        if (providerKind == TreeProviderKind::Search) {
+            if (!selected->workspacePath || !selected->sourceLine ||
+                !selected->sourceColumn) {
+                return failure("search result has no navigation target");
+            }
+            NavigationTarget target{
+                .path = *selected->workspacePath,
+                .line = LineIndex{*selected->sourceLine},
+                .column = static_cast<std::size_t>(*selected->sourceColumn)};
+            if (!runtime.deferDispatch(
+                    ClientCommand{"goto.file", std::move(target)})) {
+                return failure("could not queue search result navigation");
+            }
+            return success();
         }
         if (selected->workspacePath) {
             auto result = runtime.workspace.openFile(*selected->workspacePath);

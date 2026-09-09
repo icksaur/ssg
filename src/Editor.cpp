@@ -83,6 +83,7 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Mod+Shift+KeyZ"}), "edit.redo", "*");
     bind(seq({"Mod+KeyP"}), "file_finder.open", "*");
     bind(seq({"Mod+Shift+KeyP"}), "palette.open", "*");
+    bind(seq({"Mod+Shift+KeyF"}), "panel.show_search", "*");
     bind(seq({"Mod+KeyB"}), "panel.toggle", "*");
     bind(seq({"Mod+KeyH"}), "help.open", "*");
     bind(seq({"Mod+KeyO"}), "panel.focus", "*");
@@ -304,6 +305,9 @@ InputRoutingSnapshot inputRoutingSnapshot(Editor& editor) {
             noticeActions->push_back({action.id, action.commandId});
         }
     }
+    const auto treeProvider = editor.tree.activeProviderBinding();
+    const auto searchState =
+        treeProvider ? editor.tree.searchState(treeProvider->id) : std::nullopt;
     return {
         .keymap = std::cref(editor.resolveInputKeymap()),
         .prompt = inputPromptState(editor),
@@ -319,6 +323,11 @@ InputRoutingSnapshot inputRoutingSnapshot(Editor& editor) {
         .noticeActions = std::move(noticeActions),
         .panes = editor.paneTopology.panes(),
         .gesture = editor.documentPointerGesture,
+        .activeTreeProvider =
+            treeProvider
+                ? std::optional<TreeProviderKind>{treeProvider->kind}
+                : std::nullopt,
+        .searchEditing = searchState && searchState->editing,
     };
 }
 
@@ -341,14 +350,75 @@ std::optional<std::string> applyInputMutation(
         editor.recordNavigation(NavigationClass::User);
         return std::nullopt;
     }
-    auto const pane = std::get<FocusPane>(*mutation).pane;
-    if (!editor.focusPane(pane)) {
-        return "pane focus target changed before execution";
+    if (auto* pane = std::get_if<FocusPane>(&*mutation)) {
+        if (!editor.focusPane(pane->pane)) {
+            return "pane focus target changed before execution";
+        }
+        if (editor.screen.effectiveFocus() != FocusTarget::Editor) {
+            editor.screen.focusEditor();
+        }
+        editor.recordNavigation(NavigationClass::User);
+        return std::nullopt;
     }
-    if (editor.screen.effectiveFocus() != FocusTarget::Editor) {
-        editor.screen.focusEditor();
+
+    const auto change = std::get<SearchQueryChange>(*mutation);
+    const auto binding = editor.tree.activeProviderBinding();
+    if (!binding || binding->kind != TreeProviderKind::Search) {
+        return "search query target changed before execution";
     }
-    editor.recordNavigation(NavigationClass::User);
+    auto state = editor.tree.searchState(binding->id);
+    if (!state) return "search provider state is unavailable";
+    switch (change.kind) {
+    case SearchQueryChange::Kind::Append:
+        state->query += change.text;
+        state->editing = true;
+        break;
+    case SearchQueryChange::Kind::DeleteGraphemeBack:
+        state->query = applyPromptTextEdit(
+            state->query,
+            {PromptTextEdit::Kind::DeleteGraphemeBack, {}});
+        state->editing = true;
+        break;
+    case SearchQueryChange::Kind::MoveFirst:
+    case SearchQueryChange::Kind::MoveLast: {
+        const auto view = editor.tree.viewState();
+        const auto* provider = activeTreeProvider(view);
+        if (provider == nullptr || provider->nodes.empty()) {
+            return std::nullopt;
+        }
+        const auto& node =
+            change.kind == SearchQueryChange::Kind::MoveFirst
+                ? provider->nodes.front()
+                : provider->nodes.back();
+        if (!editor.tree.select(node.node.id)) {
+            return "search result target changed before execution";
+        }
+        state->editing = false;
+        break;
+    }
+    case SearchQueryChange::Kind::Submit:
+        editor.search.cancelWorkspaceSearch();
+        editor.workspaceSearchState.reset();
+        editor.workspaceSearchCorpus.reset();
+        editor.panelWorkspaceSearchGeneration.reset();
+        editor.tree.replaceProvider(TreeProviderSnapshot{
+            binding->id, TreeProviderKind::Search, {}});
+        state->submittedQuery.reset();
+        state->searching = false;
+        if (!state->query.empty()) {
+            state->submittedQuery = state->query;
+            state->searching = true;
+            const auto sourceGeneration = ++editor.workspaceSearchGeneration;
+            editor.startWorkspaceSearch(
+                ParsedSearchQuery{.mode = SearchMode::Text,
+                                  .text = state->query},
+                sourceGeneration);
+        }
+        break;
+    }
+    if (!editor.tree.setSearchState(binding->id, std::move(*state))) {
+        return "search provider state changed before execution";
+    }
     return std::nullopt;
 }
 
@@ -710,8 +780,18 @@ WorkspaceSnapshot Editor::snapshot(std::uint64_t revision) const {
 
 void Editor::startWorkspaceSearch(std::string query,
                                   std::uint64_t sourceRevision) {
+    panelWorkspaceSearchGeneration.reset();
     workspaceSearchState =
         search.beginWorkspaceSearch(std::move(query), sourceRevision);
+    workspaceSearchCorpus = workspaceCorpus();
+}
+
+void Editor::startWorkspaceSearch(ParsedSearchQuery query,
+                                  std::uint64_t sourceRevision) {
+    workspaceSearchState =
+        search.beginWorkspaceSearch(std::move(query), sourceRevision);
+    panelWorkspaceSearchGeneration =
+        workspaceSearchState->request.generation;
     workspaceSearchCorpus = workspaceCorpus();
 }
 
@@ -726,10 +806,43 @@ void Editor::advanceWorkspaceSearch() {
                                  *workspaceSearchCorpus,
                                  kDefaultFindWorkBudget);
     if (!batch.finished) return;
-    (void)search.publish(batch,
-                         workspaceSearchState->request.sourceRevision);
+    const auto publishResult = search.publish(
+        batch, workspaceSearchState->request.sourceRevision);
+    const bool panelSearch =
+        panelWorkspaceSearchGeneration &&
+        *panelWorkspaceSearchGeneration == batch.generation;
+    if (panelSearch && publishResult == SearchPublishResult::Accepted) {
+        const TreeProviderId searchProvider{"search"};
+        auto panelState = tree.searchState(searchProvider);
+        if (panelState && panelState->submittedQuery) {
+            std::vector<SearchTreeRecord> records;
+            records.reserve(batch.results.size());
+            for (const auto& result : batch.results) {
+                if (!result.line) continue;
+                records.push_back(
+                    {.workspacePath = result.path,
+                     .label = result.label,
+                     .sourceLine = result.line->value(),
+                     .sourceColumn = result.column});
+            }
+            tree.replaceProvider(TreeProviderSnapshot::fromSearch(
+                searchProvider, std::move(records)));
+            panelState->searching = false;
+            (void)tree.setSearchState(searchProvider,
+                                     std::move(*panelState));
+        }
+    } else if (panelSearch) {
+        const TreeProviderId searchProvider{"search"};
+        if (auto panelState = tree.searchState(searchProvider)) {
+            panelState->submittedQuery.reset();
+            panelState->searching = false;
+            (void)tree.setSearchState(searchProvider,
+                                     std::move(*panelState));
+        }
+    }
     workspaceSearchState.reset();
     workspaceSearchCorpus.reset();
+    panelWorkspaceSearchGeneration.reset();
 }
 
 WorkspaceApplyResult Editor::applyWorkspaceReplace(
@@ -1500,6 +1613,15 @@ CommandResult Editor::dispatchLocked(ClientCommand const& command) {
         search.cancelWorkspaceSearch();
         workspaceSearchState.reset();
         workspaceSearchCorpus.reset();
+        panelWorkspaceSearchGeneration.reset();
+        const TreeProviderId searchProvider{"search"};
+        if (auto state = tree.searchState(searchProvider)) {
+            state->submittedQuery.reset();
+            state->searching = false;
+            tree.replaceProvider(TreeProviderSnapshot{
+                searchProvider, TreeProviderKind::Search, {}});
+            (void)tree.setSearchState(searchProvider, std::move(*state));
+        }
     }
     const auto dispatchAndReconcile = [&](const ClientCommand& dispatched) {
         const auto revisionsBefore = documentRevisions(workspace);

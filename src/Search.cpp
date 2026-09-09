@@ -262,7 +262,7 @@ NavigationHistory::NavigationHistory(std::size_t capacity)
     }
 }
 
-NavigationTransition NavigationHistory::transition(
+NavigationTransition navigationTransition(
     const NavigationTarget& target, NavigationOrigin origin) {
     return {.target = target,
             .pauseFollowEdits = origin == NavigationOrigin::User,
@@ -272,7 +272,7 @@ NavigationTransition NavigationHistory::transition(
 NavigationTransition NavigationHistory::visit(
     NavigationTarget target, NavigationOrigin origin) {
     if (cursor_ && entries_[*cursor_] == target) {
-        return transition(target, origin);
+        return navigationTransition(target, origin);
     }
     if (cursor_ && *cursor_ + 1 < entries_.size()) {
         entries_.erase(entries_.begin() + static_cast<std::ptrdiff_t>(*cursor_ + 1),
@@ -283,7 +283,7 @@ NavigationTransition NavigationHistory::visit(
         entries_.erase(entries_.begin());
     }
     cursor_ = entries_.size() - 1;
-    return transition(entries_.back(), origin);
+    return navigationTransition(entries_.back(), origin);
 }
 
 NavigationTransition NavigationHistory::back() {
@@ -291,7 +291,7 @@ NavigationTransition NavigationHistory::back() {
         return emptyTransition();
     }
     --*cursor_;
-    return transition(entries_[*cursor_], NavigationOrigin::User);
+    return navigationTransition(entries_[*cursor_], NavigationOrigin::User);
 }
 
 NavigationTransition NavigationHistory::forward() {
@@ -299,7 +299,21 @@ NavigationTransition NavigationHistory::forward() {
         return emptyTransition();
     }
     ++*cursor_;
-    return transition(entries_[*cursor_], NavigationOrigin::User);
+    return navigationTransition(entries_[*cursor_], NavigationOrigin::User);
+}
+
+NavigationTransition NavigationHistory::peekBack() const {
+    if (!cursor_ || *cursor_ == 0) {
+        return emptyTransition();
+    }
+    return navigationTransition(entries_[*cursor_ - 1], NavigationOrigin::User);
+}
+
+NavigationTransition NavigationHistory::peekForward() const {
+    if (!cursor_ || *cursor_ + 1 >= entries_.size()) {
+        return emptyTransition();
+    }
+    return navigationTransition(entries_[*cursor_ + 1], NavigationOrigin::User);
 }
 
 SearchController::SearchController(SearchCommands commands)
@@ -386,13 +400,28 @@ PaletteExecutionResult SearchController::executePalette() {
 
 WorkspaceSearchState SearchController::beginWorkspaceSearch(
     std::string query, std::uint64_t sourceRevision) {
+    auto parsed = parseWorkspaceSearchQuery(query);
+    return beginWorkspaceSearch(std::move(parsed), std::move(query),
+                                sourceRevision);
+}
+
+WorkspaceSearchState SearchController::beginWorkspaceSearch(
+    ParsedSearchQuery query, std::uint64_t sourceRevision) {
+    const auto displayQuery = query.text;
+    return beginWorkspaceSearch(std::move(query), displayQuery,
+                                sourceRevision);
+}
+
+WorkspaceSearchState SearchController::beginWorkspaceSearch(
+    ParsedSearchQuery query, std::string displayQuery,
+    std::uint64_t sourceRevision) {
     cancelWorkspaceSearch();
     WorkspaceSearchRequest request{
         .generation = state_.searchGeneration + 1,
         .sourceRevision = sourceRevision,
-        .query = parseWorkspaceSearchQuery(query)};
+        .query = std::move(query)};
     state_.revision = sourceRevision;
-    state_.query = std::move(query);
+    state_.query = std::move(displayQuery);
     state_.mode = request.query.mode;
     state_.results.clear();
     state_.selectedIndex.reset();

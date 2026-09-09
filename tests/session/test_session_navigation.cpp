@@ -2745,6 +2745,139 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
     ASSERT_EQ(gotoCaretLine(*runtime), 3U);
 }
 
+std::unique_ptr<ssg::Editor> gotoFileRuntime() {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "a.txt"} << "one\ntwo\nthree\n";
+    std::ofstream{root / "workspace" / "b.txt"} << "beta\n";
+    std::ofstream{root / "workspace" / "c.txt"} << "gamma\n";
+    std::ofstream{root / "workspace" / "wide.txt"} << "\xce\xb1\xce\xb2\n";
+    auto created = ssg::createEditor(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    if (!created.accepted()) return nullptr;
+    return std::move(created.session);
+}
+
+std::optional<std::string> activeSavedPath(ssg::Editor& runtime) {
+    const auto document = runtime.activeDocumentId();
+    if (!document) return std::nullopt;
+    const auto state = runtime.workspace.state(*document);
+    if (!state || state->key.kind() != ssg::JournalDocumentKeyKind::Saved) {
+        return std::nullopt;
+    }
+    return state->key.savedPath();
+}
+
+std::uint64_t caretByteOffset(ssg::Editor& runtime) {
+    return runtime.selection.selections.primary().active.byteOffset.value();
+}
+
+ssg::ClientCommand gotoFile(std::string path, std::size_t line,
+                            std::size_t column) {
+    return {"goto.file",
+            std::any{ssg::NavigationTarget{.path = std::move(path),
+                                           .line = ssg::LineIndex{line},
+                                           .column = column}}};
+}
+
+TEST(gotoFileOpensFileAndPlacesCursorAtLineAndColumn) {
+    auto runtime = gotoFileRuntime();
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime->dispatch(gotoFile("a.txt", 1, 2)).accepted());
+    ASSERT_EQ(activeSavedPath(*runtime), std::optional<std::string>{"a.txt"});
+    // "one\n" is four bytes, so line 1 column 2 is byte 5.
+    ASSERT_EQ(caretByteOffset(*runtime), std::uint64_t{5});
+}
+
+TEST(gotoFileWithMissingPathLeavesStateUnchanged) {
+    auto runtime = gotoFileRuntime();
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime
+                    ->dispatch({"file.open", std::string{"a.txt"}})
+                    .accepted());
+    const auto document = runtime->activeDocumentId();
+    const auto openCount = runtime->workspace.documents().size();
+    const auto caret = caretByteOffset(*runtime);
+
+    ASSERT_FALSE(runtime->dispatch(gotoFile("absent.txt", 0, 1)).accepted());
+    ASSERT_EQ(runtime->activeDocumentId(), document);
+    ASSERT_EQ(runtime->workspace.documents().size(), openCount);
+    ASSERT_EQ(caretByteOffset(*runtime), caret);
+    ASSERT_FALSE(runtime->navigation.peekBack().target.has_value());
+}
+
+TEST(gotoFileWithOutOfRangeLineLeavesStateUnchanged) {
+    auto runtime = gotoFileRuntime();
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime->dispatch(gotoFile("a.txt", 1, 1)).accepted());
+    const auto document = runtime->activeDocumentId();
+    const auto openCount = runtime->workspace.documents().size();
+    const auto caret = caretByteOffset(*runtime);
+
+    // "beta\n" has two lines, so index 9 is past the end. The failure must not
+    // open b.txt, move the caret, or extend the history.
+    ASSERT_FALSE(runtime->dispatch(gotoFile("b.txt", 9, 1)).accepted());
+    ASSERT_EQ(runtime->activeDocumentId(), document);
+    ASSERT_EQ(runtime->workspace.documents().size(), openCount);
+    ASSERT_EQ(caretByteOffset(*runtime), caret);
+    ASSERT_FALSE(runtime->navigation.peekBack().target.has_value());
+}
+
+TEST(gotoFileWithOutOfRangeColumnLeavesStateUnchanged) {
+    auto runtime = gotoFileRuntime();
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime->dispatch(gotoFile("a.txt", 1, 1)).accepted());
+    const auto document = runtime->activeDocumentId();
+    const auto openCount = runtime->workspace.documents().size();
+    const auto caret = caretByteOffset(*runtime);
+
+    // "beta" is four bytes, so column 6 is past its end.
+    ASSERT_FALSE(runtime->dispatch(gotoFile("b.txt", 0, 6)).accepted());
+    ASSERT_EQ(runtime->activeDocumentId(), document);
+    ASSERT_EQ(runtime->workspace.documents().size(), openCount);
+    ASSERT_EQ(caretByteOffset(*runtime), caret);
+    ASSERT_FALSE(runtime->navigation.peekBack().target.has_value());
+}
+
+TEST(gotoFileSnapsColumnToGraphemeBoundary) {
+    auto runtime = gotoFileRuntime();
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    // Column 2 is byte 1, inside the two-byte alpha at bytes 0-1.
+    ASSERT_TRUE(runtime->dispatch(gotoFile("wide.txt", 0, 2)).accepted());
+    ASSERT_EQ(activeSavedPath(*runtime),
+              std::optional<std::string>{"wide.txt"});
+    ASSERT_EQ(caretByteOffset(*runtime), std::uint64_t{0});
+    // Column 3 is byte 2, the start of beta, and is already a boundary.
+    ASSERT_TRUE(runtime->dispatch(gotoFile("wide.txt", 0, 3)).accepted());
+    ASSERT_EQ(caretByteOffset(*runtime), std::uint64_t{2});
+}
+
+TEST(gotoBackAndForwardApplyTransitions) {
+    auto runtime = gotoFileRuntime();
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime->dispatch(gotoFile("a.txt", 0, 1)).accepted());
+    ASSERT_TRUE(runtime->dispatch(gotoFile("b.txt", 0, 1)).accepted());
+    ASSERT_TRUE(runtime->dispatch(gotoFile("c.txt", 0, 1)).accepted());
+    ASSERT_EQ(activeSavedPath(*runtime), std::optional<std::string>{"c.txt"});
+
+    ASSERT_TRUE(runtime->dispatch({"goto.back", {}}).accepted());
+    ASSERT_EQ(activeSavedPath(*runtime), std::optional<std::string>{"b.txt"});
+    ASSERT_TRUE(runtime->dispatch({"goto.back", {}}).accepted());
+    ASSERT_EQ(activeSavedPath(*runtime), std::optional<std::string>{"a.txt"});
+    ASSERT_TRUE(runtime->dispatch({"goto.forward", {}}).accepted());
+    ASSERT_EQ(activeSavedPath(*runtime), std::optional<std::string>{"b.txt"});
+
+    // The far end of the history is a no-op, not a failure, and does not drift.
+    ASSERT_TRUE(runtime->dispatch({"goto.back", {}}).accepted());
+    ASSERT_TRUE(runtime->dispatch({"goto.back", {}}).accepted());
+    ASSERT_EQ(activeSavedPath(*runtime), std::optional<std::string>{"a.txt"});
+}
+
 } // namespace
 
 SSG_TEST_SUITE(test_session_navigation) {
@@ -2752,6 +2885,12 @@ SSG_TEST_SUITE(test_session_navigation) {
     RUN(followPauseQueuesMultipleChangesAndResumeAdoptsTheNewest);
     RUN(gitDiffScanUpdatesDiffAndRejectsStaleBatches);
     RUN(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision);
+    RUN(gotoFileOpensFileAndPlacesCursorAtLineAndColumn);
+    RUN(gotoFileWithMissingPathLeavesStateUnchanged);
+    RUN(gotoFileWithOutOfRangeLineLeavesStateUnchanged);
+    RUN(gotoFileWithOutOfRangeColumnLeavesStateUnchanged);
+    RUN(gotoFileSnapsColumnToGraphemeBoundary);
+    RUN(gotoBackAndForwardApplyTransitions);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
