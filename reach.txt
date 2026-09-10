@@ -323,7 +323,6 @@
 1	ScratchJournal.h	func	ssg::encodeJournalRemove	ScratchJournal.cpp
 1	TextCodec.h	func	ssg::encodeText	TextCodec.cpp
 1	InitScriptWatcher.h	func	ssg::evaluateInitScript	InitScriptWatcher.cpp
-1	Search.h	func	ssg::evaluateWorkspaceSearch	Search.cpp
 1	ExternalModificationFlow.h	func	ssg::externalActionAffordance	ExternalModificationFlow.cpp
 1	DiffModel.h	func	ssg::externalDiffFileId	ExternalModificationFlow.cpp
 1	FindReplace.h	func	ssg::findTextMatches	FindReplace.cpp
@@ -634,6 +633,7 @@
 2	pointer_routing.h	func	ssg::edge_scroll	main.cpp,pointer_routing.cpp
 2	TerminalOutput.h	func	ssg::encodeFrame	TerminalOutput.cpp,main.cpp
 2	TextCodec.h	func	ssg::encodeText	TextCodec.cpp,Workspace.cpp
+2	Search.h	func	ssg::evaluateWorkspaceSearch	Editor.cpp,Search.cpp
 2	Editor.h	func	ssg::executeFindReplaceCommand	ViewCommands.cpp,editing.cpp
 2	FileCommands.h	func	ssg::fileCommandPathPrompt	FileCommands.cpp,files.cpp
 2	UiTree.h	func	ssg::footerPromptControlNodeId	EditorViews.cpp,ScreenLayout.cpp

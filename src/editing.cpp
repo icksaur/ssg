@@ -259,7 +259,10 @@ std::vector<PromptToggle> findOptionToggles(Editor& runtime) {
             {"find.toggle_regex", "regex", options.regex, 10}};
 }
 
-OperationResult bindFindReplace(Editor& runtime, FindReplaceCommand command) {
+} // namespace
+
+OperationResult executeFindReplaceCommand(Editor& runtime,
+                                          FindReplaceCommand command) {
     if (runtime.activeTabIsLiveDiff() &&
         (command == FindReplaceCommand::ReplaceOpen ||
          command == FindReplaceCommand::ReplaceCurrent ||
@@ -409,8 +412,6 @@ OperationResult bindFindReplace(Editor& runtime, FindReplaceCommand command) {
     return failure("unknown find/replace command");
 }
 
-} // namespace
-
 FindReplaceOperationResult applyFindQuery(Editor& runtime, std::string query) {
     auto* document = runtime.activeDocument();
     if (document == nullptr) {
@@ -456,11 +457,6 @@ OperationResult applyEditorSelections(Editor& runtime, ApplySelections mutation)
 OperationResult applyEditorTextInput(Editor& runtime, TextInputCommand command,
                                      TextInputArguments arguments) {
     return bindText(runtime, command, std::move(arguments));
-}
-
-OperationResult executeFindReplaceCommand(Editor& runtime,
-                                          FindReplaceCommand command) {
-    return bindFindReplace(runtime, command);
 }
 
 void registerTextInputCommands(Commands& commands, Editor& runtime) {

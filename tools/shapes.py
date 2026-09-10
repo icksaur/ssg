@@ -26,6 +26,7 @@ Bag columns:
 Usage:
     tools/shapes.py                    # bags, least-named first
     tools/shapes.py --forwarders       # single-call pass-through functions
+    tools/shapes.py --forwarders --allow forwarders.allow
     tools/shapes.py --max-fields 3
     tools/shapes.py --write shapes.txt
 """
@@ -161,6 +162,7 @@ def main() -> int:
     parser.add_argument("--builddir", type=pathlib.Path, default=None)
     parser.add_argument("--max-fields", type=int, default=4)
     parser.add_argument("--forwarders", action="store_true")
+    parser.add_argument("--allow", type=pathlib.Path, default=None)
     parser.add_argument("--jobs", type=int, default=multiprocessing.cpu_count())
     parser.add_argument("--write", type=pathlib.Path, default=None)
     options = parser.parse_args()
@@ -176,12 +178,24 @@ def main() -> int:
     ]
 
     if options.forwarders:
+        allow_path = options.allow or repo / "forwarders.allow"
+        allowed = set()
+        if allow_path.is_file():
+            allowed = {
+                line
+                for raw in allow_path.read_text().splitlines()
+                if (line := raw.strip()) and not line.startswith("#")
+            }
         rows = []
         with multiprocessing.Pool(options.jobs) as pool:
             for found in pool.imap_unordered(source_forwarders, entries, chunksize=1):
                 rows.extend(found)
         report = "".join(
-            f"{count}\t{n}\t{s}\n" for n, s, count in sorted(set(rows), key=lambda r: (-r[2], r[0]))
+            f"{count}\t{n}\t{s}\n"
+            for n, s, count in sorted(
+                set(rows), key=lambda r: (-r[2], r[0], r[1])
+            )
+            if n not in allowed
         )
     else:
         headers = sorted(p for p in root.rglob("*.h") if "detail" not in p.parts)

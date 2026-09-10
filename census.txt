@@ -2271,7 +2271,6 @@ ssg/Search.h	func	ssg::SearchCancellationToken::cancelled	bool () const noexcept
 ssg/Search.h	func	ssg::SearchController::beginWorkspaceSearch	WorkspaceSearchState (ParsedSearchQuery, std::uint64_t)
 ssg/Search.h	func	ssg::SearchController::beginWorkspaceSearch	WorkspaceSearchState (std::string, std::uint64_t)
 ssg/Search.h	func	ssg::SearchController::cancelWorkspaceSearch	void () noexcept
-ssg/Search.h	func	ssg::SearchController::evaluate	WorkspaceSearchBatch (WorkspaceSearchState &, const WorkspaceCorpus &, std::uint64_t) const
 ssg/Search.h	func	ssg::SearchController::publish	SearchPublishResult (const WorkspaceSearchBatch &, std::uint64_t)
 ssg/Search.h	func	ssg::SearchController::selectNext	void ()
 ssg/Search.h	func	ssg::SearchController::selectPrevious	void ()

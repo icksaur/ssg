@@ -1,0 +1,4 @@
+# Platform filesystem operations stay behind the platform seam.
+ssg::canonicalPath
+# Schema-level lookup hides recursive UiNode traversal.
+ssg::findUiNode

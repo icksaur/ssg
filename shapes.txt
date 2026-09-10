@@ -207,11 +207,11 @@
 9	PaletteSearcher.h	ssg::PaletteCandidate	3	std::string, std::string, std::string
 9	PromptSurface.h	ssg::PromptCommandResult	2	std::optional<PromptError>, std::optional<PromptSubmission>
 9	Search.h	ssg::NavigationTarget	4	std::string, LineIndex, std::size_t, std::optional<std::string>
+9	Search.h	ssg::WorkspaceSearchState	4	WorkspaceSearchRequest, std::size_t, std::vector<SearchResult>, bool
 9	StatusBar.h	ssg::StatusViewState	2	std::vector<StatusItemView>, std::size_t
 9	TabManager.h	ssg::TabCloseOutcome	2	TabId, TabLifecycleResult
 10	DiffModel.h	ssg::DiffWordRange	2	std::size_t, std::size_t
 10	ExternalModificationFlow.h	ssg::ExternalModificationViewState	4	std::uint64_t, std::string, std::vector<ExternalDocumentView>, std::optional<DiffFileId>
-10	Search.h	ssg::WorkspaceSearchState	4	WorkspaceSearchRequest, std::size_t, std::vector<SearchResult>, bool
 10	Selection.h	ssg::SelectionCommandArguments	3	std::optional<DocumentPosition>, std::optional<Selection>, std::vector<Selection>
 10	TextCodec.h	ssg::DecodedText	3	std::string, std::vector<LineTerminator>, TextEncodingStatus
 10	ViewAction.h	ssg::MoveVisualSelection	2	VisualSelectionDirection, bool
@@ -249,5 +249,5 @@
 38	InputRouting.h	ssg::RoutedInput	3	InputRouteAction, std::optional<DocumentPointerGesture>, bool
 47	UiTree.h	ssg::UiSchema	2	UiNode, std::vector<UiNodeId>
 47	Workspace.h	ssg::WorkspaceResult	4	WorkspaceError, std::string, std::optional<FileDocumentId>, std::vector<WorkspaceFailure>
-60	Editor.h	ssg::OperationResult	3	bool, std::string, std::optional<ViewAction>
+59	Editor.h	ssg::OperationResult	3	bool, std::string, std::optional<ViewAction>
 79	Geometry.h	ssg::Rect	4	int, int, int, int

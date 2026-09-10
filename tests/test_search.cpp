@@ -164,23 +164,23 @@ TEST(cancellationSupersessionAndStaleRevisionAreRejected) {
 
     const auto firstCorpus =
         corpusFor(fixtureWorkspace(first.request.sourceRevision));
-    const auto cancelled = controller.evaluate(
-        first, firstCorpus, std::numeric_limits<std::uint64_t>::max());
+    const auto cancelled = evaluateWorkspaceSearch(
+        firstCorpus, first, std::numeric_limits<std::uint64_t>::max());
     ASSERT_TRUE(cancelled.cancelled);
     ASSERT_EQ(controller.publish(cancelled, std::uint64_t{8}),
               SearchPublishResult::Cancelled);
 
     const auto secondCorpus =
         corpusFor(fixtureWorkspace(second.request.sourceRevision));
-    auto superseded = controller.evaluate(
-        second, secondCorpus, std::numeric_limits<std::uint64_t>::max());
+    auto superseded = evaluateWorkspaceSearch(
+        secondCorpus, second, std::numeric_limits<std::uint64_t>::max());
     superseded.generation = first.request.generation;
     ASSERT_EQ(controller.publish(superseded, std::uint64_t{8}),
               SearchPublishResult::Superseded);
 
     second = controller.beginWorkspaceSearch("#cancel", std::uint64_t{8});
-    const auto completed = controller.evaluate(
-        second, secondCorpus, std::numeric_limits<std::uint64_t>::max());
+    const auto completed = evaluateWorkspaceSearch(
+        secondCorpus, second, std::numeric_limits<std::uint64_t>::max());
     ASSERT_EQ(controller.publish(completed, std::uint64_t{9}),
               SearchPublishResult::StaleRevision);
     ASSERT_EQ(controller.publish(completed, std::uint64_t{8}),

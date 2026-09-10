@@ -956,9 +956,9 @@ bool Editor::workspaceSearchPending() const noexcept {
 
 void Editor::advanceWorkspaceSearch() {
     if (!workspaceSearchCorpus || !workspaceSearchState) return;
-    auto batch = search.evaluate(*workspaceSearchState,
-                                 *workspaceSearchCorpus,
-                                 kDefaultFindWorkBudget);
+    auto batch = evaluateWorkspaceSearch(
+        *workspaceSearchCorpus, *workspaceSearchState,
+        kDefaultFindWorkBudget);
     if (!batch.finished) return;
     const auto publishResult = search.publish(
         batch, workspaceSearchState->request.sourceRevision);

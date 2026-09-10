@@ -332,9 +332,11 @@ RowProjection projectedUnwrappedRows(std::string_view documentText,
     return RowProjection{std::move(rows)};
 }
 
-ScrollbarMetrics scrollbarMetricsImpl(uint32_t totalRows,
-                                        uint32_t viewportRows,
-                                        uint32_t firstRow) {
+}  // namespace
+
+ScrollbarMetrics scrollbarMetrics(uint32_t totalRows,
+                                   uint32_t viewportRows,
+                                   uint32_t firstRow) {
     const uint32_t maximumFirst =
         totalRows > viewportRows ? totalRows - viewportRows : 0;
     if (maximumFirst == 0) {
@@ -356,8 +358,6 @@ ScrollbarMetrics scrollbarMetricsImpl(uint32_t totalRows,
                             thumbStart,
                             thumbSize};
 }
-
-}  // namespace
 
 uint32_t scrollScaleRounded(uint32_t value, uint32_t numerator,
                             uint32_t denominator) noexcept {
@@ -466,11 +466,6 @@ uint32_t ViewportViewState::editableOffset(uint32_t viewportRow) const {
     return visibleRows.at(viewportRow).endByteOffset;
 }
 
-ScrollbarMetrics scrollbarMetrics(uint32_t totalRows, uint32_t viewportRows,
-                                   uint32_t firstRow) {
-    return scrollbarMetricsImpl(totalRows, viewportRows, firstRow);
-}
-
 ListScrollView listScrollView(
     uint32_t totalItems,
     uint32_t viewportRows,
@@ -479,10 +474,10 @@ ListScrollView listScrollView(
     bool keepSelectionVisible) {
     if (viewportRows == 0) {
         // A zero-height surface shows nothing. NOTE the returned metrics report
-        // `maximumFirstRow == totalItems` here (scrollbarMetricsImpl's
+        // `maximumFirstRow == totalItems` here (scrollbarMetrics's
         // no-viewport case), NOT 0 -- so a caller must not use those metrics to
         // bound an offset without checking the height first. ScrollOffset does.
-        return ListScrollView{0, 0, scrollbarMetricsImpl(totalItems, 0, 0)};
+        return ListScrollView{0, 0, scrollbarMetrics(totalItems, 0, 0)};
     }
     const uint32_t maximumFirst =
         totalItems > viewportRows ? totalItems - viewportRows : 0;
@@ -505,8 +500,7 @@ ListScrollView listScrollView(
     const uint32_t visibleCount =
         std::min(viewportRows, totalItems - first);
     return ListScrollView{first, visibleCount,
-                          scrollbarMetricsImpl(totalItems, viewportRows,
-                                                 first)};
+                          scrollbarMetrics(totalItems, viewportRows, first)};
 }
 // Saturating clamped shift, shared by byLines and byPages. `delta` arrives from
 // an input and may be any int64, so the extremes are handled before the add

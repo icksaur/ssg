@@ -189,9 +189,6 @@ public:
         std::string query, std::uint64_t sourceRevision);
     [[nodiscard]] WorkspaceSearchState beginWorkspaceSearch(
         ParsedSearchQuery query, std::uint64_t sourceRevision);
-    [[nodiscard]] WorkspaceSearchBatch evaluate(
-        WorkspaceSearchState& state, const WorkspaceCorpus& corpus,
-        std::uint64_t workBudget) const;
     void cancelWorkspaceSearch() noexcept;
     [[nodiscard]] SearchPublishResult publish(
         const WorkspaceSearchBatch& batch, std::uint64_t currentRevision);

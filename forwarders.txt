@@ -1,8 +1,3 @@
-3	ssg::SearchController::evaluate	Search.cpp
-3	ssg::scrollbarMetrics	Viewport.cpp
-2	ssg::canonicalPath	platform_files.cpp
-2	ssg::executeFindReplaceCommand	editing.cpp
-2	ssg::findUiNode	UiTree.cpp
 2	ssg::pathComponentEqual	RecoveryManager.cpp
 2	ssg::routeInput	input_routing.cpp
 2	ssg::sameEventKey	FilesystemWatcher.cpp
@@ -12,7 +7,6 @@
 1	ssg::RowProjection::row	Viewport.cpp
 1	ssg::TextModel::line	Selection.cpp
 1	ssg::accepted	input_routing.cpp
-1	ssg::canonicalPath	platform_files.cpp
 1	ssg::containsNul	Workspace.cpp
 1	ssg::encodeText	TextCodec.cpp
 1	ssg::failure	Editor.cpp

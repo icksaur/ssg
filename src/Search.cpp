@@ -350,12 +350,6 @@ WorkspaceSearchState SearchController::beginWorkspaceSearch(
     return WorkspaceSearchState{.request = std::move(request)};
 }
 
-WorkspaceSearchBatch SearchController::evaluate(
-    WorkspaceSearchState& state, const WorkspaceCorpus& corpus,
-    std::uint64_t workBudget) const {
-    return evaluateWorkspaceSearch(corpus, state, workBudget);
-}
-
 void SearchController::cancelWorkspaceSearch() noexcept {
     if (activeRequest_) {
         activeRequest_->cancellation.cancel();
