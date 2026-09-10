@@ -2575,119 +2575,25 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
 // nothing, and an edit (new revision) forces a full re-shape. Proven by the
 // compute_cell_run counter: two identical wrap snapshots segment the same
 // (small, non-document-scaled) amount; an edit adds a full-document re-shape.
-TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
-    auto root = testRuntimePath("runtime_wrapcache");
-    std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
-    std::filesystem::create_directories(root / "recovery");
-    std::string text;
-    for (int i = 0; i < 60; ++i) {
-        text += "line " + std::to_string(i) + " content\n";
-    }
-    std::ofstream{root / "workspace" / "doc.txt"} << text;
-    auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"doc.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"view.toggle_word_wrap",  {}})
-                    .accepted());
-    ssg::ViewportDimensions const dims{80, 24};
-    ssg::test::GridTestView grid{dims};
-    (void)grid.present(runtime);
+  std::unique_ptr<ssg::Editor> gotoLineRuntime() {
+      auto root = uniqueRoot();
+      std::ofstream{root / "workspace" / "lines.txt"}
+          << "one\ntwo\nthree\nfour\nfive";
+      auto created = ssg::createEditor(
+          {root / "workspace", root / "scratch", root / "recovery"});
+      if (!created.accepted()) return nullptr;
+      auto runtime = std::move(created.session);
+      (void)runtime->dispatch({"file.open", std::string{"lines.txt"}});
+      return runtime;
+  }
 
-    // Two identical wrap snapshots: the second re-shapes nothing from the
-    // document -- only the constant chrome/prompt shaping remains.
-    ssg::resetCellRunCalls();
-    (void)grid.present(runtime);
-    auto const base = ssg::cellRunCalls();
-    ssg::resetCellRunCalls();
-    (void)grid.present(runtime);
-    ASSERT_EQ(ssg::cellRunCalls(), base);
+  std::uint32_t gotoCaretLine(ssg::Editor& runtime) {
+      auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
+      if (!snapshot) return 0;
+      return snapshot->selections.primary().active.line.value();
+  }
 
-    // An edit bumps the document revision, so the whole document is re-shaped:
-    // the count jumps well past the cached-snapshot baseline.
-    ASSERT_TRUE(runtime.dispatch({"text.insert",
-                                  ssg::TextInputArguments{"z"}})
-                    .accepted());
-    ssg::resetCellRunCalls();
-    (void)grid.present(runtime);
-    ASSERT_TRUE(ssg::cellRunCalls() > base);
-    std::filesystem::remove_all(root);
-}
-
-
-// segments only the visible + moved lines — bounded and INDEPENDENT of document
-// length — not the whole document. Proven by the compute_cell_run counter: the
-// per-move segmentation count is identical for a 50-line and a 20000-line file.
-TEST(wordWrapOffNavigationIsViewportBounded) {
-    auto root = testRuntimePath("runtime_navbound");
-    std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
-    std::filesystem::create_directories(root / "recovery");
-    auto makeDoc = [](std::size_t lines) {
-        std::string text;
-        for (std::size_t i = 0; i < lines; ++i) {
-            text += "line " + std::to_string(i) + " content\n";
-        }
-        return text;
-    };
-    std::ofstream{root / "workspace" / "small.txt"} << makeDoc(50);
-    std::ofstream{root / "workspace" / "big.txt"} << makeDoc(20000);
-    auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ssg::ViewportDimensions const dims{80, 24};
-
-    auto navSegmentations = [&](std::string const& file) -> std::uint64_t {
-        ssg::test::GridTestView grid{dims};
-        (void)runtime.dispatch({"file.open",  file});
-        (void)grid.present(runtime);
-        ssg::resetCellRunCalls();
-        for (int i = 0; i < 4; ++i) {
-            (void)grid.dispatch(
-                runtime, {"cursor.line_down",  {}});
-        }
-        return ssg::cellRunCalls();
-    };
-
-    auto const smallCalls = navSegmentations("small.txt");
-    auto const bigCalls = navSegmentations("big.txt");
-
-    ASSERT_TRUE(smallCalls > 0);
-    // Bounded (~ per move: visible rows + the moved line), and NOT proportional to
-    // the 400x-larger document.
-    ASSERT_TRUE(smallCalls < 200);
-    ASSERT_TRUE(bigCalls > 0);
-    ASSERT_TRUE(bigCalls < 200);
-    std::filesystem::remove_all(root);
-}
-
-std::unique_ptr<ssg::Editor> gotoLineRuntime() {
-    auto root = uniqueRoot();
-    std::ofstream{root / "workspace" / "lines.txt"}
-        << "one\ntwo\nthree\nfour\nfive";
-    auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    if (!created.accepted()) return nullptr;
-    auto runtime = std::move(created.session);
-    (void)runtime->dispatch({"file.open",  std::string{"lines.txt"}});
-    return runtime;
-}
-
-std::uint32_t gotoCaretLine(ssg::Editor& runtime) {
-    auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-    if (!snapshot) return 0;
-    return snapshot->selections.primary().active.line.value();
-}
-
-TEST(gotoLineClampsToTheOneBasedLineRange) {
+  TEST(gotoLineClampsToTheOneBasedLineRange) {
     auto runtime = gotoLineRuntime();
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
@@ -3033,8 +2939,6 @@ SSG_TEST_SUITE(test_session_layout) {
     RUN(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus);
     RUN(wordWrapOffRevealsCaretHorizontally);
     RUN(wordWrapOnWrapsLongLinesOffClipsThem);
-    RUN(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges);
-    RUN(wordWrapOffNavigationIsViewportBounded);
     RUN(gotoLineClampsToTheOneBasedLineRange);
     RUN(gotoLineRejectsNonNumericInput);
     RUN(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit);

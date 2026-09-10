@@ -111,9 +111,6 @@ struct TreeNode {
 
 namespace detail {
 
-[[nodiscard]] bool filesystemTreeEntryDisappeared(
-    const std::error_code& error) noexcept;
-
 [[nodiscard]] std::optional<TreeNode> inspectFilesystemTreeEntry(
     const TreeProviderId& providerId, const std::filesystem::path& root,
     const std::filesystem::directory_entry& entry);

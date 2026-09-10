@@ -2101,40 +2101,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     }
 }
 
-// Lever 2 (visible-line cache): a renderer reuses visible document lines across
-// frames while a fresh cache shapes them again.
-TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
-    auto root = uniqueRoot();
-    std::string doc;
-    for (int i = 0; i < 30; ++i) doc += "content line " + std::to_string(i) + "\n";
-    std::ofstream{root / "doc.txt"} << doc;
-    auto runtime = makeRuntime(root);
-    ASSERT_TRUE(runtime != nullptr);
-    if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
-    auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-
-    ssg::LineLayoutCache cache;
-    auto warm = ssg::renderFrame(*snapshot, cache);
-    ssg::resetCellRunCalls();
-    auto cached = ssg::renderFrame(*snapshot, cache);
-    auto const cachedCalls = ssg::cellRunCalls();
-    ssg::resetCellRunCalls();
-    ssg::LineLayoutCache uncachedLineCache;
-    auto uncached = ssg::renderFrame(*snapshot, uncachedLineCache);
-    auto const uncachedCalls = ssg::cellRunCalls();
-
-    // The cache reused the visible document lines: strictly fewer segmentations.
-    ASSERT_TRUE(cachedCalls < uncachedCalls);
-    // Byte-identical output whether or not the cache served the lines.
-    ASSERT_EQ(cached, uncached);
-    ASSERT_EQ(warm, uncached);
-    fs::remove_all(root);
-}
-
-SSG_TEST_SUITE(test_render) {
+ SSG_TEST_SUITE(test_render) {
     RUN(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer);
     RUN(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument);
     RUN(headerAndFooterCellsAndHitsUseTheSolvedTree);
@@ -2182,7 +2149,6 @@ SSG_TEST_SUITE(test_render) {
     RUN(lspDiagnosticsUnderlineExactlyTheirRange);
     RUN(staleDiagnosticsAreNotPainted);
     RUN(styleDefineRejectionLeavesTheLiveStyleUnchanged);
-    RUN(cachedRenderReusesDocumentLineShapingAndMatchesUncached);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

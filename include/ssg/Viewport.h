@@ -92,13 +92,6 @@ struct ViewportViewState {
     bool operator==(const ViewportViewState&) const noexcept = default;
 };
 
-struct ViewportDelta {
-    bool changed;
-    std::optional<ViewportViewState> replacement;
-
-    bool operator==(const ViewportDelta&) const noexcept = default;
-};
-
 struct SelectionNavigation {
     std::uint32_t firstVisualRow = 0;
     std::uint32_t firstVisualColumn = 0;
@@ -200,8 +193,5 @@ private:
     std::span<const CellRun> logicalLines, ViewportDimensions dimensions,
     uint32_t currentFirstVisualRow, int64_t rowDelta,
     const DiffFileView* diff = nullptr);
-
-[[nodiscard]] ViewportDelta deriveViewportDelta(
-    const ViewportViewState& previous, const ViewportViewState& current);
 
 }  // namespace ssg

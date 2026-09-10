@@ -25,18 +25,10 @@ public:
     PieceTree& operator=(PieceTree&&) noexcept;
 
     [[nodiscard]] std::size_t size() const noexcept;
-    [[nodiscard]] bool empty() const noexcept;
     [[nodiscard]] std::string text() const;
-    [[nodiscard]] std::string substr(std::size_t offset, std::size_t count) const;
 
     void insert(std::size_t offset, std::string_view text);
     void erase(std::size_t offset, std::size_t count);
-
-    [[nodiscard]] std::size_t lineCount() const noexcept;
-    [[nodiscard]] std::size_t lineStart(std::size_t line) const;
-    [[nodiscard]] std::size_t lineOfOffset(std::size_t offset) const;
-
-    [[nodiscard]] bool validate() const noexcept;
 
 private:
     [[nodiscard]] NodePtr makeNode(
@@ -46,8 +38,6 @@ private:
     [[nodiscard]] std::pair<NodePtr, NodePtr> split(
         NodePtr root,
         std::size_t offset) const;
-
-    [[nodiscard]] std::string_view pieceText(const Node& node) const noexcept;
 
     SharedBytes originalBuffer_;
     std::string addBuffer_;

@@ -39,10 +39,6 @@
 
 namespace ssg {
 
-namespace {
-thread_local std::uint64_t gCellRunCalls = 0;
-}
-
 struct URange {
     uint32_t lo;
     uint32_t hi;
@@ -1339,8 +1335,6 @@ CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
     if (tabWidth < 1 || tabWidth > 16) {
         throw std::invalid_argument("tab width must be between 1 and 16");
     }
-    ++gCellRunCalls;
-
     CellRun result;
     result.totalCells = 0;
 
@@ -1522,8 +1516,5 @@ CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
 
     return result;
 }
-
-std::uint64_t cellRunCalls() { return gCellRunCalls; }
-void resetCellRunCalls() { gCellRunCalls = 0; }
 
 }  // namespace ssg

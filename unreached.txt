@@ -1,13 +1,3 @@
-ssg::cellRunCalls()	CMakeFiles/ssg_core.dir/src/GraphemeLayout.cpp.o
-ssg::colorDepthName(ssg::ColorDepth)	CMakeFiles/ssg_terminal_objects.dir/src/TerminalOutput.cpp.o
-ssg::deriveViewportDelta(ssg::ViewportViewState const&, ssg::ViewportViewState const&)	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
-ssg::detail::PieceTree::empty() const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
-ssg::detail::PieceTree::lineCount() const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
-ssg::detail::PieceTree::lineOfOffset(unsigned long) const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
-ssg::detail::PieceTree::lineStart(unsigned long) const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
-ssg::detail::PieceTree::substr[abi:cxx11](unsigned long, unsigned long) const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
-ssg::detail::PieceTree::validate() const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
-ssg::detail::filesystemTreeEntryDisappeared(std::error_code const&)	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
 ssg::formatKeyStroke[abi:cxx11](ssg::KeyStroke const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
 ssg::installFileIoFaultInjector(ssg::FileIoFaultInjector*)	CMakeFiles/ssg_platform.dir/src/linux_files.cpp.o
 ssg::isValidTreeViewState(ssg::TreeViewState const&)	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
@@ -18,7 +8,6 @@ ssg::optionalConstructionTotal()	CMakeFiles/ssg_platform.dir/src/OptionalSubsyst
 ssg::optionalSubsystemName(ssg::OptionalSubsystem)	CMakeFiles/ssg_platform.dir/src/OptionalSubsystemAudit.cpp.o
 ssg::removeFile(std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_platform.dir/src/linux_files.cpp.o
 ssg::renderSegmentationCalls()	CMakeFiles/ssg_tui_objects.dir/src/Renderer.cpp.o
-ssg::resetCellRunCalls()	CMakeFiles/ssg_core.dir/src/GraphemeLayout.cpp.o
 ssg::resetOptionalConstructionAudit()	CMakeFiles/ssg_platform.dir/src/OptionalSubsystemAudit.cpp.o
 ssg::resetRenderSegmentationCalls()	CMakeFiles/ssg_tui_objects.dir/src/Renderer.cpp.o
 ssg::resetUtf8ValidationCalls()	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o

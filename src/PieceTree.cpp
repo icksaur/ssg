@@ -1,7 +1,6 @@
 #include <ssg/PieceTree.h>
 
 #include <algorithm>
-#include <cstdlib>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
@@ -12,9 +11,7 @@ struct PieceTree::Node {
     bool addBuffer = false;
     std::size_t start = 0;
     std::size_t length = 0;
-    std::size_t pieceNewlines = 0;
     std::size_t subtreeBytes = 0;
-    std::size_t subtreeNewlines = 0;
     int height = 1;
     NodePtr left;
     NodePtr right;
@@ -29,18 +26,12 @@ std::size_t bytes(const NodePtr& node) noexcept {
     return node ? node->subtreeBytes : 0;
 }
 
-std::size_t newlines(const NodePtr& node) noexcept {
-    return node ? node->subtreeNewlines : 0;
-}
-
 int height(const NodePtr& node) noexcept {
     return node ? node->height : 0;
 }
 
 void update(Node& node) noexcept {
     node.subtreeBytes = bytes(node.left) + node.length + bytes(node.right);
-    node.subtreeNewlines =
-        newlines(node.left) + node.pieceNewlines + newlines(node.right);
     node.height = 1 + std::max(height(node.left), height(node.right));
 }
 
@@ -133,153 +124,6 @@ void appendText(
     appendText(node->right, original, add, output);
 }
 
-void appendRange(
-    const NodePtr& node,
-    std::string_view original,
-    const std::string& add,
-    std::size_t offset,
-    std::size_t count,
-    std::string& output) {
-    if (!node || count == 0) {
-        return;
-    }
-
-    const auto leftBytes = bytes(node->left);
-    if (offset < leftBytes) {
-        const auto fromLeft = std::min(count, leftBytes - offset);
-        appendRange(node->left, original, add, offset, fromLeft, output);
-        count -= fromLeft;
-        offset = leftBytes;
-    }
-    if (count == 0) {
-        return;
-    }
-
-    const auto pieceEnd = leftBytes + node->length;
-    if (offset < pieceEnd) {
-        const auto pieceOffset = offset > leftBytes ? offset - leftBytes : 0;
-        const auto fromPiece = std::min(count, node->length - pieceOffset);
-        const auto& buffer = node->addBuffer ? add : original;
-        output.append(buffer, node->start + pieceOffset, fromPiece);
-        count -= fromPiece;
-        offset = pieceEnd;
-    }
-    if (count != 0) {
-        appendRange(
-            node->right, original, add, offset - pieceEnd, count, output);
-    }
-}
-
-std::size_t countNewlinesBefore(
-    const NodePtr& node,
-    std::string_view original,
-    const std::string& add,
-    std::size_t offset) noexcept {
-    if (!node || offset == 0) {
-        return 0;
-    }
-
-    const auto leftBytes = bytes(node->left);
-    if (offset <= leftBytes) {
-        return countNewlinesBefore(
-            node->left, original, add, offset);
-    }
-
-    auto result = newlines(node->left);
-    const auto inPiece = std::min(offset - leftBytes, node->length);
-    const auto& buffer = node->addBuffer ? add : original;
-    result += static_cast<std::size_t>(std::count(
-        buffer.begin() + static_cast<std::ptrdiff_t>(node->start),
-        buffer.begin() + static_cast<std::ptrdiff_t>(node->start + inPiece),
-        '\n'));
-    if (offset <= leftBytes + node->length) {
-        return result;
-    }
-    return result + countNewlinesBefore(
-        node->right, original, add, offset - leftBytes - node->length);
-}
-
-std::size_t nthNewlineOffset(
-    const NodePtr& node,
-    std::string_view original,
-    const std::string& add,
-    std::size_t newlineIndex,
-    std::size_t base) {
-    const auto leftNewlines = newlines(node->left);
-    if (newlineIndex < leftNewlines) {
-        return nthNewlineOffset(
-            node->left, original, add, newlineIndex, base);
-    }
-
-    const auto leftBytes = bytes(node->left);
-    newlineIndex -= leftNewlines;
-    if (newlineIndex < node->pieceNewlines) {
-        const auto& buffer = node->addBuffer ? add : original;
-        auto begin = buffer.begin() + static_cast<std::ptrdiff_t>(node->start);
-        const auto end = begin + static_cast<std::ptrdiff_t>(node->length);
-        while (begin != end) {
-            if (*begin == '\n' && newlineIndex-- == 0) {
-                return base + leftBytes
-                    + static_cast<std::size_t>(
-                        begin - buffer.begin()
-                        - static_cast<std::ptrdiff_t>(node->start));
-            }
-            ++begin;
-        }
-    }
-    return nthNewlineOffset(
-        node->right,
-        original,
-        add,
-        newlineIndex - node->pieceNewlines,
-        base + leftBytes + node->length);
-}
-
-struct Validation {
-    bool valid = true;
-    std::size_t bytes = 0;
-    std::size_t newlines = 0;
-    int height = 0;
-};
-
-Validation validateNode(
-    const NodePtr& node,
-    std::string_view original,
-    const std::string& add) noexcept {
-    if (!node) {
-        return {};
-    }
-    const auto left = validateNode(node->left, original, add);
-    const auto right = validateNode(node->right, original, add);
-    const auto& buffer = node->addBuffer ? add : original;
-    const auto rangeValid =
-        node->start <= buffer.size()
-        && node->length <= buffer.size() - node->start;
-    std::size_t pieceNewlines = 0;
-    if (rangeValid) {
-        pieceNewlines = static_cast<std::size_t>(std::count(
-            buffer.begin() + static_cast<std::ptrdiff_t>(node->start),
-            buffer.begin()
-                + static_cast<std::ptrdiff_t>(node->start + node->length),
-            '\n'));
-    }
-    const auto expectedBytes = left.bytes + node->length + right.bytes;
-    const auto expectedNewlines =
-        left.newlines + pieceNewlines + right.newlines;
-    const auto expectedHeight = 1 + std::max(left.height, right.height);
-    const auto balanced = std::abs(left.height - right.height) <= 1;
-    return {
-        left.valid && right.valid && rangeValid && node->length != 0
-            && node->pieceNewlines == pieceNewlines
-            && node->subtreeBytes == expectedBytes
-            && node->subtreeNewlines == expectedNewlines
-            && node->height == expectedHeight && balanced,
-        expectedBytes,
-        expectedNewlines,
-        expectedHeight,
-    };
-}
-
 } // namespace
 
 PieceTree::PieceTree(std::string_view original)
@@ -304,25 +148,10 @@ std::size_t PieceTree::size() const noexcept {
     return bytes(root_);
 }
 
-bool PieceTree::empty() const noexcept {
-    return !root_;
-}
-
 std::string PieceTree::text() const {
     std::string result;
     result.reserve(size());
     appendText(root_, originalBuffer_.view(), addBuffer_, result);
-    return result;
-}
-
-std::string PieceTree::substr(std::size_t offset, std::size_t count) const {
-    if (offset > size() || count > size() - offset) {
-        throw std::out_of_range("piece tree read range exceeds text size");
-    }
-    std::string result;
-    result.reserve(count);
-    appendRange(
-        root_, originalBuffer_.view(), addBuffer_, offset, count, result);
     return result;
 }
 
@@ -356,33 +185,6 @@ void PieceTree::erase(std::size_t offset, std::size_t count) {
     root_ = concatenate(std::move(left), std::move(right));
 }
 
-std::size_t PieceTree::lineCount() const noexcept {
-    return newlines(root_) + 1;
-}
-
-std::size_t PieceTree::lineStart(std::size_t line) const {
-    if (line >= lineCount()) {
-        throw std::out_of_range("piece tree line exceeds line count");
-    }
-    if (line == 0) {
-        return 0;
-    }
-    return nthNewlineOffset(
-        root_, originalBuffer_.view(), addBuffer_, line - 1, 0) + 1;
-}
-
-std::size_t PieceTree::lineOfOffset(std::size_t offset) const {
-    if (offset > size()) {
-        throw std::out_of_range("piece tree line offset exceeds text size");
-    }
-    return countNewlinesBefore(
-        root_, originalBuffer_.view(), addBuffer_, offset);
-}
-
-bool PieceTree::validate() const noexcept {
-    return validateNode(root_, originalBuffer_.view(), addBuffer_).valid;
-}
-
 PieceTree::NodePtr PieceTree::makeNode(
     bool addBuffer,
     std::size_t start,
@@ -391,9 +193,6 @@ PieceTree::NodePtr PieceTree::makeNode(
     node->addBuffer = addBuffer;
     node->start = start;
     node->length = length;
-    const auto source = pieceText(*node);
-    node->pieceNewlines =
-        static_cast<std::size_t>(std::count(source.begin(), source.end(), '\n'));
     update(*node);
     return node;
 }
@@ -467,12 +266,6 @@ std::pair<PieceTree::NodePtr, PieceTree::NodePtr> PieceTree::split(
         concatenate(std::move(leftTree), std::move(leftPiece)),
         concatenate(std::move(rightPiece), std::move(rightTree)),
     };
-}
-
-std::string_view PieceTree::pieceText(const Node& node) const noexcept {
-    const std::string_view buffer =
-        node.addBuffer ? std::string_view{addBuffer_} : originalBuffer_.view();
-    return buffer.substr(node.start, node.length);
 }
 
 } // namespace ssg::detail

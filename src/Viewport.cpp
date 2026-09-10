@@ -1026,12 +1026,4 @@ ViewportViewState scrollViewportBy(
                            diff);
 }
 
-ViewportDelta deriveViewportDelta(const ViewportViewState& previous,
-                                  const ViewportViewState& current) {
-    if (previous == current) {
-        return ViewportDelta{false, std::nullopt};
-    }
-    return ViewportDelta{true, current};
-}
-
 }  // namespace ssg

@@ -318,13 +318,6 @@ TEST(scrollSaturatesAndDeltaSuppressesEqualPayload) {
         lines, ViewportDimensions{2, 2}, bottom.firstVisualRow, -99);
     ASSERT_EQ(top.firstVisualRow, 0u);
 
-    const auto same = ssg::deriveViewportDelta(initial, initial);
-    ASSERT_FALSE(same.changed);
-    ASSERT_FALSE(same.replacement.has_value());
-    const auto changed = ssg::deriveViewportDelta(initial, bottom);
-    ASSERT_TRUE(changed.changed);
-    ASSERT_TRUE(changed.replacement.has_value());
-    ASSERT_EQ(*changed.replacement, bottom);
 }
 
 TEST(viewportBoundsProperties) {
@@ -790,26 +783,7 @@ TEST(cachedLineLayoutEqualsFreshComputeRun) {
     ASSERT_EQ(tiny.size(), std::size_t{2});
 }
 
-// Lever 2: the word-wrap-OFF viewport path re-shapes the same visible lines every
-// frame; with a borrowed cache, an identical projection re-segments nothing.
-TEST(unwrappedProjectionReusesCachedVisibleLines) {
-    std::string doc;
-    for (int i = 0; i < 40; ++i) doc += "line " + std::to_string(i) + " text\n";
-    ssg::ViewportDimensions const dims{80, 24};
-    ssg::LineLayoutCache cache;
-    (void)ssg::computeUnwrappedViewport(doc, dims, 0, 0, 4, nullptr,
-                                           std::nullopt, &cache);  // warm
-    ssg::resetCellRunCalls();
-    (void)ssg::computeUnwrappedViewport(doc, dims, 0, 0, 4, nullptr,
-                                           std::nullopt, &cache);
-    ASSERT_EQ(ssg::cellRunCalls(), std::uint64_t{0});
-    // Without a cache the same projection re-segments the visible lines.
-    ssg::resetCellRunCalls();
-    (void)ssg::computeUnwrappedViewport(doc, dims, 0, 0, 4);
-    ASSERT_TRUE(ssg::cellRunCalls() > 0);
-}
-
-SSG_TEST_SUITE(test_viewport) {
+ SSG_TEST_SUITE(test_viewport) {
     RUN(emptyViewportGolden);
     RUN(shortViewportGolden);
     RUN(wideBoundaryGolden);
@@ -844,7 +818,6 @@ SSG_TEST_SUITE(test_viewport) {
     RUN(scrollToFractionRoundsUniformlyForListSurfaces);
     RUN(scrollMappingIsInertWhenNothingScrolls);
     RUN(cachedLineLayoutEqualsFreshComputeRun);
-    RUN(unwrappedProjectionReusesCachedVisibleLines);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }

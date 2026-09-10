@@ -196,11 +196,6 @@ GitTreeAffordance gitTreeAffordance(DiffFileStatus status) {
     throw std::invalid_argument("unknown git tree status");
 }
 
-bool detail::filesystemTreeEntryDisappeared(
-    const std::error_code& error) noexcept {
-    return error == std::errc::no_such_file_or_directory;
-}
-
 std::optional<TreeNode> detail::inspectFilesystemTreeEntry(
     const TreeProviderId& providerId, const std::filesystem::path& root,
     const std::filesystem::directory_entry& entry) {

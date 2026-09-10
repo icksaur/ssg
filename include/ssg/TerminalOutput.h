@@ -31,6 +31,4 @@ encodeAnsiFrame(const CellGrid& screen,
                                           const char* colorterm,
                                           const char* term,
                                           const char* termProgram);
-[[nodiscard]] std::string_view colorDepthName(ColorDepth depth);
-
 } // namespace ssg

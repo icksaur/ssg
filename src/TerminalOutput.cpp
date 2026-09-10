@@ -279,13 +279,4 @@ std::string encodeAnsiFrame(ssg::CellGrid const& screen, ssg::ColorDepth depth) 
     return out;
 }
 
-std::string_view colorDepthName(ssg::ColorDepth depth) {
-    switch (depth) {
-    case ssg::ColorDepth::Truecolor: return "truecolor";
-    case ssg::ColorDepth::Indexed256: return "indexed256";
-    case ssg::ColorDepth::Ansi16: return "ansi16";
-    }
-    return "unknown";
-}
-
 } // namespace ssg

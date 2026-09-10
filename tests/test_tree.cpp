@@ -117,10 +117,6 @@ TEST(filesystemSnapshotIgnoresAnEntryThatDisappearsDuringInspection) {
     ASSERT_FALSE(ssg::detail::inspectFilesystemTreeEntry(
                      TreeProviderId{"files"}, temporary.path(), entry)
                      .has_value());
-    ASSERT_TRUE(ssg::detail::filesystemTreeEntryDisappeared(
-        std::make_error_code(std::errc::no_such_file_or_directory)));
-    ASSERT_FALSE(ssg::detail::filesystemTreeEntryDisappeared(
-        std::make_error_code(std::errc::permission_denied)));
 }
 
 TEST(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys) {

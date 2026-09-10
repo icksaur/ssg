@@ -78,8 +78,4 @@ struct CellRun {
 // Throws std::invalid_argument when `tabWidth` is outside [1, 16].
 CellRun computeCellRun(std::string_view lineUtf8, int tabWidth = 4);
 
-// Per-thread test instrumentation for viewport-bounded shaping work.
-[[nodiscard]] std::uint64_t cellRunCalls();
-void resetCellRunCalls();
-
 }  // namespace ssg
