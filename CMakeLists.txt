@@ -1147,11 +1147,6 @@ endif()
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Settings.cpp
 )
-target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/linux_settings.cpp
-    ${SSG_SOURCE_DIR}/src/windows_settings.cpp
-)
-
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
         NAME test_settings
@@ -1161,15 +1156,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
     ssg_test_link_libraries(test_settings PRIVATE ssg_core)
-
-    ssg_add_test_suite(
-        NAME test_settings_persistence
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_settings_persistence.cpp
-        SYMBOL test_settings_persistence)
-    ssg_test_include_directories(test_settings_persistence PRIVATE
-        ${SSG_SOURCE_DIR}/tests
-    )
-    ssg_test_link_libraries(test_settings_persistence PRIVATE ssg_core)
 
 endif()
 

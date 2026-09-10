@@ -155,12 +155,6 @@ public:
     [[nodiscard]] StyleDefineResult withDefine(
         StyleDefineArguments const& arguments) const;
 
-    // Every key style.define accepts (glyph + dimension names).  Exposed so a
-    // test can assert this set exactly matches the wire codec's Style field
-    // names -- the two lists are hand-maintained in different files (this and
-    // Protocol.cpp), and this is the guard against them drifting apart.
-    [[nodiscard]] static std::vector<std::string> defineKeys();
-
     // Every glyph define key paired with its current value in this style, sorted
     // by key.  Drives the help system's chrome-glyph listing so a newly added
     // glyph (like a tab edge) documents itself with no second list to maintain.

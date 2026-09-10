@@ -1,13 +1,3 @@
-ssg::RecoveryManager::Impl::records() const	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
-ssg::RecoveryManager::records() const	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
-ssg::RowProjection::rows() const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
-ssg::RowProjection::visualRowForBufferLine(unsigned int) const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
-ssg::RowProjection::visualRowForReal(unsigned int) const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
-ssg::SettingsModel::apply(ssg::SettingCompensation const&)	CMakeFiles/ssg_core.dir/src/Settings.cpp.o
-ssg::SettingsPersistence::load(ssg::SettingsModel&) const	CMakeFiles/ssg_core.dir/src/Settings.cpp.o
-ssg::SettingsPersistence::save(ssg::SettingsModel const&) const	CMakeFiles/ssg_core.dir/src/Settings.cpp.o
-ssg::SettingsViewState::find(ssg::SettingKey) const	CMakeFiles/ssg_core.dir/src/Settings.cpp.o
-ssg::Style::defineKeys[abi:cxx11]()	CMakeFiles/ssg_core.dir/src/Style.cpp.o
 ssg::TabManager::recentlyClosedCount() const	CMakeFiles/ssg_core.dir/src/TabManager.cpp.o
 ssg::TerminalCapabilities::probing() const	CMakeFiles/ssg_terminal_objects.dir/src/TerminalCapabilities.cpp.o
 ssg::TerminalModes::depth() const	CMakeFiles/ssg_terminal_objects.dir/src/Terminal.cpp.o

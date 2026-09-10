@@ -371,13 +371,11 @@ TEST(everyGlyphFieldIsValidatedAndEveryDefaultIsValid) {
     // Round-trip: setting each key to its own current value must be accepted.
     // A default that fails its own rule would mean the defaults and the
     // validator disagree about what a legal glyph is.
-    auto const keys = ssg::Style::defineKeys();
-    ASSERT_FALSE(keys.empty());
-    std::size_t glyphKeys = 0;
-    for (auto const& key : keys) {
-        if (key.rfind("dim_", 0) == 0 || key == "tree_indent") continue;
-        ++glyphKeys;
-        auto const applied = defaults.withDefine(ssg::StyleDefineArguments{{{key, currentGlyph(defaults, key)}}});
+    auto const glyphs = defaults.glyphValues();
+    ASSERT_FALSE(glyphs.empty());
+    for (auto const& [key, value] : glyphs) {
+        auto const applied =
+            defaults.withDefine(ssg::StyleDefineArguments{{{key, value}}});
         if (!applied.accepted() && applied.error) {
             std::cout << "  offending key: " << key << " -- "
                       << applied.error->message << "\n";
@@ -401,7 +399,7 @@ TEST(everyGlyphFieldIsValidatedAndEveryDefaultIsValid) {
         if (line.find("message") != std::string::npos) continue;
         ++declared;
     }
-    ASSERT_EQ(declared, glyphKeys);
+    ASSERT_EQ(declared, glyphs.size());
 }
 
 TEST(aVariableWidthTabGlyphAcceptsAnyWidthWhileFixedGlyphsDoNot) {
@@ -428,11 +426,10 @@ TEST(aVariableWidthTabGlyphAcceptsAnyWidthWhileFixedGlyphsDoNot) {
 }
 
 TEST(styleDefineKeysAreUniqueSoNoGlyphLivesInTwoCategories) {
-    // A key present in both glyphSetters() and variableGlyphSetters() would make
-    // validation order a hidden contract.  styleDefineKeys() concatenates every
-    // map, so a duplicate here proves an overlap.
-    auto keys = ssg::Style::defineKeys();
-    std::sort(keys.begin(), keys.end());
+    auto const entries = ssg::Style{}.glyphValues();
+    std::vector<std::string> keys;
+    keys.reserve(entries.size());
+    for (auto const& [key, value] : entries) keys.push_back(key);
     ASSERT_TRUE(std::adjacent_find(keys.begin(), keys.end()) == keys.end());
 }
 

@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstdint>
-#include <filesystem>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -100,7 +99,6 @@ struct SettingViewEntry {
 struct SettingsViewState {
     std::array<SettingViewEntry, kSettingKeyCount> entries{};
 
-    [[nodiscard]] const SettingViewEntry* find(SettingKey key) const noexcept;
     friend bool operator==(const SettingsViewState&, const SettingsViewState&) = default;
 };
 
@@ -118,7 +116,6 @@ enum class SettingErrorCode : std::uint8_t {
     OutOfRange,
     EmptyIdentity,
     ImmutableScope,
-    StaleCompensation,
     InvalidSchema,
     InvalidRecord,
     IoFailure,
@@ -132,20 +129,9 @@ struct SettingError {
     friend bool operator==(const SettingError&, const SettingError&) = default;
 };
 
-struct SettingCompensation {
-    SettingScope scope = SettingScope::User;
-    SettingKey key = SettingKey::IndentWidth;
-    std::optional<SettingValue> expected;
-    std::optional<SettingValue> restore;
-    std::uint64_t expectedGeneration = 0;
-
-    friend bool operator==(const SettingCompensation&, const SettingCompensation&) = default;
-};
-
 struct SettingMutation {
     std::optional<SettingError> error;
     std::optional<SettingsDelta> delta;
-    SettingCompensation compensation;
 
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
 };
@@ -188,8 +174,6 @@ public:
     [[nodiscard]] SettingMutation set(
         SettingScope scope, SettingKey key, SettingValue value);
     [[nodiscard]] SettingMutation reset(SettingScope scope, SettingKey key);
-    [[nodiscard]] SettingMutation apply(const SettingCompensation& compensation);
-
     [[nodiscard]] std::string exportScope(SettingScope scope) const;
     [[nodiscard]] SettingsIoResult importScope(
         SettingScope scope, std::string_view document);
@@ -197,37 +181,10 @@ public:
 private:
     struct ScopeData {
         std::array<std::optional<SettingValue>, kSettingKeyCount> values;
-        std::array<std::uint64_t, kSettingKeyCount> generations{};
         std::vector<std::string> unknownFields;
     };
 
     std::array<ScopeData, 5> scopes_;
-};
-
-struct SettingsPaths {
-    std::filesystem::path userFile;
-    std::filesystem::path workspaceFile;
-};
-
-[[nodiscard]] SettingsPaths linuxSettingsPaths(
-    const std::filesystem::path& userConfigurationRoot,
-    const std::filesystem::path& workspaceStorageRoot,
-    std::string_view canonicalWorkspace);
-
-[[nodiscard]] SettingsPaths windowsSettingsPaths(
-    const std::filesystem::path& userConfigurationRoot,
-    const std::filesystem::path& workspaceStorageRoot,
-    std::string_view canonicalWorkspace);
-
-class SettingsPersistence {
-public:
-    explicit SettingsPersistence(SettingsPaths paths);
-
-    [[nodiscard]] SettingsIoResult load(SettingsModel& settings) const;
-    [[nodiscard]] SettingsIoResult save(const SettingsModel& settings) const;
-
-private:
-    SettingsPaths paths_;
 };
 
 } // namespace ssg

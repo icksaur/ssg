@@ -391,36 +391,12 @@ RowProjection::RowProjection(std::vector<ProjectedRow> rows)
     }
 }
 
-std::span<const ProjectedRow> RowProjection::rows() const noexcept {
-    return rows_;
-}
-
 const ProjectedRow& RowProjection::row(uint32_t visualRow) const {
     return rows_.at(visualRow);
 }
 
 uint32_t RowProjection::totalRows() const noexcept {
     return static_cast<uint32_t>(rows_.size());
-}
-
-uint32_t RowProjection::visualRowForReal(uint32_t bufferVisualRow) const {
-    for (uint32_t visual = 0; visual < rows_.size(); ++visual) {
-        if (const auto* real = std::get_if<RealRow>(&rows_[visual]);
-            real != nullptr && real->bufferVisualRow == bufferVisualRow) {
-            return visual;
-        }
-    }
-    return totalRows();
-}
-
-uint32_t RowProjection::visualRowForBufferLine(uint32_t bufferLine) const {
-    for (uint32_t visual = 0; visual < rows_.size(); ++visual) {
-        if (const auto* real = std::get_if<RealRow>(&rows_[visual]);
-            real != nullptr && real->bufferLine == bufferLine) {
-            return visual;
-        }
-    }
-    return totalRows();
 }
 
 uint32_t RowProjection::visualRowForPosition(

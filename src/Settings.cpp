@@ -1,13 +1,7 @@
 #include <ssg/Settings.h>
 
-#include <ssg/platform_files.h>
-
 #include <charconv>
-#include <fstream>
-#include <iterator>
-#include <span>
 #include <stdexcept>
-#include <system_error>
 
 namespace ssg {
 
@@ -324,38 +318,7 @@ std::optional<SettingKey> keyFromName(std::string_view name) {
     return std::nullopt;
 }
 
-std::optional<std::string> readIfPresent(const std::filesystem::path& path,
-                                           std::string& error) {
-    // One call decides present-vs-absent-vs-unreadable. The previous
-    // exists()-then-open pair could report "absent" for a file that appeared
-    // between the two calls, and reported an open failure for a file that had
-    // been removed in between.
-    auto result = readFile(path);
-    if (result.status == FileIoStatus::NotFound) return std::nullopt;
-    if (!result.ok()) {
-        error = "failed to open settings file: " + path.string();
-        return std::nullopt;
-    }
-    return std::string{reinterpret_cast<const char*>(result.bytes.data()),
-                       result.bytes.size()};
-}
-
-void writeDocument(const std::filesystem::path& path, std::string_view document) {
-    const auto created = ensureDirectory(path.parent_path());
-    if (!created.ok()) {
-        throw std::runtime_error(created.message);
-    }
-    const auto bytes = std::as_bytes(std::span{document.data(), document.size()});
-    replaceFileAtomically(path, bytes);
-}
-
 } // namespace
-
-const SettingViewEntry* SettingsViewState::find(SettingKey key) const noexcept {
-    if (!valid(key)) return nullptr;
-    const auto position = index(key);
-    return &entries[position];
-}
 
 SettingsModel::SettingsModel() {
     for (const auto key : kAllKeys) {
@@ -393,91 +356,50 @@ SettingMutation SettingsModel::set(
     if (!valid(key)) {
         return {{SettingError{SettingErrorCode::UnknownKey, key,
                               "setting key is not recognized"}},
-                std::nullopt, {}};
+                std::nullopt};
     }
     if (!valid(scope)) {
         return {{SettingError{SettingErrorCode::ImmutableScope, key,
                               "setting scope is not recognized"}},
-                std::nullopt, {}};
+                std::nullopt};
     }
     if (scope == SettingScope::Defaults) {
         return {{SettingError{SettingErrorCode::ImmutableScope, key,
                               "default settings are immutable"}},
-                std::nullopt, {}};
+                std::nullopt};
     }
-    if (auto error = validate(key, value)) return {{std::move(*error)}, std::nullopt, {}};
+    if (auto error = validate(key, value)) return {{std::move(*error)}, std::nullopt};
 
     auto& data = scopes_[index(scope)];
     auto& slot = data.values[index(key)];
     const auto before = resolve(key);
-    const auto restore = slot;
     slot = std::move(value);
-    const auto generation = ++data.generations[index(key)];
     const auto after = resolve(key);
-    return {std::nullopt, SettingsDelta{key, before, after},
-            SettingCompensation{scope, key, slot, restore, generation}};
+    return {std::nullopt, SettingsDelta{key, before, after}};
 }
 
 SettingMutation SettingsModel::reset(SettingScope scope, SettingKey key) {
     if (!valid(key)) {
         return {{SettingError{SettingErrorCode::UnknownKey, key,
                               "setting key is not recognized"}},
-                std::nullopt, {}};
+                std::nullopt};
     }
     if (!valid(scope)) {
         return {{SettingError{SettingErrorCode::ImmutableScope, key,
                               "setting scope is not recognized"}},
-                std::nullopt, {}};
+                std::nullopt};
     }
     if (scope == SettingScope::Defaults) {
         return {{SettingError{SettingErrorCode::ImmutableScope, key,
                               "default settings are immutable"}},
-                std::nullopt, {}};
+                std::nullopt};
     }
     auto& data = scopes_[index(scope)];
     auto& slot = data.values[index(key)];
     const auto before = resolve(key);
-    const auto restore = slot;
     slot.reset();
-    const auto generation = ++data.generations[index(key)];
     const auto after = resolve(key);
-    return {std::nullopt, SettingsDelta{key, before, after},
-            SettingCompensation{scope, key, std::nullopt, restore, generation}};
-}
-
-SettingMutation SettingsModel::apply(const SettingCompensation& compensation) {
-    if (!valid(compensation.key)) {
-        return {{SettingError{SettingErrorCode::UnknownKey, compensation.key,
-                              "setting key is not recognized"}},
-                std::nullopt, {}};
-    }
-    if (!valid(compensation.scope)) {
-        return {{SettingError{SettingErrorCode::ImmutableScope, compensation.key,
-                              "setting scope is not recognized"}},
-                std::nullopt, {}};
-    }
-    if (compensation.scope == SettingScope::Defaults) {
-        return {{SettingError{SettingErrorCode::ImmutableScope, compensation.key,
-                              "default settings are immutable"}},
-                std::nullopt, {}};
-    }
-    auto& data = scopes_[index(compensation.scope)];
-    auto& slot = data.values[index(compensation.key)];
-    if (slot != compensation.expected ||
-        data.generations[index(compensation.key)] !=
-            compensation.expectedGeneration) {
-        return {{SettingError{SettingErrorCode::StaleCompensation, compensation.key,
-                              "setting changed after the compensating action was created"}},
-                std::nullopt, {}};
-    }
-    const auto before = resolve(compensation.key);
-    slot = compensation.restore;
-    const auto generation = ++data.generations[index(compensation.key)];
-    const auto after = resolve(compensation.key);
-    return {std::nullopt, SettingsDelta{compensation.key, before, after},
-            SettingCompensation{compensation.scope, compensation.key,
-                                compensation.restore, compensation.expected,
-                                generation}};
+    return {std::nullopt, SettingsDelta{key, before, after}};
 }
 
 std::string SettingsModel::exportScope(SettingScope scope) const {
@@ -539,49 +461,8 @@ SettingsIoResult SettingsModel::importScope(
         slot = *value;
     }
     if (!sawSchema) return {false, "settings schema header is missing"};
-    const auto& current = scopes_[index(scope)];
-    for (std::size_t key = 0; key < kSettingKeyCount; ++key) {
-        parsed.generations[key] = current.generations[key] + 1;
-    }
     scopes_[index(scope)] = std::move(parsed);
     return {};
-}
-
-SettingsPersistence::SettingsPersistence(SettingsPaths paths)
-    : paths_(std::move(paths)) {
-    if (paths_.userFile.empty() || paths_.workspaceFile.empty()) {
-        throw std::invalid_argument("settings persistence paths must not be empty");
-    }
-}
-
-SettingsIoResult SettingsPersistence::load(SettingsModel& settings) const {
-    SettingsModel candidate = settings;
-    std::string error;
-    const auto user = readIfPresent(paths_.userFile, error);
-    if (!error.empty()) return {false, error};
-    if (user) {
-        const auto result = candidate.importScope(SettingScope::User, *user);
-        if (!result.ok) return result;
-    }
-    const auto workspace = readIfPresent(paths_.workspaceFile, error);
-    if (!error.empty()) return {false, error};
-    if (workspace) {
-        const auto result = candidate.importScope(SettingScope::Workspace, *workspace);
-        if (!result.ok) return result;
-    }
-    settings = std::move(candidate);
-    return {};
-}
-
-SettingsIoResult SettingsPersistence::save(const SettingsModel& settings) const {
-    try {
-        writeDocument(paths_.userFile, settings.exportScope(SettingScope::User));
-        writeDocument(paths_.workspaceFile,
-                       settings.exportScope(SettingScope::Workspace));
-        return {};
-    } catch (const std::exception& error) {
-        return {false, error.what()};
-    }
 }
 
 } // namespace ssg

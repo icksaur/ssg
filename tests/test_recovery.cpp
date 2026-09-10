@@ -167,8 +167,9 @@ TEST(dirtyCloseIsDurableBeforeRemovalAndRestoresExactDocument) {
     std::filesystem::create_directories(workspace);
     auto scratch = ssg::ScratchStore::create(
         temporary.path() / "scratch", workspace, scratchConfig());
-    auto actions = ssg::RecoveryManager::create(
-        temporary.path() / "recovery", recoveryConfig());
+    const auto recoveryRoot = temporary.path() / "recovery";
+    auto actions =
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
     const ssg::JournalDocument expected{
         ssg::JournalDocumentKey::untitled(fixedUntitledId()),
         ssg::DocumentMode::ReadOnly,
@@ -184,16 +185,12 @@ TEST(dirtyCloseIsDurableBeforeRemovalAndRestoresExactDocument) {
     ASSERT_EQ(scratch.recovery().documents,
               std::vector<ssg::JournalDocument>{expected});
 
-    actions = ssg::RecoveryManager::create(
-        temporary.path() / "recovery", recoveryConfig());
-    const auto reconstructedRecords = actions.records();
-    ASSERT_EQ(reconstructedRecords.front().document,
-              std::optional<ssg::JournalDocumentKey>{expected.key});
+    actions = ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
     const auto restored =
         actions.restoreDocument(*closed.compensation, document);
     ASSERT_TRUE(restored.accepted());
     ASSERT_EQ(document, std::optional<ssg::JournalDocument>{expected});
-    ASSERT_TRUE(actions.records().empty());
+    ASSERT_TRUE(std::filesystem::is_empty(recoveryRoot));
 }
 
 TEST(dirtyCloseDurabilityFailurePreservesDocumentAndPublishesNothing) {
@@ -206,8 +203,9 @@ TEST(dirtyCloseDurabilityFailurePreservesDocumentAndPublishesNothing) {
         ssg::ScratchStore::create(scratchRoot, workspace, scratchConfig());
     std::filesystem::create_directory(
         scratchJournalPath(scratchRoot, workspace));
-    auto actions = ssg::RecoveryManager::create(
-        temporary.path() / "recovery", recoveryConfig());
+    const auto recoveryRoot = temporary.path() / "recovery";
+    auto actions =
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
     const auto expected = savedDocument("draft.txt", "not durable");
     std::optional<ssg::JournalDocument> document{expected};
 
@@ -216,7 +214,7 @@ TEST(dirtyCloseDurabilityFailurePreservesDocumentAndPublishesNothing) {
     ASSERT_FALSE(closed.accepted());
     ASSERT_EQ(closed.error->code, ssg::RecoveryErrorCode::DurabilityFailed);
     ASSERT_EQ(document, std::optional<ssg::JournalDocument>{expected});
-    ASSERT_TRUE(actions.records().empty());
+    ASSERT_TRUE(std::filesystem::is_empty(recoveryRoot));
 }
 
 TEST(reconstructionDiscardsPartiallyRemovedRecordDirectory) {
@@ -225,15 +223,9 @@ TEST(reconstructionDiscardsPartiallyRemovedRecordDirectory) {
     writeBytes(recoveryRoot / "partial-record" / "artifacts" / "0",
                 "orphaned artifact");
 
-    bool reconstructed = false;
-    try {
-        auto actions =
-            ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
-        reconstructed = actions.records().empty();
-    } catch (...) {
-    }
+    auto actions =
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
 
-    ASSERT_TRUE(reconstructed);
     ASSERT_TRUE(std::filesystem::is_empty(recoveryRoot));
 }
 
@@ -246,73 +238,62 @@ TEST(countBudgetEvictsOldestOnlyAfterNewRecordIsInstalled) {
     writeBytes(a, "a0");
     writeBytes(b, "b0");
     writeBytes(c, "c0");
-    auto actions = ssg::RecoveryManager::create(
-        temporary.path() / "recovery", recoveryConfig(2));
-
-    const auto first = actions.deletePath(a);
-    const auto second = actions.deletePath(b);
-    const auto third = actions.deletePath(c);
-
-    ASSERT_TRUE(first.accepted());
-    ASSERT_TRUE(second.accepted());
-    ASSERT_TRUE(third.accepted());
-    const auto records = actions.records();
-    ASSERT_EQ(records.size(), std::size_t{2});
-    ASSERT_EQ(records[0].id, *second.compensation);
-    ASSERT_EQ(records[1].id, *third.compensation);
-    ASSERT_TRUE(std::ranges::none_of(records, [&](const auto& record) {
-        return record.id == *first.compensation;
-    }));
-}
-
-TEST(byteBudgetEvictsOldestWhenNewRecordFitsAfterEviction) {
-    TemporaryDirectory temporary;
     const auto recoveryRoot = temporary.path() / "recovery";
-    const auto a = temporary.path() / "canonical" / "a.bin";
-    const auto b = temporary.path() / "canonical" / "b.bin";
-    const auto c = temporary.path() / "canonical" / "c.bin";
-    const std::string original(256, 'o');
-    writeBytes(a, original);
-    writeBytes(b, original);
-    writeBytes(c, original);
     auto actions =
-        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig(2));
+
     const auto first = actions.deletePath(a);
     const auto second = actions.deletePath(b);
-    ASSERT_TRUE(first.accepted());
-    ASSERT_TRUE(second.accepted());
-    const auto initialRecords = actions.records();
-    const auto twoRecordBudget =
-        initialRecords[0].storedBytes + initialRecords[1].storedBytes;
-    actions = ssg::RecoveryManager::create(
-        recoveryRoot, recoveryConfig(8, twoRecordBudget));
-
     const auto third = actions.deletePath(c);
 
+    ASSERT_TRUE(first.accepted());
+    ASSERT_TRUE(second.accepted());
     ASSERT_TRUE(third.accepted());
-    const auto retained = actions.records();
-    ASSERT_EQ(retained.size(), std::size_t{2});
-    ASSERT_EQ(retained[0].id, *second.compensation);
-    ASSERT_EQ(retained[1].id, *third.compensation);
-    ASSERT_TRUE(std::ranges::none_of(retained, [&](const auto& record) {
-        return record.id == *first.compensation;
-    }));
+    ASSERT_FALSE(std::filesystem::exists(
+        recoveryRoot / std::string{first.compensation->value()}));
+    ASSERT_TRUE(std::filesystem::exists(
+        recoveryRoot / std::string{second.compensation->value()}));
+    ASSERT_TRUE(std::filesystem::exists(
+        recoveryRoot / std::string{third.compensation->value()}));
 }
 
-TEST(byteBudgetRejectsBeforeMutatingWhenNewestRecordCannotFit) {
+ TEST(byteBudgetEvictsOldestWhenNewRecordFitsAfterEviction) {
+     TemporaryDirectory temporary;
+     const auto recoveryRoot = temporary.path() / "recovery";
+     const auto firstPath = temporary.path() / "canonical" / "first";
+     const auto secondPath = temporary.path() / "canonical" / "second";
+     const std::string original(4096, 'o');
+     writeBytes(firstPath, original);
+     writeBytes(secondPath, original);
+     auto actions = ssg::RecoveryManager::create(
+         recoveryRoot, recoveryConfig(8, 5000));
+
+     const auto first = actions.deletePath(firstPath);
+     const auto second = actions.deletePath(secondPath);
+
+     ASSERT_TRUE(first.accepted());
+     ASSERT_TRUE(second.accepted());
+     ASSERT_FALSE(std::filesystem::exists(
+         recoveryRoot / std::string{first.compensation->value()}));
+     ASSERT_TRUE(std::filesystem::exists(
+         recoveryRoot / std::string{second.compensation->value()}));
+ }
+
+ TEST(byteBudgetRejectsBeforeMutatingWhenNewestRecordCannotFit) {
     TemporaryDirectory temporary;
     const auto target = temporary.path() / "canonical" / "large";
     const std::string original(4096, 'o');
     writeBytes(target, original);
-    auto actions = ssg::RecoveryManager::create(
-        temporary.path() / "recovery", recoveryConfig(8, 32));
+    const auto recoveryRoot = temporary.path() / "recovery";
+    auto actions =
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig(8, 32));
 
     const auto rejected = actions.deletePath(target);
 
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(rejected.error->code, ssg::RecoveryErrorCode::BudgetExceeded);
     ASSERT_EQ(readBytes(target), original);
-    ASSERT_TRUE(actions.records().empty());
+    ASSERT_TRUE(std::filesystem::is_empty(recoveryRoot));
 }
 
 } // namespace

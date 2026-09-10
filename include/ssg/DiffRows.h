@@ -41,11 +41,8 @@ class RowProjection {
 public:
     explicit RowProjection(std::vector<ProjectedRow> rows);
 
-    [[nodiscard]] std::span<const ProjectedRow> rows() const noexcept;
     [[nodiscard]] const ProjectedRow& row(uint32_t visualRow) const;
     [[nodiscard]] uint32_t totalRows() const noexcept;
-    [[nodiscard]] uint32_t visualRowForReal(uint32_t bufferVisualRow) const;
-    [[nodiscard]] uint32_t visualRowForBufferLine(uint32_t bufferLine) const;
     [[nodiscard]] uint32_t visualRowForPosition(
         const DocumentPosition& position) const;
     [[nodiscard]] uint32_t movedRealRow(uint32_t visualRow,

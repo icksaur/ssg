@@ -552,13 +552,6 @@ public:
         loadRecords();
     }
 
-    [[nodiscard]] std::vector<RecoveryRecord> records() const {
-        std::vector<RecoveryRecord> result;
-        result.reserve(records_.size());
-        for (const auto& stored : records_) result.push_back(stored.record);
-        return result;
-    }
-
     RecoveryActionResult closeDocument(
         std::optional<JournalDocument>& document,
         ScratchStore& scratch,
@@ -1155,10 +1148,6 @@ RecoveryManager::~RecoveryManager() = default;
 RecoveryManager::RecoveryManager(RecoveryManager&&) noexcept = default;
 RecoveryManager& RecoveryManager::operator=(RecoveryManager&&) noexcept =
     default;
-
-std::vector<RecoveryRecord> RecoveryManager::records() const {
-    return impl_->records();
-}
 
 RecoveryActionResult RecoveryManager::closeDocument(
     std::optional<JournalDocument>& document,

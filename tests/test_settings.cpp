@@ -1,5 +1,6 @@
 #include <ssg/Settings.h>
 #include "test_helpers.h"
+#include <algorithm>
 
 #include <array>
 #include <string>
@@ -92,86 +93,24 @@ TEST(invalidValuesAndKeysAreFailureAtomic) {
     ASSERT_EQ(settings.viewState(), before);
 }
 
-TEST(setAndResetCompensationsRestoreScopedAndEffectiveState) {
-    ssg::SettingsModel settings;
-    ASSERT_TRUE(settings
-                    .set(SettingScope::User, SettingKey::Theme,
-                         SettingValue{std::string{"light"}})
-                    .accepted());
-
-    const auto setResult =
-        settings.set(SettingScope::Workspace, SettingKey::Theme,
-                     SettingValue{std::string{"dark"}});
-    ASSERT_TRUE(setResult.accepted());
-    auto effective = settings.resolve(SettingKey::Theme);
-    ASSERT_EQ(std::get<std::string>(effective.value), "dark");
-    ASSERT_TRUE(settings.apply(setResult.compensation).accepted());
-    effective = settings.resolve(SettingKey::Theme);
-    ASSERT_EQ(std::get<std::string>(effective.value), "light");
-    ASSERT_FALSE(settings.scopedValue(SettingScope::Workspace, SettingKey::Theme).has_value());
-
-    ASSERT_TRUE(settings
-                    .set(SettingScope::Workspace, SettingKey::Theme,
-                         SettingValue{std::string{"dark"}})
-                    .accepted());
-    const auto resetResult = settings.reset(SettingScope::Workspace, SettingKey::Theme);
-    ASSERT_TRUE(resetResult.accepted());
-    effective = settings.resolve(SettingKey::Theme);
-    ASSERT_EQ(std::get<std::string>(effective.value), "light");
-    ASSERT_TRUE(settings.apply(resetResult.compensation).accepted());
-    effective = settings.resolve(SettingKey::Theme);
-    ASSERT_EQ(std::get<std::string>(effective.value), "dark");
-}
-
-TEST(staleCompensationDoesNotOverwriteANewerChange) {
-    ssg::SettingsModel settings;
-    const auto first =
-        settings.set(SettingScope::User, SettingKey::WordWrap, SettingValue{true});
-    ASSERT_TRUE(first.accepted());
-    ASSERT_TRUE(
-        settings.set(SettingScope::User, SettingKey::WordWrap, SettingValue{false}).accepted());
-
-    const auto stale = settings.apply(first.compensation);
-    ASSERT_FALSE(stale.accepted());
-    ASSERT_EQ(stale.error->code, ssg::SettingErrorCode::StaleCompensation);
-    auto effective = settings.resolve(SettingKey::WordWrap);
-    ASSERT_EQ(std::get<bool>(effective.value), false);
-
-    const auto aba =
-        settings.set(SettingScope::User, SettingKey::WordWrap, SettingValue{true});
-    ASSERT_TRUE(aba.accepted());
-    ASSERT_TRUE(
-        settings.set(SettingScope::User, SettingKey::WordWrap, SettingValue{false}).accepted());
-    ASSERT_TRUE(
-        settings.set(SettingScope::User, SettingKey::WordWrap, SettingValue{true}).accepted());
-    ASSERT_FALSE(settings.apply(aba.compensation).accepted());
-    effective = settings.resolve(SettingKey::WordWrap);
-    ASSERT_EQ(std::get<bool>(effective.value), true);
-
-    ssg::SettingsModel reloaded;
-    const auto beforeReload =
-        reloaded.set(SettingScope::User, SettingKey::WordWrap, SettingValue{true});
-    ASSERT_TRUE(beforeReload.accepted());
-    const auto serialized = reloaded.exportScope(SettingScope::User);
-    ASSERT_TRUE(reloaded.importScope(SettingScope::User, serialized).ok);
-    ASSERT_TRUE(
-        reloaded.set(SettingScope::User, SettingKey::WordWrap, SettingValue{true}).accepted());
-    const auto preReloadCompensation = reloaded.apply(beforeReload.compensation);
-    ASSERT_FALSE(preReloadCompensation.accepted());
-    effective = reloaded.resolve(SettingKey::WordWrap);
-    ASSERT_EQ(std::get<bool>(effective.value), true);
-}
-
-TEST(viewStateDeltaAndCommandSetCoverAllOwnedSettingsIds) {
+  TEST(viewStateDeltaAndCommandSetCoverAllOwnedSettingsIds) {
     ssg::SettingsModel settings;
     const auto before = settings.viewState();
     const auto changed =
         settings.set(SettingScope::Language, SettingKey::AutoIndent, SettingValue{false});
     ASSERT_TRUE(changed.accepted());
     ASSERT_EQ(changed.delta->key, SettingKey::AutoIndent);
-    ASSERT_EQ(changed.delta->before, before.find(SettingKey::AutoIndent)->effective);
+    const auto beforeEntry =
+        std::ranges::find(before.entries, SettingKey::AutoIndent,
+                          &ssg::SettingViewEntry::key);
+    ASSERT_NE(beforeEntry, before.entries.end());
+    ASSERT_EQ(changed.delta->before, beforeEntry->effective);
     const auto after = settings.viewState();
-    ASSERT_EQ(changed.delta->after, after.find(SettingKey::AutoIndent)->effective);
+    const auto afterEntry =
+        std::ranges::find(after.entries, SettingKey::AutoIndent,
+                          &ssg::SettingViewEntry::key);
+    ASSERT_NE(afterEntry, after.entries.end());
+    ASSERT_EQ(changed.delta->after, afterEntry->effective);
 
 }
 
@@ -180,8 +119,6 @@ TEST(viewStateDeltaAndCommandSetCoverAllOwnedSettingsIds) {
 SSG_TEST_SUITE(test_settings) {
     RUN(fiveScopeResolutionUsesMostSpecificPresentValue);
     RUN(invalidValuesAndKeysAreFailureAtomic);
-    RUN(setAndResetCompensationsRestoreScopedAndEffectiveState);
-    RUN(staleCompensationDoesNotOverwriteANewerChange);
     RUN(viewStateDeltaAndCommandSetCoverAllOwnedSettingsIds);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

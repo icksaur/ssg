@@ -97,8 +97,6 @@ public:
     RecoveryManager(const RecoveryManager&) = delete;
     RecoveryManager& operator=(const RecoveryManager&) = delete;
 
-    [[nodiscard]] std::vector<RecoveryRecord> records() const;
-
     [[nodiscard]] RecoveryActionResult closeDocument(
         std::optional<JournalDocument>& document,
         ScratchStore& scratch,

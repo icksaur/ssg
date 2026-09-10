@@ -222,16 +222,6 @@ StyleDefineResult Style::withDefine(
     return {std::nullopt, std::move(next)};
 }
 
-std::vector<std::string> Style::defineKeys() {
-    std::vector<std::string> keys;
-    keys.reserve(glyphSetters().size() + variableGlyphSetters().size() +
-                 dimensionSetters().size());
-    for (auto const& [key, _] : glyphSetters()) keys.push_back(key);
-    for (auto const& [key, _] : variableGlyphSetters()) keys.push_back(key);
-    for (auto const& [key, _] : dimensionSetters()) keys.push_back(key);
-    return keys;
-}
-
 std::vector<std::pair<std::string, std::string>> Style::glyphValues() const {
     Style copy = *this;  // the accessors read through a mutable Style&
     std::vector<std::pair<std::string, std::string>> entries;

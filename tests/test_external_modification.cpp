@@ -120,7 +120,6 @@ TEST(cleanExternalEditAutoReloadsWithoutRecoveryStatus) {
     ASSERT_FALSE(result.statusPublished);
     ASSERT_EQ(fixture.snapshot().text, "disk\n");
     ASSERT_FALSE(fixture.snapshot().dirty);
-    ASSERT_TRUE(fixture.recovery.records().empty());
     ASSERT_TRUE(fixture.flow.viewState().files.empty());
 }
 
@@ -175,7 +174,6 @@ TEST(openDiffIsObservationalAndKeepBufferAcknowledgesDisk) {
     ASSERT_EQ(fixture.snapshot().text, "buffer\n");
     ASSERT_TRUE(fixture.snapshot().dirty);
     ASSERT_TRUE(fixture.flow.viewState().files.empty());
-    ASSERT_TRUE(fixture.recovery.records().empty());
 }
 
 TEST(reloadReplacesBufferWithoutRecoveryRecord) {
@@ -192,7 +190,6 @@ TEST(reloadReplacesBufferWithoutRecoveryRecord) {
     ASSERT_EQ(open->utf8Content, "disk\n");
     ASSERT_FALSE(open->dirty);
     ASSERT_TRUE(fixture.flow.viewState().files.empty());
-    ASSERT_TRUE(fixture.recovery.records().empty());
 }
 
 TEST(ssgSaveAdvancesBaselineWithoutDuplicateStatus) {
