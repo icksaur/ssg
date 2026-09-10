@@ -1,0 +1,165 @@
+ssg::(anonymous namespace)::Json::integer() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::(anonymous namespace)::Json::unsignedInteger() const	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::JsonParser::consume(char)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::JsonParser::consume(char)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::(anonymous namespace)::JsonParser::hex4()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::JsonParser::hex4()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::(anonymous namespace)::JsonParser::parse()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::JsonParser::parse()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::(anonymous namespace)::JsonParser::parseString()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::JsonParser::parseString()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::(anonymous namespace)::JsonParser::parseValue(unsigned long)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::JsonParser::parseValue(unsigned long)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::(anonymous namespace)::JsonParser::skipSpace()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::JsonParser::skipSpace()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::(anonymous namespace)::appendRemovedIds(ssg::ScratchQuotaResult&, ssg::DurableStoreEvictionResult const&)	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::(anonymous namespace)::ioFailure(ssg::LspIoResult const&)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::(anonymous namespace)::jsonPosition(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::(anonymous namespace)::parseCompletion(ssg::(anonymous namespace)::Json const&, unsigned long)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::parseHover(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::parseLocation(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::parseLocations(ssg::(anonymous namespace)::Json const&, unsigned long)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::parsePosition(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::parseRange(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::responseResult(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::(anonymous namespace)::restoredRemnants(std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::(anonymous namespace)::selectionArgumentsEqual(ssg::SelectionCommandArguments const&, ssg::SelectionCommandArguments const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
+ssg::(anonymous namespace)::valid(ssg::SyntaxScope)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
+ssg::CellGrid::canonical[abi:cxx11]() const	CMakeFiles/ssg_tui_objects.dir/src/Renderer.cpp.o
+ssg::ClipboardRegister::writeGeneration() const	CMakeFiles/ssg_core.dir/src/ClipboardRegister.cpp.o
+ssg::CommandCatalog::size() const	CMakeFiles/ssg_core.dir/src/CommandCatalog.cpp.o
+ssg::CommandContext::setActiveWorkspace(ssg::WorkspaceId)	CMakeFiles/ssg_core.dir/src/CommandCatalog.cpp.o
+ssg::CommittedText::utf8[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
+ssg::Document::dirty() const	CMakeFiles/ssg_core.dir/src/Document.cpp.o
+ssg::DocumentHistory::canRedo() const	CMakeFiles/ssg_core.dir/src/DocumentHistory.cpp.o
+ssg::DocumentHistory::canUndo() const	CMakeFiles/ssg_core.dir/src/DocumentHistory.cpp.o
+ssg::DocumentHistory::retainedBytes() const	CMakeFiles/ssg_core.dir/src/DocumentHistory.cpp.o
+ssg::DocumentHistory::viewState() const	CMakeFiles/ssg_core.dir/src/DocumentHistory.cpp.o
+ssg::DocumentRuntimeState::liveInstances()	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
+ssg::Editor::activeDocumentText[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
+ssg::Editor::activeDraftReopenNotice() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
+ssg::Editor::activeWorkspace() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
+ssg::Editor::applyGitDiffScan(ssg::GitDiffScan)	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
+ssg::Editor::deferredWorkCounts() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
+ssg::Editor::liveDocumentRuntimeStateCountForTests()	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
+ssg::Editor::registerCommand(ssg::CommandSpec)	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
+ssg::Editor::workspaceRoot[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
+ssg::FollowEditsModel::acceptExternalChange(ssg::DiffFileView const&, unsigned long)	CMakeFiles/ssg_core.dir/src/FollowEditsModel.cpp.o
+ssg::GitDiffIngress::savedPathFromExternalDiffId[abi:cxx11](ssg::DiffFileId const&)	CMakeFiles/ssg_core.dir/src/GitDiffIngress.cpp.o
+ssg::GitDiffWorker::registerSavedPath(ssg::SaveExpectation)	CMakeFiles/ssg_core.dir/src/GitDiffWorker.cpp.o
+ssg::GitDiffWorker::setAvailabilityForTest(bool)	CMakeFiles/ssg_core.dir/src/GitDiffWorker.cpp.o
+ssg::KeymapMatcher::deriveDelta(ssg::KeymapViewState const&, ssg::KeymapViewState const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
+ssg::LanguageId::c()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
+ssg::LanguageId::cpp()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
+ssg::LanguageId::csharp()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
+ssg::LanguageId::javascript()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
+ssg::LanguageId::lua()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
+ssg::LanguageId::typescript()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
+ssg::LspFeatureController::acceptCompletion()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspFeatureController::cancel(ssg::LspFeatureController::Kind, ssg::LspFeatureController::Disposition)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspFeatureController::changed()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspFeatureController::dismissCompletion()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspFeatureController::dismissHover()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspFeatureController::poll(unsigned long)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspFeatureController::selectNextCompletion()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspFeatureController::selectPreviousCompletion()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspFeatureController::supersede(ssg::LspFeatureController::Kind)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspFrameResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::LspIoResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::LspPositionResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspRequestResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspRequestResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::LspSyncClient::Impl::publishDiagnostics(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::LspSyncClient::cancel(unsigned long)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::LspSyncClient::poll()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::LspSyncClient::shutdown()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::LspSyncClient::state() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::LspSyncClient::takeCompletedResponses()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::LspSyncClient::viewState() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::LspSyncResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
+ssg::LspSyncResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
+ssg::LuaCommandHost::expose(void*)	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
+ssg::LuaCommandHost::invalidate(ssg::LuaHandle)	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
+ssg::LuaCommandHost::registeredCommands[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
+ssg::LuaCommandHost::resolve(ssg::LuaHandle, void*&) const	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
+ssg::RecoveryManager::Impl::renamePath(std::filesystem::__cxx11::path const&, std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
+ssg::RecoveryManager::Impl::renamePath(std::filesystem::__cxx11::path const&, std::filesystem::__cxx11::path const&)::{lambda()#1}::operator()() const	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
+ssg::RecoveryManager::Impl::renamePath(std::filesystem::__cxx11::path const&, std::filesystem::__cxx11::path const&)::{lambda(ssg::(anonymous namespace)::StoredRecord const&)#1}::operator()(ssg::(anonymous namespace)::StoredRecord const&) const	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
+ssg::RecoveryManager::Impl::restoreFilesystem(ssg::RecoveryRecordId const&)	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
+ssg::RecoveryManager::create(std::filesystem::__cxx11::path const&, ssg::RecoveryConfig, ssg::RecoveryFaultInjector&)	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
+ssg::RecoveryManager::renamePath(std::filesystem::__cxx11::path const&, std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
+ssg::RecoveryManager::restoreFilesystem(ssg::RecoveryRecordId const&)	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
+ssg::RowProjection::rows() const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
+ssg::RowProjection::visualRowForBufferLine(unsigned int) const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
+ssg::RowProjection::visualRowForReal(unsigned int) const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
+ssg::ScratchJournal::appendCheckpoint(ssg::JournalRecoverySet const&) const	CMakeFiles/ssg_core.dir/src/ScratchJournal.cpp.o
+ssg::ScratchSession::path[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::Impl::applyQuotas()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::Impl::compact()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::Impl::journalPath[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::Impl::purgeAll()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::Impl::purgeAll()::{lambda(ssg::(anonymous namespace)::Remnant const&)#1}::operator()(ssg::(anonymous namespace)::Remnant const&) const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::Impl::purgeWorkspace()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::Impl::purgeWorkspace()::{lambda(ssg::(anonymous namespace)::Remnant const&)#1}::operator()(ssg::(anonymous namespace)::Remnant const&) const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::Impl::sessionPath[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::applyQuotas()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::compact()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::journalPath[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::purgeAll()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::purgeWorkspace()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::sessionPath[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::ScratchStore::shutdown()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
+ssg::SearchController::closePalette(unsigned long)	CMakeFiles/ssg_core.dir/src/Search.cpp.o
+ssg::SearchController::executePalette()	CMakeFiles/ssg_core.dir/src/Search.cpp.o
+ssg::SearchController::openPalette(unsigned long)	CMakeFiles/ssg_core.dir/src/Search.cpp.o
+ssg::SearchController::rankPalette()	CMakeFiles/ssg_core.dir/src/Search.cpp.o
+ssg::SettingsModel::apply(ssg::SettingCompensation const&)	CMakeFiles/ssg_core.dir/src/Settings.cpp.o
+ssg::SettingsPersistence::load(ssg::SettingsModel&) const	CMakeFiles/ssg_core.dir/src/Settings.cpp.o
+ssg::SettingsPersistence::save(ssg::SettingsModel const&) const	CMakeFiles/ssg_core.dir/src/Settings.cpp.o
+ssg::SettingsViewState::find(ssg::SettingKey) const	CMakeFiles/ssg_core.dir/src/Settings.cpp.o
+ssg::Style::defineKeys[abi:cxx11]()	CMakeFiles/ssg_core.dir/src/Style.cpp.o
+ssg::TabManager::recentlyClosedCount() const	CMakeFiles/ssg_core.dir/src/TabManager.cpp.o
+ssg::TerminalCapabilities::probing() const	CMakeFiles/ssg_terminal_objects.dir/src/TerminalCapabilities.cpp.o
+ssg::TerminalModes::depth() const	CMakeFiles/ssg_terminal_objects.dir/src/Terminal.cpp.o
+ssg::ThemeSnapshot::color(ssg::SyntaxScope) const	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
+ssg::TreeModel::activeVisibleNodeCount() const	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
+ssg::TreeModel::resetVisibleNodesRecomputeCount()	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
+ssg::TreeModel::toggleSelected()	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
+ssg::TreeModel::visibleNodesRecomputeCount()	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
+ssg::TreeProviderSnapshot::fromFilesystem(ssg::TreeProviderId, std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
+ssg::Workspace::recentFiles[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/Workspace.cpp.o
+ssg::Workspace::restore(ssg::RecoveryRecordId const&)	CMakeFiles/ssg_core.dir/src/Workspace.cpp.o
+ssg::WorkspaceCorpus::status() const	CMakeFiles/ssg_core.dir/src/WorkspaceCorpus.cpp.o
+ssg::cellRunCalls()	CMakeFiles/ssg_core.dir/src/GraphemeLayout.cpp.o
+ssg::colorDepthName(ssg::ColorDepth)	CMakeFiles/ssg_terminal_objects.dir/src/TerminalOutput.cpp.o
+ssg::deriveViewportDelta(ssg::ViewportViewState const&, ssg::ViewportViewState const&)	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
+ssg::detail::PieceTree::empty() const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
+ssg::detail::PieceTree::lineCount() const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
+ssg::detail::PieceTree::lineOfOffset(unsigned long) const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
+ssg::detail::PieceTree::lineStart(unsigned long) const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
+ssg::detail::PieceTree::substr[abi:cxx11](unsigned long, unsigned long) const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
+ssg::detail::PieceTree::validate() const	CMakeFiles/ssg_core.dir/src/PieceTree.cpp.o
+ssg::detail::filesystemTreeEntryDisappeared(std::error_code const&)	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
+ssg::formatKeyStroke[abi:cxx11](ssg::KeyStroke const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
+ssg::installFileIoFaultInjector(ssg::FileIoFaultInjector*)	CMakeFiles/ssg_platform.dir/src/linux_files.cpp.o
+ssg::isValidTreeViewState(ssg::TreeViewState const&)	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
+ssg::isValidTreeViewState(ssg::TreeViewState const&)::{lambda(ssg::TreeProviderView const&)#1}::operator()(ssg::TreeProviderView const&) const	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
+ssg::keyCodeName(ssg::KeyCode)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
+ssg::optionalConstructionCount(ssg::OptionalSubsystem)	CMakeFiles/ssg_platform.dir/src/OptionalSubsystemAudit.cpp.o
+ssg::optionalConstructionTotal()	CMakeFiles/ssg_platform.dir/src/OptionalSubsystemAudit.cpp.o
+ssg::optionalSubsystemName(ssg::OptionalSubsystem)	CMakeFiles/ssg_platform.dir/src/OptionalSubsystemAudit.cpp.o
+ssg::removeFile(std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_platform.dir/src/linux_files.cpp.o
+ssg::renderSegmentationCalls()	CMakeFiles/ssg_tui_objects.dir/src/Renderer.cpp.o
+ssg::resetCellRunCalls()	CMakeFiles/ssg_core.dir/src/GraphemeLayout.cpp.o
+ssg::resetOptionalConstructionAudit()	CMakeFiles/ssg_platform.dir/src/OptionalSubsystemAudit.cpp.o
+ssg::resetRenderSegmentationCalls()	CMakeFiles/ssg_tui_objects.dir/src/Renderer.cpp.o
+ssg::resetUtf8ValidationCalls()	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o
+ssg::scrollable_regions()	CMakeFiles/ssg_terminal_objects.dir/src/pointer_routing.cpp.o
+ssg::searchNavigationTarget(ssg::SearchResult const&)	CMakeFiles/ssg_core.dir/src/Search.cpp.o
+ssg::semanticInputForText(ssg::CommittedText const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
+ssg::semanticRoleName(ssg::SemanticRole)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
+ssg::syntaxScopeName(ssg::SyntaxScope)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
+ssg::textEncodingViewState(ssg::DecodedText const&)	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o
+ssg::utf8ValidationCalls()	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o
+ssg::viewSurfaceName(ssg::ViewSurface)	CMakeFiles/ssg_core.dir/src/Widget.cpp.o
+ssg::widgetKindName(ssg::WidgetKind)	CMakeFiles/ssg_core.dir/src/Widget.cpp.o
