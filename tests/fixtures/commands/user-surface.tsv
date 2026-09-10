@@ -81,7 +81,6 @@ external.focus_return	External Focus Return	keep
 workspace.open_directory	Workspace Open Directory	split
 file.new	New File	split
 file.open	Open File	split
-file.open_recent	File Open Recent	remove
 file.save	Save File	keep
 file.save_all	Save All Files	keep
 file.save_as	Save File As	split
@@ -89,7 +88,6 @@ file.reload	Reload File	keep
 file.rename	Rename File	split
 file.delete	Delete File	keep
 file.new_directory	File New Directory	split
-file.open_dropped_content	File Open Dropped Content	remove
 tab.close	Close Tab	split
 tab.close_others	Close Other Tabs	split
 tab.close_all	Close All Tabs	keep
@@ -98,10 +96,6 @@ tab.next	Next Tab	keep
 tab.previous	Previous Tab	keep
 tab.move_left	Tab Move Left	split
 tab.move_right	Tab Move Right	split
-file.reopen_with_encoding	File Reopen With Encoding	remove
-file.set_encoding	File Set Encoding	remove
-file.set_line_ending	File Set Line Ending	remove
-file.set_final_newline	File Set Final Newline	remove
 draft.diff	Diff Draft Against Disk	keep
 draft.discard	Discard Draft (Use Disk)	keep
 draft.dismiss	Dismiss Draft Notice	keep

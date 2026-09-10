@@ -75,7 +75,7 @@ void runState(const UiState& state) {
     if (!created.accepted()) { fs::remove_all(root); return; }
     auto& runtime = *created.session;
     if (state.openDocument) {
-        (void)runtime.dispatch({"file.open",  std::string{"doc.txt"}});
+        (void)ssg::test::openFile(runtime, std::string{"doc.txt"});
     }
     for (auto const& command : state.commands) {
         (void)runtime.dispatch({command,  {}});

@@ -1209,9 +1209,7 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                                                 std::string{"f.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"f.txt"})
                     .accepted());
 
     auto const doc = ssg::test::activeDocumentText(runtime);

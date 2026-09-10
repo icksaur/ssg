@@ -26,7 +26,7 @@ TEST(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"code.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"code.txt"}).accepted());
     ASSERT_TRUE(ssg::test::typeText(runtime, "x").accepted());
 
     auto completion = runtime.dispatch({"completion.open",  {}});

@@ -125,24 +125,5 @@ struct EncodeTextResult {
 [[nodiscard]] EncodeTextResult encodeText(const DecodedText& text);
 [[nodiscard]] EncodeTextResult encodeText(
     const DecodedText& text, EncodeTextOptions options);
-struct ReopenWithEncodingArguments {
-    TextEncoding encoding = TextEncoding::Utf8;
-    bool operator==(const ReopenWithEncodingArguments&) const = default;
-};
-
-struct SetEncodingArguments {
-    TextEncoding encoding = TextEncoding::Utf8;
-    bool operator==(const SetEncodingArguments&) const = default;
-};
-
-struct SetLineEndingArguments {
-    LineEnding lineEnding = LineEnding::Lf;
-    bool operator==(const SetLineEndingArguments&) const = default;
-};
-
-struct SetFinalNewlineArguments {
-    bool finalNewline = false;
-    bool operator==(const SetFinalNewlineArguments&) const = default;
-};
 
 } // namespace ssg

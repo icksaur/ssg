@@ -196,9 +196,7 @@ std::unique_ptr<ssg::Editor> followPauseRuntime(std::string text) {
         return nullptr;
     }
     auto runtime = std::move(created.session);
-    ASSERT_TRUE(runtime
-                    ->dispatch({"file.open",
-                                std::string{"needle.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(*runtime, std::string{"needle.txt"})
                     .accepted());
     ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
     return runtime;
@@ -363,9 +361,7 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"needle.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"needle.txt"})
                     .accepted());
     ASSERT_TRUE(runtime
                     .dispatch({"follow_edits.pause",  {}})
@@ -406,9 +402,7 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"coexist.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"coexist.txt"})
                     .accepted());
 
     ASSERT_TRUE(ssg::test::applyGitDiffScan(runtime,
@@ -468,9 +462,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"coexist.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"coexist.txt"})
                     .accepted());
     ASSERT_TRUE(ssg::test::applyGitDiffScan(runtime,
                         {.revision = std::uint64_t{32},
@@ -507,10 +499,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     if (!documentTab || !liveDiffTab) return;
 
     ASSERT_TRUE(ssg::test::dispatchInput(runtime, ssg::TabPointerInput{*documentTab}).accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"tab.close",
-                               *documentTab})
-                    .accepted());
+    ASSERT_TRUE(ssg::closeTabById(runtime, *documentTab).accepted);
     auto afterDocumentClose =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterDocumentClose.has_value());
@@ -524,9 +513,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     ASSERT_EQ(afterDocumentClose->diffFileIdentity,
               std::optional<std::string>{"coexist-id"});
 
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"coexist.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"coexist.txt"})
                     .accepted());
     auto reopened =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -538,10 +525,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
               std::size_t{1});
 
     ASSERT_TRUE(ssg::test::dispatchInput(runtime, ssg::TabPointerInput{*liveDiffTab}).accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"tab.close",
-                               *liveDiffTab})
-                    .accepted());
+    ASSERT_TRUE(ssg::closeTabById(runtime, *liveDiffTab).accepted);
     auto afterLiveDiffClose =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterLiveDiffClose.has_value());
@@ -679,13 +663,9 @@ TEST(tabSwitchPausesFollowViaNavigationPath) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"needle.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"needle.txt"})
                     .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"other.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"other.txt"})
                     .accepted());
     ASSERT_EQ(followMode(runtime), ssg::FollowMode::Following);
 
@@ -703,9 +683,7 @@ TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
         ASSERT_TRUE(created.accepted());
         if (!created.accepted()) return nullptr;
         auto runtime = std::move(created.session);
-        ASSERT_TRUE(runtime
-                        ->dispatch({"file.open",
-                                    std::string{"needle.txt"}})
+        ASSERT_TRUE(ssg::test::openFile(*runtime, std::string{"needle.txt"})
                         .accepted());
         return runtime;
     };
@@ -1303,9 +1281,7 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     const ssg::ViewportDimensions viewport{80, 24};
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                                       std::string{"needle.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"needle.txt"})
                     .accepted());
     auto document = projectFrame(runtime, viewport);
     ASSERT_TRUE(document.has_value());
@@ -1473,7 +1449,7 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", std::string{"words.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"words.txt"})
                     .accepted());
 
     auto press = runtime.input(
@@ -1510,7 +1486,7 @@ TEST(keyInputRoutingBranchesByPromptMode) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(
-        runtime.dispatch({"file.open", std::string{"lines.txt"}}).accepted());
+        ssg::test::openFile(runtime, std::string{"lines.txt"}).accepted());
 
     const auto key = [&](ssg::KeyCode code, bool mod = false) {
         ssg::KeyStroke stroke;
@@ -1659,9 +1635,7 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ssg::GridPresenter presenter{};
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                                       std::string{"lines.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"lines.txt"})
                     .accepted());
     auto frame = presenter.project(runtime, {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
@@ -1751,9 +1725,7 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                                       std::string{"lines.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"lines.txt"})
                     .accepted());
     ASSERT_TRUE(runtime
                     .input(ssg::DocumentPointerInput{
@@ -1942,9 +1914,7 @@ TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
         ASSERT_TRUE(created.accepted());
         if (!created.accepted()) return;
         auto& runtime = *created.session;
-        ASSERT_TRUE(runtime
-                        .dispatch({"file.open",
-                                   std::string{"needle.txt"}})
+        ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"needle.txt"})
                         .accepted());
         ASSERT_TRUE(runtime
                         .dispatch({"palette.open",  {}})
@@ -2006,7 +1976,7 @@ TEST(paletteExecuteValidatesCandidateMembership) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
 
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"needle.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"needle.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
 
     // A command outside the published candidate set is rejected before dispatch.
@@ -2385,8 +2355,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"long.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"long.txt"}).accepted());
 
     ssg::ViewportDimensions const dims{24, 6};
     ssg::test::GridTestView grid{dims};
@@ -2437,8 +2406,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"wide.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"wide.txt"}).accepted());
     ssg::ViewportDimensions const dims{80, 24};
 
     // Word wrap OFF (default): three logical lines (the trailing newline yields a
@@ -2491,7 +2459,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
           {root / "workspace", root / "scratch", root / "recovery"});
       if (!created.accepted()) return nullptr;
       auto runtime = std::move(created.session);
-      (void)runtime->dispatch({"file.open", std::string{"lines.txt"}});
+      (void)ssg::test::openFile(*runtime, std::string{"lines.txt"});
       return runtime;
   }
 
@@ -2691,8 +2659,7 @@ TEST(gotoFileWithMissingPathLeavesStateUnchanged) {
     auto runtime = gotoFileRuntime();
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime
-                    ->dispatch({"file.open", std::string{"a.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(*runtime, std::string{"a.txt"})
                     .accepted());
     const auto document = runtime->activeDocumentId();
     const auto openCount = runtime->workspace.documents().size();

@@ -576,6 +576,21 @@ public:
 [[nodiscard]] std::string workspaceMessage(WorkspaceResult const& result);
 [[nodiscard]] std::string tabMessage(TabResult const& result);
 [[nodiscard]] std::string wrongPayload(std::string_view commandId);
+[[nodiscard]] CommandHandlerResult createFileByPath(Editor& runtime,
+                                                     std::string_view path);
+[[nodiscard]] CommandHandlerResult openRecentFile(Editor& runtime,
+                                                   std::size_t index);
+[[nodiscard]] CommandHandlerResult openDroppedContent(
+    Editor& runtime, std::span<const std::uint8_t> bytes,
+    std::string_view label);
+[[nodiscard]] CommandHandlerResult reopenWithEncoding(Editor& runtime,
+                                                       TextEncoding encoding);
+[[nodiscard]] CommandHandlerResult setFileEncoding(Editor& runtime,
+                                                    TextEncoding encoding);
+[[nodiscard]] CommandHandlerResult setFileLineEnding(Editor& runtime,
+                                                      LineEnding lineEnding);
+[[nodiscard]] CommandHandlerResult setFileFinalNewline(Editor& runtime,
+                                                        bool finalNewline);
 [[nodiscard]] CommandHandlerResult applyFilePathCompletion(
     Editor& runtime, PromptCompletion completion, std::string_view path);
 [[nodiscard]] CommandHandlerResult applyGotoLine(Editor& runtime,

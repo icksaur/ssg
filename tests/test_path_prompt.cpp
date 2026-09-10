@@ -116,7 +116,7 @@ TEST(everyPathCommandWithoutAPayloadOpensAPathPrompt) {
         // rename needs a SAVED document; save_as needs any document; open and
         // new_directory need none. Opening a real file satisfies all three, so
         // the loop stays uniform.
-        (void)run(*runtime, "file.open", std::string{"seed.txt"});
+    (void)ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileOpen, "seed.txt");
 
         ASSERT_TRUE(run(*runtime, std::string{descriptor.id}).accepted());
         ASSERT_TRUE(pathPromptOpen(*runtime));

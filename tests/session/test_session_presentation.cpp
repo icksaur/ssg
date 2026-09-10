@@ -143,7 +143,7 @@ TEST(curatedKeymapBindingsAreArgumentFree) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", std::string{"doc.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"doc.txt"}).accepted());
 
     std::set<std::string> commands;
     for (const auto& binding : ssg::defaultTerminalKeymap().bindings) {
@@ -310,8 +310,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", 
-                                  std::string{"long.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"long.txt"}).accepted());
     runtime.focusEditor();
 
     const ssg::ViewportDimensions dims{80, 24};
@@ -373,8 +372,7 @@ TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", 
-                                  std::string{"snug.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"snug.txt"}).accepted());
     runtime.focusEditor();
     ssg::test::GridTestView grid{dims};
     auto snapshot = grid.present(runtime);
@@ -439,8 +437,7 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
 
     ASSERT_TRUE(runtime.dispatch({"file.new",  {}}).accepted());
     ASSERT_TRUE(hasTab("[new buffer]"));
-    ASSERT_TRUE(runtime.dispatch({"file.open", 
-                                  std::string{"alpha.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"alpha.txt"}).accepted());
     // The scratch tab went with it rather than lingering blank, and the file --
     // not the scratch buffer -- is what remains.
     ASSERT_TRUE(hasTab("alpha.txt"));
@@ -450,16 +447,14 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
     // scratch buffer is disposable, never a real document.  Asserted by opening
     // beta while alpha is the sole tab, which is exactly the shape that would
     // trip a rule checking only "is this untitled and empty".
-    ASSERT_TRUE(runtime.dispatch({"file.open", 
-                                  std::string{"beta.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"beta.txt"}).accepted());
     ASSERT_TRUE(hasTab("alpha.txt"));
     ASSERT_TRUE(hasTab("beta.txt"));
 
     // And an EMPTY file is still a file: opening another beside it must not
     // discard it just because it holds no text.
     std::ofstream{root / "workspace" / "empty.txt"};
-    ASSERT_TRUE(runtime.dispatch({"file.open", 
-                                  std::string{"empty.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"empty.txt"}).accepted());
     ASSERT_TRUE(hasTab("empty.txt"));
     ASSERT_TRUE(hasTab("alpha.txt"));
     ASSERT_TRUE(hasTab("beta.txt"));
@@ -471,8 +466,7 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
     // startup buffer" rather than "any blank buffer".
     ASSERT_TRUE(runtime.dispatch({"file.new",  {}}).accepted());
     ASSERT_TRUE(hasTab("[new buffer]"));
-    ASSERT_TRUE(runtime.dispatch({"file.open", 
-                                  std::string{"alpha.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"alpha.txt"}).accepted());
     ASSERT_TRUE(hasTab("[new buffer]"));
     std::filesystem::remove_all(root);
 }
@@ -490,8 +484,7 @@ TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
     ASSERT_TRUE(runtime.dispatch({"file.new",  {}}).accepted());
     runtime.focusEditor();
     ASSERT_TRUE(ssg::test::typeText(runtime, "unsaved work").accepted());
-    ASSERT_TRUE(runtime.dispatch({"file.open", 
-                                  std::string{"alpha.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"alpha.txt"}).accepted());
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -517,10 +510,8 @@ TEST(anEmptySavedFileIsNeverDiscardedAsScratch) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", 
-                                  std::string{"blank.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"file.open", 
-                                  std::string{"alpha.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"blank.txt"}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"alpha.txt"}).accepted());
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -550,8 +541,7 @@ TEST(wrapBreaksAgainstThePaneWidthNotTheClientSurface) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", 
-                                  std::string{"wide.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"wide.txt"}).accepted());
     runtime.focusEditor();
     ASSERT_TRUE(runtime.dispatch({"view.toggle_word_wrap",  {}})
                     .accepted());
@@ -574,7 +564,7 @@ TEST(addCursorChordProducesMultipleSelections) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"m.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"m.txt"}).accepted());
 
     // Drive the curated binding through the real input path.
     const auto chord = *ssg::parseKeySequence({"Mod+KeyJ"});
@@ -613,9 +603,7 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open", 
-                                       std::string{"long.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"long.txt"})
                     .accepted());
 
     ssg::GridPresenter presenter{};
@@ -792,9 +780,7 @@ TEST(visualLineMovementRequiresPresenterResolution) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open", 
-                               std::string{"lines.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"lines.txt"})
                     .accepted());
 
     auto moved = runtime.dispatch({"cursor.line_down", {}});
@@ -871,9 +857,7 @@ TEST(visualMovementUsesActivePaneAcrossSerializedInput) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open", 
-                               std::string{"lines.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"lines.txt"})
                     .accepted());
 
     ssg::GridPresenter presenter{};

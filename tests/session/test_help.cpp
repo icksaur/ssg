@@ -342,8 +342,7 @@ TEST(closingAHelpTabSucceedsAndReopenIsSkipped) {
 
     // A real editable tab plus the help tab, so closing help leaves something.
     std::ofstream{harness.root / "workspace" / "a.txt"} << "hi\n";
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"a.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"a.txt"})
                     .accepted());
     ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());

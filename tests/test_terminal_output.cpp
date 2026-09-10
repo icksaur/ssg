@@ -202,7 +202,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"u.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"u.txt"})
                     .accepted());
     auto gridFrame = ssg::test::projectGridFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(gridFrame.has_value());

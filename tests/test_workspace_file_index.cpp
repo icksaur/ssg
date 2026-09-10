@@ -264,7 +264,7 @@ TEST(indexOffersSymlinkedFilesThatTheEditorCanOpen) {
     ASSERT_TRUE(created.accepted());
     if (created.accepted() && linked != result.candidates.end()) {
         ASSERT_TRUE(
-            created.session->dispatch({"file.open", linked->id}).accepted());
+            ssg::test::openFile(*created.session, linked->id).accepted());
         ASSERT_EQ(ssg::test::activeDocumentText(*created.session), std::string{"linked\n"});
     }
     fs::remove_all(root);

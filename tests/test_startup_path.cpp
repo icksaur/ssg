@@ -74,7 +74,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
     auto& runtime = *created.session;
 
     // Mirrors src/main.cpp's pre-loop file-argument open.
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"code.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"code.txt"})
                     .accepted());
     runtime.focusEditor();
     auto beforePanel =

@@ -85,7 +85,9 @@ struct Session {
         writeFile(session.root / "workspace" / "note.txt", diskContent);
         session.created = ssg::createEditor(configFor(session.root));
         session.runtime = session.created.session.get();
-        (void)session.runtime->dispatch({"file.open",  std::string{"note.txt"}});
+        (void)ssg::applyFilePathCompletion(*session.runtime,
+                                          ssg::PromptCompletion::FileOpen,
+                                          "note.txt");
         if (dirty) {
             (void)ssg::test::typeText(*session.runtime, "!");
         }
@@ -311,11 +313,8 @@ TEST(aGenuineExternalEditAfterASelfSaveIsNotSuppressed) {
 TEST(aCleanExternalReloadDecodesNonUtf8BytesThroughTheDocumentsEncoding) {
     auto session = Session::open("nonutf8_reload", std::string{"\xe9\n"}, false);
     ASSERT_TRUE(
-        session.runtime
-            ->dispatch({"file.reopen_with_encoding",
-                        ssg::ReopenWithEncodingArguments{
-                            ssg::TextEncoding::Iso88591}})
-            .accepted());
+        ssg::reopenWithEncoding(*session.runtime,
+                                ssg::TextEncoding::Iso88591).accepted);
     // An external writer replaces the file with more Latin-1 bytes.
     writeFile(session.workspacePath("note.txt"), std::string{"\xe9\xe9\n"});
     session.runtime->external.ingest(
@@ -334,10 +333,8 @@ TEST(aFailedDirtyRenameAdoptionDoesNotPublishAnUnresolvableNewPathEntry) {
     // other.txt's path must fail (the destination is already open).
     auto session = Session::open("rename_adopt_fail", "hi\n", true);
     writeFile(session.workspacePath("other.txt"), "other\n");
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"file.open",
-                                std::string{"other.txt"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(*session.runtime,
+                    ssg::PromptCompletion::FileOpen, "other.txt").accepted);
 
     std::filesystem::rename(session.workspacePath("note.txt"),
                             session.workspacePath("other.txt"));
@@ -424,11 +421,8 @@ TEST(aCleanExternalReloadDecodesUtf16BytesWithNulThroughTheDocumentsEncoding) {
     // persisted status, unlike set-encoding which would leave the buffer dirty).
     auto session = Session::open("utf16_reload", std::string{'\x41', '\x42'}, false);
     ASSERT_TRUE(
-        session.runtime
-            ->dispatch({"file.reopen_with_encoding",
-                        ssg::ReopenWithEncodingArguments{
-                            ssg::TextEncoding::Utf16le}})
-            .accepted());
+        ssg::reopenWithEncoding(*session.runtime,
+                                ssg::TextEncoding::Utf16le).accepted);
     // An external writer replaces the file with real UTF-16LE bytes. Each ASCII
     // code unit carries a trailing NUL, which the raw-bytes binary guard would
     // wrongly reject -- the reload must decode through the document's UTF-16
@@ -469,10 +463,8 @@ TEST(aFailedRenameLeavesNoOrphanDiffEntry) {
     // that seed back rather than orphan a diff entry no pending action owns.
     auto session = Session::open("rename_orphan", "hi\n", true);
     writeFile(session.workspacePath("other.txt"), "other\n");
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"file.open",
-                                std::string{"other.txt"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(*session.runtime,
+                    ssg::PromptCompletion::FileOpen, "other.txt").accepted);
 
     std::filesystem::rename(session.workspacePath("note.txt"),
                             session.workspacePath("other.txt"));
@@ -697,7 +689,7 @@ TEST(aStatusErrorOnAMissingBaselineRaisesOnTheOverflowPath) {
     writeFile(root / "workspace" / "sub" / "note.txt", "hi\n");
     auto created = ssg::createEditor(configFor(root));
     auto* runtime = created.session.get();
-    (void)runtime->dispatch({"file.open",  std::string{"sub/note.txt"}});
+    (void)ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileOpen, "sub/note.txt");
     (void)ssg::test::typeText(*runtime, "!");
 
     std::filesystem::remove(root / "workspace" / "sub" / "note.txt");

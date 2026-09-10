@@ -83,8 +83,8 @@ TEST(saveAsRefusesAnOccupiedDestinationAndLeavesItIntact) {
     ASSERT_TRUE(run(*runtime, "file.new").accepted());
 
     const auto result =
-        run(*runtime, "file.save_as", std::string{"occupied.txt"});
-    ASSERT_FALSE(result.accepted());
+        ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileSaveAs, "occupied.txt");
+    ASSERT_FALSE(result.accepted);
     ASSERT_EQ(readOutOfBand(occupied), original);
 }
 
@@ -99,11 +99,11 @@ TEST(renameRefusesAnOccupiedDestinationAndLeavesBothFilesIntact) {
 
     auto runtime = makeRuntime(directory.path());
     ASSERT_TRUE(runtime != nullptr);
-    ASSERT_TRUE(run(*runtime, "file.open", std::string{"source.txt"}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileOpen, "source.txt").accepted);
 
     const auto result =
-        run(*runtime, "file.rename", std::string{"occupied.txt"});
-    ASSERT_FALSE(result.accepted());
+        ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileRename, "occupied.txt");
+    ASSERT_FALSE(result.accepted);
     // A rename that clobbered would leave one file; a rename that "rolled back"
     // by deleting could leave none. Both files must still be here, unchanged.
     ASSERT_EQ(readOutOfBand(occupied), occupiedText);
@@ -118,8 +118,8 @@ TEST(newDirectoryRefusesAnOccupiedName) {
     auto runtime = makeRuntime(directory.path());
     ASSERT_TRUE(runtime != nullptr);
 
-    ASSERT_FALSE(run(*runtime, "file.new_directory", std::string{"taken"})
-                     .accepted());
+    ASSERT_FALSE(ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileNewDirectory, "taken")
+                     .accepted);
     ASSERT_EQ(readOutOfBand(occupied), "i am a file");
 }
 
@@ -132,7 +132,7 @@ TEST(saveOverwritesTheDocumentsOwnPathRepeatedly) {
 
     auto runtime = makeRuntime(directory.path());
     ASSERT_TRUE(runtime != nullptr);
-    ASSERT_TRUE(run(*runtime, "file.open", std::string{"notes.txt"}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileOpen, "notes.txt").accepted);
 
     ASSERT_TRUE(ssg::test::typeText(*runtime, "second\n").accepted());
     ASSERT_TRUE(run(*runtime, "file.save").accepted());
@@ -154,7 +154,7 @@ TEST(saveAsToAFreeNameSucceedsAndRetitlesTheTab) {
     ASSERT_TRUE(run(*runtime, "file.new").accepted());
     ASSERT_TRUE(ssg::test::typeText(*runtime, "hello").accepted());
     ASSERT_TRUE(
-        run(*runtime, "file.save_as", std::string{"fresh.txt"}).accepted());
+        ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileSaveAs, "fresh.txt").accepted);
     ASSERT_TRUE(fs::is_regular_file(directory.path() / "fresh.txt"));
 
     auto snapshot = ssg::test::projectGridFrame(*runtime);
@@ -173,9 +173,9 @@ TEST(renameToAFreeNameMovesTheFileAndRetitlesTheTab) {
 
     auto runtime = makeRuntime(directory.path());
     ASSERT_TRUE(runtime != nullptr);
-    ASSERT_TRUE(run(*runtime, "file.open", std::string{"before.txt"}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileOpen, "before.txt").accepted);
     ASSERT_TRUE(
-        run(*runtime, "file.rename", std::string{"after.txt"}).accepted());
+        ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileRename, "after.txt").accepted);
 
     ASSERT_FALSE(fs::exists(directory.path() / "before.txt"));
     ASSERT_EQ(readOutOfBand(directory.path() / "after.txt"), "content\n");
@@ -219,7 +219,7 @@ TEST(deletingAFileLeavesTheBytesInTheArchive) {
 
     auto runtime = makeRuntime(directory.path());
     ASSERT_TRUE(runtime != nullptr);
-    ASSERT_TRUE(run(*runtime, "file.open", std::string{"doomed.txt"}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileOpen, "doomed.txt").accepted);
     ASSERT_TRUE(run(*runtime, "file.delete").accepted());
 
     ASSERT_FALSE(fs::exists(directory.path() / "doomed.txt"));
@@ -273,7 +273,7 @@ TEST(activeFileMutatorsRefuseWithNoDocumentWhileCreatorsDoNot) {
     ASSERT_TRUE(runtime != nullptr);
     ASSERT_TRUE(run(*runtime, "file.new").accepted());
     ASSERT_TRUE(
-        run(*runtime, "file.new_directory", std::string{"made"}).accepted());
+        ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileNewDirectory, "made").accepted);
 }
 
 // A tab whose file has been deleted would offer editing and saving of
@@ -283,7 +283,7 @@ TEST(deletingAFileClosesItsTab) {
     writeOutOfBand(directory.path() / "doomed.txt", "bytes\n");
     auto runtime = makeRuntime(directory.path());
     ASSERT_TRUE(runtime != nullptr);
-    ASSERT_TRUE(run(*runtime, "file.open", std::string{"doomed.txt"}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileOpen, "doomed.txt").accepted);
 
     auto before = ssg::test::projectGridFrame(*runtime);
     ASSERT_TRUE(before.has_value());
@@ -311,7 +311,7 @@ TEST(everyActiveFileMutatorIsRefusedInALiveDiffTab) {
     auto runtime = makeRuntime(directory.path());
     ASSERT_TRUE(runtime != nullptr);
     ASSERT_TRUE(
-        run(*runtime, "file.open", std::string{"coexist.txt"}).accepted());
+        ssg::applyFilePathCompletion(*runtime, ssg::PromptCompletion::FileOpen, "coexist.txt").accepted);
 
     ASSERT_TRUE(ssg::test::applyGitDiffScan(*runtime,
                         {.revision = std::uint64_t{30},

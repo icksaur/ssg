@@ -637,13 +637,15 @@ int main(int argc, char** argv) {
         // created as an unsaved buffer claiming that name, so the user can type
         // and save without naming it again.
         auto const openResult = ssg::statFile(target.cwd / *target.file)
-                                    ? runtime.dispatch({"file.open", *target.file})
-                                    : runtime.dispatch({"file.new", *target.file});
-        if (!openResult.accepted()) {
+                                    ? applyFilePathCompletion(
+                                          runtime, PromptCompletion::FileOpen,
+                                          *target.file)
+                                    : createFileByPath(runtime, *target.file);
+        if (!openResult.accepted) {
             std::fprintf(stderr, "ssg: %s\n", openResult.message.c_str());
         }
-        startsWithAnEditableDocument = openResult.accepted();
-        openedNamedFile = openResult.accepted();
+        startsWithAnEditableDocument = openResult.accepted;
+        openedNamedFile = openResult.accepted;
     }
     if (!startsWithAnEditableDocument) {
         startsWithAnEditableDocument = runtime.dispatch({"file.new", {}}).accepted();

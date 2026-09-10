@@ -61,7 +61,7 @@ TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"edit.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"edit.txt"}).accepted());
 
     auto setPosition = ssg::test::setSelections(runtime, {{3, 3}});
     ASSERT_TRUE(setPosition.accepted());
@@ -83,7 +83,7 @@ TEST(typingUndoBreaksOnWordAndLineBoundaries) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"edit.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"edit.txt"}).accepted());
     ASSERT_TRUE(ssg::test::setSelections(runtime, {{3, 3}}).accepted());
 
     const auto type = [&](char character) {
@@ -115,7 +115,7 @@ TEST(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"edit.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"edit.txt"}).accepted());
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     auto oracle = ssg::previewWorkspaceReplace(
@@ -183,7 +183,7 @@ TEST(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"edit.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"edit.txt"}).accepted());
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     auto oracle = ssg::previewWorkspaceReplace(
@@ -239,8 +239,7 @@ TEST(workspaceSearchAndReplaceHonorIgnoreWithOpenBufferPrecedence) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch(
-        {"file.open", std::string{"ignored-open.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"ignored-open.txt"}).accepted());
     ASSERT_TRUE(ssg::test::typeText(runtime, "unsaved ").accepted());
 
     ASSERT_TRUE(runtime.dispatch(
@@ -462,7 +461,7 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"hits.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"hits.txt"}).accepted());
 
     ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
@@ -524,7 +523,7 @@ TEST(findCloseDoesNotCancelAnUnrelatedPrompt) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"doc.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"doc.txt"}).accepted());
 
     ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
     auto before = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -558,7 +557,7 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"a.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"a.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
     {
@@ -569,7 +568,7 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
 
     // Switching to another freshly opened document (which shares revision 1 with
     // a.txt) must dismiss find: identity, not revision equality, binds the state.
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"b.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"b.txt"}).accepted());
     auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
@@ -593,7 +592,7 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"tall.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"tall.txt"}).accepted());
 
     // Baseline: the viewport starts at the top.
     {
@@ -629,7 +628,7 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"r.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"r.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.open",  {}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.update_replacement",  ssg::FindQueryArguments{"dog"}}).accepted());
@@ -672,7 +671,7 @@ TEST(replaceAllReplacesEveryMatch) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"r.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"r.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.open",  {}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.update_replacement",  ssg::FindQueryArguments{"dog"}}).accepted());
@@ -696,7 +695,7 @@ TEST(replaceCommandsAreBenignNoOpsWithoutAReplacePrompt) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"r.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"r.txt"}).accepted());
 
     // A find prompt (not replace) is open: replace commands must be benign
     // success no-ops that do not mutate the document or controller state.
@@ -721,7 +720,7 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"m.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"m.txt"}).accepted());
 
     // No find/replace prompt yet: find.toggle_case must be a benign no-op that
     // leaves the (default) options untouched.
@@ -761,7 +760,7 @@ TEST(replaceOpenPreservesFindOptions) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"m.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"m.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"find.toggle_case",  {}}).accepted());
@@ -792,7 +791,7 @@ TEST(findCloseDismissesTheReplacePrompt) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"m.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"m.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.open",  {}}).accepted());
     {
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -819,7 +818,7 @@ TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"edit.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"edit.txt"}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = projectFrame(runtime, dims);
@@ -932,7 +931,7 @@ TEST(tabKeyInsertsATabInTheEditor) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", std::string{"tab.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"tab.txt"}).accepted());
     const auto tab = runtime.input(ssg::ClientKeyInput{
         ssg::KeyStroke{.code = ssg::KeyCode::Tab}, {}});
     ASSERT_EQ(tab.outcome, ssg::ClientInputOutcome::Dispatched);
@@ -954,7 +953,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"tall.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"tall.txt"}).accepted());
 
     const ssg::ViewportDimensions dims{80, 24};
     ssg::test::GridTestView grid{dims};
@@ -1048,7 +1047,7 @@ TEST(undoAndPasteRevealTheCaret) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"tall.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"tall.txt"}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     ssg::test::GridTestView grid{dims};
     auto firstRow = [&] {
@@ -1093,7 +1092,7 @@ TEST(multiCursorPastePreservesAllCursors) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"m.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"m.txt"}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto selectionCount = [&] {
         auto snap = projectFrame(runtime, dims);
@@ -1131,8 +1130,7 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"m.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"m.txt"}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto selectionCount = [&] {
         auto snap = projectFrame(runtime, dims);
@@ -1191,7 +1189,7 @@ TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"t.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"t.txt"}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     ssg::test::GridTestView grid{dims};
     auto firstRow = [&] {
@@ -1222,8 +1220,7 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"f.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"f.txt"})
                     .accepted());
 
     ASSERT_TRUE(runtime.dispatch({"find.open",  {}})
@@ -1310,7 +1307,7 @@ TEST(findWordUnderCursorSeedsTheCaretWordAndFindsEveryOccurrence) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"w.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"w.txt"}).accepted());
 
     // The caret starts at offset 0, inside "alpha".
     ASSERT_TRUE(runtime.dispatch({"find.word_under_cursor",  {}}).accepted());
@@ -1338,7 +1335,7 @@ TEST(findWordUnderCursorTakesTheWordWhenTheCaretSitsJustPastIt) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"w.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"w.txt"}).accepted());
     // Move the caret to offset 5 -- the space, immediately past "alpha".
     ASSERT_TRUE(runtime.dispatch({"cursor.word_right",  {}}).accepted());
 
@@ -1359,7 +1356,7 @@ TEST(findWordUnderCursorPrefersTheSelectionAndSearchesItLiterally) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"w.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"w.txt"}).accepted());
     // Select the first three bytes, "a.b", spanning a word boundary the caret
     // word would never include.
     for (int i = 0; i < 3; ++i) {
@@ -1389,7 +1386,7 @@ TEST(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"w.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"w.txt"}).accepted());
     // Move the caret to offset 2, between the two spaces: no word on either side.
     ASSERT_TRUE(runtime.dispatch({"cursor.right",  {}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"cursor.right",  {}}).accepted());
@@ -1422,7 +1419,7 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"hits.txt"}}).accepted());
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"hits.txt"}).accepted());
 
     const ssg::ViewportDimensions dims{80, 24};
 

@@ -74,7 +74,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
@@ -193,7 +193,7 @@ TEST(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
     (void)runtime->dispatch({"find.open",  {}});
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
@@ -283,7 +283,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
@@ -344,7 +344,7 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
 
     auto caretOffsetAfterClick = [&](int column, int row) -> std::uint64_t {
         auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
@@ -383,7 +383,7 @@ TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
     auto base = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(base.has_value());
     if (!base || !base->document) return;
@@ -522,7 +522,7 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
     auto base = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(base.has_value());
     if (!base || !base->document) return;
@@ -581,7 +581,7 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
     auto base = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(base.has_value());
     if (!base || !base->document) return;
@@ -650,7 +650,7 @@ TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"tall.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"tall.txt"});
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
@@ -705,7 +705,7 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     for (auto const& name : names) {
-        (void)runtime->dispatch({"file.open",  name});
+        (void)ssg::test::openFile(*runtime, name);
     }
 
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
@@ -820,8 +820,8 @@ TEST(tabBarCellMapsToItsTabIndex) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"alpha.txt"}});
-    (void)runtime->dispatch({"file.open",  std::string{"beta.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"alpha.txt"});
+    (void)ssg::test::openFile(*runtime, std::string{"beta.txt"});
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
@@ -887,7 +887,7 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
     ssg::GitDiffScan scan;
     scan.revision = std::uint64_t{1};
     scan.currentBranch = std::string{"main"};
@@ -951,7 +951,7 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
 
     ssg::GitDiffScan scan{
         .revision = std::uint64_t{1},
@@ -1027,7 +1027,7 @@ TEST(outOfBoundsAndChromeReturnNoTarget) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;

@@ -675,7 +675,7 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
                   return failure(
                       "picker.submit requires a matching open picker");
                }
-               ClientCommand selected;
+               std::optional<ClientCommand> selected;
                if (arguments.activation.mode ==
                   SearchMode::Command) {
                   auto validation = validatePublishedCommand(
@@ -684,8 +684,10 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
                   selected = ClientCommand{arguments.candidateId, {}};
                } else if (arguments.activation.mode ==
                          SearchMode::File) {
-                  selected =
-                      ClientCommand{"file.open", arguments.candidateId};
+                  auto result = applyFilePathCompletion(
+                      runtime, PromptCompletion::FileOpen,
+                      arguments.candidateId);
+                  if (!result.accepted) return result;
                } else {
                   return failure(
                       "open picker has no submit action");
@@ -695,7 +697,7 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
                   return failure(
                       "another picker submission is pending");
                }
-               if (!runtime.deferDispatch(std::move(selected))) {
+               if (selected && !runtime.deferDispatch(std::move(*selected))) {
                   return failure(
                       "could not queue the selected command");
                }

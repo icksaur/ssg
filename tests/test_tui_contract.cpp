@@ -221,8 +221,7 @@ TEST(productionRuntimeNormalScreenSatisfiesTheScreenContract) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch({"file.open",
-                                   std::string{"alpha.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(*runtime, std::string{"alpha.txt"})
                     .accepted());
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
@@ -243,8 +242,7 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch({"file.open",
-                                   std::string{"alpha.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(*runtime, std::string{"alpha.txt"})
                     .accepted());
     ASSERT_TRUE(runtime->dispatch({"palette.open",  {}})
                     .accepted());
@@ -275,8 +273,7 @@ TEST(productionRuntimeTooSmallScreenSatisfiesTheScreenContract) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch({"file.open",
-                                   std::string{"alpha.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(*runtime, std::string{"alpha.txt"})
                     .accepted());
     auto frame = ssg::test::projectGridFrame(*runtime, {24, 3});
     ASSERT_TRUE(frame.has_value());
@@ -301,7 +298,6 @@ TEST(inMemorySnapshotsPublishTheUiVm) {
         std::any payload;
     };
     std::vector<Step> const script{
-        {"file.open", std::string{"alpha.txt"}},
         {"cursor.right", {}},
         {"cursor.line_down", {}},
         {"select.line_down", {}},
@@ -311,6 +307,7 @@ TEST(inMemorySnapshotsPublishTheUiVm) {
         {"prompt.cancel", {}},
     };
 
+    ASSERT_TRUE(ssg::test::openFile(*runtime, "alpha.txt").accepted());
     auto previous = ssg::test::projectGridFrame(*runtime, dims);
     ASSERT_TRUE(previous.has_value());
     if (!previous) return;

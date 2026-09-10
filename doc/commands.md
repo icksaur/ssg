@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 181 commands.
+There are 175 commands.
 
 ## clipboard-register
 
@@ -51,15 +51,6 @@ There are 181 commands.
 | `edit.transpose` | Transpose | none | lua |
 | `edit.toggle_comment` | Toggle Comment | none | lua |
 
-## encoding-eol
-
-| Command | Summary | Arguments | Surfaces |
-|---|---|---|---|
-| `file.reopen_with_encoding` | Reopen With Encoding | encoding | lua |
-| `file.set_encoding` | Set Encoding | encoding | lua |
-| `file.set_line_ending` | Set Line Ending | line ending | lua |
-| `file.set_final_newline` | Set Final Newline | final newline | lua |
-
 ## external-modification-flow
 
 | Command | Summary | Arguments | Surfaces |
@@ -79,7 +70,6 @@ There are 181 commands.
 | `workspace.open_directory` | Open Directory | none | lua |
 | `file.new` | New File | none | lua |
 | `file.open` | Open File | none | lua |
-| `file.open_recent` | Open Recent | none | lua |
 | `file.save` | Save File | none | lua |
 | `file.save_all` | Save All Files | none | lua |
 | `file.save_as` | Save File As | none | lua |
@@ -87,7 +77,6 @@ There are 181 commands.
 | `file.rename` | Rename File | none | lua |
 | `file.delete` | Delete File | none | lua |
 | `file.new_directory` | New Directory | none | lua |
-| `file.open_dropped_content` | Open Dropped Content | dropped content | — |
 
 ## find-replace
 
@@ -259,14 +248,14 @@ There are 181 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `tab.close` | Close Tab | tab | lua |
-| `tab.close_others` | Close Other Tabs | tab | lua |
-| `tab.close_all` | Close All Tabs | tab | lua |
-| `tab.reopen_closed` | Reopen Closed | tab | lua |
-| `tab.next` | Next Tab | tab | lua |
-| `tab.previous` | Previous Tab | tab | lua |
-| `tab.move_left` | Move Left | tab | lua |
-| `tab.move_right` | Move Right | tab | lua |
+| `tab.close` | Close Tab | none | lua |
+| `tab.close_others` | Close Other Tabs | none | lua |
+| `tab.close_all` | Close All Tabs | none | lua |
+| `tab.reopen_closed` | Reopen Closed | none | lua |
+| `tab.next` | Next Tab | none | lua |
+| `tab.previous` | Previous Tab | none | lua |
+| `tab.move_left` | Move Left | none | lua |
+| `tab.move_right` | Move Right | none | lua |
 
 ## text-input-commands
 

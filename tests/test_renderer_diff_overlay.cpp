@@ -32,7 +32,7 @@ Fixture makeFixture(std::string_view text) {
         {root, root / "scratch", root / "recovery"});
     if (!created.accepted()) return {std::move(root), nullptr};
     auto runtime = std::move(created.session);
-    (void)runtime->dispatch({"file.open",  std::string{"overlay.cpp"}});
+    (void)ssg::test::openFile(*runtime, std::string{"overlay.cpp"});
     return {std::move(root), std::move(runtime)};
 }
 

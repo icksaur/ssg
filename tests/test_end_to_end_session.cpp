@@ -101,7 +101,14 @@ TEST(directAndTuiClientsMatchThroughRealRuntimeSnapshots) {
         ASSERT_EQ(canonical(*directSnapshot), canonical(client.snapshot()));
     };
 
-    runCommand("file.open", std::string{"doc.txt"});
+    const auto openFile = [&] {
+        auto directResult = ssg::test::openFile(direct, "doc.txt");
+        auto tuiResult = ssg::test::openFile(tui, "doc.txt");
+        ASSERT_TRUE(directResult.accepted());
+        ASSERT_TRUE(tuiResult.accepted());
+    };
+
+    openFile();
     runText("!");
     runCommand("cursor.left");
     runText("?");

@@ -63,6 +63,12 @@ inline CommandResult dispatchInput(Editor& editor, ClientInput input) {
     return requireCommand(editor.input(std::move(input)));
 }
 
+inline CommandResult openFile(Editor& editor, std::string_view path) {
+    auto result = applyFilePathCompletion(editor, PromptCompletion::FileOpen, path);
+    return {result.accepted ? CommandError::None : CommandError::HandlerFailed,
+            std::move(result.message), std::move(result.viewAction)};
+}
+
 inline CommandResult typeText(Editor& editor, std::string text) {
     std::lock_guard operationLock{editor.operationMutex};
     auto const active = editor.activeDocumentId();

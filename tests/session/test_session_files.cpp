@@ -107,15 +107,17 @@ std::string leaveDirtyDraft(const std::filesystem::path& root) {
     auto created = ssg::createEditor(configFor(root));
     if (!created.accepted()) return {};
     auto& runtime = *created.session;
-    (void)runtime.dispatch({"file.open",  std::string{"note.txt"}});
+    (void)ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen,
+                                       "note.txt");
     (void)ssg::test::typeText(runtime, "!");
     const auto draft = ssg::test::activeDocumentText(runtime);
     (void)runtime.flushDueAutosaveDrafts();
     return draft;
 }
 
-ssg::CommandResult reopenNote(ssg::Editor& runtime) {
-    return runtime.dispatch({"file.open",  std::string{"note.txt"}});
+bool reopenNote(ssg::Editor& runtime) {
+    return ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen,
+                                        "note.txt").accepted;
 }
 
 TEST(reopeningADirtyDraftRestoresTheEditsWhenDiskIsUnchanged) {
@@ -128,7 +130,7 @@ TEST(reopeningADirtyDraftRestoresTheEditsWhenDiskIsUnchanged) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), draft);
     ASSERT_TRUE(activeTabDirty(runtime));
 
@@ -145,7 +147,7 @@ TEST(reopeningAConvergedDraftDropsItAndOpensClean) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), draft);
     ASSERT_FALSE(activeTabDirty(runtime));
 
@@ -164,7 +166,7 @@ TEST(reopeningADraftAfterAnExternalChangeFlagsConflict) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
     // The draft still loads as a dirty buffer (never a blind blocking choice)...
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), draft);
     ASSERT_TRUE(activeTabDirty(runtime));
@@ -184,14 +186,14 @@ TEST(editingAndSavingARestoredDraftRoundTripsCoherently) {
         auto created = ssg::createEditor(configFor(root));
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
-        ASSERT_TRUE(reopenNote(runtime).accepted());
+        ASSERT_TRUE(reopenNote(runtime));
         ASSERT_TRUE(ssg::test::typeText(runtime, "X").accepted());
         ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
     }
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
 
     const auto restored = ssg::test::activeDocumentText(runtime);
     // A further edit after restore must apply cleanly and stay dirty...
@@ -219,19 +221,15 @@ TEST(reactivatingAnOpenTabDoesNotReapplyItsDraft) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), draft);
     // Edit past the recovered draft, open another file, then re-open note.txt:
     // openFile short-circuits to the already-open document, so reconcile must not
     // run again and must leave the live edited buffer intact.
     ASSERT_TRUE(ssg::test::typeText(runtime, "Z").accepted());
     const auto live = ssg::test::activeDocumentText(runtime);
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"other.txt"}})
-                    .accepted());
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"note.txt"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "other.txt").accepted);
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), live);
     ASSERT_TRUE(activeTabDirty(runtime));
 }
@@ -246,7 +244,7 @@ TEST(draftDiffOnAConflictShowsDraftAgainstDiskHunks) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
 
 
     ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
@@ -270,7 +268,7 @@ TEST(draftDiffWithDiskMissingDiffsDraftAgainstEmpty) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
     // The file vanishes after the draft is open: draft.diff must still succeed,
     // diffing the draft against empty rather than failing.
     std::filesystem::remove(root / "workspace" / "note.txt");
@@ -292,7 +290,7 @@ TEST(draftDiffSurvivesAGitScanThatDoesNotMentionTheFile) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
     ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
                     .accepted());
     ASSERT_TRUE(activeTabIsLiveDiff(runtime));
@@ -326,7 +324,7 @@ TEST(draftDiscardArchivesTheDraftAndLoadsDiskContent) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
 
 
     ASSERT_TRUE(runtime.dispatch({"draft.discard",  {}})
@@ -357,7 +355,7 @@ TEST(discardedDraftIsRemovedFromScratchSoReopenIsClean) {
         auto created = ssg::createEditor(configFor(root));
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
-        ASSERT_TRUE(reopenNote(runtime).accepted());
+        ASSERT_TRUE(reopenNote(runtime));
         ASSERT_TRUE(runtime.dispatch({"draft.discard",  {}})
                         .accepted());
     }
@@ -365,7 +363,7 @@ TEST(discardedDraftIsRemovedFromScratchSoReopenIsClean) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"changed externally\n"});
     ASSERT_FALSE(activeTabDirty(runtime));
 
@@ -377,9 +375,7 @@ TEST(draftDiscardRefusesACleanSavedDocument) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"note.txt"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     // Nothing unsaved: discard must refuse rather than archive an empty change.
     ASSERT_FALSE(runtime.dispatch({"draft.discard",  {}})
                      .accepted());
@@ -405,8 +401,7 @@ TEST(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits) {
         auto created = ssg::createEditor(configFor(root));
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
-        ASSERT_TRUE(runtime.dispatch({"file.open",  relKey})
-                        .accepted());
+        ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, relKey).accepted);
         ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
         ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
     }
@@ -415,8 +410,7 @@ TEST(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  relKey})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, relKey).accepted);
     // Discard must succeed and produce exactly one bounded-name archive entry.
     ASSERT_TRUE(runtime.dispatch({"draft.discard",  {}})
                     .accepted());
@@ -436,7 +430,7 @@ TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
         auto created = ssg::createEditor(configFor(root));
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
-        ASSERT_TRUE(reopenNote(runtime).accepted());
+        ASSERT_TRUE(reopenNote(runtime));
 
         ASSERT_TRUE(hasNoticeBar(*ssg::test::projectGridFrame(runtime, dims)));
     }
@@ -447,7 +441,7 @@ TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
         auto created = ssg::createEditor(configFor(root));
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
-        ASSERT_TRUE(reopenNote(runtime).accepted());
+        ASSERT_TRUE(reopenNote(runtime));
 
         ASSERT_FALSE(hasNoticeBar(*ssg::test::projectGridFrame(runtime, dims)));
     }
@@ -465,7 +459,7 @@ TEST(noticeViewIsPresentOnlyOnADraftConflict) {
         auto created = ssg::createEditor(configFor(root));
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
-        ASSERT_TRUE(reopenNote(runtime).accepted());
+        ASSERT_TRUE(reopenNote(runtime));
         auto snapshot = ssg::test::projectGridFrame(runtime);
         ASSERT_TRUE(snapshot.has_value());
         const auto& notice = snapshot->notice;
@@ -479,7 +473,7 @@ TEST(noticeViewIsPresentOnlyOnADraftConflict) {
         auto created = ssg::createEditor(configFor(root));
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
-        ASSERT_TRUE(reopenNote(runtime).accepted());
+        ASSERT_TRUE(reopenNote(runtime));
         auto snapshot = ssg::test::projectGridFrame(runtime);
         ASSERT_TRUE(snapshot.has_value());
         ASSERT_FALSE(snapshot->notice.has_value());
@@ -497,7 +491,7 @@ TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
     auto frame = ssg::test::projectGridFrame(runtime, dims);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
@@ -556,7 +550,7 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     auto conflictCreated = ssg::createEditor(configFor(conflictRoot));
     ASSERT_TRUE(conflictCreated.accepted());
     auto& conflict = *conflictCreated.session;
-    ASSERT_TRUE(reopenNote(conflict).accepted());
+    ASSERT_TRUE(reopenNote(conflict));
     auto conflictFrame = ssg::test::projectGridFrame(conflict, dims);
     ASSERT_TRUE(conflictFrame.has_value());
     if (!conflictFrame) return;
@@ -567,7 +561,7 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     auto restoredCreated = ssg::createEditor(configFor(restoredRoot));
     ASSERT_TRUE(restoredCreated.accepted());
     auto& restored = *restoredCreated.session;
-    ASSERT_TRUE(reopenNote(restored).accepted());
+    ASSERT_TRUE(reopenNote(restored));
     auto restoredFrame = ssg::test::projectGridFrame(restored, dims);
     ASSERT_TRUE(restoredFrame.has_value());
     if (!restoredFrame) return;
@@ -604,7 +598,7 @@ TEST(clickingNoticeActionsDispatchesTheirCommands) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
     auto frame = ssg::test::projectGridFrame(runtime, dims);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
@@ -652,7 +646,7 @@ TEST(dismissRefusesWhenThereIsNoConflictNotice) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
 
     ASSERT_FALSE(runtime.dispatch({"draft.dismiss",  {}})
                      .accepted());
@@ -669,9 +663,7 @@ TEST(liveDiffVirtualDocumentIsNotAutosavedAsADraft) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"note.txt"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     // A clean file with a live-diff tab open: nothing dirty to draft. The diff
     // virtual doc must NOT be flushed.
     ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
@@ -689,9 +681,7 @@ TEST(liveDiffTabDoesNotInflateTheDirtyDocumentFlushCount) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"note.txt"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
     ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
                     .accepted());
@@ -713,7 +703,7 @@ TEST(binaryDiskReplacementRaisesConflictNotSilentDraftLoss) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
     // Not silently None: the conflict is surfaced (old behaviour left it None).
 
     ASSERT_TRUE(hasNoticeBar(*ssg::test::projectGridFrame(runtime, {80, 24})));
@@ -729,9 +719,7 @@ TEST(oversizedBufferIsNotAutosavedAndIsReportedOnce) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     runtime.autosave.draftByteCap = 4;  // "hi\n" + edits exceed it
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"note.txt"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     ASSERT_TRUE(ssg::test::typeText(runtime, "ab").accepted());
     // Over cap: not persisted (flush count 0) and reported once.
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
@@ -740,7 +728,7 @@ TEST(oversizedBufferIsNotAutosavedAndIsReportedOnce) {
     auto reCreated = ssg::createEditor(configFor(root));
     ASSERT_TRUE(reCreated.accepted());
     auto& reopened = *reCreated.session;
-    ASSERT_TRUE(reopenNote(reopened).accepted());
+    ASSERT_TRUE(reopenNote(reopened));
 
     ASSERT_FALSE(activeTabDirty(reopened));
 }
@@ -754,9 +742,7 @@ TEST(loweringAutosaveDebounceMsEnablesAFlushTheDefaultSuppresses) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",
-                                  std::string{"note.txt"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     ASSERT_TRUE(ssg::test::typeText(runtime, "a").accepted());
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});  // eager first flush
 
@@ -786,7 +772,7 @@ TEST(touchingTheFileWithIdenticalBytesIsNotAFalseConflict) {
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(reopenNote(runtime));
     // Unchanged, not Conflict: the draft is restored quietly, no yellow notice.
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), draft);
     ASSERT_TRUE(activeTabDirty(runtime));
@@ -826,14 +812,14 @@ TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
     };
 
     // Open A and scroll far down (free scroll leaves the caret off-screen above).
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"a.txt"}}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "a.txt").accepted);
     ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
                                        {ssg::ScrollTarget::Document, 50}}).accepted());
     ASSERT_EQ(firstRow(), 50U);
 
     // Opening B resets the view so B's caret (its document start) is visible: the
     // stale offset of 50 must not carry over.
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"b.txt"}}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "b.txt").accepted);
     ASSERT_EQ(firstRow(), 0U);
 }
 
@@ -849,8 +835,8 @@ TEST(openEditSaveRoundTripsRealDiskBytes) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
 
-    auto open = runtime.dispatch({"file.open",  std::string{"note.txt"}});
-    ASSERT_TRUE(open.accepted());
+    auto open = ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt");
+    ASSERT_TRUE(open.accepted);
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"hello"});
 
     auto insert = ssg::test::typeText(runtime, "!");
@@ -869,8 +855,8 @@ TEST(droppedContentOpensAsANewDocument) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
 
-    auto accepted = runtime.dispatch({"file.open_dropped_content",  ssg::DroppedContentArguments{{'a'}, "a.txt"}});
-    ASSERT_TRUE(accepted.accepted());
+    auto accepted = ssg::openDroppedContent(runtime, std::vector<std::uint8_t>{'a'}, "a.txt");
+    ASSERT_TRUE(accepted.accepted);
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"a"});
 }
 
@@ -897,11 +883,11 @@ TEST(encodingDispatchMatchesEncodeOracleAndSavedBytes) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"note.txt"}}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
 
-    ASSERT_TRUE(runtime.dispatch({"file.set_encoding",  ssg::SetEncodingArguments{ssg::TextEncoding::Utf8Bom}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"file.set_line_ending",  ssg::SetLineEndingArguments{ssg::LineEnding::Crlf}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"file.set_final_newline",  ssg::SetFinalNewlineArguments{true}}).accepted());
+    ASSERT_TRUE(ssg::setFileEncoding(runtime, ssg::TextEncoding::Utf8Bom).accepted);
+    ASSERT_TRUE(ssg::setFileLineEnding(runtime, ssg::LineEnding::Crlf).accepted);
+    ASSERT_TRUE(ssg::setFileFinalNewline(runtime, true).accepted);
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
 
@@ -917,10 +903,10 @@ TEST(reopenWithEncodingDispatchRedecodesRealFileBytes) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"latin.txt"}}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "latin.txt").accepted);
 
-    auto reopened = runtime.dispatch({"file.reopen_with_encoding",  ssg::ReopenWithEncodingArguments{ssg::TextEncoding::Iso88591}});
-    ASSERT_TRUE(reopened.accepted());
+    auto reopened = ssg::reopenWithEncoding(runtime, ssg::TextEncoding::Iso88591);
+    ASSERT_TRUE(reopened.accepted);
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"\xC3\xA9\n"});
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
@@ -941,8 +927,8 @@ TEST(closingTheLastTabClearsTheEditorDocument) {
     };
 
     // Open two files: two tabs, the active document shows content.
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"a.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"b.txt"}}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "a.txt").accepted);
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "b.txt").accepted);
     ASSERT_EQ(tabCount(), std::size_t{2});
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"beta"});
 
@@ -970,8 +956,8 @@ TEST(tabActivateFocusesTheEditor) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"a.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"b.txt"}}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "a.txt").accepted);
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "b.txt").accepted);
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = ssg::test::projectGridFrame(runtime);
@@ -1008,8 +994,8 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
         auto snap = grid.present(runtime);
         return snap ? snap->viewport.firstVisualRow : 0U;
     };
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"a.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"b.txt"}}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "a.txt").accepted);
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "b.txt").accepted);
     // B is active; scroll it far down (free scroll leaves B's caret off-screen).
     ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
                                        {ssg::ScrollTarget::Document, 50}}).accepted());
@@ -1039,16 +1025,10 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
 
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"a.txt"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "a.txt").accepted);
     ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"!alpha"});
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"b.txt"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "b.txt").accepted);
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"beta"});
 
     auto beforeClose = ssg::test::projectGridFrame(runtime);
@@ -1067,9 +1047,7 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
     ASSERT_TRUE(documentA.has_value());
     if (!tabA || !documentA) return;
 
-    ASSERT_TRUE(runtime
-                    .dispatch({"tab.close",  *tabA})
-                    .accepted());
+    ASSERT_TRUE(ssg::closeTabById(runtime, *tabA).accepted);
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"beta"});
     ASSERT_TRUE(runtime
                     .dispatch({"tab.reopen_closed",  {}})
@@ -1097,7 +1075,7 @@ TEST(autosaveFlushesADirtyDocumentEagerlyThenDebounces) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"note.txt"}}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
 
     // A clean, just-opened document is not flushed.
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
@@ -1119,7 +1097,7 @@ TEST(autosaveFlushesNothingWhenNoDocumentIsDirty) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"note.txt"}}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     // Edit then save -> clean again -> no autosave.
     ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
     ASSERT_TRUE(runtime.dispatch({"file.save",  {}}).accepted());
@@ -1133,7 +1111,7 @@ TEST(autosaveFlushAllForcesADirtyDocumentAfterAnEagerFlush) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"note.txt"}}).accepted());
+    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
     // A clean-exit flush ignores the debounce and writes the dirty draft again,

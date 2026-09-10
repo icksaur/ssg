@@ -98,7 +98,7 @@ std::string captureGridMatrix() {
         {root / "workspace", root / "scratch", root / "recovery"});
     if (!created.accepted() || !created.session) return "runtime create failed";
     auto& runtime = *created.session;
-    (void)runtime.dispatch({"file.open",  std::string{"alpha.txt"}});
+    (void)ssg::test::openFile(runtime, std::string{"alpha.txt"});
 
     const ssg::ViewportDimensions dims{80, 24};
     std::ostringstream out;

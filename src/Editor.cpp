@@ -1858,10 +1858,6 @@ CommandResult Editor::dispatchLocked(ClientCommand const& command) {
         return outcome;
     };
     auto result = dispatchAndDrain(command);
-    if (result.accepted() && screen.openPicker() == PickerKind::File &&
-        command.id == "file.open") {
-        (void)screen.prompt().cancel();
-    }
     return {result.error, std::move(result.message),
             std::move(result.viewAction)};
 }

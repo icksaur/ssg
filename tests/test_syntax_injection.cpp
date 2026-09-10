@@ -94,9 +94,7 @@ TEST(injectedParserDrivesHighlighting) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"main.cpp"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"main.cpp"})
                     .accepted());
 
     auto snapshot = ssg::test::projectGridFrame(runtime);
@@ -120,9 +118,7 @@ TEST(nullParserYieldsPlainText) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"main.cpp"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"main.cpp"})
                     .accepted());
 
     auto snapshot = ssg::test::projectGridFrame(runtime);
@@ -147,9 +143,7 @@ TEST(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"main.cpp"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"main.cpp"})
                     .accepted());
 
     auto first = ssg::test::projectGridFrame(runtime);
@@ -176,9 +170,7 @@ TEST(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"big.cpp"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"big.cpp"})
                     .accepted());
 
     auto first = ssg::test::projectGridFrame(runtime);
@@ -214,17 +206,11 @@ TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
 
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"fileA.cpp"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"fileA.cpp"})
                     .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"fileB.cpp"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"fileB.cpp"})
                     .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"fileA.cpp"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"fileA.cpp"})
                     .accepted());
 
     auto firstA = ssg::test::projectGridFrame(runtime);
@@ -232,14 +218,10 @@ TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
     if (!firstA.has_value()) return;
     ASSERT_FALSE(hasScope(firstA->syntax, SyntaxScope::Keyword));
 
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"fileB.cpp"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"fileB.cpp"})
                     .accepted());
     ASSERT_TRUE(ssg::test::typeText(runtime, "z").accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open",
-                               std::string{"fileA.cpp"}})
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"fileA.cpp"})
                     .accepted());
 
     auto secondA = ssg::test::projectGridFrame(runtime);

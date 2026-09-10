@@ -191,8 +191,8 @@ TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"alpha.txt"}});
-    (void)runtime->dispatch({"file.open",  std::string{"beta.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"alpha.txt"});
+    (void)ssg::test::openFile(*runtime, std::string{"beta.txt"});
     auto snapshot = ssg::test::projectGridFrame(*runtime, {60, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -253,7 +253,7 @@ TEST(headerAndFooterCellsAndHitsUseTheSolvedTree) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"doc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
     auto projected = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(projected.has_value());
     if (!projected) return;
@@ -289,10 +289,8 @@ TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",
-                             std::string{"alpha.txt"}});
-    (void)runtime->dispatch({"file.open",
-                             std::string{"beta.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"alpha.txt"});
+    (void)ssg::test::openFile(*runtime, std::string{"beta.txt"});
     (void)runtime->dispatch({"panel.toggle",  {}});
     auto snapshot = ssg::test::projectGridFrame(*runtime, {60, 12});
     ASSERT_TRUE(snapshot.has_value());
@@ -370,7 +368,7 @@ TEST(renderPaintsContentNotAccessibilityLabels) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"hello.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"hello.txt"});
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -390,7 +388,7 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"n.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"n.txt"});
     (void)runtime->dispatch({"view.toggle_line_numbers",  {}});
     // Put the caret on line 2 (0-indexed 1) so its number highlights.
     auto atBeta = ssg::resolveSelectionPosition("alpha\nbeta\ngamma\n",
@@ -454,7 +452,7 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"m.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"m.txt"});
     (void)runtime->dispatch({"view.toggle_line_numbers",  {}});
     // Add a second cursor on the line below: carets now on lines 1 and 2.
     (void)runtime->dispatch({"select.add_cursor_down",  {}});
@@ -492,7 +490,7 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"long.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"long.txt"});
 
     ssg::ViewportDimensions const dims{40, 8};
     ssg::test::GridTestView gridView{dims};
@@ -539,7 +537,7 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"hello.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"hello.txt"});
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -610,7 +608,7 @@ TEST(renderShowsPaletteQueryAndGhostInHeader) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"hello.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"hello.txt"});
     (void)runtime->dispatch({"palette.open",  {}});
 
     ssg::PaletteReport report;
@@ -649,7 +647,7 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"sel.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"sel.txt"});
 
     // Baseline: no selection -> the document row has no selection-role cells.
     {
@@ -714,7 +712,7 @@ TEST(renderFillsEndOfLineForMultilineSelection) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"ml.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"ml.txt"});
     // Anchor at line 0 col 0, extend down into line 1: the selection spans the
     // newline after "alpha", so alpha's end-of-line fills to the pane edge.
     ssg::test::GridTestView presenter{{80, 24}};
@@ -750,7 +748,7 @@ TEST(renderHighlightsWideGlyphCells) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"w.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"w.txt"});
     (void)runtime->dispatch({"select.all",  {}});
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -778,7 +776,7 @@ TEST(renderPaintsSecondaryRangedSelectionCaret) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"rc.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"rc.txt"});
     // Select the first word, then add the next occurrence: two RANGED selections,
     // each with an active caret. The secondary (non-primary) ranged selection's
     // caret must render as a caret cell even though it is not a bare caret.
@@ -814,7 +812,7 @@ TEST(renderPaintsSecondaryCaretAsACell) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"car.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"car.txt"});
 
     // Two carets (primary + one below): the primary uses the hardware cursor,
     // the other renders as a caret-role cell.
@@ -848,7 +846,7 @@ TEST(renderPaintsFindMatchesAndActiveMatch) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"find.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"find.txt"});
     (void)runtime->dispatch({"find.open",  {}});
     (void)runtime->dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}});
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
@@ -893,7 +891,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"stale.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"stale.txt"});
     (void)runtime->dispatch({"find.open",  {}});
     (void)runtime->dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}});
 
@@ -923,7 +921,7 @@ TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"rep.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"rep.txt"});
     (void)runtime->dispatch({"replace.open",  {}});
     (void)runtime->dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}});
     (void)runtime->dispatch({"replace.update_replacement",  ssg::FindQueryArguments{"dog"}});
@@ -949,7 +947,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"opt.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"opt.txt"});
     (void)runtime->dispatch({"find.open",  {}});
     (void)runtime->dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}});
 
@@ -998,7 +996,7 @@ TEST(renderPromptControlLabelsAreLowercaseChrome) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"p.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"p.txt"});
 
     struct Case {
         const char* command;
@@ -1128,7 +1126,7 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"hello.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"hello.txt"});
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1182,7 +1180,7 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"file.open",  std::string{"hello.txt"}});
+    (void)ssg::test::openFile(*runtime, std::string{"hello.txt"});
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;

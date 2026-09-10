@@ -65,10 +65,7 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto runtime = std::move(created.session);
-    ASSERT_TRUE(runtime
-                    ->dispatch(
-                               {"file.open", 
-                                std::string{"a.txt"}})
+    ASSERT_TRUE(ssg::test::openFile(*runtime, std::string{"a.txt"})
                     .accepted());
     auto realFrame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(realFrame.has_value());
