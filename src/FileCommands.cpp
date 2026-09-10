@@ -6,27 +6,27 @@ namespace ssg {
 
 PromptRequest fileCommandPathPrompt(FileCommand command) {
     std::string label;
-    std::string id;
+    PromptCompletion completion;
     switch (command) {
         case FileCommand::OpenDirectory:
             label = "open directory";
-            id = "workspace.open_directory";
+            completion = PromptCompletion::WorkspaceOpenDirectory;
             break;
         case FileCommand::Open:
             label = "open file";
-            id = "file.open";
+            completion = PromptCompletion::FileOpen;
             break;
         case FileCommand::SaveAs:
             label = "save file as";
-            id = "file.save_as";
+            completion = PromptCompletion::FileSaveAs;
             break;
         case FileCommand::Rename:
             label = "rename file";
-            id = "file.rename";
+            completion = PromptCompletion::FileRename;
             break;
         case FileCommand::NewDirectory:
             label = "new directory path";
-            id = "file.new_directory";
+            completion = PromptCompletion::FileNewDirectory;
             break;
         // FileCommand::Create is deliberately absent: file.new creates a buffer
         // immediately, with no payload for an unnamed one or a workspace-relative
@@ -36,7 +36,7 @@ PromptRequest fileCommandPathPrompt(FileCommand command) {
                 "file command does not accept a path prompt");
     }
     return {PromptKind::Path, label, {{"path", label, {}}}, {}, std::nullopt,
-            std::move(id)};
+            completion};
 }
 
 }  // namespace ssg

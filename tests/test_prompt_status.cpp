@@ -84,7 +84,8 @@ TEST(promptControlsCarryTheirOperatingCommands) {
     // The input control carries the command that operates it -- a client never
     // hardcodes a per-field id. With the production input ids, Find's input drives
     // find.update_query and Replace's replacement input drives
-    // replace.update_replacement; every other input falls back to prompt.update_value.
+    // replace.update_replacement; every other input is operated through typed
+    // routing and has no command string.
     PromptRequest findReq;
     findReq.kind = PromptKind::Find;
     findReq.accessibleLabel = "Find";
@@ -104,8 +105,7 @@ TEST(promptControlsCarryTheirOperatingCommands) {
     pathReq.kind = PromptKind::Path;
     pathReq.accessibleLabel = "Path";
     pathReq.inputs.push_back({"path", "Path", "/tmp"});
-    ASSERT_EQ(resolvePromptControls(pathReq).front().command,
-              std::string{"prompt.update_value"});
+    ASSERT_TRUE(resolvePromptControls(pathReq).front().command.empty());
 }
 
 StatusItem status(std::uint64_t id, StatusPriority priority,

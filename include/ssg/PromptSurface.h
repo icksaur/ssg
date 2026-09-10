@@ -69,19 +69,23 @@ struct PromptMatchCount {
                            const PromptMatchCount&) = default;
 };
 
+enum class PromptCompletion : std::uint8_t {
+    None = 0,
+    WorkspaceOpenDirectory,
+    FileOpen,
+    FileSaveAs,
+    FileRename,
+    FileNewDirectory,
+    GotoLine,
+};
+
 struct PromptRequest {
     PromptKind kind = PromptKind::CommandArgument;
     std::string accessibleLabel;
     std::vector<PromptInput> inputs;
     std::vector<PromptToggle> toggles;
     std::optional<PromptMatchCount> matchCount;
-    // The command this prompt is collecting arguments for, re-dispatched with
-    // the typed value on submit. Carrying the id -- rather than a kind enum the
-    // submit path switches on -- is what lets a new path-taking command be
-    // added without touching submission at all.
-    //
-    // Runtime-internal: clients never need to know which command a prompt serves.
-    std::string commandId;
+    PromptCompletion completion = PromptCompletion::None;
     friend bool operator==(const PromptRequest&, const PromptRequest&) = default;
 };
 
@@ -89,27 +93,16 @@ struct PromptSubmission {
     PromptKind kind = PromptKind::CommandArgument;
     std::vector<std::string> values;
     std::vector<bool> toggles;
-    std::string commandId;
+    PromptCompletion completion = PromptCompletion::None;
     friend bool operator==(const PromptSubmission&,
                            const PromptSubmission&) = default;
 };
 
-// Payload for `prompt.update_value`: which input of the active prompt receives
-// the text. Prompts with several inputs (replace) address them by index.
 struct PromptValueArguments {
     std::size_t index = 0;
     std::string value;
     friend bool operator==(const PromptValueArguments&,
                            const PromptValueArguments&) = default;
-};
-
-// Payload for `prompt.focus_control`: which input of the active prompt takes the
-// keyboard. Names the prompt input; an id not addressing an input is
-// rejected, so a toggle or the match count can never receive focus.
-struct PromptFocusArguments {
-    std::string controlId;
-    friend bool operator==(const PromptFocusArguments&,
-                           const PromptFocusArguments&) = default;
 };
 
 enum class PromptErrorCode : std::uint8_t {
@@ -181,11 +174,13 @@ struct PromptTextRoute {
     enum class Kind : std::uint8_t {
         Dispatch,
         AppendPaletteQuery,
+        UpdatePromptValue,
         Ignore,
     } kind = Kind::Ignore;
     CommandName command;
     std::any payload;
     std::string appendText;
+    PromptValueArguments promptValue;
 };
 
 [[nodiscard]] std::string applyPromptTextEdit(

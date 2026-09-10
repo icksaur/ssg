@@ -104,24 +104,18 @@ TEST(textPromptRoutesTheWholeNewValueAtIndexZero) {
     auto const route = routePromptTextEdit(
         atPrompt(ActivePrompt::TextPrompt, "na"),
         {PromptTextEdit::Kind::Append, "me"});
-    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
-    ASSERT_TRUE(route.command == CommandName{"prompt.update_value"});
-    auto const* args = std::any_cast<PromptValueArguments>(&route.payload);
-    ASSERT_TRUE(args != nullptr);
-    ASSERT_EQ(args->index, static_cast<std::size_t>(0));
-    ASSERT_EQ(args->value, std::string{"name"});
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::UpdatePromptValue);
+    ASSERT_EQ(route.promptValue.index, static_cast<std::size_t>(0));
+    ASSERT_EQ(route.promptValue.value, std::string{"name"});
 }
 
 TEST(genericTextPromptDeletionRoutesToPromptUpdateValueNotAHardcodedField) {
     PromptTextEdit back{PromptTextEdit::Kind::DeleteGraphemeBack, {}};
     auto const route = routePromptTextEdit(
         atPrompt(ActivePrompt::TextPrompt, "name", 0), back);
-    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
-    ASSERT_TRUE(route.command == CommandName{"prompt.update_value"});
-    auto const* args = std::any_cast<PromptValueArguments>(&route.payload);
-    ASSERT_TRUE(args != nullptr);
-    ASSERT_EQ(args->index, static_cast<std::size_t>(0));
-    ASSERT_EQ(args->value, std::string{"nam"});
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::UpdatePromptValue);
+    ASSERT_EQ(route.promptValue.index, static_cast<std::size_t>(0));
+    ASSERT_EQ(route.promptValue.value, std::string{"nam"});
 }
 
 TEST(promptFocusWithNoActivePromptIgnoresText) {

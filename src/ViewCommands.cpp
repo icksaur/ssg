@@ -95,8 +95,7 @@ CommandHandlerResult promptStatusCommand(Editor& runtime,
                                          std::string_view id,
                                          std::any const& payload) {
     if (id == "prompt.submit" || id == "prompt.cancel" ||
-        id == "prompt.next" || id == "prompt.previous" ||
-        id == "prompt.update_value") {
+        id == "prompt.next" || id == "prompt.previous") {
         auto const& request = runtime.screen.prompt().request();
         if (!request) {
             return failure("no active prompt");
@@ -130,32 +129,36 @@ CommandHandlerResult promptStatusCommand(Editor& runtime,
         if (id == "prompt.submit") {
             auto result = runtime.screen.prompt().submit();
             if (!result.accepted()) return failure(result.error->message);
-            // A prompt that names a command exists to collect that command's
-            // argument, so submitting it runs the command. Deferred to the
-            // dispatch wrapper because the session lock is non-reentrant.
             auto const& submission = result.submission;
-            if (submission && !submission->commandId.empty()) {
+            if (submission && submission->completion != PromptCompletion::None) {
                 if (submission->values.empty() ||
                     submission->values.front().empty()) {
-                    return failure(submission->commandId +
-                                   " requires a non-empty value");
+                    switch (submission->completion) {
+                    case PromptCompletion::WorkspaceOpenDirectory:
+                        return failure(
+                            "workspace.open_directory requires a non-empty value");
+                    case PromptCompletion::FileOpen:
+                        return failure("file.open requires a non-empty value");
+                    case PromptCompletion::FileSaveAs:
+                        return failure("file.save_as requires a non-empty value");
+                    case PromptCompletion::FileRename:
+                        return failure("file.rename requires a non-empty value");
+                    case PromptCompletion::FileNewDirectory:
+                        return failure(
+                            "file.new_directory requires a non-empty value");
+                    case PromptCompletion::GotoLine:
+                        return failure("goto.line requires a non-empty value");
+                    case PromptCompletion::None:
+                        break;
+                    }
                 }
-                if (!runtime.deferDispatch(
-                        ClientCommand{submission->commandId,
-                                      submission->values.front()})) {
-                    return failure("could not queue " + submission->commandId);
+                if (submission->completion == PromptCompletion::GotoLine) {
+                    return applyGotoLine(runtime, submission->values.front());
                 }
+                return applyFilePathCompletion(runtime, submission->completion,
+                                               submission->values.front());
             }
             return success();
-        }
-        if (id == "prompt.update_value") {
-            auto const* arguments = payloadAs<PromptValueArguments>(payload);
-            if (arguments == nullptr) {
-                return failure("prompt.update_value requires a value payload");
-            }
-            auto result =
-                runtime.screen.prompt().updateValue(arguments->index, arguments->value);
-            return result.accepted() ? success() : failure(result.error->message);
         }
         if (id == "prompt.cancel") {
             auto result = runtime.screen.prompt().cancel();
@@ -173,18 +176,7 @@ CommandHandlerResult promptStatusCommand(Editor& runtime,
     return success();
 }
 
-std::string settingMessage(SettingMutation const& mutation) {
-    return mutation.error ? mutation.error->message : "setting mutation failed";
-}
-
-void syncRuntimeSettings(Editor& runtime) {
-    runtime.wordWrap = boolSetting(runtime.settings, SettingKey::WordWrap,
-                                     runtime.wordWrap);
-    runtime.lineNumbers = boolSetting(runtime.settings, SettingKey::LineNumbers,
-                                      runtime.lineNumbers);
-}
-
-CommandHandlerResult settingsCommand(Editor& runtime, std::string_view id, std::any const& payload) {
+CommandHandlerResult settingsCommand(Editor& runtime, std::string_view id) {
     if (id == "settings.open") {
         auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
             PromptKind::Settings, "settings",
@@ -196,52 +188,7 @@ CommandHandlerResult settingsCommand(Editor& runtime, std::string_view id, std::
         runtime.enqueueStatus(StatusPriority::Information, runtime.settings.exportScope(SettingScope::Workspace));
         return success();
     }
-    if (id == "settings.import_workspace") {
-        auto const* document = payloadAs<std::string>(payload);
-        if (document == nullptr) return failure("settings.import_workspace requires a document payload");
-        auto result = runtime.settings.importScope(SettingScope::Workspace, *document);
-        syncRuntimeSettings(runtime);
-        return result.ok ? success() : failure(result.message);
-    }
-    if (id == "settings.set") {
-        auto const* arguments = payloadAs<SettingSetArguments>(payload);
-        if (arguments == nullptr) {
-            return failure("settings.set requires a typed settings payload");
-        }
-        auto mutation = runtime.settings.set(arguments->scope, arguments->key,
-                                             arguments->value);
-        if (!mutation.accepted()) return failure(settingMessage(mutation));
-        syncRuntimeSettings(runtime);
-        return success();
-    }
-    if (id == "settings.reset") {
-        auto const* arguments = payloadAs<SettingResetArguments>(payload);
-        if (arguments == nullptr) {
-            return failure("settings.reset requires a typed settings payload");
-        }
-        auto mutation = runtime.settings.reset(arguments->scope, arguments->key);
-        if (!mutation.accepted()) return failure(settingMessage(mutation));
-        syncRuntimeSettings(runtime);
-        return success();
-    }
-    if (id == "settings.reset_scope") {
-        auto const* arguments = payloadAs<SettingResetScopeArguments>(payload);
-        if (arguments == nullptr) {
-            return failure("settings.reset_scope requires a typed settings payload");
-        }
-        try {
-            for (auto const& entry : runtime.settings.viewState().entries) {
-                if (!runtime.settings.scopedValue(arguments->scope, entry.key)) continue;
-                auto mutation = runtime.settings.reset(arguments->scope, entry.key);
-                if (!mutation.accepted()) return failure(settingMessage(mutation));
-            }
-        } catch (std::invalid_argument const& error) {
-            return failure(error.what());
-        }
-        syncRuntimeSettings(runtime);
-        return success();
-    }
-    return failure(std::string{id} + " requires a typed settings payload");
+    return failure("unknown settings command");
 }
 
 
@@ -397,11 +344,9 @@ void registerViewportCommands(CommandCatalog& catalog,
 
 }
 
-// Reading and writing settings.
-//
-// settings.import_workspace carries a whole settings document from the prompt
-// that collected it, and settings.set/reset carry typed mutations that a remote
-// client may send.  The three that take nothing say so.
+// Reading and writing settings. The no-argument commands open the settings
+// prompt and export the workspace scope; typed mutations are applied directly
+// through Editor members and do not go through the command catalog.
 void registerSettingsCommands(CommandCatalog& catalog,
                               Editor& runtime) {
     auto declare = [](std::string id, std::string summary) {
@@ -413,61 +358,28 @@ void registerSettingsCommands(CommandCatalog& catalog,
             .luaApi = true,
         };
     };
-    auto run = [&runtime](std::string_view id, std::any payload) {
-        return settingsCommand(runtime, id, payload);
+    auto run = [&runtime](std::string_view id) {
+        return settingsCommand(runtime, id);
     };
 
     {
         auto built = declare("settings.open", "Open Settings");
         built.label = "Open Settings";
         built.binding = bindNoArgumentHandler(
-            [run](CommandContext&) { return run("settings.open", {}); });
+            [run](CommandContext&) { return run("settings.open"); });
         catalog.add(std::move(built));
     }
     {
         auto built = declare("settings.export_workspace", "Export Workspace");
         built.binding = bindNoArgumentHandler([run](CommandContext&) {
-            return run("settings.export_workspace", {});
+            return run("settings.export_workspace");
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = declare("settings.import_workspace", "Import Workspace");
-        built.binding = bindInProcessHandler<std::string>(
-            [run](CommandContext&, std::string const& document) {
-                return run("settings.import_workspace", std::any{document});
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = declare("settings.set", "Set");
-        built.binding = bindWireHandler<SettingSetArguments>(
-            [run](CommandContext&, SettingSetArguments const& arguments) {
-                return run("settings.set", std::any{arguments});
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = declare("settings.reset", "Reset");
-        built.binding = bindWireHandler<SettingResetArguments>(
-            [run](CommandContext&, SettingResetArguments const& arguments) {
-                return run("settings.reset", std::any{arguments});
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = declare("settings.reset_scope", "Reset Scope");
-        built.binding = bindWireHandler<SettingResetScopeArguments>(
-            [run](CommandContext&,
-                  SettingResetScopeArguments const& arguments) {
-                return run("settings.reset_scope", std::any{arguments});
-            });
         catalog.add(std::move(built));
     }
 }
 
-// The prompt line and the status bar.  Only prompt.update_value carries
-// anything: the text typed so far.
+// The prompt line and the status bar. All commands here take no argument;
+// prompt text edits are routed through typed UpdatePromptValueInput.
 void registerPromptStatusCommands(CommandCatalog& catalog,
                                   Editor& runtime) {
     auto spec = [](std::string id, std::string summary) {
@@ -498,17 +410,6 @@ void registerPromptStatusCommands(CommandCatalog& catalog,
     bare("status.next", "Next", "");
     bare("status.previous", "Previous", "");
     bare("status.dismiss", "Dismiss", "");
-
-    {
-        auto built = spec("prompt.update_value", "Update Value");
-        built.binding = bindWireHandler<PromptValueArguments>(
-            [&runtime](CommandContext&,
-                       PromptValueArguments const& arguments) {
-                return promptStatusCommand(
-                    runtime, "prompt.update_value", std::any{arguments});
-            });
-        catalog.add(std::move(built));
-    }
 }
 
 // Panes, the sidebar, and distraction-free mode. None takes an argument.

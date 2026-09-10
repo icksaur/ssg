@@ -53,9 +53,11 @@ ssg::CommandResult run(ssg::Editor& runtime, std::string id,
     return runtime.dispatch({std::move(id),  std::move(payload)});
 }
 
-// The prompt as the client sees it. commandId is deliberately NOT here -- it is
-// runtime-internal attribution -- so these tests observe which command a prompt
-// belongs to through what submitting it DOES, which is the stronger oracle.
+bool updatePromptValue(ssg::Editor& runtime, std::size_t index, std::string value) {
+    auto result = runtime.input(ssg::UpdatePromptValueInput{index, std::move(value)});
+    return result.outcome != ssg::ClientInputOutcome::Rejected;
+}
+
 bool pathPromptOpen(ssg::Editor& runtime) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     if (!snapshot) return false;
@@ -148,19 +150,17 @@ TEST(aPathCommandThatCannotRunRefusesInsteadOfPrompting) {
 }
 
 // The load-bearing behavior: two different path commands prompted in turn must
-// each re-dispatch THEMSELVES. A submit that ignored the attribution would send
-// both to whichever command it hard-coded, and the differing side effects
+// each apply their own typed file operation. A submit that used the wrong
+// completion would apply the wrong operation, and the differing side effects
 // (a directory versus a file) is what detects that.
-TEST(submittingAPathPromptRedispatchesTheCommandThatOpenedIt) {
+TEST(submittingAPathPromptRunsTheOperationThatOpenedIt) {
     TemporaryDirectory directory;
     auto runtime = makeRuntime(directory.path());
     ASSERT_TRUE(runtime != nullptr);
 
     ASSERT_TRUE(run(*runtime, "file.new_directory").accepted());
     ASSERT_TRUE(pathPromptOpen(*runtime));
-    ASSERT_TRUE(run(*runtime, "prompt.update_value",
-                    ssg::PromptValueArguments{0, "made-by-prompt"})
-                    .accepted());
+    ASSERT_TRUE(updatePromptValue(*runtime, 0, "made-by-prompt"));
     ASSERT_TRUE(run(*runtime, "prompt.submit").accepted());
     ASSERT_TRUE(fs::is_directory(directory.path() / "made-by-prompt"));
     ASSERT_FALSE(pathPromptOpen(*runtime));
@@ -170,9 +170,7 @@ TEST(submittingAPathPromptRedispatchesTheCommandThatOpenedIt) {
     ASSERT_TRUE(run(*runtime, "file.new").accepted());
     ASSERT_TRUE(run(*runtime, "file.save_as").accepted());
     ASSERT_TRUE(pathPromptOpen(*runtime));
-    ASSERT_TRUE(run(*runtime, "prompt.update_value",
-                    ssg::PromptValueArguments{0, "saved-by-prompt.txt"})
-                    .accepted());
+    ASSERT_TRUE(updatePromptValue(*runtime, 0, "saved-by-prompt.txt"));
     ASSERT_TRUE(run(*runtime, "prompt.submit").accepted());
     ASSERT_TRUE(fs::is_regular_file(directory.path() / "saved-by-prompt.txt"));
 }
@@ -189,9 +187,7 @@ TEST(savingAnUnnamedBufferPromptsAndThenSaves) {
     ASSERT_TRUE(run(*runtime, "file.save").accepted());
     ASSERT_TRUE(pathPromptOpen(*runtime));
 
-    ASSERT_TRUE(run(*runtime, "prompt.update_value",
-                    ssg::PromptValueArguments{0, "named-at-save.txt"})
-                    .accepted());
+    ASSERT_TRUE(updatePromptValue(*runtime, 0, "named-at-save.txt"));
     ASSERT_TRUE(run(*runtime, "prompt.submit").accepted());
     ASSERT_TRUE(fs::is_regular_file(directory.path() / "named-at-save.txt"));
 }
@@ -204,9 +200,7 @@ TEST(cancellingAPathPromptRunsNothing) {
     ASSERT_TRUE(runtime != nullptr);
 
     ASSERT_TRUE(run(*runtime, "file.new_directory").accepted());
-    ASSERT_TRUE(run(*runtime, "prompt.update_value",
-                    ssg::PromptValueArguments{0, "never-created"})
-                    .accepted());
+    ASSERT_TRUE(updatePromptValue(*runtime, 0, "never-created"));
     ASSERT_TRUE(run(*runtime, "prompt.cancel").accepted());
 
     ASSERT_FALSE(fs::exists(directory.path() / "never-created"));
@@ -230,9 +224,7 @@ TEST(updatingAValueWithNoPromptOpenIsRejected) {
     auto runtime = makeRuntime(directory.path());
     ASSERT_TRUE(runtime != nullptr);
 
-    ASSERT_FALSE(run(*runtime, "prompt.update_value",
-                     ssg::PromptValueArguments{0, "stray"})
-                     .accepted());
+    ASSERT_FALSE(updatePromptValue(*runtime, 0, "stray"));
 }
 
 }  // namespace
@@ -241,7 +233,7 @@ SSG_TEST_SUITE(test_path_prompt) {
     RUN(pathPromptFlagAgreesWithThePathPromptAccessor);
     RUN(everyPathCommandWithoutAPayloadOpensAPathPrompt);
     RUN(aPathCommandThatCannotRunRefusesInsteadOfPrompting);
-    RUN(submittingAPathPromptRedispatchesTheCommandThatOpenedIt);
+    RUN(submittingAPathPromptRunsTheOperationThatOpenedIt);
     RUN(savingAnUnnamedBufferPromptsAndThenSaves);
     RUN(cancellingAPathPromptRunsNothing);
     RUN(submittingAnEmptyPathDoesNotRunTheCommand);

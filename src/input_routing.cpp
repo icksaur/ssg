@@ -114,6 +114,9 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
         if (route.kind == PromptTextRoute::Kind::Dispatch) {
             return dispatch(route.command, route.payload);
         }
+        if (route.kind == PromptTextRoute::Kind::UpdatePromptValue) {
+            return accepted(EditorMutation{route.promptValue});
+        }
         if (routing.prompt == ActivePrompt::Palette) {
             switch (edit.kind) {
             case PromptTextEdit::Kind::Append:
@@ -471,6 +474,11 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
         }
     }
     return rejected("notice action target is not actionable");
+}
+
+RoutedInput routeInput(InputRoutingSnapshot const&,
+                       UpdatePromptValueInput const& input) {
+    return accepted(EditorMutation{PromptValueArguments{input.index, input.value}});
 }
 
 }  // namespace

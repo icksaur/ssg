@@ -119,14 +119,7 @@ CommandHandlerResult bindFile(Editor& runtime,
         case FileCommand::OpenDirectory: {
             auto path = stringPayload(payload);
             if (!path) return failure("workspace.open_directory requires a path payload");
-            result = runtime.workspace.openDirectory(*path);
-            if (!result.accepted()) return failure(workspaceMessage(result));
-            runtime.root = runtime.workspace.root();
-            // Same housekeeping as at startup: opening a different workspace
-            // means a different archive to expire.
-            pruneArchiveReportingFailures(runtime);
-            (void)runtime.refreshTree();
-            return success();
+            return applyFilePathCompletion(runtime, PromptCompletion::WorkspaceOpenDirectory, *path);
         }
         case FileCommand::Create: {
             // A payload names the file to create; the file itself is not written
@@ -145,8 +138,7 @@ CommandHandlerResult bindFile(Editor& runtime,
                 if (!opened.accepted()) return failure(opened.error->message);
                 return success();
             }
-            result = runtime.workspace.openFile(*path);
-            return openDocumentResult(runtime, result);
+            return applyFilePathCompletion(runtime, PromptCompletion::FileOpen, *path);
         }
         case FileCommand::OpenRecent: {
             auto const* index = payloadAs<std::size_t>(payload);
@@ -198,10 +190,7 @@ CommandHandlerResult bindFile(Editor& runtime,
             auto path = stringPayload(payload);
             if (!id) return failure("no active document");
             if (!path) return failure("file.save_as requires a path payload");
-            result = runtime.workspace.saveAs(*id, *path);
-            if (!result.accepted()) return failure(workspaceMessage(result));
-            (void)runtime.refreshTree();
-            return runtime.updateTabsFor(*id);
+            return applyFilePathCompletion(runtime, PromptCompletion::FileSaveAs, *path);
         }
         case FileCommand::Reload: {
             auto id = runtime.activeDocumentId();
@@ -217,10 +206,7 @@ CommandHandlerResult bindFile(Editor& runtime,
             auto path = stringPayload(payload);
             if (!id) return failure("no active document");
             if (!path) return failure("file.rename requires a path payload");
-            result = runtime.workspace.renameFile(*id, *path);
-            if (!result.accepted()) return failure(workspaceMessage(result));
-            (void)runtime.refreshTree();
-            return runtime.updateTabsFor(*id);
+            return applyFilePathCompletion(runtime, PromptCompletion::FileRename, *path);
         }
         case FileCommand::Remove: {
             auto id = runtime.activeDocumentId();
@@ -243,10 +229,7 @@ CommandHandlerResult bindFile(Editor& runtime,
         case FileCommand::NewDirectory: {
             auto path = stringPayload(payload);
             if (!path) return failure("file.new_directory requires a path payload");
-            result = runtime.workspace.newDirectory(*path);
-            if (!result.accepted()) return failure(workspaceMessage(result));
-            (void)runtime.refreshTree();
-            return success();
+            return applyFilePathCompletion(runtime, PromptCompletion::FileNewDirectory, *path);
         }
     }
     return failure("unknown file command");
@@ -412,6 +395,69 @@ CommandHandlerResult bindEncoding(Editor& runtime,
 }
 
 }  // namespace
+
+CommandHandlerResult applyFilePathCompletion(Editor& runtime,
+                                             PromptCompletion completion,
+                                             std::string_view path) {
+    const auto command = [&]() -> std::optional<FileCommand> {
+        switch (completion) {
+        case PromptCompletion::WorkspaceOpenDirectory:
+            return FileCommand::OpenDirectory;
+        case PromptCompletion::FileOpen:
+            return FileCommand::Open;
+        case PromptCompletion::FileSaveAs:
+            return FileCommand::SaveAs;
+        case PromptCompletion::FileRename:
+            return FileCommand::Rename;
+        case PromptCompletion::FileNewDirectory:
+            return FileCommand::NewDirectory;
+        default:
+            return std::nullopt;
+        }
+    }();
+    if (!command) return failure("unsupported path completion");
+    if (auto refusal = pathCommandPrecondition(runtime, *command)) {
+        return failure(*refusal);
+    }
+
+    WorkspaceResult result;
+    switch (completion) {
+        case PromptCompletion::WorkspaceOpenDirectory:
+            result = runtime.workspace.openDirectory(path);
+            if (!result.accepted()) return failure(workspaceMessage(result));
+            runtime.root = runtime.workspace.root();
+            pruneArchiveReportingFailures(runtime);
+            (void)runtime.refreshTree();
+            return success();
+        case PromptCompletion::FileOpen:
+            result = runtime.workspace.openFile(path);
+            return openDocumentResult(runtime, result);
+        case PromptCompletion::FileSaveAs: {
+            auto id = runtime.activeDocumentId();
+            if (!id) return failure("no active document");
+            result = runtime.workspace.saveAs(*id, std::string{path});
+            if (!result.accepted()) return failure(workspaceMessage(result));
+            (void)runtime.refreshTree();
+            return runtime.updateTabsFor(*id);
+        }
+        case PromptCompletion::FileRename: {
+            auto id = runtime.activeDocumentId();
+            if (!id) return failure("no active document");
+            result = runtime.workspace.renameFile(*id, std::string{path});
+            if (!result.accepted()) return failure(workspaceMessage(result));
+            (void)runtime.refreshTree();
+            return runtime.updateTabsFor(*id);
+        }
+        case PromptCompletion::FileNewDirectory:
+            result = runtime.workspace.newDirectory(std::string{path});
+            if (!result.accepted()) return failure(workspaceMessage(result));
+            (void)runtime.refreshTree();
+            return success();
+        default:
+            break;
+    }
+    return failure("unsupported path completion");
+}
 
 CommandHandlerResult activateTab(Editor& runtime, TabId tabId) {
     return bindTab(runtime, TabCommand::Activate, std::any{tabId});

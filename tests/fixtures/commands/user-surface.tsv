@@ -135,13 +135,8 @@ prompt.focus_next_control	Prompt Focus Next Control	keep
 status.next	Status Next	keep
 status.previous	Status Previous	keep
 status.dismiss	Status Dismiss	keep
-prompt.update_value	Prompt Update Value	remove
 settings.open	Open Settings	keep
 settings.export_workspace	Settings Export Workspace	keep
-settings.import_workspace	Settings Import Workspace	remove
-settings.set	Settings Set	remove
-settings.reset	Settings Reset	remove
-settings.reset_scope	Settings Reset Scope	remove
 theme.set	Theme Set	config
 style.define	Style Define	config
 keymap.bind	Keymap Bind	config

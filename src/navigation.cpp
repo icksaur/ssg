@@ -13,6 +13,9 @@
 #include <string>
 
 namespace ssg {
+
+[[nodiscard]] CommandHandlerResult applyGotoLine(Editor& runtime, std::string_view lineText);
+
 namespace {
 
 CommandHandlerResult validatePublishedCommand(Editor& runtime,
@@ -220,62 +223,16 @@ CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::an
         if (!applied.accepted) return applied;
         (void)runtime.navigation.visit(*target, NavigationOrigin::User);
     } else if (id == "goto.line") {
-        // No payload means the command was invoked directly (keybinding or
-        // palette): open a one-field prompt that re-dispatches goto.line with the
-        // typed line number via the generic prompt.submit path.
         auto const* lineText = payloadAs<std::string>(payload);
         if (lineText == nullptr) {
             auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
                 PromptKind::CommandArgument, "go to line",
-                {{"line", "line number", ""}}, {}, std::nullopt, "goto.line"});
+                {{"line", "line number", ""}}, {}, std::nullopt,
+                PromptCompletion::GotoLine});
             if (!opened.accepted()) return failure(opened.error->message);
             return success();
         }
-        if (!runtime.activeDocumentId()) return failure("goto.line requires an active document");
-        // Trim surrounding whitespace, then require the whole value to be a
-        // base-10 integer. The number itself is not range-checked here: it is
-        // clamped to [1, lineCount] below, so 0 or a negative goes to the first
-        // line and an over-large number goes to the last (backlog: clamp to
-        // [1, LINES]).
-        std::string_view digits{*lineText};
-        while (!digits.empty() && std::isspace(static_cast<unsigned char>(digits.front())))
-            digits.remove_prefix(1);
-        while (!digits.empty() && std::isspace(static_cast<unsigned char>(digits.back())))
-            digits.remove_suffix(1);
-        long long requested = 0;
-        auto const* first = digits.data();
-        auto const* last = first + digits.size();
-        auto const [stop, ec] = std::from_chars(first, last, requested);
-        if (ec != std::errc{} || stop != last)
-            return failure("goto.line expects a line number");
-        // One source of truth for line boundaries: the active text. The line
-        // count is newlines + 1, and the target line's start is taken from the
-        // same scan, so the two can never disagree.
-        std::string const& text = runtime.activeText();
-        std::size_t lineCount = 1;
-        for (char c : text) if (c == '\n') ++lineCount;
-        // Clamp the 1-based request to [1, lineCount], then convert to a 0-based
-        // line index.
-        std::size_t target = requested < 1
-                                 ? 0
-                                 : (static_cast<unsigned long long>(requested) > lineCount
-                                        ? lineCount - 1
-                                        : static_cast<std::size_t>(requested - 1));
-        std::size_t start = 0;
-        if (target > 0) {
-            std::size_t seen = 0;
-            for (std::size_t i = 0; i < text.size(); ++i) {
-                if (text[i] == '\n' && ++seen == target) { start = i + 1; break; }
-            }
-        }
-        auto position = resolveSelectionPosition(text, ByteOffset{start}, 4);
-        if (!position) return failure("goto.line could not resolve the target position");
-        auto const active = runtime.activeDocumentId();
-        if (!active) return failure("goto.line requires an active document");
-        auto placed = placePrimaryCaret(runtime, *active, *position);
-        if (!placed.accepted) {
-            return placed;
-        }
+        return applyGotoLine(runtime, *lineText);
     } else {
         return failure("unknown search command");
     }
@@ -419,6 +376,46 @@ CommandHandlerResult followCommand(Editor& runtime, std::string_view id) {
 }
 
 } // namespace
+
+CommandHandlerResult applyGotoLine(Editor& runtime, std::string_view lineText) {
+    if (!runtime.activeDocumentId()) return failure("goto.line requires an active document");
+    std::string_view digits{lineText};
+    while (!digits.empty() && std::isspace(static_cast<unsigned char>(digits.front())))
+        digits.remove_prefix(1);
+    while (!digits.empty() && std::isspace(static_cast<unsigned char>(digits.back())))
+        digits.remove_suffix(1);
+    long long requested = 0;
+    auto const* first = digits.data();
+    auto const* last = first + digits.size();
+    auto const [stop, ec] = std::from_chars(first, last, requested);
+    if (ec != std::errc{} || stop != last)
+        return failure("goto.line expects a line number");
+    std::string const& text = runtime.activeText();
+    std::size_t lineCount = 1;
+    for (char c : text) if (c == '\n') ++lineCount;
+    std::size_t target = requested < 1
+                             ? 0
+                             : (static_cast<unsigned long long>(requested) > lineCount
+                                    ? lineCount - 1
+                                    : static_cast<std::size_t>(requested - 1));
+    std::size_t start = 0;
+    if (target > 0) {
+        std::size_t seen = 0;
+        for (std::size_t i = 0; i < text.size(); ++i) {
+            if (text[i] == '\n' && ++seen == target) { start = i + 1; break; }
+        }
+    }
+    auto position = resolveSelectionPosition(text, ByteOffset{start}, 4);
+    if (!position) return failure("goto.line could not resolve the target position");
+    auto const active = runtime.activeDocumentId();
+    if (!active) return failure("goto.line requires an active document");
+    return applyEditorSelections(
+        runtime,
+        ApplySelections{
+            *active,
+            SelectionSet{std::vector<Selection>{Selection{*position, *position}}},
+            true});
+}
 
 CommandHandlerResult activateTreeNode(Editor& runtime, TreeNodeId nodeId) {
     if (!runtime.tree.select(nodeId)) {
@@ -745,8 +742,8 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
     jump("goto.symbol", "Go to Symbol", "Go to Symbol");
 
     // goto.line is not a client-resolved jump: with no argument it opens a
-    // line-number prompt, and the prompt round-trip re-dispatches it with the
-    // typed string. An absent payload therefore opens the prompt.
+    // line-number prompt; a string payload goes directly to applyGotoLine.
+    // An absent payload therefore opens the prompt.
     {
         auto built = spec("goto.line", "Go to Line");
         built.label = "Go to Line";

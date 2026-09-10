@@ -576,5 +576,9 @@ public:
 [[nodiscard]] std::string workspaceMessage(WorkspaceResult const& result);
 [[nodiscard]] std::string tabMessage(TabResult const& result);
 [[nodiscard]] std::string wrongPayload(std::string_view commandId);
+[[nodiscard]] CommandHandlerResult applyFilePathCompletion(
+    Editor& runtime, PromptCompletion completion, std::string_view path);
+[[nodiscard]] CommandHandlerResult applyGotoLine(Editor& runtime,
+                                                 std::string_view lineText);
 
 } // namespace ssg

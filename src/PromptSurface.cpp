@@ -139,7 +139,7 @@ PromptCommandResult PromptSurface::submit() {
     }
     PromptSubmission submission;
     submission.kind = request_->kind;
-    submission.commandId = request_->commandId;
+    submission.completion = request_->completion;
     for (const auto& input : request_->inputs) {
         submission.values.push_back(input.value);
     }
@@ -163,13 +163,13 @@ PromptCommandResult PromptSurface::cancel() {
 
 std::vector<PromptControl> resolvePromptControls(const PromptRequest& request) {
     // The command that OPERATES an input: find/replace inputs have dedicated
-    // update commands; every generic prompt input takes the shared
-    // prompt.update_value. A toggle's operating command is its own id (the
+    // update commands; generic prompt inputs are operated through typed routing,
+    // not a command. A toggle's operating command is its own id (the
     // registered find.toggle_* command); the match count is not operable.
     const auto inputCommand = [](std::string_view id) -> std::string {
         if (id == "find.query") return "find.update_query";
         if (id == "replace.replacement") return "replace.update_replacement";
-        return "prompt.update_value";
+        return {};
     };
     std::vector<PromptControl> controls;
     controls.reserve(request.inputs.size() + request.toggles.size() + 1);

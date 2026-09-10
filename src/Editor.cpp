@@ -371,6 +371,11 @@ std::optional<std::string> applyInputMutation(
         editor.recordNavigation(NavigationClass::User);
         return std::nullopt;
     }
+    if (auto* args = std::get_if<PromptValueArguments>(&*mutation)) {
+        auto result = editor.screen.prompt().updateValue(args->index, args->value);
+        if (!result.accepted()) return result.error->message;
+        return std::nullopt;
+    }
 
     const auto change = std::get<SearchQueryChange>(*mutation);
     const auto binding = editor.tree.activeProviderBinding();

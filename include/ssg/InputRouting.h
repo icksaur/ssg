@@ -86,7 +86,7 @@ struct ActivateTreeNode {
 
 using EditorMutation =
     std::variant<ApplyTextInput, ApplySelections, FocusPane, SearchQueryChange,
-                 ActivateTab, CloseTab>;
+                 ActivateTab, CloseTab, PromptValueArguments>;
 
 struct RouteUnhandled {};
 

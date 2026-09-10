@@ -171,12 +171,20 @@ struct ViewTransitionInput {
                            const ViewTransitionInput&) = default;
 };
 
+struct UpdatePromptValueInput {
+    std::size_t index = 0;
+    std::string value;
+
+    friend bool operator==(const UpdatePromptValueInput&,
+                           const UpdatePromptValueInput&) = default;
+};
+
 using ClientInput =
     std::variant<ClientKeyInput, TabPointerInput, TreePointerInput,
                  SearchQueryPointerInput, PickerPointerInput,
                  ExternalActionPointerInput, NoticeActionPointerInput,
                  UiNodePointerInput, DocumentPointerInput, ScrollLinesInput,
-                 ScrollFractionInput, ViewTransitionInput>;
+                 ScrollFractionInput, ViewTransitionInput, UpdatePromptValueInput>;
 
 enum class ClientOwnedInputKind : std::uint8_t {
     AppendText = 0,

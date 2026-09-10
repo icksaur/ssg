@@ -74,8 +74,6 @@ std::string_view commandArgumentName(ssg::CommandEntry const& command) {
         {typeid(ssg::TreeSelectArguments), "tree node"},
         {typeid(ssg::ExternalActionInvocation), "external action"},
         {typeid(ssg::FindQueryArguments), "query"},
-        {typeid(ssg::PromptValueArguments), "prompt value"},
-        {typeid(ssg::PromptFocusArguments), "prompt focus"},
         {typeid(ssg::UiNodeActivationArguments), "UI node activation"},
         {typeid(ssg::TabId), "tab"},
     };

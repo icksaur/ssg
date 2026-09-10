@@ -59,10 +59,12 @@ PromptTextRoute dispatchActiveInput(ActivePrompt prompt, std::size_t activeInput
         return {PromptTextRoute::Kind::Dispatch,
                 CommandName{"find.update_query"},
                 FindQueryArguments{std::move(value)}, {}};
-    case ActivePrompt::TextPrompt:
-        return {PromptTextRoute::Kind::Dispatch,
-                CommandName{"prompt.update_value"},
-                PromptValueArguments{activeInput, std::move(value)}, {}};
+    case ActivePrompt::TextPrompt: {
+        PromptTextRoute route;
+        route.kind = PromptTextRoute::Kind::UpdatePromptValue;
+        route.promptValue = PromptValueArguments{activeInput, std::move(value)};
+        return route;
+    }
     case ActivePrompt::Palette:
     case ActivePrompt::None:
         return {};

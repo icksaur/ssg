@@ -2571,11 +2571,10 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
     if (!snapshot) return;
     ASSERT_EQ(snapshot->promptStatus.activeKind,
               std::optional{ssg::PromptKind::CommandArgument});
-    // The generic prompt round-trip re-dispatches goto.line with the typed value.
+    // The generic prompt round-trip directly applies the goto.line completion.
     ASSERT_TRUE(runtime
-                    ->dispatch({"prompt.update_value",
-                                ssg::PromptValueArguments{0, "4"}})
-                    .accepted());
+                    ->input(ssg::UpdatePromptValueInput{0, "4"})
+                    .outcome != ssg::ClientInputOutcome::Rejected);
     ASSERT_TRUE(runtime
                     ->dispatch({"prompt.submit",  {}})
                     .accepted());

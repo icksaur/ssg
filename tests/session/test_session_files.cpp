@@ -769,8 +769,7 @@ TEST(loweringAutosaveDebounceMsEnablesAFlushTheDefaultSuppresses) {
     auto lower = ssg::SettingSetArguments{ssg::SettingScope::User,
                                           ssg::SettingKey::AutosaveDebounceMs,
                                           ssg::SettingValue{std::uint32_t{1}}};
-    ASSERT_TRUE(runtime.dispatch({"settings.set",  lower})
-                    .accepted());
+    ASSERT_TRUE(runtime.settings.set(lower.scope, lower.key, lower.value).accepted());
     std::this_thread::sleep_for(std::chrono::milliseconds{20});
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
 }
