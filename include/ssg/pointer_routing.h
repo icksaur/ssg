@@ -105,7 +105,6 @@ struct PointerTargets {
     std::optional<std::string> picker_candidate_id;
     std::optional<ssg::PickerActivation> picker_activation;
     std::optional<ssg::UiNodeId> ui_node_id;
-    std::optional<std::string> notice_action_id;
     std::optional<ssg::ExternalActionInvocation> external_invocation;
 };
 

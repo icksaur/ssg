@@ -19,14 +19,13 @@ std::filesystem::path uniqueRoot(std::string_view name) {
     auto root = testRuntimePath("runtime_help_" + std::string{name});
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     return root;
 }
 
 ssg::EditorConfig configFor(const std::filesystem::path& root) {
     ssg::EditorConfig config{
-        root / "workspace", root / "scratch", root / "recovery"};
+        root / "workspace", root / "recovery", root / "archive"};
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
     return config;
@@ -263,36 +262,6 @@ TEST(savingAHelpTabFailsGracefullyWithoutAPrompt) {
     }
 }
 
-TEST(helpTabNeverPersistsADraft) {
-    Harness harness{"persist"};
-    ASSERT_TRUE(harness.runtime != nullptr);
-    if (!harness.runtime) return;
-    auto& runtime = *harness.runtime;
-
-    ASSERT_TRUE(runtime.dispatch("help.open")
-                    .accepted());
-    // The read-only help document is not an autosave candidate.
-    ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{0});
-    // And no draft file for it was written under the scratch root. (The scratch
-    // root may hold session-lock/journal infrastructure; what must not appear is
-    // a persisted draft, which flushAllAutosaveDrafts returning 0 already
-    // guarantees -- this is a belt-and-braces check that opening help added no
-    // files versus a baseline with no help tab.)
-    Harness baseline{"persist_baseline"};
-    ASSERT_TRUE(baseline.runtime != nullptr);
-    if (!baseline.runtime) return;
-    auto countFiles = [](const std::filesystem::path& dir) {
-        std::size_t n = 0;
-        for (auto const& entry :
-             std::filesystem::recursive_directory_iterator(dir)) {
-            if (entry.is_regular_file()) ++n;
-        }
-        return n;
-    };
-    ASSERT_EQ(countFiles(harness.root / "scratch"),
-              countFiles(baseline.root / "scratch"));
-}
-
 TEST(helpTabTitleCarriesTheReadOnlyMarker) {
     Harness harness{"marker"};
     ASSERT_TRUE(harness.runtime != nullptr);
@@ -383,7 +352,6 @@ SSG_TEST_SUITE(test_help) {
     RUN(helpOpenIsIdempotentAndRefreshes);
     RUN(helpTabRejectsEditsAndLeavesTheBufferUnchanged);
     RUN(savingAHelpTabFailsGracefullyWithoutAPrompt);
-    RUN(helpTabNeverPersistsADraft);
     RUN(helpTabTitleCarriesTheReadOnlyMarker);
     RUN(footerHelpShowsTheHelpKeyAndYieldsWhenUnbound);
     RUN(closingAHelpTabSucceedsAndReopenIsSkipped);

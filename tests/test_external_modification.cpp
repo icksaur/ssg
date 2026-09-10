@@ -85,10 +85,10 @@ struct Fixture {
         return workspace.document(documentId).snapshot();
     }
 
-    [[nodiscard]] std::optional<ssg::JournalDocument> journal() const {
+    [[nodiscard]] std::optional<ssg::ClosedDocumentSnapshot> journal() const {
         const auto state = workspace.state(documentId);
         const auto current = snapshot();
-        return ssg::JournalDocument{state->key, current.mode, state->dirty,
+        return ssg::ClosedDocumentSnapshot{state->key, current.mode, state->dirty,
                                     current.text};
     }
 };

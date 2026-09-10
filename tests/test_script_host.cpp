@@ -26,14 +26,13 @@ fs::path uniqueRoot() {
     auto root =
         testRuntimePath("script_host_root_" + std::to_string(::getpid()));
     fs::remove_all(root);
-    fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");
     return root;
 }
 
 std::unique_ptr<ssg::Editor> makeRuntime(fs::path const& root) {
     auto created =
-        ssg::createEditor({root, root / "scratch", root / "recovery"});
+        ssg::createEditor({root, root / "recovery", root / "archive"});
     return std::move(created.session);
 }
 

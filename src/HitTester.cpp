@@ -183,27 +183,6 @@ RegionHit HitTester::at(int column, int row) const {
         }
     }
 
-    if (snapshot.notice) {
-        const auto* node =
-            snapshot.layout.find(UiNodeId{std::string{kNoticeNodeId}});
-        if (!node) {
-            throw std::logic_error(
-                "HitTester: notice has no solved UI node");
-        }
-        if (contains(node->rect, column, row)) {
-            const auto solved =
-                solveNoticeSurface(*snapshot.notice, node->rect);
-            for (const auto& action : solved.actions) {
-                if (!contains(action.rect, column, row)) continue;
-                RegionHit hit;
-                hit.region = HitRegion::NoticeAction;
-                hit.fieldId = action.id;
-                return hit;
-            }
-            return {};
-        }
-    }
-
     if (!snapshot.externalModification.files.empty()) {
         const auto* node = snapshot.layout.find(
             UiNodeId{std::string{kExternalModNodeId}});

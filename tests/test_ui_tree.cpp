@@ -266,7 +266,7 @@ TEST(publishedTreeRejectsAPathNodeWithoutADeclaredFocusHost) {
 TEST(publishedTreeRejectsANonFocusHostAsTheSolePathNode) {
     auto schema = publishedScreenSchema();
     schema.focusPath =
-        std::vector<UiNodeId>{UiNodeId{std::string{ssg::kNoticeNodeId}}};
+        std::vector<UiNodeId>{UiNodeId{std::string{ssg::kTabBarNodeId}}};
     ASSERT_FALSE(ssg::validatePublishedUiTree(schema).ok());
 }
 

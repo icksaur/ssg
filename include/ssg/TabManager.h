@@ -1,7 +1,6 @@
 #pragma once
 
 #include <ssg/RecoveryManager.h>
-#include <ssg/ScratchStore.h>
 #include <ssg/Workspace.h>
 
 #include <chrono>
@@ -41,12 +40,11 @@ struct TabState {
     TabId id;
     TabKind kind = TabKind::Document;
     std::optional<FileDocumentId> document;
-    std::optional<JournalDocumentKey> documentKey;
+    std::optional<DocumentKey> documentKey;
     std::string contentIdentity;
     std::string label;
     DocumentMode mode = DocumentMode::Edit;
     bool dirty = false;
-    std::optional<ScratchDurability> recovery;
 
     friend bool operator==(const TabState&, const TabState&) = default;
 };
@@ -65,7 +63,6 @@ enum class TabError : std::uint8_t {
     NoTabs,
     NoRecentlyClosed,
     LifecycleFailed,
-    DurabilityFailed,
 };
 
 struct TabFailure {
@@ -92,8 +89,7 @@ struct TabLifecycleResult {
     std::string message;
     std::optional<RecoveryRecordId> compensation;
     std::optional<FileDocumentId> reopenedDocument;
-    std::optional<JournalDocumentKey> reopenedDocumentKey;
-    bool durable = false;
+    std::optional<DocumentKey> reopenedDocumentKey;
     // An ephemeral tab (e.g. a read-only help/output tab) is regenerable and is
     // deliberately NOT journaled for reopen, so it legitimately closes without a
     // compensation record. closeAt accepts a missing compensation only when this
@@ -132,9 +128,8 @@ public:
 
     [[nodiscard]] const TabViewState& viewState() const noexcept;
     [[nodiscard]] TabResult openDocument(
-        FileDocumentId document, JournalDocumentKey identity,
-        std::string_view label, DocumentMode mode, bool dirty,
-        std::optional<ScratchDurability> recovery = std::nullopt);
+        FileDocumentId document, DocumentKey identity,
+        std::string_view label, DocumentMode mode, bool dirty);
     [[nodiscard]] TabResult openContent(TabKind kind,
                                          std::string_view contentIdentity,
                                          std::string_view label,
@@ -144,9 +139,8 @@ public:
     // keeps a renamed or saved-as document's tab title correct: a partial sync
     // silently leaves the old name on screen while the bytes live elsewhere.
     [[nodiscard]] TabResult updateDocument(
-        FileDocumentId document, JournalDocumentKey identity,
-        std::string_view label, DocumentMode mode, bool dirty,
-        std::optional<ScratchDurability> recovery);
+        FileDocumentId document, DocumentKey identity,
+        std::string_view label, DocumentMode mode, bool dirty);
 
     // Removes every tab for a document that NO LONGER EXISTS, without running
     // the ordinary close path. Distinct from close(): closing flushes a document

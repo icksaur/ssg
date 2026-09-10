@@ -1,4 +1,3 @@
-#include <ssg/DraftReopenClassifier.h>
 #include <ssg/Editor.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
@@ -45,18 +44,6 @@ std::string resolveHomeDirectory() {
     return home;
 }
 
-std::string uniqueDiscardedDraftArchiveName(std::string_view savedPath) {
-    std::string basename =
-        std::filesystem::path{std::string{savedPath}}.filename().string();
-    if (basename.empty()) basename = "draft";
-    if (basename.size() > 64) basename.resize(64);
-    const auto stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                           std::chrono::system_clock::now().time_since_epoch())
-                           .count();
-    return basename + "." + std::to_string(fastContentHash(savedPath)) + "." +
-           std::to_string(stamp) + ".draft";
-}
-
 } // namespace
 
 KeymapViewState defaultTerminalKeymap() {
@@ -96,7 +83,6 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Mod+Slash"}), "find.open", "*");
     bind(seq({"Mod+Digit8"}), "find.word_under_cursor", "editor");
     bind(seq({"Mod+KeyR"}), "replace.open", "*");
-    bind(seq({"Mod+Shift+KeyD"}), "draft.discard", "editor");
 
     bind(seq({"Mod+KeyX"}), "clipboard.cut", "editor");
     bind(seq({"Mod+KeyC"}), "clipboard.copy", "editor");
@@ -206,7 +192,6 @@ void reconcileAfterOperation(
     const std::unordered_map<std::uint64_t, std::uint64_t>& revisionsBefore,
     bool accepted) {
     editor.reconcileFindDocument();
-    editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
     if (accepted &&
@@ -256,15 +241,6 @@ PromptRoutingState inputPromptState(Editor const& editor) {
 InputRoutingSnapshot inputRoutingSnapshot(Editor& editor) {
     auto const* document = editor.activeDocument();
     auto const* tab = editor.activeTabState();
-    auto notice = editor.draftNotice();
-    std::optional<std::vector<InputRoutingNoticeAction>> noticeActions;
-    if (notice) {
-        noticeActions.emplace();
-        noticeActions->reserve(notice->actions.size());
-        for (auto const& action : notice->actions) {
-            noticeActions->push_back({action.id, action.commandId});
-        }
-    }
     const auto treeProvider = editor.tree.activeProviderBinding();
     const auto searchState =
         treeProvider ? editor.tree.searchState(treeProvider->id) : std::nullopt;
@@ -280,7 +256,6 @@ InputRoutingSnapshot inputRoutingSnapshot(Editor& editor) {
         .diffRevision = editor.diff.viewState().revision,
         .selections = std::cref(editor.selection.selections),
         .followMode = editor.follow.viewState().mode,
-        .noticeActions = std::move(noticeActions),
         .panes = editor.paneTopology.panes(),
         .gesture = editor.documentPointerGesture,
         .activeTreeProvider =
@@ -437,7 +412,6 @@ ClientInputResult executeInputRoute(Editor& editor, RouteAccepted route,
         editor.externalModificationPresent());
     auto error = applyInputMutation(editor, std::move(route.mutation));
     editor.reconcileFindDocument();
-    editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
     if (!error && existingDocumentMutated(revisionsBefore, editor.workspace)) {
@@ -497,7 +471,6 @@ ClientInputResult executeInputRoute(Editor& editor, InvokeExternalAction route,
         editor.externalModificationPresent());
     auto result = invokeExternalAction(editor, route.invocation);
     editor.reconcileFindDocument();
-    editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
     if (result.accepted &&
@@ -530,7 +503,6 @@ ClientInputResult executeInputRoute(Editor& editor, ActivateUiNode route,
         editor.externalModificationPresent());
     auto result = applyUiNodeActivation(editor, route.nodeId);
     editor.reconcileFindDocument();
-    editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
     if (result.accepted &&
@@ -560,7 +532,6 @@ ClientInputResult executeInputRoute(Editor& editor, ActivateTreeNode route,
         editor.externalModificationPresent());
     auto result = activateTreeNode(editor, route.nodeId);
     editor.reconcileFindDocument();
-    editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
     if (result.accepted &&
@@ -681,7 +652,6 @@ std::string tabMessage(TabResult const& result) {
 }
 
 Editor::Editor(std::filesystem::path canonicalCwd,
-               std::filesystem::path scratchRoot,
                std::filesystem::path recoveryRoot,
                std::filesystem::path archiveRoot,
                bool deferEnrichment,
@@ -690,11 +660,9 @@ Editor::Editor(std::filesystem::path canonicalCwd,
                bool enableFilesystemWatcher)
     : root{std::move(canonicalCwd)},
       workspaceIgnore{makePlatformGitIgnoreMatcher(root)},
-      scratchRoot{weaklyCanonicalPath(scratchRoot)},
       recoveryRoot{weaklyCanonicalPath(recoveryRoot)},
       archiveRoot{weaklyCanonicalPath(archiveRoot)},
       recovery{RecoveryManager::create(recoveryRoot)},
-      scratch{ScratchStore::create(scratchRoot, root)},
       workspace{Workspace::create(root, recovery, this->archiveRoot)},
       selection{initialSelection()}, clipboard{4}, tabs{},
       external{workspace, diff}, syntaxParser{std::move(parser)},
@@ -721,8 +689,7 @@ int Editor::gitDiffWakeDescriptor() const {
 
 
 TabLifecycleResult Editor::closeTab(
-    const TabState& tab, std::chrono::milliseconds durabilityTimeout,
-    std::span<const TabId> alreadyClosed) {
+    const TabState& tab, std::span<const TabId> alreadyClosed) {
     if (!tab.document) {
         if (tab.kind == TabKind::ReadOnlyOutput) {
             // Read-only output tabs have no recovery record.
@@ -735,7 +702,7 @@ TabLifecycleResult Editor::closeTab(
                 (void)workspace.removeDocument(document);
             }
             return {TabError::None, {}, std::nullopt, std::nullopt, std::nullopt,
-                    false, true};
+                    true};
         }
         if (tab.kind == TabKind::LiveDiff) {
             const auto mapped = liveDiffDocuments.find(tab.contentIdentity);
@@ -757,21 +724,18 @@ TabLifecycleResult Editor::closeTab(
                                 "live diff document state does not exist",
                                 std::nullopt, std::nullopt, std::nullopt, false};
                     }
-                    std::optional<JournalDocument> journal;
+                    std::optional<ClosedDocumentSnapshot> snapshot;
                     if (auto const* current = workspace.tryDocument(document);
                         current != nullptr) {
-                        journal = JournalDocument{state->key, current->mode(),
-                                                  state->dirty,
-                                                  current->snapshot().text,
-                                                  workspace.baselineFor(document)};
+                        snapshot = ClosedDocumentSnapshot{
+                            state->key, current->mode(), state->dirty,
+                            current->snapshot().text};
                     }
-                    auto closed =
-                        recovery.closeDocument(journal, scratch, durabilityTimeout);
+                    auto closed = recovery.closeDocument(snapshot);
                     if (!closed.accepted()) {
                         return {TabError::LifecycleFailed, closed.error->message,
                                 std::nullopt, std::nullopt, std::nullopt, false};
                     }
-                    if (journal) scratch.removeDocument(state->key);
                     auto removed = workspace.removeDocument(document);
                     if (!removed.accepted()) {
                         return {TabError::LifecycleFailed, workspaceMessage(removed),
@@ -780,8 +744,7 @@ TabLifecycleResult Editor::closeTab(
                     documentRuntimeStates.erase(document.value());
                     liveDiffDocuments.erase(mapped);
                     return {TabError::None, {}, closed.compensation, std::nullopt,
-                            std::nullopt,
-                            scratch.waitUntilDurable(durabilityTimeout)};
+                            std::nullopt};
                 }
                 liveDiffDocuments.erase(mapped);
             }
@@ -815,33 +778,31 @@ TabLifecycleResult Editor::closeTab(
     auto state = workspace.state(*tab.document);
     if (!state) return {TabError::NotFound, "tab document does not exist",
                         std::nullopt, std::nullopt, std::nullopt, false};
-    std::optional<JournalDocument> document;
+    std::optional<ClosedDocumentSnapshot> document;
     if (auto const* current = workspace.tryDocument(*tab.document); current != nullptr) {
-        document = JournalDocument{state->key, current->mode(), state->dirty,
-                                   current->snapshot().text,
-                                   workspace.baselineFor(*tab.document)};
+        document = ClosedDocumentSnapshot{
+            state->key, current->mode(), state->dirty,
+            current->snapshot().text};
     }
-    auto closed = recovery.closeDocument(document, scratch, durabilityTimeout);
+    auto closed = recovery.closeDocument(document);
     if (!closed.accepted()) {
         return {TabError::LifecycleFailed, closed.error->message, std::nullopt,
                 std::nullopt, std::nullopt, false};
     }
-    if (document) scratch.removeDocument(state->key);
     auto removed = workspace.removeDocument(*tab.document);
     if (!removed.accepted()) {
         return {TabError::LifecycleFailed, workspaceMessage(removed),
                 std::nullopt, std::nullopt, std::nullopt, false};
     }
     documentRuntimeStates.erase(tab.document->value());
-    autosave.forget(*tab.document);
     return {TabError::None,      {},
             closed.compensation, std::nullopt,
-            std::nullopt,        scratch.waitUntilDurable(durabilityTimeout)};
+            std::nullopt};
 }
 
 TabLifecycleResult Editor::reopenTab(
     const TabState& tab, const RecoveryRecordId& compensation) {
-    std::optional<JournalDocument> restoredDocument;
+    std::optional<ClosedDocumentSnapshot> restoredDocument;
     auto restored = recovery.restoreDocument(compensation, restoredDocument);
     if (!restored.accepted()) {
         return {TabError::LifecycleFailed, restored.error->message, std::nullopt,
@@ -856,7 +817,7 @@ TabLifecycleResult Editor::reopenTab(
     if (tab.kind == TabKind::LiveDiff) {
         opened = workspace.openVirtualDocument(
             tab.label, restoredDocument->utf8Content, restoredDocument->mode);
-    } else if (restoredDocument->key.kind() == JournalDocumentKeyKind::Saved) {
+    } else if (restoredDocument->key.kind() == DocumentKeyKind::Saved) {
         opened = workspace.openFile(restoredDocument->key.savedPath());
     } else {
         opened = workspace.newDocument();
@@ -901,7 +862,7 @@ WorkspaceCorpus Editor::workspaceCorpus() const {
     buffers.reserve(workspace.documents().size());
     for (auto const id : workspace.documents()) {
         auto state = workspace.state(id);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved ||
+        if (!state || state->key.kind() != DocumentKeyKind::Saved ||
             state->contentKind != FileContentKind::Text) {
             continue;
         }
@@ -918,7 +879,7 @@ WorkspaceCorpus Editor::workspaceCorpus() const {
     }
 
     WorkspaceCorpusOptions options;
-    options.excludedDirectories = {scratchRoot, recoveryRoot, archiveRoot};
+    options.excludedDirectories = {recoveryRoot, archiveRoot};
     return WorkspaceCorpus{root, std::move(buffers), *workspaceIgnore, readFile,
                            std::move(options)};
 }
@@ -1098,96 +1059,6 @@ OperationResult Editor::openReadOnlyTab(
     return success();
 }
 
-OperationResult Editor::openDraftDiff() {
-    const auto id = activeDocumentId();
-    if (!id) return failure("no active document");
-    const auto state = workspace.state(*id);
-    if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
-        return failure("draft.diff needs a saved file");
-    }
-    const auto* opened = workspace.tryDocument(*id);
-    if (opened == nullptr) return failure("no active document");
-    const std::string draft = opened->snapshot().text;
-
-    const auto absolute =
-        workspace.root() / std::filesystem::path{state->key.savedPath()};
-    std::string disk;
-    if (const auto read = readFile(absolute); read.ok()) {
-        disk.assign(reinterpret_cast<const char*>(read.bytes.data()),
-                    read.bytes.size());
-    }
-
-    const DiffFileId diffId{"draft:" + state->key.savedPath()};
-    const std::uint64_t revision{diff.viewState().revision + 1};
-    const auto applied = diff.applyNonGitEvent(
-        NonGitDiffEvent{NonGitDiffEventKind::Create, diffId,
-                        std::filesystem::path{state->key.savedPath()},
-                        std::nullopt, disk, draft},
-        revision);
-    if (!applied.accepted()) return failure("draft diff could not be computed");
-
-    const auto file = diff.file(diffId);
-    if (!file.has_value()) return failure("draft diff is unavailable");
-    return openOrFocusLiveDiffTab(file->get(), NavigationClass::Programmatic);
-}
-
-bool Editor::archiveDiscardedDraft(std::string_view savedPath,
-                                                std::string_view content) {
-    const auto archiveDir = scratchRoot.parent_path() / "draft-archive";
-    const auto created = ensureDirectory(archiveDir);
-    if (!created.ok()) {
-        return false;
-    }
-
-    const auto target =
-        archiveDir / uniqueDiscardedDraftArchiveName(savedPath);
-    const std::span<const std::byte> bytes{
-        reinterpret_cast<const std::byte*>(content.data()), content.size()};
-    return createFileExclusively(target, bytes).ok();
-}
-
-OperationResult Editor::discardDraft() {
-    const auto id = activeDocumentId();
-    if (!id) return failure("no active document");
-    const auto state = workspace.state(*id);
-    if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
-        return failure("draft.discard needs a saved file");
-    }
-    if (!state->dirty) return failure("no unsaved edits to discard");
-    const auto* opened = workspace.tryDocument(*id);
-    if (opened == nullptr) return failure("no active document");
-    const std::string draftText = opened->snapshot().text;
-
-    if (!archiveDiscardedDraft(state->key.savedPath(), draftText)) {
-        return failure("could not archive the draft before discarding");
-    }
-
-    const auto reloaded = workspace.reload(*id);
-    if (!reloaded.accepted()) return failure("could not load the file from disk");
-
-    scratch.removeDocument(state->key);
-    (void)scratch.waitUntilDurable(std::chrono::milliseconds{100});
-    if (const auto found = documentRuntimeStates.find(id->value());
-        found != documentRuntimeStates.end()) {
-        found->second.reopen = DraftReopenOutcome::None;
-    }
-    resetSelectionForActiveDocument();
-    refreshSyntax();
-    return updateTabsFor(*id);
-}
-
-OperationResult Editor::dismissDraftNotice() {
-    const auto id = activeDocumentId();
-    if (!id) return failure("no active document");
-    const auto found = documentRuntimeStates.find(id->value());
-    if (found == documentRuntimeStates.end() ||
-        found->second.reopen != DraftReopenOutcome::Conflict) {
-        return failure("no draft notice to dismiss");
-    }
-    found->second.reopen = DraftReopenOutcome::None;
-    return success();
-}
-
 bool Editor::openOrRevealFollowTargetProgrammatic(const FollowTarget& target) {
     const auto file = diff.file(target.id);
     if (!file.has_value()) {
@@ -1223,7 +1094,6 @@ void Editor::ensureDocumentRuntimeState(FileDocumentId document) {
 void Editor::discardDocumentRuntimeState(FileDocumentId document) {
     documentRuntimeStates.erase(document.value());
     documentLanguageOverrides.erase(document.value());
-    autosave.forget(document);
     if (findDocumentId == document) findDocumentId.reset();
     for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
         it = it->second == document ? liveDiffDocuments.erase(it)
@@ -1451,7 +1321,7 @@ void Editor::refreshSyntax(std::vector<SyntaxEdit> edits) {
         override != documentLanguageOverrides.end()) {
         language = override->second;
     } else if (auto state = activeWorkspaceState();
-               state && state->key.kind() == JournalDocumentKeyKind::Saved) {
+               state && state->key.kind() == DocumentKeyKind::Saved) {
         language = LanguageId::fromPath(state->key.savedPath());
     }
     if (deferringEnrichment) {
@@ -1488,58 +1358,6 @@ void Editor::primeDeferred() {
 
 void Editor::showStatus(std::string text) {
     statusText = std::move(text);
-}
-
-void Editor::reconcileDraftOnOpen(FileDocumentId document) {
-    auto state = workspace.state(document);
-    if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) return;
-
-    const auto drafts = scratch.recovery().documents;
-    const auto draft = std::find_if(
-        drafts.begin(), drafts.end(), [&](const JournalDocument& candidate) {
-            return candidate.dirty && candidate.key == state->key;
-        });
-    if (draft == drafts.end()) return;
-
-    auto const* opened = workspace.tryDocument(document);
-    auto rawDisk = workspace.rawDiskContent(document);
-    if (opened == nullptr || !rawDisk) return;
-    const DraftDiskState disk{std::move(*rawDisk), opened->snapshot().text};
-
-    auto& runtimeState = documentRuntimeStates.at(document.value());
-    switch (classifyDraftReopen(draft->baseline,
-                                             draft->utf8Content, disk)) {
-        case DraftReopenClass::Converged:
-            scratch.removeDocument(draft->key);
-            runtimeState.reopen = DraftReopenOutcome::None;
-            return;
-        case DraftReopenClass::Unchanged:
-            if (workspace.restoreDraft(document, draft->utf8Content)) {
-                runtimeState.reopen = DraftReopenOutcome::Restored;
-            } else {
-                runtimeState.reopen = DraftReopenOutcome::Conflict;
-            }
-            return;
-        case DraftReopenClass::Conflict:
-            (void)workspace.restoreDraft(document, draft->utf8Content);
-            runtimeState.reopen = DraftReopenOutcome::Conflict;
-            return;
-        case DraftReopenClass::Missing:
-            // Unreachable via file.open (the file was just read from disk), so a
-            // missing disk file here means the classifier's contract changed;
-            // leave the clean buffer rather than guess.
-            return;
-    }
-}
-
-std::size_t Editor::flushDueAutosaveDrafts() {
-    std::lock_guard operationLock{operationMutex};
-    return autosave.flushDueDrafts(*this);
-}
-
-std::size_t Editor::flushAllAutosaveDrafts() {
-    std::lock_guard operationLock{operationMutex};
-    return autosave.flushAllDrafts(*this);
 }
 
 DiffIngressResult Editor::applyExternalDiffBurst(
@@ -1660,19 +1478,14 @@ FindReplaceOperationResult Editor::updateReplacement(std::string replacement) {
 EditorCreateResult createEditor(EditorConfig config) {
     try {
         auto cwd = canonicalDirectory(config.cwd);
-        if (config.scratchRoot.empty()) config.scratchRoot = cwd / ".ssg" / "scratch";
         if (config.recoveryRoot.empty()) config.recoveryRoot = cwd / ".ssg" / "recovery";
         if (config.archiveRoot.empty()) config.archiveRoot = cwd / ".ssg" / "archive";
-        const auto scratchCreated = ensureDirectory(config.scratchRoot);
-        if (!scratchCreated.ok()) {
-            throw std::runtime_error(scratchCreated.message);
-        }
         const auto recoveryCreated = ensureDirectory(config.recoveryRoot);
         if (!recoveryCreated.ok()) {
             throw std::runtime_error(recoveryCreated.message);
         }
         auto editor = std::unique_ptr<Editor>{new Editor{
-            cwd, config.scratchRoot, config.recoveryRoot, config.archiveRoot,
+            cwd, config.recoveryRoot, config.archiveRoot,
             config.deferEnrichment, std::move(config.syntaxParser),
             config.enableGitDiffWorker, config.enableFilesystemWatcher}};
         (void)editor->workspace.pruneArchive();
@@ -1729,7 +1542,6 @@ CommandResult Editor::dispatchLocked(std::string_view commandId) {
             externalModificationPresent());
         auto result = commands.dispatch(dispatched);
         reconcileFindDocument();
-        screen.refreshNoticePresence(noticePresent());
         screen.refreshExternalModificationPresence(
             externalModificationPresent());
         if (result.accepted() &&

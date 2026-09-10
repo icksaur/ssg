@@ -28,7 +28,6 @@ fs::path uniqueRoot() {
     auto base = fs::temp_directory_path() /
                 ("ssg-builder-" + std::to_string(::rand()));
     fs::remove_all(base);
-    fs::create_directories(base / "scratch");
     fs::create_directories(base / "recovery");
     return base;
 }
@@ -61,7 +60,7 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
     auto root = uniqueRoot();
     std::ofstream{root / "a.txt", std::ios::binary} << text;
     auto created = ssg::createEditor(
-        {root, root / "scratch", root / "recovery"});
+        {root, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto runtime = std::move(created.session);

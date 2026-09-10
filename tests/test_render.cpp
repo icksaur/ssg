@@ -43,14 +43,13 @@ struct PaletteProjection {
 fs::path uniqueRoot() {
     auto base = fs::temp_directory_path() /
                 ("ssg-render-" + std::to_string(::rand()));
-    fs::create_directories(base / "scratch");
     fs::create_directories(base / "recovery");
     return base;
 }
 
 std::unique_ptr<ssg::Editor> makeRuntime(fs::path const& root) {
     ssg::EditorConfig config{
-        root, root / "scratch", root / "recovery"};
+        root, root / "recovery", root / "archive"};
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
     auto created = ssg::createEditor(config);
@@ -1729,18 +1728,14 @@ TEST(urlDetectionStopsAtSentenceAndBracketBoundaries) {
     ASSERT_TRUE(linksFor("no links here at all\n").empty());
 }
 
-TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
+TEST(externalRowsPaintTheirPublishedRolesAtTheirRects) {
     ssg::LineLayoutCache lineCache;
     auto snapshot =
         ssg::test::GridPresentationBuilder{}
             .document("content\n")
             .viewport(80, 16)
-            .noticePresent()
             .externalModificationPresent()
             .fields([](ssg::GridPresentation& sections) {
-                sections.notice = ssg::NoticeView{
-                    "Draft conflict",
-                    {{"diff", "Diff", "draft.diff"}}};
                 sections.externalModification = {
                     std::uint64_t{1},
                     "Files changed on disk",
@@ -1757,36 +1752,16 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
                     ssg::DiffFileId{"b"}};
             })
             .build();
-    const auto* solvedNotice = snapshot.layout.find(
-        ssg::UiNodeId{std::string{ssg::kNoticeNodeId}});
     const auto* solvedExternal = snapshot.layout.find(
         ssg::UiNodeId{std::string{ssg::kExternalModNodeId}});
-    ASSERT_TRUE(solvedNotice != nullptr);
     ASSERT_TRUE(solvedExternal != nullptr);
-    if (!solvedNotice || !solvedExternal) {
-        return;
-    }
-    const auto noticeSurface =
-        ssg::solveNoticeSurface(*snapshot.notice,
-                                solvedNotice->rect);
-    ASSERT_TRUE(!noticeSurface.actions.empty());
-    if (noticeSurface.actions.empty()) return;
+    if (!solvedExternal) return;
     const auto externalSurface = ssg::solveExternalModificationSurface(
         snapshot.externalModification, solvedExternal->rect);
     ASSERT_EQ(externalSurface.rows.size(), std::size_t{2});
     if (externalSurface.rows.size() < 2) return;
 
     auto const grid = ssg::renderFrame(snapshot, lineCache);
-    ASSERT_EQ(grid.at(solvedNotice->rect.x, solvedNotice->rect.y).text,
-              std::string{"D"});
-    ASSERT_EQ(grid.at(solvedNotice->rect.x, solvedNotice->rect.y).role,
-              ssg::SemanticRole::StatusWarning);
-    ASSERT_EQ(grid.at(noticeSurface.actions.front().rect.x,
-                      noticeSurface.actions.front().rect.y).text,
-              std::string{"["});
-    ASSERT_EQ(grid.at(noticeSurface.actions.front().rect.x,
-                      noticeSurface.actions.front().rect.y).role,
-              ssg::SemanticRole::StatusWarning);
     ASSERT_EQ(grid.at(externalSurface.rows[0].rect.x,
                       externalSurface.rows[0].rect.y).role,
               ssg::SemanticRole::StatusWarning);
@@ -1912,7 +1887,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
             .helpHint("help")
             .tabs({{"a.txt", "Tab a.txt", true, false},
                    {"b.txt", "Tab b.txt", false, false}})
-            .noticePresent()
+            .externalModificationPresent()
             .lineNumbers()
             .promptInput(pickerOpen, "needle", "ghost")
             .paletteReport(ssg::PaletteReport{
@@ -1937,9 +1912,15 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
             })
             .fields([&](ssg::GridPresentation& sections) {
                 sections.theme = theme;
-                sections.notice = ssg::NoticeView{
-                    "Draft conflict",
-                    {{"diff", "Diff", "draft.diff"}}};
+                sections.externalModification = {
+                    std::uint64_t{1},
+                    "Files changed on disk",
+                    {{ssg::DiffFileId{"external"}, "external.txt",
+                      ssg::ExternalDocumentStatus::ExternallyModified,
+                      "modified", "M",
+                      {ssg::externalActionAffordance(
+                          ssg::ExternalAction::Reload)}}},
+                    ssg::DiffFileId{"external"}};
                 // A ranged selection on line 0 paints real Selection-role
                 // cells, so Selection is proven consumed at the cell level, not
                 // only via grid.selectionFill.
@@ -2094,7 +2075,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     RUN(urlDetectionStopsAtSentenceAndBracketBoundaries);
     RUN(tabRenderingUsesSemanticTabsAndSolvedGeometry);
     RUN(externalIntrinsicShrinksToPreserveAnEditorRow);
-    RUN(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects);
+    RUN(externalRowsPaintTheirPublishedRolesAtTheirRects);
     RUN(lspDiagnosticsUnderlineExactlyTheirRange);
     RUN(staleDiagnosticsAreNotPainted);
     RUN(styleDefineRejectionLeavesTheLiveStyleUnchanged);

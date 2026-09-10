@@ -53,7 +53,6 @@ struct RuntimeFixture {
         std::ofstream{root / "workspace" / "doc.txt"} << "alpha";
         auto created = ssg::createEditor(
             {.cwd = root / "workspace",
-             .scratchRoot = root / "scratch",
              .recoveryRoot = root / "recovery",
              .enableGitDiffWorker = false,
              .enableFilesystemWatcher = false});

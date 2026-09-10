@@ -20,6 +20,25 @@ namespace {
 constexpr std::size_t kMaximumRecentFiles = 32;
 constexpr std::size_t kMaximumDropLabelBytes = 255;
 
+struct DiskBaseline {
+    std::uint64_t mtimeNanos = 0;
+    std::uint64_t size = 0;
+    std::uint64_t contentHash = 0;
+
+    friend bool operator==(const DiskBaseline&, const DiskBaseline&) = default;
+};
+
+std::uint64_t fastContentHash(std::string_view bytes) noexcept {
+    constexpr std::uint64_t kOffsetBasis = 14695981039346656037ULL;
+    constexpr std::uint64_t kPrime = 1099511628211ULL;
+    std::uint64_t hash = kOffsetBasis;
+    for (const char byte : bytes) {
+        hash ^= static_cast<std::uint8_t>(byte);
+        hash *= kPrime;
+    }
+    return hash;
+}
+
 WorkspaceResult failure(WorkspaceError error, std::string message) {
     WorkspaceResult result;
     result.error = error;
@@ -39,10 +58,9 @@ std::vector<std::uint8_t> readFileBytes(const std::filesystem::path& path) {
 // The disk baseline a document's edits branch from: the mtime and size of the
 // on-disk file plus a fast hash of `diskBytes` (the exact bytes just read from,
 // or written to, that file). Best-effort — nullopt if the file cannot be stat'd,
-// which draft recovery treats as "unknown baseline" (a conflict), never as
-// "unchanged". `diskBytes` must be the literal file bytes, not the decoded
-// buffer, so the hash matches a later re-read of the same file.
-std::optional<DraftBaseline> captureDiskBaseline(
+// An unavailable stat leaves the baseline unknown. `diskBytes` must be the
+// literal file bytes so the hash matches a later re-read of the same file.
+std::optional<DiskBaseline> captureDiskBaseline(
     const std::filesystem::path& absolute,
     std::span<const std::uint8_t> diskBytes) {
     std::optional<FileStat> status;
@@ -52,7 +70,7 @@ std::optional<DraftBaseline> captureDiskBaseline(
         return std::nullopt;
     }
     if (!status) return std::nullopt;
-    DraftBaseline baseline;
+    DiskBaseline baseline;
     baseline.mtimeNanos = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             status->mtime.time_since_epoch())
@@ -248,17 +266,17 @@ public:
     // branch from. Present carries the branched-from bytes' size+hash+mtime;
     // Missing means the file was observed absent (a keep_buffer dismissal of a
     // removal). An absent `present` with `missing==false` is an unknown baseline
-    // (a best-effort stat failed on open), which draft recovery treats as a
+    // (a best-effort stat failed on open), which external-change detection treats as an
     // conflict. Open/save/reload/rename set Present-from-disk; keep_buffer advances
     // it to Present(dismissed bytes) or Missing. Implicitly constructs from the
-    // optional<DraftBaseline> the capture path produces, so those sites are
+    // optional<DiskBaseline> the capture path produces, so those sites are
     // unchanged.
     struct ExternalBaseline {
-        std::optional<DraftBaseline> present;
+        std::optional<DiskBaseline> present;
         bool missing = false;
 
         ExternalBaseline() = default;
-        ExternalBaseline(std::optional<DraftBaseline> disk)  // NOLINT: implicit
+        ExternalBaseline(std::optional<DiskBaseline> disk)  // NOLINT: implicit
             : present(std::move(disk)) {}
         static ExternalBaseline removed() {
             ExternalBaseline value;
@@ -272,7 +290,7 @@ public:
 
     struct Entry {
         FileDocumentId id;
-        JournalDocumentKey key;
+        DocumentKey key;
         std::string displayLabel;
         FileContentKind contentKind;
         // utf8 is the disk baseline; lineTerminators follow the live document.
@@ -322,7 +340,7 @@ public:
         const auto found = std::find_if(entries.begin(), entries.end(),
                                         [path](const Entry& entry) {
                                             return entry.key.kind() ==
-                                                       JournalDocumentKeyKind::
+                                                       DocumentKeyKind::
                                                            Saved &&
                                                    entry.key.savedPath() ==
                                                        path;
@@ -387,7 +405,7 @@ public:
     }
 
     WorkspaceResult addBytes(std::vector<std::uint8_t> bytes,
-                              JournalDocumentKey key,
+                              DocumentKey key,
                               std::string label,
                               DocumentMode mode = DocumentMode::Edit) {
         const auto id = FileDocumentId{nextDocument++};
@@ -456,7 +474,7 @@ public:
             } else {
                 replaceFileAtomically(absolute, asBytes(encoded.bytes));
             }
-            entry.key = JournalDocumentKey::saved(path);
+            entry.key = DocumentKey::saved(path);
             entry.persisted = true;
             entry.displayLabel =
                 std::filesystem::path{path}.filename().string();
@@ -464,7 +482,7 @@ public:
             entry.rawBytes = encoded.bytes;
             entry.persistedStatus = entry.decoded.status;
             // The just-written disk bytes become the new branched-from baseline,
-            // so a draft made after this save is compared against what we wrote.
+            // so later external changes are compared against what we wrote.
             entry.baseline = captureDiskBaseline(absolute, entry.rawBytes);
             if (saveObserver) {
                 // Ordered before the write is reported (the reconcile correlates a
@@ -536,10 +554,10 @@ std::optional<WorkspaceDocumentState> Workspace::state(
         return std::nullopt;
     }
     const auto text = entry->document.snapshot().text;
-    const bool untitled = entry->key.kind() == JournalDocumentKeyKind::Untitled;
+    const bool untitled = entry->key.kind() == DocumentKeyKind::Untitled;
     // An untitled buffer used to be dirty unconditionally.  Technically true --
     // it has never been written anywhere -- but it made the state useless: every
-    // session opens on an empty scratch buffer, so every session began showing
+    // session opens on an empty buffer, so every session began showing
     // unsaved changes nobody had made, and the badge stopped meaning anything.
     // An untitled buffer is unsaved exactly when it holds something to lose.
     const bool dirty =
@@ -554,12 +572,6 @@ std::optional<WorkspaceDocumentState> Workspace::state(
         entry->decoded.status,
         dirty,
     };
-}
-
-std::optional<DraftBaseline> Workspace::baselineFor(
-    FileDocumentId documentId) const {
-    const auto* entry = impl_->find(documentId);
-    return entry ? entry->baseline.present : std::nullopt;
 }
 
 bool Workspace::matchesExternalBaseline(
@@ -586,7 +598,7 @@ bool Workspace::commitExternalDismissal(
     if (removed) {
         entry->baseline = Impl::ExternalBaseline::removed();
     } else {
-        DraftBaseline advanced;
+        DiskBaseline advanced;
         const std::string_view bytes =
             dismissedContent ? std::string_view{*dismissedContent}
                              : std::string_view{};
@@ -595,43 +607,9 @@ bool Workspace::commitExternalDismissal(
         // mtimeNanos is left unset: the observed mtime that pairs with these
         // dismissed bytes is not available here, and stat-ing the path now would
         // record newer disk metadata against the older dismissed content. The
-        // raise/skip and draft-classify comparisons use size+contentHash, so mtime
-        // is never load-bearing; a misleading mixed value must not be stored.
+        // Comparisons use size and contentHash, so mtime is never load-bearing.
         entry->baseline = Impl::ExternalBaseline{advanced};
     }
-    return true;
-}
-
-std::optional<std::string> Workspace::rawDiskContent(
-    FileDocumentId documentId) const {
-    const auto* entry = impl_->find(documentId);
-    if (!entry) return std::nullopt;
-    return std::string{entry->rawBytes.begin(), entry->rawBytes.end()};
-}
-
-bool Workspace::restoreDraft(FileDocumentId documentId,
-                             std::string_view draftContent) {
-    auto* entry = impl_->find(documentId);
-    if (!entry || entry->key.kind() != JournalDocumentKeyKind::Saved) {
-        return false;
-    }
-    if (entry->contentKind != FileContentKind::Text) return false;
-    // Keep decoded.utf8 / persistedStatus / baseline (the disk state) so
-    // state() derives dirty from draft-vs-disk; only the live buffer changes.
-    std::string text{draftContent};
-    entry->document = Document{text, entry->document.mode()};
-    // decoded.utf8 remains the disk baseline used by the dirty check.
-    // lineTerminators follows the live buffer because applyTerminatorEdits indexes
-    // it against the pre-edit buffer text.
-    const auto terminator = defaultTerminator(entry->decoded.status);
-    entry->decoded.lineTerminators.clear();
-    for (const char value : text) {
-        if (value == '\n') entry->decoded.lineTerminators.push_back(terminator);
-    }
-    if (!text.empty() && text.back() != '\n') {
-        entry->decoded.lineTerminators.push_back(LineTerminator::None);
-    }
-    entry->decoded.status.finalNewline = !text.empty() && text.back() == '\n';
     return true;
 }
 
@@ -680,7 +658,7 @@ WorkspaceResult Workspace::openDirectory(
 
 WorkspaceResult Workspace::newDocument(std::string_view suggestedLabel) {
     return impl_->addBytes(
-        {}, JournalDocumentKey::untitled(UntitledDocumentId::generate()),
+        {}, DocumentKey::untitled(UntitledDocumentId::generate()),
         suggestedLabel.empty() ? std::string{kNewBufferLabel} : sanitizeLabel(suggestedLabel),
         DocumentMode::Edit);
 }
@@ -699,7 +677,7 @@ WorkspaceResult Workspace::newFile(std::string_view rawPath) {
     if (const auto status = statFile(*absolute); status) {
         return failure(WorkspaceError::AlreadyOpen, "path already exists");
     }
-    auto result = impl_->addBytes({}, JournalDocumentKey::saved(path),
+    auto result = impl_->addBytes({}, DocumentKey::saved(path),
                                   absolute->filename().string());
     if (result.accepted() && result.document) {
         if (auto* entry = impl_->find(*result.document)) {
@@ -714,7 +692,7 @@ WorkspaceResult Workspace::openVirtualDocument(std::string_view suggestedLabel,
                                                DocumentMode mode) {
     return impl_->addBytes(
         std::vector<std::uint8_t>{initialText.begin(), initialText.end()},
-        JournalDocumentKey::untitled(UntitledDocumentId::generate()),
+        DocumentKey::untitled(UntitledDocumentId::generate()),
         suggestedLabel.empty() ? std::string{kNewBufferLabel} : sanitizeLabel(suggestedLabel),
         mode);
 }
@@ -741,7 +719,7 @@ WorkspaceResult Workspace::openFile(std::string_view rawPath) {
         auto bytes = readFileBytes(*absolute);
         auto baseline = captureDiskBaseline(*absolute, bytes);
         auto result = impl_->addBytes(
-            std::move(bytes), JournalDocumentKey::saved(path),
+            std::move(bytes), DocumentKey::saved(path),
             absolute->filename().string());
         if (result.accepted() && result.document) {
             if (auto* entry = impl_->find(*result.document)) {
@@ -760,7 +738,7 @@ WorkspaceResult Workspace::openDroppedContent(
     std::string_view suggestedLabel) {
     return impl_->addBytes(
         {bytes.begin(), bytes.end()},
-        JournalDocumentKey::untitled(UntitledDocumentId::generate()),
+        DocumentKey::untitled(UntitledDocumentId::generate()),
         sanitizeLabel(suggestedLabel), DocumentMode::Edit);
 }
 
@@ -770,7 +748,7 @@ WorkspaceResult Workspace::save(FileDocumentId id) {
         return failure(WorkspaceError::NotFound,
                        "workspace document does not exist");
     }
-    if (entry->key.kind() != JournalDocumentKeyKind::Saved) {
+    if (entry->key.kind() != DocumentKeyKind::Saved) {
         return failure(WorkspaceError::InvalidPath,
                        "untitled document requires save_as");
     }
@@ -793,7 +771,7 @@ WorkspaceResult Workspace::saveAll() {
     for (const auto id : ids) {
         const auto current = state(id);
         if (!current || !current->dirty ||
-            current->key.kind() != JournalDocumentKeyKind::Saved) {
+            current->key.kind() != DocumentKeyKind::Saved) {
             continue;
         }
         const auto saved = save(id);
@@ -829,14 +807,14 @@ WorkspaceResult Workspace::saveAs(FileDocumentId id,
     }
     // Save-as to the document's OWN current path is just a save, so it keeps
     // the self-overwrite permission. Any other name must not clobber.
-    const bool ownPath = entry->key.kind() == JournalDocumentKeyKind::Saved &&
+    const bool ownPath = entry->key.kind() == DocumentKeyKind::Saved &&
                          entry->persisted && entry->key.savedPath() == path;
     return impl_->saveTo(*entry, path, *absolute, ownPath);
 }
 
 WorkspaceResult Workspace::reload(FileDocumentId id) {
     auto* entry = impl_->find(id);
-    if (!entry || entry->key.kind() != JournalDocumentKeyKind::Saved) {
+    if (!entry || entry->key.kind() != DocumentKeyKind::Saved) {
         return failure(WorkspaceError::NotFound,
                        "saved workspace document does not exist");
     }
@@ -875,7 +853,7 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
 WorkspaceResult Workspace::reloadWithContent(FileDocumentId id,
                                              std::string content) {
     auto* entry = impl_->find(id);
-    if (!entry || entry->key.kind() != JournalDocumentKeyKind::Saved) {
+    if (!entry || entry->key.kind() != DocumentKeyKind::Saved) {
         return failure(WorkspaceError::NotFound,
                        "saved workspace document does not exist");
     }
@@ -920,7 +898,7 @@ WorkspaceResult Workspace::adoptExternalRename(FileDocumentId id,
                                                std::string content,
                                                bool replaceBuffer) {
     auto* entry = impl_->find(id);
-    if (!entry || entry->key.kind() != JournalDocumentKeyKind::Saved) {
+    if (!entry || entry->key.kind() != DocumentKeyKind::Saved) {
         return failure(WorkspaceError::NotFound,
                        "saved workspace document does not exist");
     }
@@ -954,7 +932,7 @@ WorkspaceResult Workspace::adoptExternalRename(FileDocumentId id,
     const std::string diskText = decoded.text->utf8;
     const std::string bufferContent =
         replaceBuffer ? diskText : entry->document.snapshot().text;
-    entry->key = JournalDocumentKey::saved(path);
+    entry->key = DocumentKey::saved(path);
     entry->displayLabel = destination->filename().string();
     if (replaceBuffer) {
         entry->document = Document{diskText, entry->document.mode()};
@@ -977,7 +955,7 @@ WorkspaceResult Workspace::adoptExternalRename(FileDocumentId id,
 WorkspaceResult Workspace::renameFile(FileDocumentId id,
                                       std::string_view rawPath) {
     auto* entry = impl_->find(id);
-    if (!entry || entry->key.kind() != JournalDocumentKeyKind::Saved) {
+    if (!entry || entry->key.kind() != DocumentKeyKind::Saved) {
         return failure(WorkspaceError::NotFound,
                        "saved workspace document does not exist");
     }
@@ -1008,7 +986,7 @@ WorkspaceResult Workspace::renameFile(FileDocumentId id,
         return failure(WorkspaceError::RecoveryFailed,
                        action.error->message);
     }
-    entry->key = JournalDocumentKey::saved(path);
+    entry->key = DocumentKey::saved(path);
     entry->displayLabel = destination->filename().string();
     impl_->touchRecent(path);
     WorkspaceResult result;
@@ -1018,7 +996,7 @@ WorkspaceResult Workspace::renameFile(FileDocumentId id,
 
 WorkspaceResult Workspace::deleteFile(FileDocumentId id) {
     auto* entry = impl_->find(id);
-    if (!entry || entry->key.kind() != JournalDocumentKeyKind::Saved) {
+    if (!entry || entry->key.kind() != DocumentKeyKind::Saved) {
         return failure(WorkspaceError::NotFound,
                        "saved workspace document does not exist");
     }

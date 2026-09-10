@@ -54,7 +54,6 @@ struct ScreenProjection {
     bool distractionFree = false;
     std::optional<PickerKind> openPicker;
     BaseFocus baseFocus = BaseFocus::Editor;
-    bool noticePresent = false;
     bool externalModificationPresent = false;
     bool externalFocusHeld = false;
 };
@@ -68,7 +67,7 @@ UiInteractionState buildInteraction(
     if (!truth.panelPresent) hidden.push_back(nodeId(kPanelNodeId));
     if (truth.distractionFree) {
         for (const std::string_view region :
-             {kNoticeNodeId, kExternalModNodeId, kPanelNodeId, kTabBarNodeId,
+             {kExternalModNodeId, kPanelNodeId, kTabBarNodeId,
               kFooterNodeId}) {
             hidden.push_back(nodeId(region));
         }
@@ -99,13 +98,6 @@ UiInteractionState buildInteraction(
     }
     if (hasFooterPrompt && !footerPromptOpen) hidden.push_back(footerPrompt);
     if (footerPromptOpen) hidden.push_back(nodeId(kFooterNodeId));
-
-    const UiNodeId notice = nodeId(kNoticeNodeId);
-    const bool hasNotice = findUiNode(schema, notice) != nullptr;
-    if (truth.noticePresent && !hasNotice) {
-        throw std::logic_error("draft notice requires the notice node");
-    }
-    if (hasNotice && !truth.noticePresent) hidden.push_back(notice);
 
     const UiNodeId externalMod = nodeId(kExternalModNodeId);
     const bool hasExternalMod = findUiNode(schema, externalMod) != nullptr;
@@ -195,7 +187,7 @@ UiInteractionState ScreenState::project() const {
     return buildInteraction(
         std::move(schema),
         {panelPresent_, distractionFree_, visiblePicker(), baseFocus_,
-         noticePresent_, externalModificationPresent_, externalFocusHeld_},
+         externalModificationPresent_, externalFocusHeld_},
         activePromptRegion(prompt_));
 }
 
@@ -319,13 +311,6 @@ bool ScreenState::focusPanel() {
     return true;
 }
 
-bool ScreenState::refreshNoticePresence(bool present) {
-    auto& state = *this;
-    if (state.noticePresent_ == present) return false;
-    state.noticePresent_ = present;
-    return true;
-}
-
 bool ScreenState::refreshExternalModificationPresence(bool present) {
     auto& state = *this;
     if (state.externalModificationPresent_ == present &&
@@ -408,7 +393,7 @@ PalettePresenceOverlay ScreenState::pickerPresenceOverlay() const {
     return derivePickerPresenceOverlay(
         current,
         {panelPresent_, distractionFree_, visiblePicker(), baseFocus_,
-         noticePresent_, externalModificationPresent_, externalFocusHeld_});
+         externalModificationPresent_, externalFocusHeld_});
 }
 
 }  // namespace ssg

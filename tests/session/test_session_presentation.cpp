@@ -26,13 +26,12 @@ std::filesystem::path uniqueRoot(std::string_view name) {
     auto root = testRuntimePath("runtime_snapshot_" + std::string{name});
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     return root;
 }
 
 ssg::EditorConfig configFor(const std::filesystem::path& root) {
-    return {root / "workspace", root / "scratch", root / "recovery"};
+    return {root / "workspace", root / "recovery", root / "archive"};
 }
 
 const ssg::UiNode* nodeById(const ssg::UiNode& node, std::string_view id) {
@@ -387,8 +386,8 @@ TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
 // Every session opens on an empty untitled buffer.  Reporting it unsaved is
 // technically true and practically useless: the badge appears before the user
 // has done anything, so it stops meaning "you have work to lose".
-TEST(anEmptyScratchBufferIsNotUnsavedUntilItHasContent) {
-    auto root = uniqueRoot("scratch_dirty");
+TEST(anEmptyBlankBufferIsNotUnsavedUntilItHasContent) {
+    auto root = uniqueRoot("blank_dirty");
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -407,11 +406,11 @@ TEST(anEmptyScratchBufferIsNotUnsavedUntilItHasContent) {
     std::filesystem::remove_all(root);
 }
 
-// Opening a file beside the startup scratch buffer would otherwise leave a blank
+// Opening a file beside the startup blank buffer would otherwise leave a blank
 // tab nobody asked for.  It is discarded only when it is the sole tab, untitled,
 // and empty -- a buffer with content, or one kept beside others, is never taken.
-TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
-    auto root = uniqueRoot("scratch_close");
+TEST(openingAFileDiscardsOnlyAnEmptySoleBlankTab) {
+    auto root = uniqueRoot("blank_close");
     std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
     std::ofstream{root / "workspace" / "beta.txt"} << "beta\n";
     auto created = ssg::createEditor(configFor(root));
@@ -438,13 +437,13 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
     ASSERT_TRUE(runtime.dispatch("file.new").accepted());
     ASSERT_TRUE(hasTab("[new buffer]"));
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"alpha.txt"}).accepted());
-    // The scratch tab went with it rather than lingering blank, and the file --
-    // not the scratch buffer -- is what remains.
+    // The blank tab went with it rather than lingering blank, and the file --
+    // not the blank buffer -- is what remains.
     ASSERT_TRUE(hasTab("alpha.txt"));
     ASSERT_FALSE(hasTab("[new buffer]"));
 
     // A second open leaves the file already there alone: only the STARTUP
-    // scratch buffer is disposable, never a real document.  Asserted by opening
+    // blank buffer is disposable, never a real document.  Asserted by opening
     // beta while alpha is the sole tab, which is exactly the shape that would
     // trip a rule checking only "is this untitled and empty".
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"beta.txt"}).accepted());
@@ -459,7 +458,7 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
     ASSERT_TRUE(hasTab("alpha.txt"));
     ASSERT_TRUE(hasTab("beta.txt"));
 
-    // Only the SOLE tab is disposable.  An empty scratch buffer sitting beside
+    // Only the SOLE tab is disposable.  An empty blank buffer sitting beside
     // other tabs was opened deliberately -- the user asked for it with file.new
     // rather than being handed it at startup -- so it stays.  The untitled and
     // empty checks alone would not preserve it; this is what makes the rule "the
@@ -471,11 +470,11 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
     std::filesystem::remove_all(root);
 }
 
-// A scratch buffer the user has typed into holds work, so opening a file beside
+// A blank buffer the user has typed into holds work, so opening a file beside
 // it must keep it.  This is the assertion that makes the feature safe rather
 // than merely tidy.
-TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
-    auto root = uniqueRoot("scratch_keep");
+TEST(aBlankBufferWithContentSurvivesOpeningAFile) {
+    auto root = uniqueRoot("blank_keep");
     std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
     auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
@@ -488,13 +487,13 @@ TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    bool keptScratch = false;
+    bool keptBlank = false;
     bool openedFile = false;
     for (auto const& tab : snapshot->tabs.tabs) {
-        if (tab.label == "[new buffer]") keptScratch = true;
+        if (tab.label == "[new buffer]") keptBlank = true;
         if (tab.label == "alpha.txt") openedFile = true;
     }
-    ASSERT_TRUE(keptScratch);
+    ASSERT_TRUE(keptBlank);
     ASSERT_TRUE(openedFile);
     std::filesystem::remove_all(root);
 }
@@ -502,8 +501,8 @@ TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
 // An EMPTY FILE is still a file.  The disposal rule turns on "untitled", not on
 // "has no text", so a real but empty document opened as the sole tab must
 // survive opening another beside it.
-TEST(anEmptySavedFileIsNeverDiscardedAsScratch) {
-    auto root = uniqueRoot("scratch_empty_file");
+TEST(anEmptySavedFileIsNeverDiscardedAsBlank) {
+    auto root = uniqueRoot("blank_empty_file");
     std::ofstream{root / "workspace" / "blank.txt"};
     std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
     auto created = ssg::createEditor(configFor(root));
@@ -922,10 +921,10 @@ SSG_TEST_SUITE(test_session_presentation) {
     RUN(curatedKeymapResolvesPerContext);
     RUN(everyDocumentLineIsReachableAndTheCaretIsNeverLost);
     RUN(aDocumentClippedByTheChromeStillReportsAScrollbar);
-    RUN(anEmptyScratchBufferIsNotUnsavedUntilItHasContent);
-    RUN(openingAFileDiscardsOnlyAnEmptySoleScratchTab);
-    RUN(aScratchBufferWithContentSurvivesOpeningAFile);
-    RUN(anEmptySavedFileIsNeverDiscardedAsScratch);
+    RUN(anEmptyBlankBufferIsNotUnsavedUntilItHasContent);
+    RUN(openingAFileDiscardsOnlyAnEmptySoleBlankTab);
+    RUN(aBlankBufferWithContentSurvivesOpeningAFile);
+    RUN(anEmptySavedFileIsNeverDiscardedAsBlank);
     RUN(wrapBreaksAgainstThePaneWidthNotTheClientSurface);
     RUN(addCursorChordProducesMultipleSelections);
     RUN(settingsOpenFocusesASettingsPrompt);

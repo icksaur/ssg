@@ -137,7 +137,7 @@ class ExternalModificationFlow {
     processEvent(ExternalEventInput input, std::uint64_t diffRevision,
                  bool resync = false);
     [[nodiscard]] ExternalModificationResult
-    reload(const DiffFileId& id, std::optional<JournalDocument>& document);
+    reload(const DiffFileId& id, std::optional<ClosedDocumentSnapshot>& document);
     [[nodiscard]] ExternalModificationResult
     resolveReload(const DiffFileId& id);
     [[nodiscard]] ExternalModificationResult keepBuffer(const DiffFileId& id);

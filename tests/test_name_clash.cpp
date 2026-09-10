@@ -39,8 +39,8 @@ private:
 };
 
 std::unique_ptr<ssg::Editor> makeRuntime(const fs::path& root) {
-    ssg::EditorConfig config{
-        root, root / "scratch", root / "recovery"};
+    ssg::EditorConfig config{.cwd = root,
+                             .recoveryRoot = root / "recovery"};
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
     auto created = ssg::createEditor(config);

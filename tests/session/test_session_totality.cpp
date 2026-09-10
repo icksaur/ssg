@@ -25,7 +25,6 @@ fs::path makeRoot(const std::string& name) {
     auto root = testRuntimePath("runtime_totality_" + name);
     fs::remove_all(root);
     fs::create_directories(root / "workspace");
-    fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");
     std::string text;
     for (int i = 0; i < 200; ++i) text += "the quick brown fox jumps\n";
@@ -70,7 +69,7 @@ void runState(const UiState& state) {
     ssg::LineLayoutCache lineCache;
     auto root = makeRoot(state.name);
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) { fs::remove_all(root); return; }
     auto& runtime = *created.session;

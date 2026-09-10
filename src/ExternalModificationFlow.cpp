@@ -340,7 +340,7 @@ bool ExternalModificationFlow::reconcileAllOpenDocumentsAgainstDisk() {
     std::uint64_t sequence = 0;
     for (const auto documentId : workspace_->documents()) {
         const auto state = workspace_->state(documentId);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
+        if (!state || state->key.kind() != DocumentKeyKind::Saved) {
             continue;
         }
 
@@ -544,7 +544,7 @@ ExternalModificationFlow::processEvent(ExternalEventInput input,
 
 ExternalModificationResult
 ExternalModificationFlow::reload(const DiffFileId& id,
-                                 std::optional<JournalDocument>& document) {
+                                 std::optional<ClosedDocumentSnapshot>& document) {
     const auto pending = findPending(id);
     if (pending == pending_.end()) {
         return failure(ExternalModificationError::NoExternalChange);
@@ -556,8 +556,8 @@ ExternalModificationFlow::reload(const DiffFileId& id,
         return failure(ExternalModificationError::DocumentMissing);
     }
 
-    JournalDocument replacement{
-        JournalDocumentKey::saved(pending->view.path.generic_string()),
+    ClosedDocumentSnapshot replacement{
+        DocumentKey::saved(pending->view.path.generic_string()),
         document->mode, false, *pending->diskContent};
     document = std::move(replacement);
     const auto idx = static_cast<std::size_t>(pending - pending_.begin());
@@ -667,7 +667,7 @@ std::optional<FileDocumentId> ExternalModificationFlow::resolveDocument(
     const auto savedPath = path.generic_string();
     for (const auto document : workspace_->documents()) {
         const auto state = workspace_->state(document);
-        if (state && state->key.kind() == JournalDocumentKeyKind::Saved &&
+        if (state && state->key.kind() == DocumentKeyKind::Saved &&
             state->key.savedPath() == savedPath) {
             return document;
         }

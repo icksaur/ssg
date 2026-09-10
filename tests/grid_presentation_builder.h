@@ -74,10 +74,6 @@ public:
         lineNumbers_ = enabled;
         return *this;
     }
-    GridPresentationBuilder& noticePresent(bool present = true) {
-        noticePresent_ = present;
-        return *this;
-    }
     GridPresentationBuilder& externalModificationPresent(bool present = true) {
         externalModificationPresent_ = present;
         return *this;
@@ -123,7 +119,6 @@ public:
             (void)screen.togglePanel();
             if (!panelFocused_) screen.focusEditor();
         }
-        if (noticePresent_) (void)screen.refreshNoticePresence(true);
         if (externalModificationPresent_) {
             (void)screen.refreshExternalModificationPresence(true);
         }
@@ -161,12 +156,6 @@ public:
             .theme = defaultTheme(),
             .uiTree = std::move(uiTree),
             .tabs = std::move(tabs),
-            .notice = noticePresent_
-                          ? std::optional<NoticeView>{NoticeView{
-                                "Draft conflict",
-                                {{"draft.notice.dismiss", "dismiss",
-                                  "draft.dismiss"}}}}
-                          : std::nullopt,
             .externalModification = {},
             .followMode = FollowMode::Following,
             .prompt = PromptViewState{
@@ -408,7 +397,6 @@ private:
     PaletteReport palette_;
     std::optional<UiSchema> schema_;
     std::optional<PromptInput> promptInput_;
-    bool noticePresent_ = false;
     bool externalModificationPresent_ = false;
     StatusFieldProjection statusFields_;
     std::string helpHintLabel_;

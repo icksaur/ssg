@@ -542,7 +542,7 @@ TEST(gitRemoveFileRejectsStaleOrEqualRevisionAndRemovesOnNextRevision) {
 
 TEST(gitScanClassificationDistinguishesGitFromNonGitEntries) {
     // The invariant the git-scan reconciliation relies on: isGitFile is true
-    // only for git-sourced entries, so a rescan can leave draft-vs-disk and
+    // only for git-sourced entries, so a rescan can leave local and
     // external-modification (non-git) entries untouched instead of evicting
     // them.
     DiffModel model;
@@ -555,15 +555,15 @@ TEST(gitScanClassificationDistinguishesGitFromNonGitEntries) {
                     .accepted());
     ASSERT_TRUE(model
                     .applyNonGitEvent({NonGitDiffEventKind::Create,
-                                       DiffFileId{"draft:note.txt"},
+                                       DiffFileId{"local:note.txt"},
                                        "note.txt", std::nullopt,
                                        std::string{"disk\n"},
-                                       std::string{"draft\n"}},
+                                       std::string{"local\n"}},
                                       std::uint64_t{2})
                     .accepted());
 
     ASSERT_TRUE(model.isGitFile(DiffFileId{"tracked"}));
-    ASSERT_FALSE(model.isGitFile(DiffFileId{"draft:note.txt"}));
+    ASSERT_FALSE(model.isGitFile(DiffFileId{"local:note.txt"}));
     ASSERT_FALSE(model.isGitFile(DiffFileId{"unknown"}));
 }
 

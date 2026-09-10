@@ -1,7 +1,6 @@
 #include "test_helpers.h"
 
 #include <ssg/Workspace.h>
-#include <ssg/ScratchJournal.h>
 
 #include <chrono>
 #include <filesystem>
@@ -91,7 +90,7 @@ TEST(untitledIdentityChangesOnlyAfterSuccessfulSave) {
     const auto created = workspace.newDocument();
     const auto id = *created.document;
     const auto before = workspace.state(id);
-    ASSERT_EQ(before->key.kind(), ssg::JournalDocumentKeyKind::Untitled);
+    ASSERT_EQ(before->key.kind(), ssg::DocumentKeyKind::Untitled);
     // A brand-new untitled buffer holds nothing to lose, so it is not unsaved.
     ASSERT_FALSE(before->dirty);
     // Type something: now there IS something a failed save would lose, which is
@@ -112,7 +111,7 @@ TEST(untitledIdentityChangesOnlyAfterSuccessfulSave) {
     const auto saved = workspace.saveAs(id, "named.txt");
     ASSERT_TRUE(saved.accepted());
     const auto afterSave = workspace.state(id);
-    ASSERT_EQ(afterSave->key.kind(), ssg::JournalDocumentKeyKind::Saved);
+    ASSERT_EQ(afterSave->key.kind(), ssg::DocumentKeyKind::Saved);
     ASSERT_EQ(afterSave->key.savedPath(), std::string{"named.txt"});
     ASSERT_FALSE(afterSave->dirty);
 }
@@ -127,7 +126,7 @@ TEST(newFileClaimsANameAndStaysUnsavedUntilItIsWritten) {
     ASSERT_TRUE(created.accepted());
     const auto id = *created.document;
     const auto before = workspace.state(id);
-    ASSERT_EQ(before->key.kind(), ssg::JournalDocumentKeyKind::Saved);
+    ASSERT_EQ(before->key.kind(), ssg::DocumentKeyKind::Saved);
     ASSERT_EQ(before->key.savedPath(), std::string{"fresh.txt"});
     // Empty, but nothing is on disk yet, so the file only exists if it is saved.
     ASSERT_TRUE(before->dirty);
@@ -282,75 +281,18 @@ TEST(removeDocumentErasesOnlyInMemoryState) {
     ASSERT_EQ(readBytes(temporary.path() / "keep.txt"), std::string{"keep me"});
 }
 
-TEST(openCapturesDiskBaselineAndUntitledHasNone) {
-    TemporaryDirectory temporary;
-    writeBytes(temporary.path() / "note.txt", "hello world\n");
-    auto recovery =
-        ssg::RecoveryManager::create(temporary.path() / ".recovery");
-    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
-
-    const auto opened = workspace.openFile("note.txt");
-    ASSERT_TRUE(opened.accepted());
-    const auto baseline = workspace.baselineFor(*opened.document);
-    ASSERT_TRUE(baseline.has_value());
-    // The baseline hashes the RAW disk bytes and records the disk size, so it
-    // reflects what the edits branch from, not the decoded buffer.
-    ASSERT_EQ(baseline->size, std::uint64_t{12});
-    ASSERT_EQ(baseline->contentHash, ssg::fastContentHash("hello world\n"));
-    ASSERT_TRUE(baseline->mtimeNanos != 0);
-
-    // An untitled buffer has no disk file, so no baseline.
-    const auto untitled = workspace.newDocument("scratch");
-    ASSERT_TRUE(untitled.accepted());
-    ASSERT_FALSE(workspace.baselineFor(*untitled.document).has_value());
-}
-
-TEST(saveAsCapturesBaselineForWrittenBytes) {
-    TemporaryDirectory temporary;
-    auto recovery =
-        ssg::RecoveryManager::create(temporary.path() / ".recovery");
-    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
-
-    // A fresh untitled buffer starts with no baseline; saving it to disk
-    // captures a baseline for the bytes that were written.
-    const auto untitled = workspace.openVirtualDocument(
-        "draft", "fresh\n", ssg::DocumentMode::Edit);
-    ASSERT_TRUE(untitled.accepted());
-    ASSERT_FALSE(workspace.baselineFor(*untitled.document).has_value());
-
-    const auto saved = workspace.saveAs(*untitled.document, "draft.txt");
-    ASSERT_TRUE(saved.accepted());
-    const auto baseline = workspace.baselineFor(*untitled.document);
-    ASSERT_TRUE(baseline.has_value());
-    ASSERT_EQ(baseline->contentHash,
-              ssg::fastContentHash(readBytes(temporary.path() / "draft.txt")));
-    ASSERT_EQ(baseline->size,
-              readBytes(temporary.path() / "draft.txt").size());
-}
-
-TEST(reloadRefreshesBaselineFromDisk) {
-    TemporaryDirectory temporary;
-    writeBytes(temporary.path() / "live.txt", "first\n");
-    auto recovery =
-        ssg::RecoveryManager::create(temporary.path() / ".recovery");
-    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
-
-    const auto opened = workspace.openFile("live.txt");
-    ASSERT_TRUE(opened.accepted());
-    const auto openedBaseline = workspace.baselineFor(*opened.document);
-    ASSERT_TRUE(openedBaseline.has_value());
-    if (openedBaseline) {
-        ASSERT_EQ(openedBaseline->contentHash, ssg::fastContentHash("first\n"));
-    }
-
-    // Something external rewrites the file; reload re-reads disk, so the baseline
-    // now reflects the new disk content (the authority is disk, not the buffer).
-    writeBytes(temporary.path() / "live.txt", "second changed\n");
-    ASSERT_TRUE(workspace.reload(*opened.document).accepted());
-    const auto baseline = workspace.baselineFor(*opened.document);
-    ASSERT_TRUE(baseline.has_value());
-    ASSERT_EQ(baseline->contentHash, ssg::fastContentHash("second changed\n"));
-    ASSERT_EQ(baseline->size, std::uint64_t{15});
+TEST(documentKeysPreserveSavedAndUntitledIdentity) {
+    const auto first = ssg::UntitledDocumentId::generate();
+    const auto second = ssg::UntitledDocumentId::generate();
+    ASSERT_NE(first, second);
+    ASSERT_EQ(ssg::DocumentKey::untitled(first).untitledId(), first);
+    ASSERT_EQ(ssg::DocumentKey::saved("src/file.cpp").savedPath(),
+              std::string{"src/file.cpp"});
+    ASSERT_THROWS(ssg::DocumentKey::saved("../escape"),
+                  std::invalid_argument);
+    ASSERT_THROWS(ssg::DocumentKey::saved(""), std::invalid_argument);
+    ASSERT_THROWS(ssg::DocumentKey::saved("file").untitledId(),
+                  std::logic_error);
 }
 
 }  // namespace
@@ -365,9 +307,7 @@ SSG_TEST_SUITE(test_workspace) {
     RUN(emptyAndMixedEndingEditsSaveWithExactMetadata);
     RUN(tryDocumentReturnsNullForAbsentId);
     RUN(removeDocumentErasesOnlyInMemoryState);
-    RUN(openCapturesDiskBaselineAndUntitledHasNone);
-    RUN(saveAsCapturesBaselineForWrittenBytes);
-    RUN(reloadRefreshesBaselineFromDisk);
+    RUN(documentKeysPreserveSavedAndUntitledIdentity);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

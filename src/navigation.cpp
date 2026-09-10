@@ -24,7 +24,7 @@ std::optional<std::string> navigationTargetText(Editor& runtime,
                                                 std::string const& path) {
     for (auto const document : runtime.workspace.documents()) {
         auto const state = runtime.workspace.state(document);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
+        if (!state || state->key.kind() != DocumentKeyKind::Saved) continue;
         if (state->key.savedPath() != path) continue;
         auto const* opened = runtime.workspace.tryDocument(document);
         if (opened == nullptr) return std::nullopt;

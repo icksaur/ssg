@@ -31,14 +31,14 @@ std::filesystem::path uniqueRoot(std::string_view name) {
     auto root = testRuntimePath("runtime_extmod_" + std::string{name});
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
+    std::filesystem::create_directories(root / "archive");
     return root;
 }
 
 ssg::EditorConfig configFor(const std::filesystem::path& root) {
-    ssg::EditorConfig config{root / "workspace", root / "scratch",
-                                    root / "recovery"};
+    ssg::EditorConfig config{root / "workspace", root / "recovery",
+                             root / "archive"};
     // Non-git workspace, git worker AND the filesystem watcher off: ingress is
     // driven through the test hook, so the reconcile runs deterministically without
     // depending on inotify timing, and watcherAvailable starts false. The watcher

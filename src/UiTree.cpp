@@ -113,12 +113,10 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
                 return;
             }
             if (node.size.kind() == SizeKind::Auto &&
-                *w.surface != ViewSurface::Notice &&
                 *w.surface != ViewSurface::ExternalModification) {
                 // A View names its client-rendered surface and has no content to
                 // hug, so it is Exact- or Flex-sized -- EXCEPT the
-                // draft-conflict notice and the external-modification bar,
-                // whose intrinsic (reservation-sized) footprints the runtime
+                // external-modification bar, whose intrinsic footprint the runtime
                 // sizes, so they alone may be Auto.
                 error = here + ": a \"view\" leaf must not be Auto-sized";
                 return;

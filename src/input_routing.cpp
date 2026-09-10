@@ -458,22 +458,6 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
     return {ActivateUiNode{input.nodeId}, std::nullopt, false};
 }
 
-RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
-                       NoticeActionPointerInput const& input) {
-    if (!isPrimaryPress(input.phase, input.button)) {
-        return unhandled();
-    }
-    if (!snapshot.noticeActions) {
-        return rejected("notice action target is not present");
-    }
-    for (auto const& action : *snapshot.noticeActions) {
-        if (action.id == input.actionId) {
-            return dispatch(action.commandId);
-        }
-    }
-    return rejected("notice action target is not actionable");
-}
-
 RoutedInput routeInput(InputRoutingSnapshot const&,
                        UpdatePromptValueInput const& input) {
     return accepted(EditorMutation{PromptValueArguments{input.index, input.value}});

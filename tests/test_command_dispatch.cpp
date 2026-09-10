@@ -18,7 +18,6 @@ namespace fs = std::filesystem;
 fs::path uniqueRoot() {
     const auto root = testRuntimePath("dispatch_root_" + std::to_string(::getpid()));
     fs::remove_all(root);
-    fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");
     return root;
 }
@@ -26,7 +25,6 @@ fs::path uniqueRoot() {
 std::unique_ptr<ssg::Editor> makeRuntime(fs::path const& root) {
     return std::move(ssg::createEditor(
                          {.cwd = root,
-                          .scratchRoot = root / "scratch",
                           .recoveryRoot = root / "recovery",
                           .enableGitDiffWorker = false,
                           .enableFilesystemWatcher = false})

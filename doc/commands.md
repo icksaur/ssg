@@ -17,14 +17,6 @@ There are 162 commands.
 | `clipboard.cut` | Cut | none | lua |
 | `clipboard.paste` | Paste | none | lua |
 
-## draft-recovery
-
-| Command | Summary | Arguments | Surfaces |
-|---|---|---|---|
-| `draft.diff` | Diff Draft Against Disk | none | lua |
-| `draft.discard` | Discard Draft (Use Disk) | none | lua |
-| `draft.dismiss` | Dismiss Draft Notice | none | lua |
-
 ## edit-command-suite
 
 | Command | Summary | Arguments | Surfaces |

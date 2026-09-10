@@ -68,18 +68,12 @@ struct TabManager::Impl {
         return found == outcomes.end() ? nullptr : &found->result;
     }
 
-    // I2: a dirty tab is removed only after an accepted durable outcome; only an
-    // ephemeral tab may close without compensation or recently-closed history.
     [[nodiscard]] TabResult closeAt(
         std::size_t index, TabLifecycleResult result,
         std::optional<std::size_t> recordedIndex = {}) {
         const auto tab = view.tabs[index];
         if (!result.accepted()) {
             return failure(result.error, std::move(result.message));
-        }
-        if (tab.dirty && !result.durable) {
-            return failure(TabError::DurabilityFailed,
-                           "dirty close did not become durable");
         }
         if (!result.compensation) {
             if (!result.ephemeral) {
@@ -202,11 +196,10 @@ const TabViewState& TabManager::viewState() const noexcept {
 }
 
 TabResult TabManager::openDocument(FileDocumentId document,
-                                   JournalDocumentKey identity,
+                                   DocumentKey identity,
                                    std::string_view label,
                                    DocumentMode mode,
-                                   bool dirty,
-                                   std::optional<ScratchDurability> recovery) {
+                                   bool dirty) {
     if (document.value() == 0) {
         return failure(TabError::InvalidArgument,
                        "document id must be non-zero");
@@ -225,7 +218,7 @@ TabResult TabManager::openDocument(FileDocumentId document,
 
     std::string resolvedLabel{label};
     if (resolvedLabel.empty()) {
-        if (identity.kind() == JournalDocumentKeyKind::Untitled) {
+        if (identity.kind() == DocumentKeyKind::Untitled) {
             resolvedLabel = impl_->untitledLabel();
         } else {
             const auto& path = identity.savedPath();
@@ -242,7 +235,7 @@ TabResult TabManager::openDocument(FileDocumentId document,
     const auto id = TabId{impl_->nextId++};
     impl_->view.tabs.push_back(
         {id, TabKind::Document, document, std::move(identity), {},
-         std::move(resolvedLabel), mode, dirty, recovery});
+         std::move(resolvedLabel), mode, dirty});
     impl_->view.active = id;
     return {TabError::None, {}, id, {}};
 }
@@ -269,17 +262,16 @@ TabResult TabManager::openContent(TabKind kind,
     const auto id = TabId{impl_->nextId++};
     impl_->view.tabs.push_back(
         {id, kind, {}, {}, std::string{contentIdentity}, std::string{label},
-         mode, false, std::nullopt});
+         mode, false});
     impl_->view.active = id;
     return {TabError::None, {}, id, {}};
 }
 
 TabResult TabManager::updateDocument(FileDocumentId document,
-                                     JournalDocumentKey identity,
+                                     DocumentKey identity,
                                      std::string_view label,
                                      DocumentMode mode,
-                                     bool dirty,
-                                     std::optional<ScratchDurability> recovery) {
+                                     bool dirty) {
     const auto found = std::find_if(
         impl_->view.tabs.begin(), impl_->view.tabs.end(),
         [document](const TabState& tab) {
@@ -292,7 +284,6 @@ TabResult TabManager::updateDocument(FileDocumentId document,
     found->label = label;
     found->mode = mode;
     found->dirty = dirty;
-    found->recovery = recovery;
     return {TabError::None, {}, found->id, {}};
 }
 

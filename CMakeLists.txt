@@ -9,8 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Use ccache as the compiler launcher when available.  Fresh build trees (e.g.
-# per-worktree builds) then reuse cached object files instead of recompiling from
-# scratch, which turns a clean build of an already-seen tree into a near-instant
+# per-worktree builds) then reuse cached object files instead of recompiling every
+# object, which turns a clean build of an already-seen tree into a near-instant
 # cache replay.  Opt out with -DSSG_CCACHE=OFF.
 option(SSG_CCACHE "Use ccache as the compiler launcher when found" ON)
 if(SSG_CCACHE AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
@@ -180,6 +180,7 @@ endif()
 
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Document.cpp
+    ${SSG_SOURCE_DIR}/src/DocumentKey.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -193,26 +194,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
     ssg_test_link_libraries(test_document PRIVATE ssg_core)
-
-endif()
-
-target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/DraftAutosaveScheduler.cpp
-    ${SSG_SOURCE_DIR}/src/DraftReopenClassifier.cpp
-)
-
-if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    ssg_add_test_suite(
-        NAME test_draft_autosave
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_draft_autosave.cpp
-        SYMBOL test_draft_autosave)
-    ssg_test_link_libraries(test_draft_autosave PRIVATE ssg_core)
-
-    ssg_add_test_suite(
-        NAME test_draft_reopen
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_draft_reopen.cpp
-        SYMBOL test_draft_reopen)
-    ssg_test_link_libraries(test_draft_reopen PRIVATE ssg_core)
 
 endif()
 
@@ -286,27 +267,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_files.cpp
         SYMBOL test_session_files)
     ssg_test_link_libraries(test_session_files PRIVATE ssg_tui_objects)
-    ssg_add_test_suite(
-        NAME test_session_reopen
-        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_files.cpp
-        SYMBOL test_session_reopen)
-    ssg_test_link_libraries(test_session_reopen PRIVATE ssg_tui_objects)
-    ssg_add_test_suite(
-        NAME test_session_drafts
-        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_files.cpp
-        SYMBOL test_session_drafts)
-    ssg_test_link_libraries(test_session_drafts PRIVATE ssg_tui_objects)
-    ssg_add_test_suite(
-        NAME test_session_notices
-        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_files.cpp
-        SYMBOL test_session_notices)
-    ssg_test_link_libraries(test_session_notices PRIVATE ssg_tui_objects)
-    ssg_add_test_suite(
-        NAME test_session_conflicts
-        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_files.cpp
-        SYMBOL test_session_conflicts)
-    ssg_test_link_libraries(test_session_conflicts PRIVATE ssg_tui_objects)
-
     ssg_add_test_suite(
         NAME test_session_external_modification
         ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_external_modification.cpp
@@ -946,58 +906,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_test_include_directories(test_renderer_diff_overlay
         PRIVATE ${SSG_SOURCE_DIR}/tests)
     ssg_test_link_libraries(test_renderer_diff_overlay PRIVATE ssg_tui_objects)
-
-endif()
-
-target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/ScratchStore.cpp
-)
-
-if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    ssg_add_test_suite(
-        NAME test_scratch
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_scratch.cpp
-        SYMBOL test_scratch)
-    ssg_test_include_directories(test_scratch PRIVATE
-        ${SSG_SOURCE_DIR}/tests
-    )
-    ssg_test_link_libraries(test_scratch PRIVATE ssg_core)
-
-endif()
-
-target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/ScratchJournal.cpp
-)
-
-if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    ssg_add_test_suite(
-        NAME test_scratch_journal
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_scratch_journal.cpp
-        SYMBOL test_scratch_journal)
-    ssg_test_include_directories(test_scratch_journal PRIVATE
-        ${SSG_SOURCE_DIR}/tests
-    )
-    ssg_test_compile_definitions(test_scratch_journal PRIVATE
-        SSG_SCRATCH_JOURNAL_FIXTURE_DIR="${SSG_SOURCE_DIR}/tests/fixtures/scratch/journal"
-    )
-    ssg_test_link_libraries(test_scratch_journal PRIVATE ssg_core)
-
-endif()
-
-target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/ScratchSession.cpp
-)
-
-if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    ssg_add_test_suite(
-        NAME test_scratch_session
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_scratch_session.cpp
-        SYMBOL test_scratch_session
-        ARGS)
-    ssg_test_include_directories(test_scratch_session PRIVATE
-        ${SSG_SOURCE_DIR}/tests
-    )
-    ssg_test_link_libraries(test_scratch_session PRIVATE ssg_core)
 
 endif()
 

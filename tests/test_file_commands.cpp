@@ -50,7 +50,7 @@ TEST(droppedContentSanitizesLabelAndNormalizesNewlines) {
         workspace.openDroppedContent(bytes, "../../bad/name.txt");
     ASSERT_TRUE(accepted.accepted());
     const auto state = workspace.state(*accepted.document);
-    ASSERT_EQ(state->key.kind(), ssg::JournalDocumentKeyKind::Untitled);
+    ASSERT_EQ(state->key.kind(), ssg::DocumentKeyKind::Untitled);
     ASSERT_EQ(state->displayLabel, std::string{"name.txt"});
     ASSERT_EQ(workspace.document(*accepted.document).snapshot().text,
               std::string{"hi\n!"});

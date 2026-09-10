@@ -55,7 +55,7 @@ std::optional<std::string> pathCommandPrecondition(
         auto const state = runtime.workspace.state(*id);
         // Renaming needs a file to rename. An unnamed buffer has none, and the
         // command that gives it one is save_as.
-        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
+        if (!state || state->key.kind() != DocumentKeyKind::Saved) {
             return std::string{"document has no file to rename"};
         }
     }
@@ -77,8 +77,8 @@ OperationResult finishTabOperation(Editor& runtime, TabResult const& result,
 }
 
 // Whether a tab's close lifecycle result means the tab actually closes.
-bool closesTab(const TabState& state, const TabLifecycleResult& result) {
-    return result.accepted() && (!state.dirty || result.durable) &&
+bool closesTab(const TabLifecycleResult& result) {
+    return result.accepted() &&
            (result.compensation.has_value() || result.ephemeral);
 }
 
@@ -109,7 +109,7 @@ OperationResult closeTabById(Editor& runtime, TabId tabId) {
         tabs.begin(), tabs.end(),
         [tabId](const TabState& candidate) { return candidate.id == tabId; });
     if (found == tabs.end()) return failure("tab is not open");
-    auto outcome = runtime.closeTab(*found, std::chrono::milliseconds{100});
+    auto outcome = runtime.closeTab(*found);
     auto result = runtime.tabs.close(tabId, std::move(outcome));
     return finishTabOperation(runtime, result, std::nullopt, false, false);
 }
@@ -183,8 +183,7 @@ OperationResult Editor::updateTabsFor(FileDocumentId document) {
     auto const* opened = workspace.tryDocument(document);
     if (opened == nullptr) return failure("workspace document does not exist");
     auto result = tabs.updateDocument(document, state->key, state->displayLabel,
-                                       opened->mode(), state->dirty,
-                                       scratch.durabilityState().kind);
+                                      opened->mode(), state->dirty);
     return result.accepted() ? success() : failure(tabMessage(result));
 }
 
@@ -193,47 +192,39 @@ OperationResult Editor::activateDocument(FileDocumentId document) {
     if (!state) return failure("workspace document does not exist");
     auto const* opened = workspace.tryDocument(document);
     if (opened == nullptr) return failure("workspace document does not exist");
-    // Note the startup scratch buffer BEFORE opening, while it is still the only
+    // Note the startup empty buffer before opening, while it is still the only
     // tab.  Every session begins on an empty untitled buffer; opening a file
     // beside it leaves a blank tab nobody asked for and nobody will use.  It is
     // discarded only when it is the sole tab, is untitled, and holds nothing --
     // so a buffer the user typed into, or deliberately kept beside others, is
     // never taken away.
-    std::optional<TabState> disposableScratch;
+    std::optional<TabState> disposableBuffer;
     if (auto const& view = tabs.viewState(); view.tabs.size() == 1) {
         auto const& only = view.tabs.front();
         if (only.document && *only.document != document && only.documentKey &&
-            only.documentKey->kind() == JournalDocumentKeyKind::Untitled) {
-            auto const* scratchDocument = workspace.tryDocument(*only.document);
-            if (scratchDocument != nullptr &&
-                scratchDocument->snapshot().text.empty()) {
-                disposableScratch = only;
+            only.documentKey->kind() == DocumentKeyKind::Untitled) {
+            auto const* emptyDocument = workspace.tryDocument(*only.document);
+            if (emptyDocument != nullptr &&
+                emptyDocument->snapshot().text.empty()) {
+                disposableBuffer = only;
             }
         }
     }
-    // Reconcile a recovered draft only the first time a document is opened from
-    // disk (fresh runtime state), never when re-activating an already-open tab —
-    // that would clobber the live buffer with a stale draft.
-    const bool freshlyOpened =
-        documentRuntimeStates.find(document.value()) == documentRuntimeStates.end();
     ensureDocumentRuntimeState(document);
-    if (freshlyOpened) reconcileDraftOnOpen(document);
     state = workspace.state(document);
     auto result = tabs.openDocument(document, state->key, state->displayLabel,
-                                     opened->mode(), state->dirty,
-                                     scratch.durabilityState().kind);
+                                    opened->mode(), state->dirty);
     if (!result.accepted()) return failure(tabMessage(result));
     // Closed only after the open succeeded, so a failed open never costs the
     // buffer the user still has. closeTab retires the workspace document and
     // TabManager consumes the completed outcome.
-    if (disposableScratch) {
-        auto outcome = closeTab(*disposableScratch, std::chrono::milliseconds{100});
-        (void)tabs.close(disposableScratch->id, std::move(outcome));
+    if (disposableBuffer) {
+        auto outcome = closeTab(*disposableBuffer);
+        (void)tabs.close(disposableBuffer->id, std::move(outcome));
     }
     resetSelectionForActiveDocument();
     refreshSyntax();
     reconcileFindDocument();
-    screen.refreshNoticePresence(noticePresent());
     screen.refreshExternalModificationPresence(externalModificationPresent());
     return success();
 }
@@ -271,7 +262,7 @@ void registerFileCommands(Commands& commands, Editor& runtime) {
             }
             // An untitled buffer cannot be saved over itself; redirect to save_as.
             auto const state = runtime.workspace.state(*id);
-            if (state && state->key.kind() != JournalDocumentKeyKind::Saved) {
+            if (state && state->key.kind() != DocumentKeyKind::Saved) {
                 auto opened = openGenericPrompt(runtime.screen.prompt(),
                     fileCommandPathPrompt(FileCommand::SaveAs));
                 if (!opened.accepted()) return failure(opened.error->message);
@@ -369,9 +360,8 @@ void registerTabCommands(Commands& commands, Editor& runtime) {
             for (const auto& target : targets) {
                 auto outcome = TabCloseOutcome{
                     target.id,
-                    runtime.closeTab(target, std::chrono::milliseconds{100},
-                                     alreadyClosed)};
-                if (closesTab(target, outcome.result))
+                    runtime.closeTab(target, alreadyClosed)};
+                if (closesTab(outcome.result))
                     alreadyClosed.push_back(target.id);
                 outcomes.push_back(std::move(outcome));
             }
@@ -386,9 +376,8 @@ void registerTabCommands(Commands& commands, Editor& runtime) {
             for (const auto& target : targets) {
                 auto outcome = TabCloseOutcome{
                     target.id,
-                    runtime.closeTab(target, std::chrono::milliseconds{100},
-                                     alreadyClosed)};
-                if (closesTab(target, outcome.result))
+                    runtime.closeTab(target, alreadyClosed)};
+                if (closesTab(outcome.result))
                     alreadyClosed.push_back(target.id);
                 outcomes.push_back(std::move(outcome));
             }
@@ -431,27 +420,10 @@ void registerTabCommands(Commands& commands, Editor& runtime) {
         });
 }
 
-// Draft recovery commands (single-file draft recovery, M15). draft.diff opens a
-// live diff of the current buffer (the draft) against its current disk content,
-// so a conflict can be inspected before it is resolved. In-process only: it
-// opens a live diff tab, a concept with no remote representation.
-void registerDraftCommands(Commands& commands, Editor& runtime) {
-    commands.add("draft.diff", "Diff Draft Against Disk", [&runtime] {
-            return runtime.openDraftDiff();
-    });
-    commands.add("draft.discard", "Discard Draft (Use Disk)", [&runtime] {
-            return runtime.discardDraft();
-    });
-    commands.add("draft.dismiss", "Dismiss Draft Notice", [&runtime] {
-            return runtime.dismissDraftNotice();
-    });
-}
-
 void bindRuntimeFiles(Commands& commands, Editor& runtime) {
     bindExternalModificationCommands(commands, runtime);
     registerFileCommands(commands, runtime);
     registerTabCommands(commands, runtime);
-    registerDraftCommands(commands, runtime);
 }
 
 } // namespace ssg

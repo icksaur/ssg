@@ -82,7 +82,6 @@ inline CommandResult typeText(Editor& editor, std::string text) {
         editor, TextInputCommand::Insert,
         TextInputArguments{std::move(text)});
     editor.reconcileFindDocument();
-    editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
     if (result.accepted && active && revisionBefore &&

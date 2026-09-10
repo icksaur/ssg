@@ -25,11 +25,10 @@ struct Fixture {
 Fixture makeFixture(std::string_view text) {
     auto root =
         testRuntimePath("runtime_renderer_diff_" + std::to_string(std::rand()));
-    fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");
     std::ofstream{root / "overlay.cpp"} << text;
     auto created = ssg::createEditor(
-        {root, root / "scratch", root / "recovery"});
+        {root, root / "recovery", root / "archive"});
     if (!created.accepted()) return {std::move(root), nullptr};
     auto runtime = std::move(created.session);
     (void)ssg::test::openFile(*runtime, std::string{"overlay.cpp"});

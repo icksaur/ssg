@@ -17,7 +17,6 @@ struct RuntimeFixture {
         std::filesystem::create_directories(root / "workspace");
         auto created = ssg::createEditor(
             {.cwd = root / "workspace",
-             .scratchRoot = root / "scratch",
              .recoveryRoot = root / "recovery",
              .enableGitDiffWorker = false,
              .enableFilesystemWatcher = false});

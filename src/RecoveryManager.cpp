@@ -1,5 +1,6 @@
 #include <ssg/RecoveryManager.h>
 
+#include <ssg/Document.h>
 #include <ssg/DurableStore.h>
 #include <ssg/platform_files.h>
 
@@ -398,9 +399,43 @@ bool validSnapshotKind(std::uint8_t kind) {
     return kind <= static_cast<std::uint8_t>(SnapshotKind::Symlink);
 }
 
+void encodeDocumentKey(ByteWriter& writer, const DocumentKey& key) {
+    if (key.kind() == DocumentKeyKind::Saved) {
+        writer.u8(0);
+        writer.string(key.savedPath());
+        return;
+    }
+    writer.u8(1);
+    writer.raw(key.untitledId().bytes());
+}
+
+DocumentKey decodeDocumentKey(ByteReader& reader) {
+    std::uint8_t kind = 0;
+    if (!reader.u8(kind)) {
+        throw std::runtime_error("truncated recovery document key");
+    }
+    if (kind == 0) {
+        std::string path;
+        if (!reader.string(path)) {
+            throw std::runtime_error("truncated recovery document path");
+        }
+        return DocumentKey::saved(path);
+    }
+    if (kind == 1) {
+        std::span<const std::byte> encoded;
+        if (!reader.raw(16, encoded)) {
+            throw std::runtime_error("truncated recovery untitled id");
+        }
+        std::array<std::byte, 16> id{};
+        std::copy(encoded.begin(), encoded.end(), id.begin());
+        return DocumentKey::untitled(UntitledDocumentId{id});
+    }
+    throw std::runtime_error("invalid recovery document key");
+}
+
 struct StoredRecord {
     RecoveryRecord record;
-    std::optional<JournalDocument> document;
+    std::optional<ClosedDocumentSnapshot> document;
     std::vector<SnapshotKind> snapshots;
     std::filesystem::path directory;
     bool restoredInMemory = false;
@@ -414,14 +449,10 @@ std::vector<std::byte> encodeManifest(const StoredRecord& stored) {
 
     if (stored.document) {
         writer.u8(1);
-        const auto encoded =
-            encodeJournalCheckpoint({std::vector<JournalDocument>{
-                *stored.document}});
-        if (encoded.size() > std::numeric_limits<std::uint32_t>::max()) {
-            throw std::length_error("recovery document is too large");
-        }
-        writer.u32(static_cast<std::uint32_t>(encoded.size()));
-        writer.raw(encoded);
+        encodeDocumentKey(writer, stored.document->key);
+        writer.u8(static_cast<std::uint8_t>(stored.document->mode));
+        writer.u8(stored.document->dirty ? 1 : 0);
+        writer.string(stored.document->utf8Content);
     } else {
         writer.u8(0);
     }
@@ -459,21 +490,21 @@ StoredRecord decodeManifest(const RecoveryRecordId& id,
         throw std::runtime_error("invalid recovery manifest header");
     }
 
-    std::optional<JournalDocument> document;
+    std::optional<ClosedDocumentSnapshot> document;
     if (hasDocument != 0) {
-        std::uint32_t documentSize = 0;
-        std::span<const std::byte> documentBytes;
-        if (!reader.u32(documentSize) ||
-            !reader.raw(documentSize, documentBytes)) {
-            throw std::runtime_error("truncated recovery document");
-        }
-        const auto replayed = replayJournal(documentBytes);
-        if (replayed.discardedTail ||
-            replayed.validBytes != documentBytes.size() ||
-            replayed.recovery.documents.size() != 1) {
+        auto key = decodeDocumentKey(reader);
+        std::uint8_t mode = 0;
+        std::uint8_t dirty = 0;
+        std::string content;
+        if (!reader.u8(mode) ||
+            mode > static_cast<std::uint8_t>(DocumentMode::Diff) ||
+            !reader.u8(dirty) || dirty > 1 || !reader.string(content)) {
             throw std::runtime_error("invalid recovery document");
         }
-        document = replayed.recovery.documents.front();
+        (void)Document{content, static_cast<DocumentMode>(mode)};
+        document = ClosedDocumentSnapshot{
+            std::move(key), static_cast<DocumentMode>(mode), dirty != 0,
+            std::move(content)};
     }
 
     std::uint32_t pathCount = 0;
@@ -512,7 +543,7 @@ StoredRecord decodeManifest(const RecoveryRecordId& id,
     return {{id,
              kind,
              storedBytes,
-             document ? std::optional<JournalDocumentKey>{document->key}
+             document ? std::optional<DocumentKey>{document->key}
                       : std::nullopt,
              std::move(paths)},
             std::move(document),
@@ -553,39 +584,11 @@ public:
     }
 
     RecoveryActionResult closeDocument(
-        std::optional<JournalDocument>& document,
-        ScratchStore& scratch,
-        std::chrono::milliseconds durabilityTimeout) {
+        std::optional<ClosedDocumentSnapshot>& document) {
         if (!document) {
             return {{},
                     error(RecoveryErrorCode::PreparationFailed,
                           "cannot close an absent document")};
-        }
-        if (durabilityTimeout <= std::chrono::milliseconds::zero()) {
-            return {{},
-                    error(RecoveryErrorCode::DurabilityFailed,
-                          "dirty close requires a finite positive durability "
-                          "timeout")};
-        }
-        if (document->dirty) {
-            try {
-                scratch.updateDocument(*document);
-                if (!scratch.waitUntilDurable(durabilityTimeout)) {
-                    const auto state = scratch.durabilityState();
-                    const auto detail =
-                        state.failure.empty() ? "durability timed out"
-                                              : state.failure;
-                    return {{},
-                            error(RecoveryErrorCode::DurabilityFailed,
-                                  "dirty close rejected: " + detail)};
-                }
-            } catch (...) {
-                return {{},
-                        error(RecoveryErrorCode::DurabilityFailed,
-                              "dirty close rejected: " +
-                                  exceptionMessage(
-                                      std::current_exception()))};
-            }
         }
 
         const auto previous = *document;
@@ -682,7 +685,7 @@ public:
 
     RecoveryRestoreResult restoreDocument(
         const RecoveryRecordId& id,
-        std::optional<JournalDocument>& document) {
+        std::optional<ClosedDocumentSnapshot>& document) {
         const auto found = findRecord(id);
         if (found == records_.end()) {
             return {error(RecoveryErrorCode::RecordNotFound,
@@ -795,7 +798,7 @@ private:
 
     StoredRecord prepareRecord(
         RecoveryRecordKind kind,
-        std::optional<JournalDocument> document,
+        std::optional<ClosedDocumentSnapshot> document,
         std::vector<std::filesystem::path> paths) {
         validateRecoverySeparation(paths);
 
@@ -816,7 +819,7 @@ private:
              kind,
              0,
              document
-                 ? std::optional<JournalDocumentKey>{document->key}
+                 ? std::optional<DocumentKey>{document->key}
                  : std::nullopt,
              std::move(paths)},
             std::move(document),
@@ -867,7 +870,7 @@ private:
     template <typename Mutation, typename Rollback>
     RecoveryActionResult prepareAndPerform(
         RecoveryRecordKind kind,
-        std::optional<JournalDocument> document,
+        std::optional<ClosedDocumentSnapshot> document,
         std::vector<std::filesystem::path> paths,
         Mutation&& mutation,
         Rollback&& rollback) {
@@ -1150,10 +1153,8 @@ RecoveryManager& RecoveryManager::operator=(RecoveryManager&&) noexcept =
     default;
 
 RecoveryActionResult RecoveryManager::closeDocument(
-    std::optional<JournalDocument>& document,
-    ScratchStore& scratch,
-    std::chrono::milliseconds durabilityTimeout) {
-    return impl_->closeDocument(document, scratch, durabilityTimeout);
+    std::optional<ClosedDocumentSnapshot>& document) {
+    return impl_->closeDocument(document);
 }
 
 RecoveryActionResult RecoveryManager::renamePathNoClobber(
@@ -1169,7 +1170,7 @@ RecoveryActionResult RecoveryManager::deletePath(
 
 RecoveryRestoreResult RecoveryManager::restoreDocument(
     const RecoveryRecordId& record,
-    std::optional<JournalDocument>& document) {
+    std::optional<ClosedDocumentSnapshot>& document) {
     return impl_->restoreDocument(record, document);
 }
 

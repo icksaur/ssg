@@ -26,7 +26,6 @@ SessionFixture sessionFixture(std::string_view name) {
     std::filesystem::create_directories(root / "workspace");
     auto created = ssg::createEditor(
         {.cwd = root / "workspace",
-         .scratchRoot = root / "scratch",
          .recoveryRoot = root / "recovery",
          .enableGitDiffWorker = false,
          .enableFilesystemWatcher = false});

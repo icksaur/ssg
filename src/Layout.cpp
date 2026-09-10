@@ -89,22 +89,6 @@ const SolvedGridNode* SolvedGridTree::find(
     return nullptr;
 }
 
-SolvedNoticeSurface solveNoticeSurface(const NoticeView& notice, Rect rect) {
-    SolvedNoticeSurface solved{rect, {}};
-    int actionX = rect.right();
-    for (auto it = notice.actions.rbegin(); it != notice.actions.rend(); ++it) {
-        std::string text = "[" + it->label + "]";
-        const auto width = static_cast<int>(
-            computeCellRun(text).totalCells);
-        actionX -= width;
-        if (actionX < rect.x) break;
-        solved.actions.push_back(
-            {it->id, std::move(text), {actionX, rect.y, width, 1}});
-        --actionX;
-    }
-    return solved;
-}
-
 GridSize measureExternalModificationSurface(
     const ExternalModificationViewState& external) {
     constexpr int kMaxListRows = 4;

@@ -639,7 +639,7 @@ TEST(uiFrameResolvesAutoLeavesFromIntrinsicSizes) {
     UiNode root{
         UiNodeId{"root"}, Size::flex(),
         UiContainer{Axis::Row, {}, Gap::of(1),
-                    {view("auto", Size::autoSize(), ViewSurface::Notice),
+                    {view("auto", Size::autoSize(), ViewSurface::ExternalModification),
                      view("rest", Size::flex())}}};
     auto schema = validated(std::move(root));
     auto solved = solveUiFrame(schema, {{UiNodeId{"auto"}, GridSize{4, 2}}},

@@ -34,10 +34,6 @@ void paintScrollGutter(CellGrid& grid, int x, int y, int height,
                        const ThemeSnapshot& theme, std::uint8_t background,
                        const Style& style);
 
-void paintNotice(CellGrid& grid, const NoticeView& notice,
-                 const SolvedNoticeSurface& solved,
-                 const ThemeSnapshot& theme, const Style& style,
-                 SemanticRole foregroundRole, SemanticRole backgroundRole);
 void paintExternalModification(
     CellGrid& grid, const ExternalModificationViewState& external,
     const SolvedExternalModificationSurface& solved,

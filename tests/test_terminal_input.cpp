@@ -1198,12 +1198,11 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
     auto root = fs::temp_directory_path() / "ssg-altremove-e2e";
     fs::remove_all(root);
     fs::create_directories(root / "workspace");
-    fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "f.txt"} << "abcdefghij\n";
 
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;

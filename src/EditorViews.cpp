@@ -242,28 +242,6 @@ PromptViewState Editor::promptView() const {
     return view;
 }
 
-std::optional<NoticeView> Editor::draftNotice() const {
-    // Only the Conflict outcome raises the notice; a Restored draft is a quieter
-    // state with no external change to resolve. The action command ids are already
-    // registered; the host only dispatches them.
-    const auto id = activeDocumentId();
-    if (!id) return std::nullopt;
-    const auto found = documentRuntimeStates.find(id->value());
-    if (found == documentRuntimeStates.end() ||
-        found->second.reopen != DraftReopenOutcome::Conflict) {
-        return std::nullopt;
-    }
-    return NoticeView{
-        "Unsaved draft: file changed on disk externally.",
-        {{"draft.notice.diff", "diff", "draft.diff"},
-         {"draft.notice.use_disk", "use disk", "draft.discard"},
-         {"draft.notice.dismiss", "dismiss", "draft.dismiss"}}};
-}
-
-bool Editor::noticePresent() const {
-    return draftNotice().has_value();
-}
-
 StatusFieldProjection Editor::uiStatusFields() const {
     auto followProjection = follow.footerProjection();
     auto fields = projectStatusFields(

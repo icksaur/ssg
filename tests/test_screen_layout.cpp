@@ -104,7 +104,6 @@ TEST(fixedHeaderAndFooterAreSemanticUiNodes) {
         {kDocumentNodeId, SemanticRole::Text, SemanticRole::Canvas},
         {kFindResultsNodeId, SemanticRole::Text, SemanticRole::Canvas},
         {kFooterPromptNodeId, SemanticRole::Prompt, SemanticRole::Canvas},
-        {kNoticeNodeId, SemanticRole::Canvas, SemanticRole::StatusWarning},
         {kExternalModNodeId, SemanticRole::Canvas,
          SemanticRole::StatusWarning},
     };
@@ -141,7 +140,7 @@ TEST(viewportsRemainSemanticTreeProperties) {
     ASSERT_TRUE(std::get<UiContainer>(editor->content).scroll ==
                 ScrollAxis::None);
     for (const auto id :
-         {kTreeNodeId, kTabBarNodeId, kNoticeNodeId, kExternalModNodeId,
+         {kTreeNodeId, kTabBarNodeId, kExternalModNodeId,
           kDocumentNodeId, kFindResultsNodeId, kHeaderNodeId, kFooterNodeId,
           kFooterPromptNodeId}) {
         const auto* node = find(composition.root, id);

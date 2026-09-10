@@ -39,7 +39,6 @@ struct GridPresentation {
     ThemeSnapshot theme;
     UiSchema uiTree;
     TabViewState tabs;
-    std::optional<NoticeView> notice;
     ExternalModificationViewState externalModification;
     FollowMode followMode = FollowMode::Following;
     PromptViewState prompt;

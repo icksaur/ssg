@@ -182,7 +182,7 @@ public:
     file(const DiffFileId& id) const;
 
     // Whether an entry exists for `id` and originates from a git scan, as
-    // opposed to a non-git diff (a draft-vs-disk view, or an external
+    // opposed to a non-git diff (such as an external
     // modification view). A git rescan owns and reconciles only its own
     // entries, so it must leave non-git entries untouched rather than evicting
     // them as "no longer changed".

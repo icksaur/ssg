@@ -75,7 +75,6 @@ bool hasScope(const SyntaxViewState& syntax, SyntaxScope scope) {
 EditorConfig configFor(const std::filesystem::path& root) {
     EditorConfig config;
     config.cwd = root / "workspace";
-    config.scratchRoot = root / "scratch";
     config.recoveryRoot = root / "recovery";
     return config;
 }

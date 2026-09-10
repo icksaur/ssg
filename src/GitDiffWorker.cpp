@@ -476,8 +476,8 @@ GitDiffWorkerDrain GitDiffWorker::drain() {
     if (wakeReadFd_ == -1) {
         return result;
     }
-    char scratch[64];
-    while (::read(wakeReadFd_, scratch, sizeof scratch) > 0) {
+    char wakeBytes[64];
+    while (::read(wakeReadFd_, wakeBytes, sizeof wakeBytes) > 0) {
         // Drain every queued wake byte so a subsequent poll() never wakes on a
         // stale signal.
     }

@@ -313,21 +313,6 @@ CellGrid renderFrame(const GridPresentation& snapshot,
                            SemanticRole::FooterBackground),
             style);
     }
-    if (snapshot.notice) {
-        const auto* node =
-            snapshot.layout.find(UiNodeId{std::string{kNoticeNodeId}});
-        if (!node) {
-            throw std::logic_error(
-                "renderFrame: notice has no solved UI node");
-        }
-        paintNotice(grid, *snapshot.notice,
-                    solveNoticeSurface(*snapshot.notice,
-                                       node->rect),
-                    theme, style,
-                    node->style.foreground.value_or(SemanticRole::Canvas),
-                    node->style.background.value_or(
-                        SemanticRole::StatusWarning));
-    }
     if (!snapshot.externalModification.files.empty()) {
         const auto* node = snapshot.layout.find(
             UiNodeId{std::string{kExternalModNodeId}});

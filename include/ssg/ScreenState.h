@@ -29,7 +29,6 @@ public:
     bool showPanel();
     bool focusPanel();
 
-    bool refreshNoticePresence(bool present);
     bool refreshExternalModificationPresence(bool present);
     bool captureExternalFocus();
     bool releaseExternalFocus();
@@ -64,7 +63,6 @@ private:
     std::optional<PickerKind> openPicker_;
     BaseFocus baseFocus_ = BaseFocus::Editor;
     BaseFocus panelReturnFocus_ = BaseFocus::Editor;
-    bool noticePresent_ = false;
     bool externalModificationPresent_ = false;
     bool externalFocusHeld_ = false;
 };

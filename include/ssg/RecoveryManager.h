@@ -1,9 +1,8 @@
 #pragma once
 
-#include <ssg/ScratchStore.h>
-#include <ssg/ScratchJournal.h>
+#include <ssg/DocumentKey.h>
+#include <ssg/types.h>
 
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -44,15 +43,24 @@ struct RecoveryRecord {
     RecoveryRecordId id;
     RecoveryRecordKind kind;
     std::uintmax_t storedBytes;
-    std::optional<JournalDocumentKey> document;
+    std::optional<DocumentKey> document;
     std::vector<std::filesystem::path> affectedPaths;
 
     friend bool operator==(const RecoveryRecord&, const RecoveryRecord&) =
         default;
 };
 
+struct ClosedDocumentSnapshot {
+    DocumentKey key;
+    DocumentMode mode = DocumentMode::Edit;
+    bool dirty = false;
+    std::string utf8Content;
+
+    friend bool operator==(const ClosedDocumentSnapshot&,
+                           const ClosedDocumentSnapshot&) = default;
+};
+
 enum class RecoveryErrorCode : std::uint8_t {
-    DurabilityFailed,
     BudgetExceeded,
     PreparationFailed,
     ActionFailed,
@@ -98,9 +106,7 @@ public:
     RecoveryManager& operator=(const RecoveryManager&) = delete;
 
     [[nodiscard]] RecoveryActionResult closeDocument(
-        std::optional<JournalDocument>& document,
-        ScratchStore& scratch,
-        std::chrono::milliseconds durabilityTimeout);
+        std::optional<ClosedDocumentSnapshot>& document);
     // Renames only when the destination is free, with the exclusion enforced by
     // the filesystem rather than by a preceding check.
     [[nodiscard]] RecoveryActionResult renamePathNoClobber(
@@ -112,7 +118,7 @@ public:
 
     [[nodiscard]] RecoveryRestoreResult restoreDocument(
         const RecoveryRecordId& record,
-        std::optional<JournalDocument>& document);
+        std::optional<ClosedDocumentSnapshot>& document);
 private:
     class Impl;
     explicit RecoveryManager(std::unique_ptr<Impl> implementation) noexcept;

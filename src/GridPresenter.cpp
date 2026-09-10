@@ -67,7 +67,7 @@ std::vector<GridIntrinsicSize> intrinsicSizes(
 
 SolveUiFrameResult solveFrameLayout(
     const UiSchema& schema, const PromptViewState& prompt,
-    bool noticePresent, const ExternalModificationViewState& external,
+    const ExternalModificationViewState& external,
     bool palettePresent, GridSize dimensions, const Style& style) {
     if (dimensions.columns <= 0 || dimensions.rows <= 0 ||
         dimensions.columns < static_cast<int>(style.dimensions.minimumColumns) ||
@@ -110,7 +110,6 @@ SolveUiFrameResult solveFrameLayout(
         UiNodeId{std::string{kRootNodeId}},
         UiNodeId{std::string{kHeaderNodeId}},
         UiNodeId{std::string{kFooterNodeId}},
-        UiNodeId{std::string{kNoticeNodeId}},
         UiNodeId{std::string{kExternalModNodeId}},
         UiNodeId{std::string{kTabBarNodeId}},
         UiNodeId{std::string{kPanelNodeId}},
@@ -156,10 +155,6 @@ SolveUiFrameResult solveFrameLayout(
             return {std::nullopt,
                     "prompt backing does not correspond to UI nodes"};
         }
-    }
-    if (noticePresent &&
-        !result.tree->find(UiNodeId{std::string{kNoticeNodeId}})) {
-        return {std::nullopt, "notice backing has no solved UI node"};
     }
     if (!external.files.empty() &&
         !result.tree->find(UiNodeId{std::string{kExternalModNodeId}})) {
@@ -244,7 +239,6 @@ std::optional<GridPresentation> GridPresenter::project(
     auto theme = runtime.theme;
     auto uiTree = runtime.projectedUiTree();
     auto tabs = runtime.tabs.viewState();
-    auto notice = runtime.draftNotice();
     auto externalModification = runtime.external.viewState();
     auto followMode = runtime.follow.viewState().mode;
     auto prompt = runtime.promptView();
@@ -279,7 +273,7 @@ std::optional<GridPresentation> GridPresenter::project(
         static_cast<int>(request.dimensions.columns),
         static_cast<int>(request.dimensions.rows)};
     auto solved = solveFrameLayout(
-        uiTree, prompt, notice.has_value(), externalModification,
+        uiTree, prompt, externalModification,
         paletteView.activePicker.has_value(), gridSize, style);
     if (!solved.tree) return std::nullopt;
     auto layout = std::move(*solved.tree);
@@ -421,7 +415,6 @@ std::optional<GridPresentation> GridPresenter::project(
         .theme = std::move(theme),
         .uiTree = std::move(uiTree),
         .tabs = std::move(tabs),
-        .notice = std::move(notice),
         .externalModification = std::move(externalModification),
         .followMode = followMode,
         .prompt = std::move(prompt),

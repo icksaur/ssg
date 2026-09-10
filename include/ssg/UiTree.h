@@ -217,13 +217,7 @@ inline constexpr std::string_view kFooterFollowFieldNodeId = "footer.left.1";
 // keymap-derived hint text and its command is the stable hint command, both
 // written at snapshot publication.
 inline constexpr std::string_view kFooterHintNodeId = "footer.right.0";
-// The draft-conflict notice's semantic surface: a content child after the tab bar
-// and before the replaceable document/picker branches, hidden unless the active document has an
-// unresolved draft conflict.
-inline constexpr std::string_view kNoticeNodeId = "notice";
-
-// The external-modification bar's presence-gated content child, immediately after
-// the notice and before the replaceable document/picker branches.
+// The external-modification bar's presence-gated content child.
 inline constexpr std::string_view kExternalModNodeId = "externalmod";
 
 // A well-formed empty root (id "root", an empty Column). A default-constructed

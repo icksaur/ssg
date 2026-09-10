@@ -187,7 +187,6 @@ TEST(unicodeEndToEndGridAndEncoding) {
     auto root = fs::temp_directory_path() / "ssg-m9u";
     fs::remove_all(root);
     fs::create_directories(root / "workspace");
-    fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");
     // a b [U+4E00 wide] e [U+0301 combining] [U+1F468 ZWJ U+1F469]
     const std::string cjk = "\xE4\xB8\x80";                 // U+4E00, wide
@@ -197,7 +196,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
     std::ofstream{root / "workspace" / "u.txt", std::ios::binary} << line << "\n";
 
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;

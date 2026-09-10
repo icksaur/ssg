@@ -52,10 +52,6 @@ std::vector<std::string_view> keyboardRoutes(
             "external.open_diff"};
 }
 std::vector<std::string_view> keyboardRoutes(
-    std::type_identity<ssg::NoticeActionPointerInput>) {
-    return {"draft.discard"};
-}
-std::vector<std::string_view> keyboardRoutes(
     std::type_identity<ssg::DocumentPointerInput>) {
     return {"cursor.left", "cursor.right", "cursor.line_up",
             "cursor.line_down", "select.left", "select.right",
@@ -100,7 +96,6 @@ std::filesystem::path uniqueRoot() {
     auto root = testRuntimePath(runtimeName);
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "needle.txt"} << "alpha needle omega";
     return root;
@@ -195,7 +190,7 @@ std::unique_ptr<ssg::Editor> followPauseRuntime(std::string text) {
     std::ofstream{root / "workspace" / "needle.txt"} << text;
     std::ofstream{root / "workspace" / "other.txt"} << "other\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) {
         return nullptr;
@@ -219,7 +214,7 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
     std::ofstream{root / "workspace" / "c.txt"} << middle;
 
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -317,7 +312,7 @@ TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
     std::ofstream{root / "workspace" / "b.txt"} << "b\n";
 
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -359,7 +354,7 @@ TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
 TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
     auto root = uniqueRoot();
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -400,7 +395,7 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "coexist.txt"} << "disk\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -460,7 +455,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "coexist.txt"} << "disk\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -547,7 +542,7 @@ TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {
     std::ofstream{root / "workspace" / "gone.txt"} << "gone\n";
     std::filesystem::remove(root / "workspace" / "gone.txt");
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -600,7 +595,7 @@ TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {
 TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
     auto root = uniqueRoot();
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -661,7 +656,7 @@ TEST(tabSwitchPausesFollowViaNavigationPath) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "other.txt"} << "other\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -681,7 +676,7 @@ TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
     const auto makeRuntime = []() -> std::unique_ptr<ssg::Editor> {
         auto root = uniqueRoot();
         auto created = ssg::createEditor(
-            {root / "workspace", root / "scratch", root / "recovery"});
+            {root / "workspace", root / "recovery", root / "archive"});
         ASSERT_TRUE(created.accepted());
         if (!created.accepted()) return nullptr;
         auto runtime = std::move(created.session);
@@ -869,7 +864,7 @@ TEST(followPauseOnEditTransitionTable) {
 
 TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
     auto root = uniqueRoot();
-    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -897,7 +892,7 @@ TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
 // moment a second one lands.
 TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
     auto root = uniqueRoot();
-    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -948,7 +943,7 @@ TEST(filePickerPublishesWorkspaceFiles) {
     // the fixture's, not the enclosing checkout's.
     ASSERT_EQ(std::system(("git -C \"" + workspace.string() + "\" init -q >/dev/null 2>&1").c_str()), 0);
 
-    auto created = ssg::createEditor({workspace, root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({workspace, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -986,7 +981,7 @@ TEST(togglingGitignoreRebuildsTheOpenFilePickerIndex) {
     std::ofstream{workspace / "build" / "hidden.o"} << "h\n";
     ASSERT_EQ(std::system(("git -C \"" + workspace.string() + "\" init -q >/dev/null 2>&1").c_str()), 0);
 
-    auto created = ssg::createEditor({workspace, root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({workspace, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1023,7 +1018,6 @@ TEST(workerFilesystemRefreshPublishesChangedFileCandidates) {
               0);
     auto created = ssg::createEditor(
         {.cwd = root / "workspace",
-         .scratchRoot = root / "scratch",
          .recoveryRoot = root / "recovery",
          .enableGitDiffWorker = false,
          .enableFilesystemWatcher = false});
@@ -1055,7 +1049,7 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     std::ofstream{workspace / "present.txt"} << "p\n";
     ASSERT_EQ(std::system(("git -C \"" + workspace.string() + "\" init -q >/dev/null 2>&1").c_str()), 0);
 
-    auto created = ssg::createEditor({workspace, root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({workspace, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1091,7 +1085,7 @@ TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
                               .c_str()),
               0);
     auto created = ssg::createEditor(
-        {workspace, root / "scratch", root / "recovery"});
+        {workspace, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1133,7 +1127,7 @@ TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
 TEST(pickerSubmissionRequiresMatchingPickerMode) {
     auto root = uniqueRoot();
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1171,7 +1165,7 @@ TEST(pickerSubmissionRequiresMatchingPickerMode) {
 TEST(commandPickerActionThatOpensPromptDismissesPickerWithoutFailure) {
     auto root = uniqueRoot();
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1194,7 +1188,7 @@ TEST(commandPickerActionThatOpensPromptDismissesPickerWithoutFailure) {
 TEST(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision) {
     auto root = uniqueRoot();
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1235,7 +1229,7 @@ TEST(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision) {
 TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     auto root = uniqueRoot();
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1249,10 +1243,10 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
 
     ASSERT_TRUE(
         runtime.dispatch("file.new").accepted());
-    auto scratch = projectFrame(runtime, viewport);
-    ASSERT_TRUE(scratch.has_value());
-    if (!scratch || !scratch->tabs.active) return;
-    const auto scratchTab = *scratch->tabs.active;
+    auto initialFrame = projectFrame(runtime, viewport);
+    ASSERT_TRUE(initialFrame.has_value());
+    if (!initialFrame || !initialFrame->tabs.active) return;
+    const auto initialTab = *initialFrame->tabs.active;
     auto activate = runtime.input(ssg::TabPointerInput{documentTab});
     ASSERT_EQ(activate.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_TRUE(activate.command.has_value() && activate.command->accepted());
@@ -1262,7 +1256,7 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     auto closeBasis = projectFrame(runtime, viewport);
     ASSERT_TRUE(closeBasis.has_value());
     if (!closeBasis) return;
-    auto close = runtime.input(ssg::TabPointerInput{scratchTab,
+    auto close = runtime.input(ssg::TabPointerInput{initialTab,
                              ssg::InputPointerButton::Auxiliary});
     ASSERT_TRUE(close.command.has_value() && close.command->accepted());
     auto afterClose = projectFrame(runtime, viewport);
@@ -1270,7 +1264,7 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     ASSERT_TRUE(std::none_of(
         afterClose->tabs.tabs.begin(),
         afterClose->tabs.tabs.end(),
-        [&](const ssg::TabState& tab) { return tab.id == scratchTab; }));
+        [&](const ssg::TabState& tab) { return tab.id == initialTab; }));
 
     ASSERT_TRUE(runtime
                     .dispatch("palette.open")
@@ -1404,7 +1398,7 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
     std::filesystem::create_directories(root / "workspace");
     std::ofstream{root / "workspace" / "words.txt"} << "alpha beta gamma\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1440,7 +1434,7 @@ TEST(keyInputRoutingBranchesByPromptMode) {
     std::filesystem::create_directories(root / "workspace");
     std::ofstream{root / "workspace" / "lines.txt"} << "one\ntwo\nthree\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1552,19 +1546,10 @@ TEST(keyInputRoutingBranchesByPromptMode) {
 TEST(viewTransitionsExecuteTypedEditorMutations) {
     auto root = uniqueRoot();
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-
-    auto missingNotice =
-        runtime.input(ssg::NoticeActionPointerInput{"missing"});
-    ASSERT_EQ(missingNotice.outcome, ssg::ClientInputOutcome::Rejected);
-    ASSERT_TRUE(missingNotice.command.has_value());
-    if (missingNotice.command) {
-        ASSERT_EQ(missingNotice.command->message,
-                  std::string{"notice action target is not present"});
-    }
 
     ASSERT_TRUE(runtime.dispatch("panel.toggle").accepted());
     ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Panel);
@@ -1589,7 +1574,7 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     std::ofstream{root / "workspace" / "lines.txt"}
         << "aa\nbb\ncc\ndd\nee\nff\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1680,7 +1665,7 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
     std::ofstream{root / "workspace" / "lines.txt"}
         << "aa\nbb\ncc\ndd\nee\nff\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1745,7 +1730,7 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
 TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
     auto root = uniqueRoot();
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1797,7 +1782,7 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
 TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
         auto root = uniqueRoot();
         auto created = ssg::createEditor(
-            {root / "workspace", root / "scratch", root / "recovery"});
+            {root / "workspace", root / "recovery", root / "archive"});
         ASSERT_TRUE(created.accepted());
         if (!created.accepted()) return;
         auto& runtime = *created.session;
@@ -1824,7 +1809,7 @@ TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
 TEST(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation) {
     auto root = uniqueRoot();
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1852,7 +1837,7 @@ TEST(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation) {
 
 TEST(submitPickerValidatesCandidateMembership) {
     auto root = uniqueRoot();
-    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1875,7 +1860,7 @@ TEST(submitPickerValidatesCandidateMembership) {
 
 TEST(staleCandidateIdIsRejectedBySubmitPicker) {
     auto root = uniqueRoot();
-    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1898,7 +1883,7 @@ TEST(staleCandidateIdIsRejectedBySubmitPicker) {
 
 TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
     auto root = uniqueRoot();
-    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -1942,7 +1927,6 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
     auto root = testRuntimePath("runtime_nav_treescroll");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     // 40 top-level files -> a tree far taller than a short panel.
     for (int i = 0; i < 40; ++i) {
@@ -1950,7 +1934,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
         std::snprintf(name, sizeof name, "file-%02d.txt", i);
         std::ofstream{root / "workspace" / name} << "x";
     }
-    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -2020,7 +2004,6 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     auto root = testRuntimePath("runtime_nav_treescroll_wheel");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     for (int i = 0; i < 40; ++i) {
         char name[32];
@@ -2028,7 +2011,7 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
         std::ofstream{root / "workspace" / name} << "x";
     }
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -2130,12 +2113,11 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     auto root = testRuntimePath("runtime_hscroll");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     // A single 60-cell line, far wider than the test pane.
     std::ofstream{root / "workspace" / "long.txt"} << std::string(60, 'a') << "\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -2180,13 +2162,12 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     auto root = testRuntimePath("runtime_wrap_gate");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     // One 200-cell line (far wider than the 80-col pane) plus a short line.
     std::ofstream{root / "workspace" / "wide.txt"}
         << std::string(200, 'b') << "\nshort\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -2240,7 +2221,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
       std::ofstream{root / "workspace" / "lines.txt"}
           << "one\ntwo\nthree\nfour\nfive";
       auto created = ssg::createEditor(
-          {root / "workspace", root / "scratch", root / "recovery"});
+          {root / "workspace", root / "recovery", root / "archive"});
       if (!created.accepted()) return nullptr;
       auto runtime = std::move(created.session);
       (void)ssg::test::openFile(*runtime, std::string{"lines.txt"});
@@ -2321,7 +2302,7 @@ std::unique_ptr<ssg::Editor> gotoFileRuntime() {
     std::ofstream{root / "workspace" / "c.txt"} << "gamma\n";
     std::ofstream{root / "workspace" / "wide.txt"} << "\xce\xb1\xce\xb2\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     if (!created.accepted()) return nullptr;
     return std::move(created.session);
 }
@@ -2330,7 +2311,7 @@ std::optional<std::string> activeSavedPath(ssg::Editor& runtime) {
     const auto document = runtime.activeDocumentId();
     if (!document) return std::nullopt;
     const auto state = runtime.workspace.state(*document);
-    if (!state || state->key.kind() != ssg::JournalDocumentKeyKind::Saved) {
+    if (!state || state->key.kind() != ssg::DocumentKeyKind::Saved) {
         return std::nullopt;
     }
     return state->key.savedPath();
@@ -2352,7 +2333,6 @@ TEST(filesTreeLoadsOneLevelBelowVisibleDirectories) {
         0);
     auto created = ssg::createEditor(
         {.cwd = workspace,
-         .scratchRoot = root / "scratch",
          .recoveryRoot = root / "recovery",
          .enableGitDiffWorker = false,
          .enableFilesystemWatcher = false});

@@ -23,14 +23,13 @@ namespace fs = std::filesystem;
 fs::path uniqueRoot() {
     auto root = testRuntimePath("hit_test_root");
     fs::remove_all(root);
-    fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");
     return root;
 }
 
 std::unique_ptr<ssg::Editor> makeRuntime(fs::path const& root) {
     auto created = ssg::createEditor(
-        {root, root / "scratch", root / "recovery"});
+        {root, root / "recovery", root / "archive"});
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.session);
     return runtime;

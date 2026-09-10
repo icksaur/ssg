@@ -204,11 +204,6 @@ UiComposition assembleScreen(
             ScrollAxis::Vertical),
         SemanticRole::PanelInactive, SemanticRole::TreeBackground),
         FocusTarget::Panel);
-    // Editor-owned transient UI sits after tabs and before the document. It
-    // consumes document rows without spanning or moving the side panel.
-    UiNode notice = withStyle(
-        viewLeaf(kNoticeNodeId, ViewSurface::Notice, Size::autoSize()),
-        SemanticRole::Canvas, SemanticRole::StatusWarning);
     UiNode externalMod = withFocusContext(withStyle(
         viewLeaf(kExternalModNodeId, ViewSurface::ExternalModification,
                  Size::autoSize()),
@@ -236,7 +231,7 @@ UiComposition assembleScreen(
                             Size::exact(dimensions.tabBarHeight)),
                    SemanticRole::TabInactive,
                    SemanticRole::TabInactiveBackground),
-         std::move(notice), std::move(externalMod), std::move(editor),
+         std::move(externalMod), std::move(editor),
          std::move(findResultsViewport)});
     UiNode body = container(kBodyNodeId, Axis::Row, Size::flex(),
                             {std::move(panel), std::move(content)});

@@ -14,7 +14,6 @@ std::filesystem::path uniqueRoot() {
     auto root = testRuntimePath("runtime_language");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "code.txt"} << "abc";
     return root;
@@ -22,7 +21,7 @@ std::filesystem::path uniqueRoot() {
 
 TEST(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport) {
     auto root = uniqueRoot();
-    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;

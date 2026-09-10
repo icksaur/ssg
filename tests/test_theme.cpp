@@ -173,7 +173,6 @@ TEST(editorRuntimeStartsFromTheDefaultTheme) {
     std::filesystem::create_directories(root / "workspace");
     ssg::EditorConfig config;
     config.cwd = root / "workspace";
-    config.scratchRoot = root / "scratch";
     config.recoveryRoot = root / "recovery";
     auto created = ssg::createEditor(config);
     ASSERT_TRUE(created.accepted());

@@ -7,7 +7,6 @@
 #include <ssg/DiffModel.h>
 #include <ssg/DocumentHistory.h>
 #include <ssg/DocumentPointerGesture.h>
-#include <ssg/DraftAutosaveScheduler.h>
 #include <ssg/EditCommands.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/FileCommands.h>
@@ -52,22 +51,8 @@
 
 namespace ssg {
 
-struct NoticeAction {
-    std::string id;
-    std::string label;
-    std::string commandId;
-    friend bool operator==(const NoticeAction&, const NoticeAction&) = default;
-};
-
-struct NoticeView {
-    std::string text;
-    std::vector<NoticeAction> actions;
-    friend bool operator==(const NoticeView&, const NoticeView&) = default;
-};
-
 struct EditorConfig {
     std::filesystem::path cwd;
-    std::filesystem::path scratchRoot;
     std::filesystem::path recoveryRoot;
     std::filesystem::path archiveRoot;
     bool deferEnrichment = false;
@@ -137,11 +122,6 @@ inline std::uint32_t uint32Setting(SettingsModel const& settings, SettingKey key
     return fallback;
 }
 
-// The reopen outcome of a document's recovered draft (single-file draft
-// recovery, M15). Mirrors Editor::DraftReopenNotice; lives per-document
-// so the notice (p5) and discard (p6) phases can read it by document id.
-enum class DraftReopenOutcome { None, Restored, Conflict };
-
 struct DocumentRuntimeState {
     explicit DocumentRuntimeState(
         const SettingsModel& settings,
@@ -155,7 +135,6 @@ struct DocumentRuntimeState {
 
     DocumentHistory history;
     SyntaxModel syntax;
-    DraftReopenOutcome reopen = DraftReopenOutcome::None;
 };
 
 void bindRuntimeEditing(Commands& commands, Editor& runtime);
@@ -198,7 +177,6 @@ private:
     friend EditorCreateResult createEditor(EditorConfig config);
 
     Editor(std::filesystem::path canonicalCwd,
-           std::filesystem::path scratchRoot,
            std::filesystem::path recoveryRoot,
            std::filesystem::path archiveRoot,
            bool deferEnrichment = false,
@@ -246,17 +224,14 @@ public:
 
     std::filesystem::path root;
     std::unique_ptr<GitIgnoreMatcher> workspaceIgnore;
-    std::filesystem::path scratchRoot;
     std::filesystem::path recoveryRoot;
     std::filesystem::path archiveRoot;
     RecoveryManager recovery;
-    ScratchStore scratch;
     Workspace workspace;
     SelectionViewState selection;
     SettingsModel settings;
     std::map<std::uint64_t, DocumentRuntimeState> documentRuntimeStates;
     ClipboardRegister clipboard;
-    DraftAutosaveScheduler autosave;
     FindReplaceController findReplace;
     // The document the find/replace controller last evaluated against.  Find
     // matches are byte offsets into one specific document; when the active
@@ -378,8 +353,7 @@ public:
     // I1: Editor alone performs workspace/recovery effects for
     // close/reopen.
     [[nodiscard]] TabLifecycleResult closeTab(
-        const TabState& tab, std::chrono::milliseconds durabilityTimeout,
-        std::span<const TabId> alreadyClosed = {});
+        const TabState& tab, std::span<const TabId> alreadyClosed = {});
     [[nodiscard]] TabLifecycleResult reopenTab(
         const TabState& tab, const RecoveryRecordId& compensation);
 
@@ -420,20 +394,7 @@ public:
     [[nodiscard]] std::optional<ResolvedPromptControls>
     resolvedPromptControls() const;
     [[nodiscard]] PromptViewState promptView() const;
-    // The geometry-free semantic projection of the active footer-region prompt,
-    // or nullopt unless a footer-region prompt is open.
-    // The one draft-conflict notice resolver: the geometry-free NoticeView for
-    // the active document, or nullopt unless its reopen outcome is Conflict.
-    [[nodiscard]] std::optional<NoticeView> draftNotice() const;
-    // Whether the active document currently raises a draft-conflict notice. The
-    // notice's tree-node presence lives outside the prompt/panel transitions,
-    // so the runtime reconciles this into the interaction authority after each
-    // dispatch.
-    [[nodiscard]] bool noticePresent() const;
-    // Whether any file is externally modified (the external-modification
-    // section is non-empty). Like noticePresent, reconciled into the
-    // interaction authority so the external-modification node's presence tracks
-    // it -- after each dispatch and in the watcher drain.
+    // Whether any file is externally modified.
     [[nodiscard]] bool externalModificationPresent() const {
         return !external.viewState().files.empty();
     }
@@ -473,25 +434,6 @@ public:
     openReadOnlyTab(TabKind kind, std::string contentIdentity,
                     std::string label, std::string text,
                     LanguageId language = LanguageId::plainText());
-    // Open a live diff tab of the active saved document's buffer (the draft,
-    // the target) against its CURRENT disk content (the baseline), via the
-    // source-agnostic non-git diff engine. A missing/unreadable disk file diffs
-    // the draft against empty. The tab is a derived view, not persisted.
-    [[nodiscard]] OperationResult openDraftDiff();
-    // Discard the active saved document's unsaved edits in favour of the disk
-    // content (the notice's "Use disk"). The discarded edits are archived first
-    // (reversible), then the buffer is reloaded from disk, the scratch draft
-    // removed, and the reopen notice cleared. Non-destructive: no user file is
-    // written, and the draft survives in the archive.
-    [[nodiscard]] OperationResult discardDraft();
-    // Dismiss the draft-conflict notice for the active document, leaving the
-    // draft in place (the "Dismiss" action). Clears only the notice state.
-    [[nodiscard]] OperationResult dismissDraftNotice();
-    // Copy discarded draft content into the draft archive (beside the scratch
-    // store) under a unique name, so a mis-clicked discard is recoverable.
-    // Returns false only when the archive copy could not be written.
-    [[nodiscard]] bool archiveDiscardedDraft(std::string_view savedPath,
-                                             std::string_view content);
     [[nodiscard]] bool
     openOrRevealFollowTargetProgrammatic(const FollowTarget& target);
     void recordNavigation(NavigationClass classification);
@@ -522,22 +464,6 @@ public:
     // counters exist for the startup oracle to assert no scan happened before
     // priming.
     void primeDeferred();
-    // Flush drafts of open dirty documents. `flushDueAutosaveDrafts` applies
-    // the debounce policy (eager first, then once per AutosaveDebounceMs);
-    // called on the app's periodic tick. `flushAllAutosaveDrafts` forces every
-    // dirty draft, for a clean process exit. Both return the number of drafts
-    // written this call. Non-blocking: durability is the background fsync
-    // thread's job.
-    std::size_t flushDueAutosaveDrafts();
-    std::size_t flushAllAutosaveDrafts();
-    // On the first open of a saved document from disk, reconcile any dirty
-    // draft recovered for its path against the current disk file (single-file
-    // draft recovery, M15). Converged drafts are dropped and the clean disk
-    // buffer kept; otherwise the draft is loaded as a dirty buffer and the
-    // document's reopen outcome recorded (Restored when disk is unchanged,
-    // Conflict when it changed externally). A no-op when there is no dirty
-    // draft for the path.
-    void reconcileDraftOnOpen(FileDocumentId document);
     bool deferringEnrichment = false;
     bool pendingTreeRefresh = false;
     bool pendingSyntaxRefresh = false;

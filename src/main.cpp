@@ -65,7 +65,6 @@ namespace {
 
 constexpr int kEscapeTimeoutMs = 30;
 constexpr int kEdgeScrollIntervalMs = 40;
-constexpr int kAutosaveTickMs = 1000;
 constexpr int kDragFrameIntervalMs = 16;
 volatile std::sig_atomic_t gSignalPipeWrite = -1;
 
@@ -318,12 +317,12 @@ class PaletteView {
 };
 
 void drainSignals(SsgContext& context) {
-    char scratch[64];
+    char signalBytes[64];
     std::string tags;
     for (;;) {
-        auto const n = ::read(context.signalReadFd, scratch, sizeof scratch);
+        auto const n = ::read(context.signalReadFd, signalBytes, sizeof signalBytes);
         if (n <= 0) break;
-        tags.append(scratch, static_cast<std::size_t>(n));
+        tags.append(signalBytes, static_cast<std::size_t>(n));
     }
     auto const events = classifySignalTags(tags);
     if (events.terminate) {
@@ -468,8 +467,6 @@ void handlePointer(SsgContext& context, const Decoded& decoded, PointerState& po
             targets.picker_activation = context.palette->activation();
         } else if (hit.region == HitRegion::HeaderField || hit.region == HitRegion::FooterField) {
             if (hit.fieldId) targets.ui_node_id = UiNodeId{*hit.fieldId};
-        } else if (hit.region == HitRegion::NoticeAction) {
-            targets.notice_action_id = hit.fieldId;
         } else if (hit.region == HitRegion::ExternalAction && hit.externalFileId && hit.commandId) {
             const auto fileId = DiffFileId{*hit.externalFileId};
             for (auto const& file : context.activeSnapshot->externalModification.files) {
@@ -586,9 +583,8 @@ int main(int argc, char** argv) {
     } else {
         stateBase = ssg::userStateRoot("ssg");
     }
-    (void)ssg::createDirectoriesDurably(stateBase / "scratch");
     (void)ssg::createDirectoriesDurably(stateBase / "archive");
-    for (const auto& dir : {stateBase, stateBase / "scratch", stateBase / "archive"}) {
+    for (const auto& dir : {stateBase, stateBase / "archive"}) {
         const auto status = ssg::statFile(dir);
         if (status && status->kind == ssg::FileKind::Directory) {
             try {
@@ -603,7 +599,6 @@ int main(int argc, char** argv) {
 
     ssg::EditorConfig config;
     config.cwd = target.cwd;
-    config.scratchRoot = stateBase / "scratch";
     config.recoveryRoot = recoveryBase / "recovery";
     config.archiveRoot = stateBase / "archive";
     config.deferEnrichment = true;
@@ -738,19 +733,10 @@ int main(int argc, char** argv) {
                     continue;
                 }
             }
-            // The self-pipe makes resize and termination reliable across read(2).
-            // An autosave timeout repaints only when a draft was written.
-            FdReadiness wait;
-            while (true) {
-                const auto timeout =
-                    runtime.workspaceSearchPending() ? 0 : kAutosaveTickMs;
-                wait = waitReadiness(timeout, context.signalReadFd, context.gitDiffWakeFd, initScriptWatcher ? initScriptWatcher->wakeDescriptor() : -1);
-                if (wait.input || wait.signal || wait.gitDiff || wait.initScript) {
-                    break;
-                }
-                if (runtime.workspaceSearchPending()) break;
-                if (runtime.flushDueAutosaveDrafts() > 0) break;
-            }
+            const auto timeout = runtime.workspaceSearchPending() ? 0 : -1;
+            auto wait = waitReadiness(
+                timeout, context.signalReadFd, context.gitDiffWakeFd,
+                initScriptWatcher ? initScriptWatcher->wakeDescriptor() : -1);
             if (wait.signal) {
                 drainSignals(context);
                 if (!wait.input && !runtime.workspaceSearchPending()) continue;
@@ -781,9 +767,6 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "ssg: terminated by an unknown error\n");
         return 1;
     }
-
-    // Crashes rely on the last debounced draft; only clean exit reaches this flush.
-    runtime.flushAllAutosaveDrafts();
 
     return 0;
 }

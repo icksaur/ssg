@@ -22,11 +22,6 @@
 
 namespace ssg {
 
-struct InputRoutingNoticeAction {
-    std::string id;
-    std::string commandId;
-};
-
 struct InputRoutingSnapshot {
     std::reference_wrapper<CompiledKeymap const> keymap;
     PromptRoutingState prompt;
@@ -39,7 +34,6 @@ struct InputRoutingSnapshot {
     std::uint64_t diffRevision = 0;
     std::reference_wrapper<SelectionSet const> selections;
     FollowMode followMode = FollowMode::Following;
-    std::optional<std::vector<InputRoutingNoticeAction>> noticeActions;
     std::vector<PaneId> panes;
     DocumentPointerGesture gesture;
     std::optional<TreeProviderKind> activeTreeProvider;

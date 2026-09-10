@@ -168,12 +168,6 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                     *targets.ui_node_id};
                 return dispatch;
             }
-            if (hit.region == ssg::HitRegion::NoticeAction &&
-                targets.notice_action_id) {
-                dispatch.semantic_input = ssg::NoticeActionPointerInput{
-                   *targets.notice_action_id};
-                return dispatch;
-            }
             if (hit.region == ssg::HitRegion::PanelQuery) {
                 dispatch.semantic_input = ssg::SearchQueryPointerInput{};
                 return dispatch;

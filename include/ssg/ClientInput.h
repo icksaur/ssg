@@ -89,15 +89,6 @@ struct UiNodePointerInput {
                            const UiNodePointerInput&) = default;
 };
 
-struct NoticeActionPointerInput {
-    std::string actionId;
-    InputPointerButton button = InputPointerButton::Primary;
-    InputPointerPhase phase = InputPointerPhase::Press;
-
-    friend bool operator==(const NoticeActionPointerInput&,
-                           const NoticeActionPointerInput&) = default;
-};
-
 struct DocumentPointerInput {
     std::optional<ByteOffset> position;
     bool additive = false;
@@ -182,7 +173,7 @@ struct UpdatePromptValueInput {
 using ClientInput =
     std::variant<ClientKeyInput, TabPointerInput, TreePointerInput,
                  SearchQueryPointerInput, PickerPointerInput,
-                 ExternalActionPointerInput, NoticeActionPointerInput,
+                 ExternalActionPointerInput,
                  UiNodePointerInput, DocumentPointerInput, ScrollLinesInput,
                  ScrollFractionInput, ViewTransitionInput, UpdatePromptValueInput>;
 

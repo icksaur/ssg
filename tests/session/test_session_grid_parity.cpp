@@ -26,7 +26,6 @@ std::filesystem::path uniqueRoot() {
     auto root = testRuntimePath("runtime_grid_parity");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     std::ofstream out{root / "workspace" / "alpha.txt"};
     for (int line = 0; line < 40; ++line) out << "alpha line " << line << "\n";
@@ -95,7 +94,7 @@ std::string captureGridMatrix() {
     ssg::LineLayoutCache lineCache;
     auto root = uniqueRoot();
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     if (!created.accepted() || !created.session) return "runtime create failed";
     auto& runtime = *created.session;
     (void)ssg::test::openFile(runtime, std::string{"alpha.txt"});

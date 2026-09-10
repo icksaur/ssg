@@ -34,7 +34,6 @@ fs::path uniqueRoot(std::string const& name) {
     auto base = fs::temp_directory_path() / "ssg-contract-fixtures" / name;
     fs::remove_all(base);
     fs::create_directories(base / "workspace");
-    fs::create_directories(base / "scratch");
     fs::create_directories(base / "recovery");
     return base;
 }
@@ -45,7 +44,7 @@ std::unique_ptr<ssg::Editor> makeRuntime(fs::path const& root) {
     std::ofstream{root / "workspace" / "alpha.txt", std::ios::binary}
         << "first line\nsecond line\nthird line\n";
     auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
+        {root / "workspace", root / "recovery", root / "archive"});
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.session);
     return runtime;

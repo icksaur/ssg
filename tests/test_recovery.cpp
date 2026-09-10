@@ -1,7 +1,5 @@
 #include <ssg/platform_files.h>
 #include <ssg/RecoveryManager.h>
-#include <ssg/ScratchStore.h>
-#include <ssg/ScratchJournal.h>
 #include "test_helpers.h"
 
 #include <algorithm>
@@ -21,8 +19,6 @@
 #include <vector>
 
 namespace {
-
-using namespace std::chrono_literals;
 
 class TemporaryDirectory {
 public:
@@ -124,15 +120,6 @@ ssg::UntitledDocumentId fixedUntitledId() {
     return ssg::UntitledDocumentId{value};
 }
 
-ssg::JournalDocument savedDocument(std::string path,
-                                    std::string contents,
-                                    bool dirty = true) {
-    return {ssg::JournalDocumentKey::saved(path),
-            ssg::DocumentMode::Edit,
-            dirty,
-            std::move(contents)};
-}
-
 ssg::RecoveryConfig recoveryConfig(
     std::size_t maximumRecords = 16,
     std::uintmax_t maximumBytes =
@@ -140,80 +127,29 @@ ssg::RecoveryConfig recoveryConfig(
     return {maximumRecords, maximumBytes};
 }
 
-ssg::ScratchStoreConfig scratchConfig() {
-    ssg::ScratchStoreConfig result;
-    result.compactionThresholdBytes =
-        std::numeric_limits<std::uintmax_t>::max();
-    result.durabilityTarget = 100ms;
-    return result;
-}
-
-std::filesystem::path scratchJournalPath(
-    const std::filesystem::path& root,
-    const std::filesystem::path& workspace) {
-    const auto sessions =
-        root / "workspaces" / ssg::scratchWorkspaceKey(workspace) / "sessions";
-    const auto entries = ssg::listDirectory(sessions);
-    if (!entries.ok() || entries.entries.size() != 1) {
-        throw std::runtime_error("expected one scratch session");
-    }
-    return entries.entries.front().path() / "journal.bin";
-}
-
-TEST(dirtyCloseIsDurableBeforeRemovalAndRestoresExactDocument) {
+TEST(closedDocumentRestoresExactSnapshot) {
     TemporaryDirectory temporary;
-    const auto workspace =
-        std::filesystem::absolute(temporary.path() / "workspace");
-    std::filesystem::create_directories(workspace);
-    auto scratch = ssg::ScratchStore::create(
-        temporary.path() / "scratch", workspace, scratchConfig());
     const auto recoveryRoot = temporary.path() / "recovery";
     auto actions =
         ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
-    const ssg::JournalDocument expected{
-        ssg::JournalDocumentKey::untitled(fixedUntitledId()),
+    const ssg::ClosedDocumentSnapshot expected{
+        ssg::DocumentKey::untitled(fixedUntitledId()),
         ssg::DocumentMode::ReadOnly,
         true,
-        "dirty \xCE\xB2 draft\n"};
-    std::optional<ssg::JournalDocument> document{expected};
+        "dirty \xCE\xB2 text\n"};
+    std::optional<ssg::ClosedDocumentSnapshot> document{expected};
 
-    const auto closed = actions.closeDocument(document, scratch, 2s);
+    const auto closed = actions.closeDocument(document);
 
     ASSERT_TRUE(closed.accepted());
     ASSERT_TRUE(closed.compensation.has_value());
     ASSERT_FALSE(document.has_value());
-    ASSERT_EQ(scratch.recovery().documents,
-              std::vector<ssg::JournalDocument>{expected});
 
     actions = ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
     const auto restored =
         actions.restoreDocument(*closed.compensation, document);
     ASSERT_TRUE(restored.accepted());
-    ASSERT_EQ(document, std::optional<ssg::JournalDocument>{expected});
-    ASSERT_TRUE(std::filesystem::is_empty(recoveryRoot));
-}
-
-TEST(dirtyCloseDurabilityFailurePreservesDocumentAndPublishesNothing) {
-    TemporaryDirectory temporary;
-    const auto workspace =
-        std::filesystem::absolute(temporary.path() / "workspace");
-    std::filesystem::create_directories(workspace);
-    const auto scratchRoot = temporary.path() / "scratch";
-    auto scratch =
-        ssg::ScratchStore::create(scratchRoot, workspace, scratchConfig());
-    std::filesystem::create_directory(
-        scratchJournalPath(scratchRoot, workspace));
-    const auto recoveryRoot = temporary.path() / "recovery";
-    auto actions =
-        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
-    const auto expected = savedDocument("draft.txt", "not durable");
-    std::optional<ssg::JournalDocument> document{expected};
-
-    const auto closed = actions.closeDocument(document, scratch, 2s);
-
-    ASSERT_FALSE(closed.accepted());
-    ASSERT_EQ(closed.error->code, ssg::RecoveryErrorCode::DurabilityFailed);
-    ASSERT_EQ(document, std::optional<ssg::JournalDocument>{expected});
+    ASSERT_EQ(document, std::optional<ssg::ClosedDocumentSnapshot>{expected});
     ASSERT_TRUE(std::filesystem::is_empty(recoveryRoot));
 }
 
@@ -299,8 +235,7 @@ TEST(countBudgetEvictsOldestOnlyAfterNewRecordIsInstalled) {
 } // namespace
 
 SSG_TEST_SUITE(test_recovery) {
-    RUN(dirtyCloseIsDurableBeforeRemovalAndRestoresExactDocument);
-    RUN(dirtyCloseDurabilityFailurePreservesDocumentAndPublishesNothing);
+    RUN(closedDocumentRestoresExactSnapshot);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

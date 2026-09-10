@@ -240,8 +240,7 @@ DiffIngressResult GitDiffIngress::applyGitDiffScanLocked(GitDiffScan scan) {
                     tabs.tabs.begin(), tabs.tabs.end(),
                     [&](const TabState& tab) { return tab.id == *liveTab; });
                 if (found != tabs.tabs.end()) {
-                    auto outcome = editor.closeTab(
-                        *found, std::chrono::milliseconds{100});
+                    auto outcome = editor.closeTab(*found);
                     (void)editor.tabs.close(*liveTab, std::move(outcome));
                 }
             }

@@ -11,8 +11,8 @@
 
 namespace {
 
-ssg::JournalDocumentKey saved(std::string_view path) {
-    return ssg::JournalDocumentKey::saved(path);
+ssg::DocumentKey saved(std::string_view path) {
+    return ssg::DocumentKey::saved(path);
 }
 
 ssg::TabState tabState(const ssg::TabManager& tabs, ssg::TabId id) {
@@ -29,22 +29,22 @@ ssg::TabState tabState(const ssg::TabManager& tabs, ssg::TabId id) {
 ssg::TabLifecycleResult acceptedCloseResult(const ssg::TabState& tab) {
     return {ssg::TabError::None, {},
             ssg::RecoveryRecordId{"closed-" + std::to_string(tab.id.value())},
-            std::nullopt, std::nullopt, tab.dirty};
+            std::nullopt, std::nullopt};
 }
 
 ssg::TabLifecycleResult failedCloseResult() {
-    return {ssg::TabError::DurabilityFailed, "durability failed", std::nullopt,
-            std::nullopt, std::nullopt, false};
+    return {ssg::TabError::LifecycleFailed, "close failed", std::nullopt,
+            std::nullopt, std::nullopt};
 }
 
 ssg::TabLifecycleResult ephemeralCloseResult() {
     return {ssg::TabError::None, {}, std::nullopt, std::nullopt, std::nullopt,
-            false, true};
+            true};
 }
 
 ssg::TabLifecycleResult missingCompensationResult() {
     return {ssg::TabError::None, {}, std::nullopt, std::nullopt, std::nullopt,
-            false, false};
+            false};
 }
 
 ssg::TabCloseOutcome acceptedCloseOutcome(const ssg::TabState& tab) {
@@ -69,7 +69,7 @@ TEST(duplicateDocumentIdentityActivatesExistingTab) {
     (void)openSaved(tabs, 2, "src/b.cpp");
     const auto duplicate = tabs.openDocument(
         ssg::FileDocumentId{99}, saved("src/a.cpp"), "other",
-        ssg::DocumentMode::ReadOnly, true, ssg::ScratchDurability::Failed);
+        ssg::DocumentMode::ReadOnly, true);
 
     ASSERT_TRUE(duplicate.accepted());
     ASSERT_EQ(duplicate.tab, std::optional{first});
@@ -113,7 +113,7 @@ TEST(activeClosePrefersRightThenLeftAndDirtyFailureIsAtomic) {
     const auto before = tabs.viewState();
 
     const auto closeFailure = tabs.close(b, failedCloseResult());
-    ASSERT_EQ(closeFailure.error, ssg::TabError::DurabilityFailed);
+    ASSERT_EQ(closeFailure.error, ssg::TabError::LifecycleFailed);
     ASSERT_EQ(tabs.viewState(), before);
 
     ASSERT_TRUE(tabs.close(b, acceptedCloseResult(tabState(tabs, b))).accepted());
@@ -225,11 +225,11 @@ TEST(untitledLabelsAreSmallestAvailableAndReopenIsStable) {
     ssg::TabManager tabs;
     const auto first = tabs.openDocument(
         ssg::FileDocumentId{1},
-        ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate()),
+        ssg::DocumentKey::untitled(ssg::UntitledDocumentId::generate()),
         "", ssg::DocumentMode::Edit, true);
     const auto second = tabs.openDocument(
         ssg::FileDocumentId{2},
-        ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate()),
+        ssg::DocumentKey::untitled(ssg::UntitledDocumentId::generate()),
         "", ssg::DocumentMode::Edit, true);
     ASSERT_EQ(tabs.viewState().tabs[0].label, std::string{"Untitled 1"});
     ASSERT_EQ(tabs.viewState().tabs[1].label, std::string{"Untitled 2"});
@@ -237,7 +237,7 @@ TEST(untitledLabelsAreSmallestAvailableAndReopenIsStable) {
     (void)tabs.close(*first.tab, acceptedCloseResult(tabState(tabs, *first.tab)));
     const auto third = tabs.openDocument(
         ssg::FileDocumentId{3},
-        ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate()),
+        ssg::DocumentKey::untitled(ssg::UntitledDocumentId::generate()),
         "", ssg::DocumentMode::Edit, true);
     ASSERT_EQ(tabs.viewState().tabs.back().label, std::string{"Untitled 1"});
     auto begin = tabs.beginReopenClosed();
@@ -258,12 +258,12 @@ TEST(untitledLabelsAreSmallestAvailableAndReopenIsStable) {
 TEST(reopenUntitledRebindsDocumentKeyForDedup) {
     ssg::TabManager tabs;
     auto originalKey =
-        ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate());
+        ssg::DocumentKey::untitled(ssg::UntitledDocumentId::generate());
     auto reopenedKey =
-        ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate());
+        ssg::DocumentKey::untitled(ssg::UntitledDocumentId::generate());
     while (reopenedKey == originalKey) {
         reopenedKey =
-            ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate());
+            ssg::DocumentKey::untitled(ssg::UntitledDocumentId::generate());
     }
     auto opened = tabs.openDocument(ssg::FileDocumentId{1}, originalKey, "",
                                     ssg::DocumentMode::Edit, true);
@@ -294,19 +294,16 @@ TEST(reopenUntitledRebindsDocumentKeyForDedup) {
     ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
 }
 
-TEST(badgesUpdateExactly) {
+TEST(documentStateUpdatesExactly) {
     ssg::TabManager tabs;
     (void)openSaved(tabs, 7, "a");
     ASSERT_TRUE(tabs.updateDocument(
                     ssg::FileDocumentId{7}, saved("a"), "a",
-                    ssg::DocumentMode::ReadOnly, true,
-                    ssg::ScratchDurability::Pending)
+                    ssg::DocumentMode::ReadOnly, true)
                     .accepted());
     const auto target = tabs.viewState();
     ASSERT_EQ(target.tabs[0].mode, ssg::DocumentMode::ReadOnly);
     ASSERT_TRUE(target.tabs[0].dirty);
-    ASSERT_EQ(target.tabs[0].recovery,
-              std::optional{ssg::ScratchDurability::Pending});
 }
 
 TEST(closeAcceptsAMissingCompensationOnlyForAnEphemeralTab) {
@@ -338,7 +335,7 @@ SSG_TEST_SUITE(test_tabs) {
     RUN(reopenActivatesAnIdentityAlreadyOpenedByAnotherPath);
     RUN(untitledLabelsAreSmallestAvailableAndReopenIsStable);
     RUN(reopenUntitledRebindsDocumentKeyForDedup);
-    RUN(badgesUpdateExactly);
+    RUN(documentStateUpdatesExactly);
     RUN(closeAcceptsAMissingCompensationOnlyForAnEphemeralTab);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

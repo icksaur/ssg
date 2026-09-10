@@ -2,25 +2,6 @@
 
 namespace ssg {
 
-void paintNotice(CellGrid& grid, const NoticeView& notice,
-                 const SolvedNoticeSurface& solved,
-                 ThemeSnapshot const& theme, Style const& style,
-                 SemanticRole foregroundRole,
-                 SemanticRole backgroundRole) {
-    const auto foreground = semanticIndex(theme, foregroundRole);
-    const auto background = semanticIndex(theme, backgroundRole);
-    fillRect(grid, solved.rect, foreground, background,
-             backgroundRole);
-    paintText(grid, solved.rect.x, solved.rect.y, solved.rect.right(),
-              notice.text, foreground, background,
-              backgroundRole, style);
-    for (const auto& action : solved.actions) {
-        paintText(grid, action.rect.x, action.rect.y, action.rect.right(),
-                  action.text, foreground, background,
-                  backgroundRole, style);
-    }
-}
-
 void paintExternalModification(
     CellGrid& grid, const ExternalModificationViewState& external,
     const SolvedExternalModificationSurface& solved,

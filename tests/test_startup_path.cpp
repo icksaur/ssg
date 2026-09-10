@@ -17,7 +17,6 @@ fs::path makeWorkspace(std::string const& name) {
     auto root = testRuntimePath("startup_path_" + name);
     fs::remove_all(root);
     fs::create_directories(root / "workspace");
-    fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");
     std::string text;
     for (int i = 0; i < 200; ++i) text += "int value = 1; // a line of code\n";
@@ -33,7 +32,6 @@ fs::path makeWorkspace(std::string const& name) {
 ssg::EditorConfig configFor(fs::path const& root, bool defer) {
     ssg::EditorConfig config;
     config.cwd = root / "workspace";
-    config.scratchRoot = root / "scratch";
     config.recoveryRoot = root / "recovery";
     config.deferEnrichment = defer;
     return config;

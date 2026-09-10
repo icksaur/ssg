@@ -133,8 +133,8 @@ void setOwnerOnlyPermissions(const std::filesystem::path& path);
 // (LOCAL/disposable: Linux `~/.cache`, Windows `%LOCALAPPDATA%`) and from
 // userConfigRoot() (backed up/synced/hand-edited: Linux `~/.config`, Windows
 // ROAMING `%APPDATA%`). State is data the app owns and wants to survive a
-// restart but that a user neither hand-edits nor needs synced -- draft
-// recovery scratch, session remnants (Linux XDG `~/.local/state`, Windows
+// restart but that a user neither hand-edits nor needs synced, such as
+// session remnants (Linux XDG `~/.local/state`, Windows
 // LOCAL `%LOCALAPPDATA%`). It resolves to a different root than both other
 // primitives even though all three mirror the same XDG-style
 // env-var-with-fallback shape.

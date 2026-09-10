@@ -70,7 +70,7 @@ public:
         std::string_view suffix);
 
     // Accepts canonical names and the prior decimal-nanosecond prefix used by
-    // scratch and recovery so retained state survives upgrades.
+    // retained application state so it survives upgrades.
     [[nodiscard]] static std::optional<
         std::chrono::system_clock::time_point>
     entryTimestamp(std::string_view name);

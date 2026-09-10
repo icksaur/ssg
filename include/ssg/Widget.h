@@ -22,14 +22,13 @@ enum class WidgetKind : std::uint8_t {
 enum class ViewSurface : std::uint8_t {
     TabBar = 0,
     FindResults = 3,
-    Notice = 6,
     ExternalModification = 7,
     Document = 8,
     Tree = 9,
 };
 
 inline constexpr std::array kAllViewSurfaces{
-    ViewSurface::TabBar, ViewSurface::FindResults, ViewSurface::Notice,
+    ViewSurface::TabBar, ViewSurface::FindResults,
     ViewSurface::ExternalModification, ViewSurface::Document, ViewSurface::Tree,
 };
 enum class Overflow : std::uint8_t {

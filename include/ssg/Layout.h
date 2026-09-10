@@ -29,8 +29,6 @@
 
 namespace ssg {
 
-struct NoticeView;
-
 struct LayoutNode {
     UiNodeId id;
     Size size;
@@ -60,28 +58,6 @@ struct SolvedGridTree {
     [[nodiscard]] const SolvedGridNode* find(
         const UiNodeId& id) const noexcept;
 };
-
-struct SolvedNoticeAction {
-    std::string id;
-    std::string text;
-    Rect rect;
-
-    friend bool operator==(const SolvedNoticeAction&,
-                           const SolvedNoticeAction&) = default;
-};
-
-struct SolvedNoticeSurface {
-    Rect rect;
-    std::vector<SolvedNoticeAction> actions;
-
-    friend bool operator==(const SolvedNoticeSurface&,
-                           const SolvedNoticeSurface&) = default;
-};
-
-// CONTRACT: This is the single authoritative action placement within a solved
-// notice band; rendering and hit testing consume the same result.
-[[nodiscard]] SolvedNoticeSurface solveNoticeSurface(
-    const NoticeView& notice, Rect rect);
 
 struct SolvedExternalModificationAction {
     DiffFileId fileId;

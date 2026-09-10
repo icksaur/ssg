@@ -1,10 +1,10 @@
 #pragma once
 
 #include <ssg/Document.h>
+#include <ssg/DocumentKey.h>
 #include <ssg/platform_files.h>
 #include <ssg/FileArchive.h>
 #include <ssg/RecoveryManager.h>
-#include <ssg/ScratchJournal.h>
 #include <ssg/TextCodec.h>
 
 #include <compare>
@@ -77,7 +77,7 @@ struct WorkspaceResult {
 
 struct WorkspaceDocumentState {
     FileDocumentId id;
-    JournalDocumentKey key;
+    DocumentKey key;
     std::string displayLabel;
     FileContentKind contentKind = FileContentKind::Text;
     TextEncodingStatus encoding;
@@ -119,11 +119,6 @@ public:
     [[nodiscard]] std::vector<FileDocumentId> documents() const;
     [[nodiscard]] std::optional<WorkspaceDocumentState> state(
         FileDocumentId document) const;
-    // The disk baseline captured when the document was opened or last saved (the
-    // state its edits branch from), or nullopt for an untitled buffer or an
-    // unknown id. Used by draft recovery to detect an external change on reopen.
-    [[nodiscard]] std::optional<DraftBaseline> baselineFor(
-        FileDocumentId document) const;
     // Whether an observed disk state equals the document's authoritative external
     // baseline (the state its edits branch from, as advanced by a keep_buffer
     // dismissal). `observedContent` is the raw disk bytes, or nullopt when the file
@@ -137,19 +132,6 @@ public:
     [[nodiscard]] bool commitExternalDismissal(
         FileDocumentId document, bool removed,
         const std::optional<std::string>& dismissedContent);
-    // The literal bytes read from disk when the document was opened or last
-    // reloaded — the same bytes the baseline hash was computed over. Used by
-    // draft recovery to classify a recovered draft against the current disk
-    // file. nullopt for an unknown id.
-    [[nodiscard]] std::optional<std::string> rawDiskContent(
-        FileDocumentId document) const;
-    // Replaces a freshly-opened saved document's buffer with a recovered draft's
-    // content, leaving the persisted (disk) baseline untouched so the document
-    // reports dirty exactly when the draft differs from disk — dirtiness is
-    // derived, never set. Returns false for an untitled, non-text, or unknown
-    // document. Intended for the single-file draft reopen path only.
-    [[nodiscard]] bool restoreDraft(FileDocumentId document,
-                                    std::string_view draftContent);
     [[nodiscard]] const Document* tryDocument(FileDocumentId document) const noexcept;
     [[nodiscard]] const Document& document(FileDocumentId document) const;
     [[nodiscard]] TransactionResult apply(

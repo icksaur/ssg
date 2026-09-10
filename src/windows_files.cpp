@@ -311,7 +311,7 @@ std::filesystem::path userConfigRoot(std::string_view application_name) {
 
 // The user's own per-application STATE root. Unlike user_config_root above
 // (ROAMING, synced), state is app-owned data that survives a restart but is
-// neither hand-edited nor roamed -- draft recovery scratch, session remnants.
+// neither hand-edited nor roamed, such as session remnants.
 // Windows has no XDG state analogue, so this resolves to the LOCAL, disposable
 // LOCALAPPDATA root like user_cache_root, but under a distinct application
 // subtree so it is never mistaken for the cache.

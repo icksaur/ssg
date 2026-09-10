@@ -260,7 +260,7 @@ TEST(indexOffersSymlinkedFilesThatTheEditorCanOpen) {
         }));
 
     auto created = createEditor(
-        {workspace, root / "scratch", root / "recovery"});
+        {workspace, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
     if (created.accepted() && linked != result.candidates.end()) {
         ASSERT_TRUE(
