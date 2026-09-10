@@ -1,8 +1,3 @@
-2	ssg::pathComponentEqual	RecoveryManager.cpp
-2	ssg::routeInput	input_routing.cpp
-2	ssg::sameEventKey	FilesystemWatcher.cpp
-2	ssg::weaklyCanonicalPath	platform_files.cpp
-1	ssg::InitScriptWatcher::readInitScriptIfPresentQuiet	InitScriptWatcher.cpp
 1	ssg::LuaCommandHost::Impl::callbackHost	LuaCommandHost.cpp
 1	ssg::RowProjection::row	Viewport.cpp
 1	ssg::TextModel::line	Selection.cpp
@@ -22,7 +17,6 @@
 1	ssg::valid	Settings.cpp
 1	ssg::valid	Theme.cpp
 1	ssg::viewAction	input_routing.cpp
-1	ssg::weaklyCanonicalPath	platform_files.cpp
 0	ssg::ByteReader::empty	RecoveryManager.cpp
 0	ssg::Document::mode	Document.cpp
 0	ssg::Document::revision	Document.cpp

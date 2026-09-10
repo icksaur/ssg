@@ -2,3 +2,9 @@
 ssg::canonicalPath
 # Schema-level lookup hides recursive UiNode traversal.
 ssg::findUiNode
+# Component comparison owns Windows path case folding.
+ssg::pathComponentEqual
+# Public variant boundary hides typed input overloads.
+ssg::routeInput
+# Platform filesystem operations stay behind the platform seam.
+ssg::weaklyCanonicalPath

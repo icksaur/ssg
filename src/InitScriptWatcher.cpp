@@ -131,7 +131,7 @@ void InitScriptWatcher::run() {
     std::unique_lock lock{mutex_};
     while (!stop_) {
         lock.unlock();
-        auto current = readInitScriptIfPresentQuiet(scriptPath_);
+        auto current = readInitScriptIfPresent(scriptPath_, false);
         lock.lock();
         if (current && lastRead && *current == *lastRead &&
             *current != lastApplied_) {
@@ -149,11 +149,6 @@ void InitScriptWatcher::run() {
         wake_.wait_for(lock, kInitScriptPollInterval,
                        [this] { return stop_; });
     }
-}
-
-std::optional<std::string> InitScriptWatcher::readInitScriptIfPresentQuiet(
-    std::filesystem::path const& scriptPath) {
-    return readInitScriptIfPresent(scriptPath, false);
 }
 
 }  // namespace ssg

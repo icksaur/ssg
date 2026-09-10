@@ -46,8 +46,6 @@ public:
 
 private:
     void run();
-    [[nodiscard]] static std::optional<std::string> readInitScriptIfPresentQuiet(
-        std::filesystem::path const& scriptPath);
 
     std::filesystem::path scriptPath_;
     int wakePipe_[2] = {-1, -1};

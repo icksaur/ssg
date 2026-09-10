@@ -58,10 +58,6 @@ std::optional<WatchFileState> stateFor(const EntryMap& entries,
     return found->second;
 }
 
-bool sameEventKey(const WatchEvent& left, const WatchEvent& right) {
-    return left.path == right.path;
-}
-
 auto identityKey(const FileIdentity& identity) {
     return std::tuple{
         identity.volume, identity.file[0], identity.file[1]};
@@ -345,7 +341,7 @@ private:
         const auto same = std::find_if(
             pending_.rbegin(), pending_.rend(),
             [&event](const PendingEvent& candidate) {
-                return sameEventKey(candidate.event, event);
+                return candidate.event.path == event.path;
             });
         if (same != pending_.rend()) {
             const auto distinctReplacement =
