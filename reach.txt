@@ -4,10 +4,12 @@
 0	LineLayoutCache.h	struct	ssg::LineLayoutCache::Entry	
 0	LineLayoutCache.h	struct	ssg::LineLayoutCache::Key	
 0	LineLayoutCache.h	struct	ssg::LineLayoutCache::KeyHash	
-0	LspFeatureController.h	struct	ssg::LspFeaturePublication	
+0	LspState.h	struct	ssg::LspCompletionItem	
+0	LspState.h	struct	ssg::LspHover	
+0	LspState.h	struct	ssg::LspNavigationTarget	
+0	LspState.h	struct	ssg::LspNavigationViewState	
 0	LuaCommandHost.h	alias	ssg::LuaGenerationGate	
 0	PaletteSearcher.h	struct	ssg::PalettePresenceOp	
-0	Keymap.h	alias	ssg::SemanticInputArguments	
 0	TabManager.h	struct	ssg::TabFailure	
 0	ClientInput.h	alias	ssg::ViewTransition	
 0	Workspace.h	struct	ssg::WorkspaceFailure	
@@ -60,7 +62,6 @@
 0	Geometry.h	func	ssg::operator==	
 0	GitDiffSource.h	func	ssg::operator==	
 0	GitDiffSource.h	func	ssg::operator==	
-0	UiInteractionState.h	func	ssg::operator==
 0	Keymap.h	func	ssg::operator==	
 0	Keymap.h	func	ssg::operator==	
 0	Keymap.h	func	ssg::operator==	
@@ -80,20 +81,17 @@
 0	Layout.h	func	ssg::operator==	
 0	Layout.h	func	ssg::operator==	
 0	Layout.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
+0	LspState.h	func	ssg::operator==	
+0	LspState.h	func	ssg::operator==	
+0	LspState.h	func	ssg::operator==	
+0	LspState.h	func	ssg::operator==	
+0	LspState.h	func	ssg::operator==	
+0	LspState.h	func	ssg::operator==	
+0	LspState.h	func	ssg::operator==	
+0	LspState.h	func	ssg::operator==	
+0	LspState.h	func	ssg::operator==	
+0	LspState.h	func	ssg::operator==	
+0	LspState.h	func	ssg::operator==	
 0	PaletteSearcher.h	func	ssg::operator==	
 0	PaletteSearcher.h	func	ssg::operator==	
 0	PaletteSearcher.h	func	ssg::operator==	
@@ -128,9 +126,6 @@
 0	Search.h	func	ssg::operator==	
 0	Search.h	func	ssg::operator==	
 0	Search.h	func	ssg::operator==	
-0	Search.h	func	ssg::operator==	
-0	Search.h	func	ssg::operator==	
-0	Settings.h	func	ssg::operator==	
 0	Settings.h	func	ssg::operator==	
 0	Settings.h	func	ssg::operator==	
 0	Settings.h	func	ssg::operator==	
@@ -159,12 +154,12 @@
 0	TerminalInput.h	func	ssg::operator==	
 0	TextCodec.h	func	ssg::operator==	
 0	TextCodec.h	func	ssg::operator==	
-0	TextCodec.h	func	ssg::operator==	
 0	Theme.h	func	ssg::operator==	
 0	Theme.h	func	ssg::operator==	
 0	Theme.h	func	ssg::operator==	
 0	Theme.h	func	ssg::operator==	
 0	Theme.h	func	ssg::operator==	
+0	UiInteractionState.h	func	ssg::operator==	
 0	UiRegionProjection.h	func	ssg::operator==	
 0	UiRegionProjection.h	func	ssg::operator==	
 0	UiRegionProjection.h	func	ssg::operator==	
@@ -202,7 +197,6 @@
 1	SystemClipboardReader.h	alias	ssg::ClipboardEnvironmentLookup	SystemClipboardReader.cpp
 1	SystemClipboardReader.h	alias	ssg::ClipboardExecutableLookup	SystemClipboardReader.cpp
 1	CommandCatalog.h	alias	ssg::CommandHandler	CommandCatalog.cpp
-1	Keymap.h	class	ssg::CommittedText	Keymap.cpp
 1	CompiledKeymap.h	class	ssg::CompiledContext	CompiledKeymap.cpp
 1	CompiledKeymap.h	struct	ssg::CompiledKeymap::Entry	CompiledKeymap.cpp
 1	CompiledKeymap.h	class	ssg::CompiledStroke	CompiledKeymap.cpp
@@ -214,8 +208,6 @@
 1	FileCommands.h	struct	ssg::DroppedContentArguments	files.cpp
 1	EditCommands.h	enum	ssg::EditCommandError	EditCommands.cpp
 1	Editor.h	struct	ssg::Editor::DeferredCommand	Editor.cpp
-1	Editor.h	struct	ssg::Editor::DeferredWorkCounts	Editor.cpp
-1	Editor.h	enum	ssg::Editor::DraftReopenNotice	Editor.cpp
 1	TextCodec.h	struct	ssg::EncodeTextOptions	TextCodec.cpp
 1	ExternalModificationFlow.h	enum	ssg::ExternalAction	ExternalModificationFlow.cpp
 1	Editor.h	struct	ssg::ExternalDiffRevision	Editor.cpp
@@ -227,7 +219,6 @@
 1	ExternalModificationFlow.h	struct	ssg::ExternalOpenDiffResult	ExternalModificationFlow.cpp
 1	FileCommands.h	struct	ssg::FileCommandDescriptor	files.cpp
 1	platform_files.h	struct	ssg::FileIdentity	FilesystemWatcher.cpp
-1	platform_files.h	class	ssg::FileIoFaultInjector	linux_files.cpp
 1	TextCodec.h	enum	ssg::FinalNewlinePolicy	TextCodec.cpp
 1	FindReplace.h	struct	ssg::FindResult	FindReplace.cpp
 1	WidgetLayout.h	struct	ssg::FitItem	WidgetLayout.cpp
@@ -235,40 +226,20 @@
 1	FollowEditsModel.h	struct	ssg::FollowEditsConfig	FollowEditsModel.cpp
 1	FollowEditsModel.h	enum	ssg::FollowEditsError	FollowEditsModel.cpp
 1	GridPresenter.h	struct	ssg::GridPresentationRequest	GridPresenter.cpp
-1	DocumentHistory.h	struct	ssg::HistoryViewState	DocumentHistory.cpp
-1	Keymap.h	struct	ssg::KeymapDelta	Keymap.cpp
 1	Keymap.h	enum	ssg::KeymapErrorCode	Keymap.cpp
 1	Keymap.h	struct	ssg::KeymapResolution	Keymap.cpp
 1	Layout.h	struct	ssg::LayoutNode	Layout.cpp
 1	SyntaxModel.h	struct	ssg::LineIndentation	SyntaxModel.cpp
 1	platform_files.h	enum	ssg::LongPathPolicy	platform_files.cpp
-1	LspSyncClient.h	class	ssg::LspByteStream	LspSyncClient.cpp
-1	LspFeatureController.h	struct	ssg::LspCompletionAcceptance	LspFeatureController.cpp
-1	LspFeatureController.h	struct	ssg::LspCompletionItem	LspFeatureController.cpp
-1	LspFeatureController.h	struct	ssg::LspFeatureConfig	LspFeatureController.cpp
-1	LspFeatureController.h	class	ssg::LspFeatureController	LspFeatureController.cpp
-1	LspFeatureController.h	enum	ssg::LspFeatureController::Disposition	LspFeatureController.cpp
-1	LspFeatureController.h	enum	ssg::LspFeatureController::Kind	LspFeatureController.cpp
-1	LspFeatureController.h	struct	ssg::LspFeatureController::Pending	LspFeatureController.cpp
-1	LspFeatureController.h	enum	ssg::LspFeatureError	LspFeatureController.cpp
-1	LspFeatureController.h	struct	ssg::LspFeaturePollResult	LspFeatureController.cpp
-1	LspFeatureController.h	enum	ssg::LspFeaturePublishResult	LspFeatureController.cpp
-1	LspFeatureController.h	struct	ssg::LspFeatureRequestResult	LspFeatureController.cpp
-1	LspSyncClient.h	struct	ssg::LspFrameConfig	LspSyncClient.cpp
-1	LspSyncClient.h	class	ssg::LspFrameDecoder	LspSyncClient.cpp
-1	LspSyncClient.h	enum	ssg::LspFrameError	LspSyncClient.cpp
-1	LspSyncClient.h	struct	ssg::LspFrameResult	LspSyncClient.cpp
-1	LspFeatureController.h	struct	ssg::LspHover	LspFeatureController.cpp
-1	LspSyncClient.h	struct	ssg::LspIoResult	LspSyncClient.cpp
-1	LspSyncClient.h	enum	ssg::LspIoStatus	LspSyncClient.cpp
-1	LspSyncClient.h	enum	ssg::LspLifecycleState	LspSyncClient.cpp
-1	LspFeatureController.h	struct	ssg::LspNavigationTarget	LspFeatureController.cpp
-1	LspFeatureController.h	struct	ssg::LspNavigationViewState	LspFeatureController.cpp
-1	LspSyncClient.h	enum	ssg::LspPositionError	LspSyncClient.cpp
-1	LspSyncClient.h	struct	ssg::LspSyncConfig	LspSyncClient.cpp
-1	LspSyncClient.h	enum	ssg::LspSyncError	LspSyncClient.cpp
+1	LspState.h	struct	ssg::LspCompletionViewState	language_services.cpp
+1	LspState.h	struct	ssg::LspDiagnostic	PaintDocument.cpp
+1	LspState.h	enum	ssg::LspDiagnosticSeverity	PaintDocument.cpp
+1	LspState.h	struct	ssg::LspDocumentDiagnostics	PaintDocument.cpp
+1	LspState.h	struct	ssg::LspFeatureViewState	language_services.cpp
+1	LspState.h	enum	ssg::LspPositionError	LspState.cpp
+1	LspState.h	struct	ssg::LspPositionResult	LspState.cpp
+1	LspState.h	struct	ssg::LspRange	PaintDocument.cpp
 1	LuaCommandHost.h	alias	ssg::LuaDispatcher	LuaCommandHost.cpp
-1	LuaCommandHost.h	struct	ssg::LuaHandle	LuaCommandHost.cpp
 1	PaletteSearcher.h	struct	ssg::MatcherParameters	PaletteSearcher.cpp
 1	FilesystemWatcher.h	struct	ssg::NativeWatchEvent	FilesystemWatcher.cpp
 1	SyntaxModel.h	class	ssg::OpaqueSyntaxParse	TreeSitterParser.cpp
@@ -283,17 +254,15 @@
 1	PromptSurface.h	struct	ssg::PromptInput	PromptSurface.cpp
 1	Editor.h	struct	ssg::PumpResult	Editor.cpp
 1	RecoveryManager.h	struct	ssg::RecoveryConfig	RecoveryManager.cpp
-1	RecoveryManager.h	class	ssg::RecoveryFaultInjector	RecoveryManager.cpp
+1	RecoveryManager.h	enum	ssg::RecoveryErrorCode	RecoveryManager.cpp
+1	RecoveryManager.h	struct	ssg::RecoveryRecord	RecoveryManager.cpp
 1	RecoveryManager.h	enum	ssg::RecoveryRecordKind	RecoveryManager.cpp
-1	RecoveryManager.h	enum	ssg::RecoveryStep	RecoveryManager.cpp
 1	TextCodec.h	struct	ssg::ReopenWithEncodingArguments	files.cpp
 1	WidgetLayout.h	struct	ssg::RowFit	WidgetLayout.cpp
-1	ScratchStore.h	struct	ssg::ScratchQuotaResult	ScratchStore.cpp
 1	ScratchStore.h	class	ssg::ScratchSessionId	ScratchSession.cpp
 1	ScratchStore.h	struct	ssg::ScratchStoreConfig	ScratchStore.cpp
 1	ScriptHost.h	alias	ssg::ScriptHost::ViewActionSink	ScriptHost.cpp
 1	Keymap.h	struct	ssg::ScrollPagesArguments	ViewCommands.cpp
-1	pointer_routing.h	struct	ssg::ScrollableRegionDescriptor	pointer_routing.cpp
 1	Style.h	struct	ssg::ScrollbarGlyphs	Style.cpp
 1	Search.h	class	ssg::SearchCancellationToken	Search.cpp
 1	Search.h	enum	ssg::SearchQueryError	Search.cpp
@@ -301,11 +270,9 @@
 1	DiffModel.h	struct	ssg::SeededDiffFile	DiffModel.cpp
 1	Viewport.h	struct	ssg::SelectionNavigation	GridPresenter.cpp
 1	Selection.h	enum	ssg::SelectionNavigationError	Selection.cpp
-1	Keymap.h	struct	ssg::SemanticCommand	Keymap.cpp
 1	TextCodec.h	struct	ssg::SetEncodingArguments	files.cpp
 1	TextCodec.h	struct	ssg::SetFinalNewlineArguments	files.cpp
 1	TextCodec.h	struct	ssg::SetLineEndingArguments	files.cpp
-1	Settings.h	struct	ssg::SettingCompensation	Settings.cpp
 1	Settings.h	enum	ssg::SettingErrorCode	Settings.cpp
 1	Settings.h	struct	ssg::SettingResetArguments	ViewCommands.cpp
 1	Settings.h	struct	ssg::SettingResetScopeArguments	ViewCommands.cpp
@@ -313,7 +280,6 @@
 1	Settings.h	alias	ssg::SettingValue	Settings.cpp
 1	Settings.h	struct	ssg::SettingsDelta	Settings.cpp
 1	Settings.h	struct	ssg::SettingsModel::ScopeData	Settings.cpp
-1	Settings.h	class	ssg::SettingsPersistence	Settings.cpp
 1	SharedBytes.h	struct	ssg::SharedBytes::Backing	SharedBytes.cpp
 1	Layout.h	struct	ssg::SolvedTabSeparator	PaintChrome.cpp
 1	StatusBar.h	struct	ssg::StatusBar::Entry	StatusBar.cpp
@@ -339,7 +305,6 @@
 1	Terminal.h	class	ssg::TerminalModes::Guard	Terminal.cpp
 1	Terminal.h	alias	ssg::TerminalModes::Writer	Terminal.cpp
 1	TextCodec.h	enum	ssg::TextEncodingErrorCode	TextCodec.cpp
-1	TextCodec.h	struct	ssg::TextEncodingViewState	TextCodec.cpp
 1	TextInputCommands.h	enum	ssg::TextInputError	TextInputCommands.cpp
 1	WidgetLayout.h	struct	ssg::TextInputLayout	WidgetLayout.cpp
 1	TreeModel.h	struct	ssg::TreeModel::ProviderState	TreeModel.cpp
@@ -350,12 +315,9 @@
 1	TreeSitterGrammars.h	struct	ssg::TreeSitterGrammar::Injection	TreeSitterParser.cpp
 1	TreeSitterParser.h	class	ssg::TreeSitterParser	TreeSitterParser.cpp
 1	UiInteractionState.h	class	ssg::UiInteractionState	ScreenState.cpp
-1	Viewport.h	struct	ssg::ViewportDelta	Viewport.cpp
 1	FilesystemWatcher.h	alias	ssg::WatchClock	LinuxFilesystemWatcher.cpp
 1	FilesystemWatcher.h	alias	ssg::WatchTimePoint	FilesystemWatcher.cpp
-1	WorkspaceCorpus.h	enum	ssg::WorkspaceCorpusOutcome	WorkspaceCorpus.cpp
 1	WorkspaceCorpus.h	alias	ssg::WorkspaceCorpusReader	WorkspaceCorpus.cpp
-1	WorkspaceCorpus.h	struct	ssg::WorkspaceCorpusStatus	WorkspaceCorpus.cpp
 1	Workspace.h	enum	ssg::WorkspaceError	Workspace.cpp
 1	Search.h	struct	ssg::WorkspaceFile	FindReplace.cpp
 1	FindReplace.h	struct	ssg::WorkspaceFileReplacement	Editor.cpp
@@ -365,13 +327,10 @@
 1	ScreenLayout.h	func	ssg::assembleFooterPrompt	ScreenLayout.cpp
 1	CommandCatalog.h	func	ssg::bindOptionalWireHandler	editing.cpp
 1	Editor.h	func	ssg::bindRuntimePresentation	ViewCommands.cpp
+1	LspState.h	func	ssg::byteOffsetToLspPosition	LspState.cpp
 1	TerminalCapabilities.h	func	ssg::capabilityName	TerminalCapabilities.cpp
-1	GraphemeLayout.h	func	ssg::cellRunCalls	GraphemeLayout.cpp
-1	TerminalOutput.h	func	ssg::colorDepthName	TerminalOutput.cpp
 1	Keymap.h	func	ssg::defaultTerminalKeymap	Editor.cpp
-1	Viewport.h	func	ssg::deriveViewportDelta	Viewport.cpp
 1	PieceTree.h	alias	ssg::detail::PieceTree::NodePtr	PieceTree.cpp
-1	TreeModel.h	func	ssg::detail::filesystemTreeEntryDisappeared	TreeModel.cpp
 1	TreeModel.h	func	ssg::detail::inspectFilesystemTreeEntry	TreeModel.cpp
 1	SystemClipboardReader.h	func	ssg::discoverSystemClipboardPrograms	SystemClipboardReader.cpp
 1	UiTree.h	func	ssg::emptyUiRoot	UiTree.cpp
@@ -379,7 +338,6 @@
 1	TerminalOutput.h	func	ssg::encodeClipboardWrite	TerminalOutput.cpp
 1	ScratchJournal.h	func	ssg::encodeJournalDocument	ScratchJournal.cpp
 1	ScratchJournal.h	func	ssg::encodeJournalRemove	ScratchJournal.cpp
-1	LspSyncClient.h	func	ssg::encodeLspFrame	LspSyncClient.cpp
 1	TextCodec.h	func	ssg::encodeText	TextCodec.cpp
 1	InitScriptWatcher.h	func	ssg::evaluateInitScript	InitScriptWatcher.cpp
 1	Search.h	func	ssg::evaluateWorkspaceSearch	Search.cpp
@@ -387,27 +345,19 @@
 1	DiffModel.h	func	ssg::externalDiffFileId	ExternalModificationFlow.cpp
 1	FindReplace.h	func	ssg::findTextMatches	FindReplace.cpp
 1	WidgetLayout.h	func	ssg::fitRow	WidgetLayout.cpp
-1	Keymap.h	func	ssg::formatKeyStroke	Keymap.cpp
 1	TreeModel.h	func	ssg::gitTreeAffordance	TreeModel.cpp
 1	Layout.h	func	ssg::gridTabDisplay	Layout.cpp
 1	Layout.h	func	ssg::gridTabTitle	Layout.cpp
 1	DocumentHistory.h	func	ssg::historyEditKind	editing.cpp
-1	platform_files.h	func	ssg::installFileIoFaultInjector	linux_files.cpp
-1	TreeModel.h	func	ssg::isValidTreeViewState	TreeModel.cpp
 1	KeyCode.h	func	ssg::keyCodeDisplay	Keymap.cpp
 1	KeyCode.h	func	ssg::keyCodeFromName	Keymap.cpp
-1	KeyCode.h	func	ssg::keyCodeName	Keymap.cpp
 1	focus.h	func	ssg::keymapContexts	Keymap.cpp
 1	WidgetLayout.h	func	ssg::layoutTextInput	WidgetLayout.cpp
-1	Settings.h	func	ssg::linuxSettingsPaths	linux_settings.cpp
 1	PaletteSearcher.h	func	ssg::matcherParametersInDomain	PaletteSearcher.cpp
 1	Search.h	func	ssg::operator==	Search.cpp
 1	SyntaxModel.h	func	ssg::operator==	SyntaxModel.cpp
 1	TextCodec.h	func	ssg::operator==	Workspace.cpp
 1	UiTree.h	func	ssg::operator==	ScreenState.cpp
-1	OptionalSubsystemAudit.h	func	ssg::optionalConstructionCount	OptionalSubsystemAudit.cpp
-1	OptionalSubsystemAudit.h	func	ssg::optionalConstructionTotal	OptionalSubsystemAudit.cpp
-1	OptionalSubsystemAudit.h	func	ssg::optionalSubsystemName	OptionalSubsystemAudit.cpp
 1	WidgetLayout.h	func	ssg::packEnd	WidgetLayout.cpp
 1	PaletteSearcher.h	func	ssg::paletteGhost	PaletteSearcher.cpp
 1	Keymap.h	func	ssg::parseKeySequenceString	Keymap.cpp
@@ -415,38 +365,22 @@
 1	Search.h	func	ssg::parseWorkspaceSearchQuery	Search.cpp
 1	Search.h	func	ssg::rankWorkspaceSearch	Search.cpp
 1	PaletteSearcher.h	func	ssg::referenceRank	PaletteSearcher.cpp
-1	platform_files.h	func	ssg::removeFile	linux_files.cpp
-1	Renderer.h	func	ssg::renderSegmentationCalls	Renderer.cpp
-1	GraphemeLayout.h	func	ssg::resetCellRunCalls	GraphemeLayout.cpp
-1	OptionalSubsystemAudit.h	func	ssg::resetOptionalConstructionAudit	OptionalSubsystemAudit.cpp
-1	Renderer.h	func	ssg::resetRenderSegmentationCalls	Renderer.cpp
-1	TextCodec.h	func	ssg::resetUtf8ValidationCalls	TextCodec.cpp
 1	ScratchStore.h	func	ssg::scratchWorkspaceKey	ScratchSession.cpp
 1	Scrollbar.h	func	ssg::scrollFirstRow	Viewport.cpp
 1	Scrollbar.h	func	ssg::scrollScaleRounded	Viewport.cpp
 1	Scrollbar.h	func	ssg::scrollThumbStart	Viewport.cpp
 1	Viewport.h	func	ssg::scrollViewportBy	Viewport.cpp
-1	pointer_routing.h	func	ssg::scrollable_regions	pointer_routing.cpp
 1	Viewport.h	func	ssg::scrollbarMetrics	Viewport.cpp
 1	Search.h	func	ssg::searchGotoLine	Search.cpp
-1	Search.h	func	ssg::searchNavigationTarget	Search.cpp
-1	Keymap.h	func	ssg::semanticInputForText	Keymap.cpp
-1	Theme.h	func	ssg::semanticRoleName	Theme.cpp
 1	UiTree.h	func	ssg::setUiNodeVisible	UiTree.cpp
 1	Layout.h	func	ssg::solveGridTree	Layout.cpp
 1	DiffModel.h	func	ssg::splitDiffLines	DiffModel.cpp
 1	Theme.h	func	ssg::syntaxScopeFromName	Theme.cpp
-1	Theme.h	func	ssg::syntaxScopeName	Theme.cpp
-1	TextCodec.h	func	ssg::textEncodingViewState	TextCodec.cpp
 1	TreeModel.h	func	ssg::treeProviderCanBeCreatedEmpty	TreeModel.cpp
 1	Editor.h	func	ssg::uint32Setting	DraftAutosaveScheduler.cpp
 1	platform_files.h	func	ssg::userCacheRoot	linux_files.cpp
-1	TextCodec.h	func	ssg::utf8ValidationCalls	TextCodec.cpp
 1	UiTree.h	func	ssg::validatePublishedUiTree	UiTree.cpp
-1	Widget.h	func	ssg::viewSurfaceName	Widget.cpp
 1	WidgetLayout.h	func	ssg::visibleTail	WidgetLayout.cpp
-1	Widget.h	func	ssg::widgetKindName	Widget.cpp
-1	Settings.h	func	ssg::windowsSettingsPaths	windows_settings.cpp
 1	Editor.h	func	ssg::wrongPayload	Editor.cpp
 1	color.h	func	ssg::xterm256Color	color.cpp
 2	InputRouting.h	struct	ssg::ApplySelections	Editor.cpp,input_routing.cpp
@@ -481,6 +415,7 @@
 2	DraftReopenClassifier.h	struct	ssg::DraftDiskState	DraftReopenClassifier.cpp,Editor.cpp
 2	DraftReopenClassifier.h	enum	ssg::DraftReopenClass	DraftReopenClassifier.cpp,Editor.cpp
 2	Editor.h	enum	ssg::DraftReopenOutcome	Editor.cpp,EditorViews.cpp
+2	DurableStore.h	struct	ssg::DurableStoreEvictionResult	DurableStore.cpp,RecoveryManager.cpp
 2	EditCommands.h	enum	ssg::EditCommand	EditCommands.cpp,editing.cpp
 2	EditCommands.h	struct	ssg::EditCommandResult	EditCommands.cpp,editing.cpp
 2	EditCommands.h	struct	ssg::EditCommandSettings	EditCommands.cpp,editing.cpp
@@ -532,19 +467,9 @@
 2	Keymap.h	struct	ssg::KeymapMutationError	Keymap.cpp,ViewCommands.cpp
 2	Keymap.h	struct	ssg::KeymapMutationResult	Keymap.cpp,ViewCommands.cpp
 2	TextCodec.h	enum	ssg::LineTerminator	TextCodec.cpp,Workspace.cpp
-2	LspSyncClient.h	struct	ssg::LspByteOffsetResult	LspSyncClient.cpp,PaintDocument.cpp
-2	LspSyncClient.h	struct	ssg::LspCompletedResponse	LspFeatureController.cpp,LspSyncClient.cpp
-2	LspSyncClient.h	enum	ssg::LspCompletedResponseStatus	LspFeatureController.cpp,LspSyncClient.cpp
-2	LspFeatureController.h	struct	ssg::LspCompletionViewState	LspFeatureController.cpp,language_services.cpp
-2	LspSyncClient.h	struct	ssg::LspDiagnostic	LspSyncClient.cpp,PaintDocument.cpp
-2	LspSyncClient.h	enum	ssg::LspDiagnosticSeverity	LspSyncClient.cpp,PaintDocument.cpp
-2	LspSyncClient.h	struct	ssg::LspDocumentDiagnostics	LspSyncClient.cpp,PaintDocument.cpp
-2	LspSyncClient.h	struct	ssg::LspDocumentSnapshot	LspFeatureController.cpp,LspSyncClient.cpp
-2	LspFeatureController.h	struct	ssg::LspFeatureViewState	LspFeatureController.cpp,language_services.cpp
-2	LspSyncClient.h	struct	ssg::LspPositionResult	LspFeatureController.cpp,LspSyncClient.cpp
-2	LspSyncClient.h	struct	ssg::LspRequestResult	LspFeatureController.cpp,LspSyncClient.cpp
-2	LspSyncClient.h	class	ssg::LspSyncClient	LspFeatureController.cpp,LspSyncClient.cpp
-2	LspSyncClient.h	struct	ssg::LspSyncResult	LspFeatureController.cpp,LspSyncClient.cpp
+2	LspState.h	struct	ssg::LspByteOffsetResult	LspState.cpp,PaintDocument.cpp
+2	LspState.h	struct	ssg::LspPosition	LspState.cpp,PaintDocument.cpp
+2	LspState.h	struct	ssg::LspSyncViewState	GridPresenter.cpp,PaintDocument.cpp
 2	LuaCommandHost.h	struct	ssg::LuaCommand	LuaCommandHost.cpp,ScriptHost.cpp
 2	LuaCommandHost.h	class	ssg::LuaCommandHost	LuaCommandHost.cpp,ScriptHost.cpp
 2	LuaCommandHost.h	struct	ssg::LuaCommandHostOptions	LuaCommandHost.cpp,ScriptHost.cpp
@@ -557,7 +482,6 @@
 2	Search.h	struct	ssg::NavigationTarget	Search.cpp,navigation.cpp
 2	Search.h	struct	ssg::NavigationTransition	Search.cpp,navigation.cpp
 2	ClientInput.h	struct	ssg::NoticeActionPointerInput	input_routing.cpp,pointer_routing.cpp
-2	Search.h	struct	ssg::PaletteExecutionResult	Editor.cpp,Search.cpp
 2	PaletteSearcher.h	struct	ssg::PalettePresenceOverlay	EditorViews.cpp,ScreenState.cpp
 2	PaneNavigation.h	enum	ssg::PaneDirection	Layout.cpp,ViewCommands.cpp
 2	ClientInput.h	struct	ssg::PaneFocusTransition	GridPresenter.cpp,input_routing.cpp
@@ -576,8 +500,7 @@
 2	PromptSurface.h	struct	ssg::PromptTextRoute	PromptRouting.cpp,input_routing.cpp
 2	PromptSurface.h	enum	ssg::PromptTextRoute::Kind	PromptRouting.cpp,input_routing.cpp
 2	PromptSurface.h	struct	ssg::PromptValueArguments	PromptRouting.cpp,ViewCommands.cpp
-2	RecoveryManager.h	enum	ssg::RecoveryErrorCode	RecoveryManager.cpp,Workspace.cpp
-2	RecoveryManager.h	struct	ssg::RecoveryRecord	RecoveryManager.cpp,Workspace.cpp
+2	RecoveryManager.h	struct	ssg::RecoveryRestoreResult	Editor.cpp,RecoveryManager.cpp
 2	ViewAction.h	struct	ssg::ResolvePaneFocus	GridPresenter.cpp,ViewCommands.cpp
 2	color.h	struct	ssg::ResolvedColor	TerminalOutput.cpp,color.cpp
 2	ViewAction.h	struct	ssg::RevealSelection	GridPresenter.cpp,editing.cpp
@@ -598,8 +521,6 @@
 2	ViewAction.h	struct	ssg::ScrollPages	GridPresenter.cpp,ViewCommands.cpp
 2	Style.h	struct	ssg::ScrollbarCell	Renderer.cpp,Style.cpp
 2	Style.h	enum	ssg::ScrollbarCellKind	Renderer.cpp,Style.cpp
-2	Search.h	struct	ssg::SearchCommandDescriptor	Editor.cpp,Search.cpp
-2	Search.h	struct	ssg::SearchCommands	Editor.cpp,Search.cpp
 2	Search.h	enum	ssg::SearchPublishResult	Editor.cpp,Search.cpp
 2	InputRouting.h	struct	ssg::SearchQueryChange	Editor.cpp,input_routing.cpp
 2	InputRouting.h	enum	ssg::SearchQueryChange::Kind	Editor.cpp,input_routing.cpp
@@ -668,6 +589,7 @@
 2	UiTree.h	struct	ssg::UiNodeActivationArguments	ViewCommands.cpp,pointer_routing.cpp
 2	UiRegionProjection.h	struct	ssg::UiRegionProjectionResult	GridPresenter.cpp,UiRegionProjection.cpp
 2	TextCodec.h	class	ssg::ValidatedUtf8	Document.cpp,Workspace.cpp
+2	Widget.h	enum	ssg::ViewSurface	ScreenLayout.cpp,UiTree.cpp
 2	ClientInput.h	struct	ssg::ViewTransitionInput	GridPresenter.cpp,input_routing.cpp
 2	Viewport.h	struct	ssg::VisualRow	PaintDocument.cpp,Viewport.cpp
 2	ViewAction.h	enum	ssg::VisualSelectionDirection	GridPresenter.cpp,editing.cpp
@@ -682,7 +604,6 @@
 2	FilesystemWatcher.h	struct	ssg::WorkspaceEntry	FilesystemWatcher.cpp,LinuxFilesystemWatcher.cpp
 2	WorkspaceFileIndex.h	struct	ssg::WorkspaceFileIndexOptions	Editor.cpp,WorkspaceFileIndex.cpp
 2	WorkspaceFileIndex.h	struct	ssg::WorkspaceFileIndexResult	Editor.cpp,WorkspaceFileIndex.cpp
-2	CommandCatalog.h	struct	ssg::WorkspaceId	CommandCatalog.cpp,Editor.cpp
 2	FindReplace.h	struct	ssg::WorkspacePreviewResult	FindReplace.cpp,editing.cpp
 2	FilesystemWatcher.h	struct	ssg::WorkspaceScan	FilesystemWatcher.cpp,LinuxFilesystemWatcher.cpp
 2	Search.h	struct	ssg::WorkspaceSearchBatch	Editor.cpp,Search.cpp
@@ -703,7 +624,6 @@
 2	Editor.h	func	ssg::bindRuntimeLanguageServices	ViewCommands.cpp,language_services.cpp
 2	Editor.h	func	ssg::bindRuntimeNavigation	ViewCommands.cpp,navigation.cpp
 2	WorkspaceFileIndex.h	func	ssg::buildWorkspaceFileIndex	Editor.cpp,WorkspaceFileIndex.cpp
-2	LspSyncClient.h	func	ssg::byteOffsetToLspPosition	LspFeatureController.cpp,LspSyncClient.cpp
 2	DraftReopenClassifier.h	func	ssg::classifyDraftReopen	DraftReopenClassifier.cpp,Editor.cpp
 2	Terminal.h	func	ssg::classifySignalTags	Terminal.cpp,main.cpp
 2	Workspace.h	func	ssg::containsBinaryNul	Workspace.cpp,WorkspaceCorpus.cpp
@@ -724,7 +644,7 @@
 2	pointer_routing.h	func	ssg::is_scrollbar_region	main.cpp,pointer_routing.cpp
 2	WidgetLayout.h	func	ssg::layoutInputLine	UiRegionProjection.cpp,WidgetLayout.cpp
 2	InitScriptWatcher.h	func	ssg::loadInitScript	InitScriptWatcher.cpp,main.cpp
-2	LspSyncClient.h	func	ssg::lspPositionToByteOffset	LspSyncClient.cpp,PaintDocument.cpp
+2	LspState.h	func	ssg::lspPositionToByteOffset	LspState.cpp,PaintDocument.cpp
 2	FilesystemWatcher.h	func	ssg::makePlatformFilesystemWatcher	GitDiffWorker.cpp,LinuxFilesystemWatcher.cpp
 2	GitDiffSource.h	func	ssg::makePlatformGitIgnoreMatcher	Editor.cpp,GitRepository.cpp
 2	GitMetadataWatcher.h	func	ssg::makePlatformGitMetadataWatcher	GitDiffWorker.cpp,LinuxGitMetadataWatcher.cpp
@@ -733,7 +653,6 @@
 2	WidgetLayout.h	func	ssg::measureFieldCells	UiRegionProjection.cpp,WidgetLayout.cpp
 2	Search.h	func	ssg::navigationTransition	Search.cpp,navigation.cpp
 2	DiffModel.h	func	ssg::nextDiffHunk	DiffModel.cpp,navigation.cpp
-2	TextCodec.h	func	ssg::noteUtf8Validation	Document.cpp,TextCodec.cpp
 2	FilesystemWatcher.h	func	ssg::operator==	ExternalModificationFlow.cpp,FilesystemWatcher.cpp
 2	RecoveryManager.h	func	ssg::operator==	RecoveryManager.cpp,TabManager.cpp
 2	ScratchJournal.h	func	ssg::operator==	Editor.cpp,ScratchStore.cpp
@@ -774,6 +693,7 @@
 2	Terminal.h	func	ssg::terminalSize	Terminal.cpp,main.cpp
 2	WidgetLayout.h	func	ssg::textInputText	PaintOverlays.cpp,WidgetLayout.cpp
 2	Keymap.h	func	ssg::textRoutingForContext	Keymap.cpp,PromptRouting.cpp
+2	platform_files.h	func	ssg::treeBytes	RecoveryManager.cpp,platform_files.cpp
 2	TreeModel.h	func	ssg::treeProviderLabel	Layout.cpp,TreeModel.cpp
 2	platform_files.h	func	ssg::tryLockFile	ScratchSession.cpp,linux_files.cpp
 2	UiTree.h	func	ssg::uiSchemaNodeIds	ScreenState.cpp,UiTree.cpp
@@ -806,7 +726,6 @@
 3	ClientInput.h	struct	ssg::DocumentPointerInput	input_routing.cpp,main.cpp,pointer_routing.cpp
 3	ScratchJournal.h	struct	ssg::DraftBaseline	DraftReopenClassifier.cpp,ScratchJournal.cpp,Workspace.cpp
 3	DurableStore.h	struct	ssg::DurableStoreClaimResult	DurableStore.cpp,FileArchive.cpp,ScratchSession.cpp
-3	DurableStore.h	struct	ssg::DurableStoreEvictionResult	DurableStore.cpp,RecoveryManager.cpp,ScratchStore.cpp
 3	ExternalModificationFlow.h	struct	ssg::ExternalActionAffordance	ExternalModificationFlow.cpp,Layout.cpp,main.cpp
 3	ExternalModificationFlow.h	struct	ssg::ExternalDocumentView	ExternalModificationFlow.cpp,Layout.cpp,main.cpp
 3	FileArchive.h	struct	ssg::FileArchivePruneReport	FileArchive.cpp,Workspace.cpp,files.cpp
@@ -815,6 +734,7 @@
 3	FollowEditsModel.h	struct	ssg::FollowDiffChange	Editor.cpp,FollowEditsModel.cpp,GitDiffIngress.cpp
 3	LayoutConstraints.h	class	ssg::Gap	Layout.cpp,ScreenLayout.cpp,UiRegionProjection.cpp
 3	GitDiffIngress.h	struct	ssg::GitDiffIngress	Editor.cpp,EditorViews.cpp,GitDiffIngress.cpp
+3	GitDiffSource.h	struct	ssg::GitDiffScan	GitDiffIngress.cpp,GitDiffSource.cpp,GitRepository.cpp
 3	GitDiffWorker.h	class	ssg::GitDiffWorker	Editor.cpp,GitDiffIngress.cpp,GitDiffWorker.cpp
 3	GitDiffSource.h	class	ssg::GitIgnoreMatcher	GitRepository.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp
 3	GitDiffSource.h	class	ssg::GitRepository	GitDiffSource.cpp,GitDiffWorker.cpp,GitRepository.cpp
@@ -830,9 +750,6 @@
 3	Keymap.h	class	ssg::KeymapMatcher	Editor.cpp,EditorViews.cpp,Keymap.cpp
 3	Keymap.h	struct	ssg::KeymapUnbindArguments	Keymap.cpp,ScriptHost.cpp,ViewCommands.cpp
 3	Viewport.h	struct	ssg::ListScrollView	Layout.cpp,PaletteSearcher.cpp,Viewport.cpp
-3	LspSyncClient.h	struct	ssg::LspPosition	LspFeatureController.cpp,LspSyncClient.cpp,PaintDocument.cpp
-3	LspSyncClient.h	struct	ssg::LspRange	LspFeatureController.cpp,LspSyncClient.cpp,PaintDocument.cpp
-3	LspSyncClient.h	struct	ssg::LspSyncViewState	GridPresenter.cpp,LspSyncClient.cpp,PaintDocument.cpp
 3	LuaCommandHost.h	struct	ssg::LuaResult	InitScriptWatcher.cpp,LuaCommandHost.cpp,ScriptHost.cpp
 3	DiffModel.h	struct	ssg::NonGitDiffEvent	DiffModel.cpp,Editor.cpp,ExternalModificationFlow.cpp
 3	DiffModel.h	enum	ssg::NonGitDiffEventKind	DiffModel.cpp,Editor.cpp,ExternalModificationFlow.cpp
@@ -852,9 +769,10 @@
 3	RecoveryManager.h	struct	ssg::RecoveryActionResult	Editor.cpp,RecoveryManager.cpp,Workspace.cpp
 3	RecoveryManager.h	struct	ssg::RecoveryError	Editor.cpp,RecoveryManager.cpp,Workspace.cpp
 3	RecoveryManager.h	class	ssg::RecoveryManager	Editor.cpp,RecoveryManager.cpp,Workspace.cpp
-3	RecoveryManager.h	struct	ssg::RecoveryRestoreResult	Editor.cpp,RecoveryManager.cpp,Workspace.cpp
+3	RecoveryManager.h	class	ssg::RecoveryRecordId	Editor.cpp,RecoveryManager.cpp,TabManager.cpp
 3	HitTester.h	struct	ssg::RegionHit	HitTester.cpp,main.cpp,pointer_routing.cpp
 3	UiTree.h	struct	ssg::ResolvedUiNodeStyle	Layout.cpp,Renderer.cpp,UiTree.cpp
+3	FilesystemWatcher.h	struct	ssg::SaveExpectation	ExternalModificationFlow.cpp,FilesystemWatcher.cpp,LinuxFilesystemWatcher.cpp
 3	ScratchStore.h	struct	ssg::ScratchDurabilityState	RecoveryManager.cpp,ScratchStore.cpp,files.cpp
 3	ScratchJournal.h	class	ssg::ScratchJournal	ScratchJournal.cpp,ScratchSession.cpp,ScratchStore.cpp
 3	ScriptHost.h	class	ssg::ScriptHost	InitScriptWatcher.cpp,ScriptHost.cpp,main.cpp
@@ -868,7 +786,6 @@
 3	Settings.h	struct	ssg::SettingError	Settings.cpp,ViewCommands.cpp,navigation.cpp
 3	Settings.h	struct	ssg::SettingMutation	Settings.cpp,ViewCommands.cpp,navigation.cpp
 3	Settings.h	enum	ssg::SettingScope	Settings.cpp,ViewCommands.cpp,navigation.cpp
-3	Settings.h	struct	ssg::SettingsPaths	Settings.cpp,linux_settings.cpp,windows_settings.cpp
 3	SharedBytes.h	class	ssg::SharedBytes	Document.cpp,PieceTree.cpp,SharedBytes.cpp
 3	Layout.h	struct	ssg::SolvedExternalModificationRow	HitTester.cpp,Layout.cpp,PaintChrome.cpp
 3	Layout.h	struct	ssg::SolvedExternalModificationSurface	HitTester.cpp,Layout.cpp,PaintChrome.cpp
@@ -880,6 +797,7 @@
 3	SyntaxModel.h	class	ssg::SyntaxParser	Editor.cpp,SyntaxModel.cpp,TreeSitterParser.cpp
 3	TabManager.h	enum	ssg::TabError	Editor.cpp,TabManager.cpp,files.cpp
 3	TabManager.h	struct	ssg::TabResult	Editor.cpp,TabManager.cpp,files.cpp
+3	TextInputCommands.h	struct	ssg::TextInputArguments	PromptRouting.cpp,TextInputCommands.cpp,editing.cpp
 3	Theme.h	struct	ssg::ThemeSetArguments	ScriptHost.cpp,Theme.cpp,ViewCommands.cpp
 3	TreeModel.h	enum	ssg::TreeNodeKind	Editor.cpp,Layout.cpp,TreeModel.cpp
 3	TreeModel.h	struct	ssg::TreeNodeView	Editor.cpp,Layout.cpp,TreeModel.cpp
@@ -889,7 +807,6 @@
 3	ScratchJournal.h	class	ssg::UntitledDocumentId	RecoveryManager.cpp,ScratchJournal.cpp,Workspace.cpp
 3	ViewActionResult.h	struct	ssg::ViewActionResult	GridPresenter.cpp,ScriptHost.cpp,main.cpp
 3	ViewActionResult.h	enum	ssg::ViewActionStatus	GridPresenter.cpp,ScriptHost.cpp,main.cpp
-3	Widget.h	enum	ssg::ViewSurface	ScreenLayout.cpp,UiTree.cpp,Widget.cpp
 3	FilesystemWatcher.h	struct	ssg::WatchFileState	ExternalModificationFlow.cpp,FilesystemWatcher.cpp,LinuxFilesystemWatcher.cpp
 3	WorkspaceCorpus.h	class	ssg::WorkspaceCorpus	Editor.cpp,Search.cpp,WorkspaceCorpus.cpp
 3	WorkspaceCorpus.h	struct	ssg::WorkspaceCorpusFile	Editor.cpp,Search.cpp,WorkspaceCorpus.cpp
@@ -917,7 +834,6 @@
 3	Layout.h	func	ssg::solvePaletteSurface	HitTester.cpp,Layout.cpp,Renderer.cpp
 3	Layout.h	func	ssg::solveTabBar	HitTester.cpp,Layout.cpp,Renderer.cpp
 3	platform_files.h	func	ssg::syncDirectory	FileArchive.cpp,RecoveryManager.cpp,linux_files.cpp
-3	platform_files.h	func	ssg::treeBytes	RecoveryManager.cpp,ScratchStore.cpp,platform_files.cpp
 3	UiTree.h	func	ssg::validateUiSchema	GridPresenter.cpp,ScreenState.cpp,UiTree.cpp
 3	platform_files.h	func	ssg::validateWorkspaceRelativePath	Workspace.cpp,linux_files.cpp,platform_files.cpp
 4	LayoutConstraints.h	enum	ssg::Axis	Layout.cpp,ScreenLayout.cpp,UiRegionProjection.cpp,UiTree.cpp
@@ -927,11 +843,13 @@
 4	types.h	enum	ssg::CycleDirection	Editor.cpp,PaneTopology.cpp,ScreenState.cpp,ViewCommands.cpp
 4	TextCodec.h	struct	ssg::DecodeTextResult	SystemClipboardReader.cpp,TextCodec.cpp,Workspace.cpp,WorkspaceCorpus.cpp
 4	Document.h	enum	ssg::DocumentError	ClipboardRegister.cpp,Document.cpp,DocumentHistory.cpp,Workspace.cpp
+4	DurableStore.h	class	ssg::DurableStore	DurableStore.cpp,FileArchive.cpp,RecoveryManager.cpp,ScratchSession.cpp
+4	DurableStore.h	struct	ssg::DurableStoreEntry	DurableStore.cpp,FileArchive.cpp,RecoveryManager.cpp,ScratchSession.cpp
+4	DurableStore.h	struct	ssg::DurableStoreListResult	DurableStore.cpp,FileArchive.cpp,RecoveryManager.cpp,ScratchSession.cpp
 4	ExternalModificationFlow.h	class	ssg::ExternalModificationFlow	Editor.cpp,ExternalModificationFlow.cpp,GitDiffIngress.cpp,GridPresenter.cpp
 4	FollowEditsModel.h	struct	ssg::FollowEditsResult	Editor.cpp,FollowEditsModel.cpp,GitDiffIngress.cpp,navigation.cpp
 4	FollowEditsModel.h	struct	ssg::FollowTarget	Editor.cpp,FollowEditsModel.cpp,GitDiffIngress.cpp,navigation.cpp
 4	DiffModel.h	struct	ssg::GitDiffFile	DiffModel.cpp,GitDiffIngress.cpp,GitDiffSource.cpp,GitRepository.cpp
-4	GitDiffSource.h	struct	ssg::GitDiffScan	Editor.cpp,GitDiffIngress.cpp,GitDiffSource.cpp,GitRepository.cpp
 4	Renderer.h	struct	ssg::GridPosition	PaintDocument.cpp,PaintOverlays.cpp,Renderer.cpp,TerminalOutput.cpp
 4	DocumentHistory.h	enum	ssg::HistoryEditKind	ClipboardRegister.cpp,DocumentHistory.cpp,FindReplace.cpp,editing.cpp
 4	DocumentHistory.h	struct	ssg::HistoryResult	ClipboardRegister.cpp,DocumentHistory.cpp,FindReplace.cpp,editing.cpp
@@ -947,8 +865,6 @@
 4	Picker.h	class	ssg::PickerCatalog	EditorViews.cpp,PaletteSearcher.cpp,Picker.cpp,ScreenState.cpp
 4	PromptSurface.h	struct	ssg::PromptControl	Editor.cpp,EditorViews.cpp,PromptSurface.cpp,ScreenLayout.cpp
 4	PromptSurface.h	enum	ssg::PromptControlKind	Editor.cpp,EditorViews.cpp,PromptSurface.cpp,ScreenLayout.cpp
-4	RecoveryManager.h	class	ssg::RecoveryRecordId	Editor.cpp,RecoveryManager.cpp,TabManager.cpp,Workspace.cpp
-4	FilesystemWatcher.h	struct	ssg::SaveExpectation	ExternalModificationFlow.cpp,FilesystemWatcher.cpp,GitDiffWorker.cpp,LinuxFilesystemWatcher.cpp
 4	ViewAction.h	struct	ssg::ScrollFraction	GridPresenter.cpp,ViewCommands.cpp,input_routing.cpp,navigation.cpp
 4	Keymap.h	struct	ssg::ScrollFractionArguments	Keymap.cpp,ViewCommands.cpp,input_routing.cpp,navigation.cpp
 4	ViewAction.h	struct	ssg::ScrollLines	GridPresenter.cpp,ViewCommands.cpp,input_routing.cpp,navigation.cpp
@@ -964,7 +880,6 @@
 4	SyntaxModel.h	class	ssg::SyntaxViewState	Editor.cpp,GridPresenter.cpp,PaintDocument.cpp,SyntaxModel.cpp
 4	TabManager.h	struct	ssg::TabLifecycleResult	Editor.cpp,GitDiffIngress.cpp,TabManager.cpp,files.cpp
 4	Settings.h	enum	ssg::TextEncoding	Settings.cpp,SystemClipboardReader.cpp,TextCodec.cpp,Workspace.cpp
-4	TextInputCommands.h	struct	ssg::TextInputArguments	Keymap.cpp,PromptRouting.cpp,TextInputCommands.cpp,editing.cpp
 4	Document.h	struct	ssg::TransactionResult	Document.cpp,DocumentHistory.cpp,Editor.cpp,Workspace.cpp
 4	TreeModel.h	struct	ssg::TreeNode	Editor.cpp,Layout.cpp,TreeModel.cpp,navigation.cpp
 4	TreeModel.h	class	ssg::TreeNodeId	Editor.cpp,GridPresenter.cpp,Layout.cpp,TreeModel.cpp
@@ -984,21 +899,18 @@
 5	DiffModel.h	struct	ssg::DiffMutationResult	DiffModel.cpp,Editor.cpp,ExternalModificationFlow.cpp,GitDiffIngress.cpp,GitDiffSource.cpp
 5	DiffModel.h	struct	ssg::DiffOpenTarget	DiffModel.cpp,Editor.cpp,ExternalModificationFlow.cpp,FollowEditsModel.cpp,navigation.cpp
 5	DocumentHistory.h	class	ssg::DocumentHistory	ClipboardRegister.cpp,DocumentHistory.cpp,Editor.cpp,FindReplace.cpp,editing.cpp
-5	DurableStore.h	class	ssg::DurableStore	DurableStore.cpp,FileArchive.cpp,RecoveryManager.cpp,ScratchSession.cpp,ScratchStore.cpp
-5	DurableStore.h	struct	ssg::DurableStoreEntry	DurableStore.cpp,FileArchive.cpp,RecoveryManager.cpp,ScratchSession.cpp,ScratchStore.cpp
-5	DurableStore.h	struct	ssg::DurableStoreListResult	DurableStore.cpp,FileArchive.cpp,RecoveryManager.cpp,ScratchSession.cpp,ScratchStore.cpp
 5	FindReplace.h	class	ssg::FindReplaceController	Editor.cpp,EditorViews.cpp,FindReplace.cpp,GridPresenter.cpp,editing.cpp
 5	FollowEditsModel.h	struct	ssg::FollowEditsViewState	Editor.cpp,FollowEditsModel.cpp,GitDiffIngress.cpp,GridPresenter.cpp,navigation.cpp
 5	GridPresenter.h	struct	ssg::GridPresentation	GridPresenter.cpp,HitTester.cpp,PaintDocument.cpp,Renderer.cpp,main.cpp
 5	Geometry.h	struct	ssg::GridSize	GridPresenter.cpp,Layout.cpp,PaintDocument.cpp,Renderer.cpp,TerminalOutput.cpp
 5	ScratchJournal.h	struct	ssg::JournalRecoverySet	Editor.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchSession.cpp,ScratchStore.cpp
 5	LineLayoutCache.h	class	ssg::LineLayoutCache	GridPresenter.cpp,PaintDocument.cpp,Renderer.cpp,Viewport.cpp,main.cpp
-5	OptionalSubsystemAudit.h	enum	ssg::OptionalSubsystem	LinuxFilesystemWatcher.cpp,LspSyncClient.cpp,LuaCommandHost.cpp,OptionalSubsystemAudit.cpp,SyntaxModel.cpp
 5	PaletteSearcher.h	struct	ssg::PaletteViewState	EditorViews.cpp,GridPresenter.cpp,PaletteSearcher.cpp,main.cpp,navigation.cpp
 5	Picker.h	enum	ssg::PickerKind	Editor.cpp,PaletteSearcher.cpp,Picker.cpp,ScreenState.cpp,navigation.cpp
 5	PromptSurface.h	struct	ssg::PromptError	PromptSurface.cpp,ViewCommands.cpp,editing.cpp,files.cpp,navigation.cpp
 5	ScratchStore.h	class	ssg::ScratchStore	DraftAutosaveScheduler.cpp,Editor.cpp,RecoveryManager.cpp,ScratchStore.cpp,files.cpp
 5	Search.h	enum	ssg::SearchMode	Editor.cpp,PaletteSearcher.cpp,Search.cpp,main.cpp,navigation.cpp
+5	Selection.h	struct	ssg::SelectionCommandArguments	DocumentPointerGesture.cpp,Selection.cpp,editing.cpp,input_routing.cpp,navigation.cpp
 5	LayoutConstraints.h	class	ssg::Size	GridPresenter.cpp,Layout.cpp,ScreenLayout.cpp,UiRegionProjection.cpp,UiTree.cpp
 5	Layout.h	struct	ssg::SolvedGridNode	GridPresenter.cpp,HitTester.cpp,Layout.cpp,PaintOverlays.cpp,Renderer.cpp
 5	Layout.h	struct	ssg::SolvedGridTree	GridPresenter.cpp,HitTester.cpp,Layout.cpp,PaintOverlays.cpp,Renderer.cpp
@@ -1014,7 +926,6 @@
 5	platform_files.h	func	ssg::createDirectoriesDurably	DurableStore.cpp,Workspace.cpp,linux_files.cpp,main.cpp,platform_files.cpp
 5	DiffModel.h	func	ssg::diffOpenFile	DiffModel.cpp,Editor.cpp,ExternalModificationFlow.cpp,FollowEditsModel.cpp,navigation.cpp
 5	ScratchJournal.h	func	ssg::fastContentHash	DraftAutosaveScheduler.cpp,DraftReopenClassifier.cpp,Editor.cpp,ScratchJournal.cpp,Workspace.cpp
-5	OptionalSubsystemAudit.h	func	ssg::noteOptionalConstruction	LinuxFilesystemWatcher.cpp,LspSyncClient.cpp,LuaCommandHost.cpp,OptionalSubsystemAudit.cpp,SyntaxModel.cpp
 5	PromptSurface.h	func	ssg::openGenericPrompt	PromptSurface.cpp,ViewCommands.cpp,editing.cpp,files.cpp,navigation.cpp
 5	platform_files.h	func	ssg::setOwnerOnlyPermissions	RecoveryManager.cpp,ScratchSession.cpp,ScratchStore.cpp,linux_files.cpp,main.cpp
 6	CommandCatalog.h	struct	ssg::CommandEntry	CommandCatalog.cpp,Editor.cpp,EditorViews.cpp,ScriptHost.cpp,ViewCommands.cpp,help.cpp
@@ -1033,7 +944,6 @@
 6	PromptSurface.h	enum	ssg::PromptRegion	EditorViews.cpp,GridPresenter.cpp,HitTester.cpp,Renderer.cpp,ScreenLayout.cpp,ScreenState.cpp
 6	PromptSurface.h	struct	ssg::PromptStatusViewState	Editor.cpp,EditorViews.cpp,GridPresenter.cpp,HitTester.cpp,Renderer.cpp,main.cpp
 6	ViewAction.h	enum	ssg::ScrollTarget	GridPresenter.cpp,ViewCommands.cpp,input_routing.cpp,main.cpp,navigation.cpp,pointer_routing.cpp
-6	Selection.h	struct	ssg::SelectionCommandArguments	DocumentPointerGesture.cpp,Keymap.cpp,Selection.cpp,editing.cpp,input_routing.cpp,navigation.cpp
 6	Selection.h	struct	ssg::SelectionViewState	Editor.cpp,GitDiffIngress.cpp,GridPresenter.cpp,Selection.cpp,editing.cpp,navigation.cpp
 6	Settings.h	enum	ssg::SettingKey	DocumentHistory.cpp,DraftAutosaveScheduler.cpp,Editor.cpp,Settings.cpp,ViewCommands.cpp,navigation.cpp
 6	Layout.h	struct	ssg::SolvedDocumentSurface	GridPresenter.cpp,HitTester.cpp,Layout.cpp,PaintDocument.cpp,Renderer.cpp,main.cpp
@@ -1043,7 +953,9 @@
 6	Viewport.h	struct	ssg::ViewportDimensions	GridPresenter.cpp,Renderer.cpp,Selection.cpp,Terminal.cpp,Viewport.cpp,editing.cpp
 6	Viewport.h	struct	ssg::ViewportViewState	GridPresenter.cpp,HitTester.cpp,PaintDocument.cpp,Renderer.cpp,Selection.cpp,Viewport.cpp
 6	Workspace.h	struct	ssg::WorkspaceResult	Editor.cpp,ExternalModificationFlow.cpp,GitDiffIngress.cpp,Workspace.cpp,files.cpp,navigation.cpp
+6	platform_files.h	func	ssg::ensureDirectory	DurableStore.cpp,Editor.cpp,FileArchive.cpp,RecoveryManager.cpp,ScratchSession.cpp,platform_files.cpp
 6	PromptSurface.h	func	ssg::promptFocusRegion	EditorViews.cpp,GridPresenter.cpp,HitTester.cpp,Renderer.cpp,ScreenLayout.cpp,ScreenState.cpp
+6	platform_files.h	func	ssg::replaceFileAtomically	Editor.cpp,RecoveryManager.cpp,ScratchSession.cpp,ScratchStore.cpp,Workspace.cpp,linux_files.cpp
 7	CommandCatalog.h	struct	ssg::ClientCommand	CommandCatalog.cpp,Editor.cpp,ScriptHost.cpp,ViewCommands.cpp,input_routing.cpp,navigation.cpp,pointer_routing.cpp
 7	DiffModel.h	class	ssg::DiffModel	DiffModel.cpp,Editor.cpp,ExternalModificationFlow.cpp,GitDiffIngress.cpp,GitDiffSource.cpp,GridPresenter.cpp,navigation.cpp
 7	ExternalModificationFlow.h	struct	ssg::ExternalModificationViewState	ExternalModificationFlow.cpp,GridPresenter.cpp,HitTester.cpp,Layout.cpp,PaintChrome.cpp,Renderer.cpp,main.cpp
@@ -1055,31 +967,32 @@
 7	Document.h	struct	ssg::TextEdit	ClipboardRegister.cpp,Document.cpp,DocumentHistory.cpp,EditCommands.cpp,TextInputCommands.cpp,Workspace.cpp,editing.cpp
 7	Workspace.h	class	ssg::Workspace	DraftAutosaveScheduler.cpp,Editor.cpp,ExternalModificationFlow.cpp,GitDiffIngress.cpp,Workspace.cpp,files.cpp,navigation.cpp
 7	Workspace.h	struct	ssg::WorkspaceDocumentState	DraftAutosaveScheduler.cpp,Editor.cpp,ExternalModificationFlow.cpp,GitDiffIngress.cpp,Workspace.cpp,files.cpp,navigation.cpp
-7	platform_files.h	func	ssg::ensureDirectory	DurableStore.cpp,Editor.cpp,FileArchive.cpp,RecoveryManager.cpp,ScratchSession.cpp,Settings.cpp,platform_files.cpp
 7	Editor.h	func	ssg::failure	Editor.cpp,ExternalModificationFlow.cpp,ViewCommands.cpp,editing.cpp,files.cpp,language_services.cpp,navigation.cpp
-7	platform_files.h	func	ssg::replaceFileAtomically	Editor.cpp,RecoveryManager.cpp,ScratchSession.cpp,ScratchStore.cpp,Settings.cpp,Workspace.cpp,linux_files.cpp
 7	Editor.h	func	ssg::success	Editor.cpp,ExternalModificationFlow.cpp,ViewCommands.cpp,editing.cpp,files.cpp,language_services.cpp,navigation.cpp
 8	Document.h	struct	ssg::EditTransaction	ClipboardRegister.cpp,Document.cpp,DocumentHistory.cpp,EditCommands.cpp,FindReplace.cpp,TextInputCommands.cpp,Workspace.cpp,editing.cpp
+8	platform_files.h	enum	ssg::FileIoStatus	DurableStore.cpp,FileArchive.cpp,InitScriptWatcher.cpp,ScratchJournal.cpp,TreeModel.cpp,Workspace.cpp,linux_files.cpp,platform_files.cpp
 8	PromptSurface.h	class	ssg::PromptSurface	Editor.cpp,EditorViews.cpp,PromptSurface.cpp,ScreenLayout.cpp,ScreenState.cpp,ViewCommands.cpp,editing.cpp,navigation.cpp
 8	TabManager.h	class	ssg::TabId	Editor.cpp,GitDiffIngress.cpp,GridPresenter.cpp,Layout.cpp,TabManager.cpp,files.cpp,input_routing.cpp,main.cpp
 8	TabManager.h	struct	ssg::TabViewState	Editor.cpp,GitDiffIngress.cpp,GridPresenter.cpp,Layout.cpp,Renderer.cpp,TabManager.cpp,files.cpp,main.cpp
 8	Theme.h	struct	ssg::ThemeSnapshot	DefaultTheme.cpp,GridPresenter.cpp,PaintChrome.cpp,PaintDocument.cpp,PaintOverlays.cpp,Renderer.cpp,Theme.cpp,ViewCommands.cpp
-9	CommandCatalog.h	class	ssg::CommandContext	CommandCatalog.cpp,ExternalModificationFlow.cpp,ScriptHost.cpp,ViewCommands.cpp,editing.cpp,files.cpp,help.cpp,language_services.cpp,navigation.cpp
+8	Widget.h	enum	ssg::WidgetKind	EditorViews.cpp,GridPresenter.cpp,HitTester.cpp,PaintOverlays.cpp,ScreenLayout.cpp,UiRegionProjection.cpp,UiTree.cpp,ViewCommands.cpp
+9	CommandCatalog.h	struct	ssg::CommandContext	CommandCatalog.cpp,ExternalModificationFlow.cpp,ScriptHost.cpp,ViewCommands.cpp,editing.cpp,files.cpp,help.cpp,language_services.cpp,navigation.cpp
 9	DiffModel.h	struct	ssg::DiffViewState	DiffModel.cpp,Editor.cpp,ExternalModificationFlow.cpp,FollowEditsModel.cpp,GitDiffIngress.cpp,GitDiffSource.cpp,GridPresenter.cpp,PaintDocument.cpp,navigation.cpp
-9	platform_files.h	enum	ssg::FileIoStatus	DurableStore.cpp,FileArchive.cpp,InitScriptWatcher.cpp,ScratchJournal.cpp,Settings.cpp,TreeModel.cpp,Workspace.cpp,linux_files.cpp,platform_files.cpp
+9	platform_files.h	struct	ssg::DirectoryListResult	DurableStore.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,TreeModel.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,platform_files.cpp
+9	platform_files.h	struct	ssg::FileIoResult	DurableStore.cpp,Editor.cpp,FileArchive.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchSession.cpp,Workspace.cpp,linux_files.cpp,platform_files.cpp
 9	types.h	struct	ssg::LineIndex	Editor.cpp,PaintDocument.cpp,Renderer.cpp,Search.cpp,Selection.cpp,SyntaxModel.cpp,Viewport.cpp,editing.cpp,navigation.cpp
 9	PromptSurface.h	enum	ssg::PromptKind	Editor.cpp,EditorViews.cpp,FileCommands.cpp,PromptSurface.cpp,ScreenState.cpp,ViewCommands.cpp,editing.cpp,main.cpp,navigation.cpp
 9	PromptSurface.h	struct	ssg::PromptRequest	Editor.cpp,EditorViews.cpp,FileCommands.cpp,PromptSurface.cpp,ScreenLayout.cpp,ScreenState.cpp,ViewCommands.cpp,editing.cpp,navigation.cpp
 9	ScreenState.h	class	ssg::ScreenState	Editor.cpp,EditorViews.cpp,ExternalModificationFlow.cpp,GitDiffIngress.cpp,ScreenState.cpp,ViewCommands.cpp,editing.cpp,files.cpp,navigation.cpp
 9	Style.h	struct	ssg::StyleDimensions	Editor.cpp,GridPresenter.cpp,HitTester.cpp,Layout.cpp,Renderer.cpp,ScreenLayout.cpp,Style.cpp,UiRegionProjection.cpp,ViewCommands.cpp
 9	UiTree.h	struct	ssg::UiContainer	EditorViews.cpp,GridPresenter.cpp,HitTester.cpp,Layout.cpp,PaintOverlays.cpp,Renderer.cpp,ScreenLayout.cpp,UiRegionProjection.cpp,UiTree.cpp
-9	Widget.h	enum	ssg::WidgetKind	EditorViews.cpp,GridPresenter.cpp,HitTester.cpp,PaintOverlays.cpp,ScreenLayout.cpp,UiRegionProjection.cpp,UiTree.cpp,ViewCommands.cpp,Widget.cpp
+9	platform_files.h	func	ssg::listDirectory	DurableStore.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,TreeModel.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,platform_files.cpp
+9	platform_files.h	func	ssg::readFile	Editor.cpp,ExternalModificationFlow.cpp,GitRepository.cpp,InitScriptWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,Workspace.cpp,linux_files.cpp,navigation.cpp
 10	CommandCatalog.h	enum	ssg::CommandEffect	CommandCatalog.cpp,Editor.cpp,ExternalModificationFlow.cpp,ScriptHost.cpp,ViewCommands.cpp,editing.cpp,files.cpp,help.cpp,language_services.cpp,navigation.cpp
 10	CommandCatalog.h	struct	ssg::CommandHandlerResult	CommandCatalog.cpp,Editor.cpp,ExternalModificationFlow.cpp,LuaCommandHost.cpp,ScriptHost.cpp,ViewCommands.cpp,editing.cpp,files.cpp,language_services.cpp,navigation.cpp
 10	CommandCatalog.h	struct	ssg::CommandSpec	CommandCatalog.cpp,Editor.cpp,ExternalModificationFlow.cpp,ScriptHost.cpp,ViewCommands.cpp,editing.cpp,files.cpp,help.cpp,language_services.cpp,navigation.cpp
 10	DiffModel.h	struct	ssg::DiffFileView	DiffModel.cpp,Editor.cpp,FollowEditsModel.cpp,GitDiffIngress.cpp,GitDiffSource.cpp,GridPresenter.cpp,PaintDocument.cpp,Selection.cpp,Viewport.cpp,navigation.cpp
-10	platform_files.h	struct	ssg::DirectoryListResult	DurableStore.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,ScratchStore.cpp,TreeModel.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,platform_files.cpp
-10	platform_files.h	struct	ssg::FileIoResult	DurableStore.cpp,Editor.cpp,FileArchive.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchSession.cpp,Settings.cpp,Workspace.cpp,linux_files.cpp,platform_files.cpp
+10	platform_files.h	struct	ssg::FileReadResult	Editor.cpp,ExternalModificationFlow.cpp,GitRepository.cpp,InitScriptWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,Workspace.cpp,WorkspaceCorpus.cpp,linux_files.cpp,navigation.cpp
 10	focus.h	enum	ssg::FocusTarget	CompiledKeymap.cpp,Editor.cpp,Keymap.cpp,Renderer.cpp,ScreenLayout.cpp,ScreenState.cpp,UiTree.cpp,ViewCommands.cpp,input_routing.cpp,main.cpp
 10	ScratchJournal.h	class	ssg::JournalDocumentKey	DraftAutosaveScheduler.cpp,Editor.cpp,ExternalModificationFlow.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchStore.cpp,TabManager.cpp,Workspace.cpp,files.cpp,navigation.cpp
 10	Geometry.h	struct	ssg::Rect	GridPresenter.cpp,HitTester.cpp,Layout.cpp,PaintChrome.cpp,PaintDocument.cpp,PaintOverlays.cpp,Renderer.cpp,UiRegionProjection.cpp,main.cpp,pointer_routing.cpp
@@ -1087,10 +1000,7 @@
 10	UiTree.h	struct	ssg::UiNode	EditorViews.cpp,GridPresenter.cpp,HitTester.cpp,Layout.cpp,PaintOverlays.cpp,Renderer.cpp,ScreenLayout.cpp,UiRegionProjection.cpp,UiTree.cpp,ViewCommands.cpp
 10	UiTree.h	struct	ssg::UiSchema	EditorViews.cpp,GridPresenter.cpp,HitTester.cpp,Layout.cpp,PaintChrome.cpp,PaintOverlays.cpp,Renderer.cpp,ScreenState.cpp,UiTree.cpp,ViewCommands.cpp
 10	UiWidget.h	struct	ssg::WidgetDescriptor	EditorViews.cpp,GridPresenter.cpp,HitTester.cpp,Layout.cpp,PaintOverlays.cpp,Renderer.cpp,ScreenLayout.cpp,UiRegionProjection.cpp,UiTree.cpp,ViewCommands.cpp
-10	platform_files.h	func	ssg::listDirectory	DurableStore.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,ScratchStore.cpp,TreeModel.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,platform_files.cpp
-10	platform_files.h	func	ssg::readFile	Editor.cpp,ExternalModificationFlow.cpp,GitRepository.cpp,InitScriptWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,Settings.cpp,Workspace.cpp,linux_files.cpp,navigation.cpp
 10	Selection.h	func	ssg::resolveSelectionPosition	ClipboardRegister.cpp,EditCommands.cpp,Editor.cpp,GitDiffIngress.cpp,Selection.cpp,TextInputCommands.cpp,editing.cpp,input_routing.cpp,main.cpp,navigation.cpp
-11	platform_files.h	struct	ssg::FileReadResult	Editor.cpp,ExternalModificationFlow.cpp,GitRepository.cpp,InitScriptWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,Settings.cpp,Workspace.cpp,WorkspaceCorpus.cpp,linux_files.cpp,navigation.cpp
 11	UiTree.h	class	ssg::UiNodeId	EditorViews.cpp,GridPresenter.cpp,HitTester.cpp,Layout.cpp,Renderer.cpp,ScreenLayout.cpp,ScreenState.cpp,StatusBar.cpp,UiRegionProjection.cpp,UiTree.cpp,main.cpp
 12	GraphemeLayout.h	struct	ssg::CellSpan	EditCommands.cpp,PaintDocument.cpp,PaintOverlays.cpp,PromptRouting.cpp,Renderer.cpp,Selection.cpp,Style.cpp,TextInputCommands.cpp,Viewport.cpp,WidgetLayout.cpp,main.cpp,navigation.cpp
 12	DiffModel.h	class	ssg::DiffFileId	DiffModel.cpp,Editor.cpp,ExternalModificationFlow.cpp,FollowEditsModel.cpp,GitDiffIngress.cpp,GitDiffSource.cpp,GitRepository.cpp,GridPresenter.cpp,HitTester.cpp,Layout.cpp,main.cpp,navigation.cpp
@@ -1107,7 +1017,7 @@
 16	GraphemeLayout.h	struct	ssg::CellRun	EditCommands.cpp,GraphemeLayout.cpp,GridPresenter.cpp,Layout.cpp,PaintDocument.cpp,PaintOverlays.cpp,PromptRouting.cpp,Renderer.cpp,Selection.cpp,Style.cpp,TextInputCommands.cpp,UiRegionProjection.cpp,Viewport.cpp,WidgetLayout.cpp,main.cpp,navigation.cpp
 16	types.h	struct	ssg::DocumentPosition	ClipboardRegister.cpp,DocumentHistory.cpp,DocumentPointerGesture.cpp,EditCommands.cpp,Editor.cpp,GridPresenter.cpp,PaintDocument.cpp,Renderer.cpp,Selection.cpp,TextInputCommands.cpp,Viewport.cpp,editing.cpp,input_routing.cpp,main.cpp,navigation.cpp,pointer_routing.cpp
 16	GraphemeLayout.h	func	ssg::computeCellRun	EditCommands.cpp,GraphemeLayout.cpp,GridPresenter.cpp,Layout.cpp,PaintDocument.cpp,PaintOverlays.cpp,PromptRouting.cpp,Renderer.cpp,Selection.cpp,Style.cpp,TextInputCommands.cpp,UiRegionProjection.cpp,Viewport.cpp,WidgetLayout.cpp,main.cpp,navigation.cpp
-18	platform_files.h	enum	ssg::FileKind	DurableStore.cpp,Editor.cpp,FileArchive.cpp,FilesystemWatcher.cpp,GitRepository.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchSession.cpp,ScratchStore.cpp,TreeModel.cpp,Workspace.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,main.cpp,platform_files.cpp
+17	platform_files.h	enum	ssg::FileKind	DurableStore.cpp,Editor.cpp,FileArchive.cpp,FilesystemWatcher.cpp,GitRepository.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchSession.cpp,TreeModel.cpp,Workspace.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,main.cpp,platform_files.cpp
+19	types.h	struct	ssg::ByteOffset	ClipboardRegister.cpp,Document.cpp,DocumentHistory.cpp,EditCommands.cpp,Editor.cpp,FindReplace.cpp,GitDiffIngress.cpp,LspState.cpp,PaintDocument.cpp,Selection.cpp,SyntaxModel.cpp,TextInputCommands.cpp,TreeSitterParser.cpp,Viewport.cpp,Workspace.cpp,editing.cpp,input_routing.cpp,main.cpp,navigation.cpp
 19	platform_files.h	struct	ssg::FileStat	DurableStore.cpp,Editor.cpp,ExternalModificationFlow.cpp,FileArchive.cpp,FilesystemWatcher.cpp,GitRepository.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchSession.cpp,ScratchStore.cpp,TreeModel.cpp,Workspace.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,main.cpp,platform_files.cpp
 19	platform_files.h	func	ssg::statFile	DurableStore.cpp,Editor.cpp,ExternalModificationFlow.cpp,FileArchive.cpp,FilesystemWatcher.cpp,GitRepository.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchSession.cpp,ScratchStore.cpp,TreeModel.cpp,Workspace.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,main.cpp,platform_files.cpp
-20	types.h	struct	ssg::ByteOffset	ClipboardRegister.cpp,Document.cpp,DocumentHistory.cpp,EditCommands.cpp,Editor.cpp,FindReplace.cpp,GitDiffIngress.cpp,LspFeatureController.cpp,LspSyncClient.cpp,PaintDocument.cpp,Selection.cpp,SyntaxModel.cpp,TextInputCommands.cpp,TreeSitterParser.cpp,Viewport.cpp,Workspace.cpp,editing.cpp,input_routing.cpp,main.cpp,navigation.cpp

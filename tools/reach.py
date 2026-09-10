@@ -177,8 +177,8 @@ def declarations(repo: pathlib.Path, jobs: int) -> dict[str, tuple[str, str]]:
     return found
 
 
-def references(entry: dict, root: pathlib.Path) -> tuple[str, set[str]]:
-    """The USRs of public declarations this translation unit references."""
+def parse_args(entry: dict) -> list[str]:
+    """The flags libclang needs to parse this translation unit."""
     args = [
         a
         for a in entry["command"].split()
@@ -189,7 +189,12 @@ def references(entry: dict, root: pathlib.Path) -> tuple[str, set[str]]:
     # libclang does not ship the driver's own resource headers on its default
     # search path, so without these every translation unit fails on <stddef.h>
     # and clang discards the function bodies that hold most references.
-    args += system_include_args()
+    return args + system_include_args()
+
+
+def references(entry: dict, root: pathlib.Path) -> tuple[str, set[str]]:
+    """The USRs of public declarations this translation unit references."""
+    args = parse_args(entry)
     index = ci.Index.create()
     try:
         unit = index.parse(entry["file"], args=args)
