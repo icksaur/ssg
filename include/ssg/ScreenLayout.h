@@ -16,8 +16,6 @@ namespace ssg {
 
 [[nodiscard]] UiComposition withFooterPrompt(UiComposition base,
                                              const PromptSurface& prompt);
-[[nodiscard]] UiComposition withStatusActions(
-    UiComposition base, const std::vector<StatusActionNode>& actions);
 [[nodiscard]] UiNode assembleFooterPrompt(const PromptSurface& prompt);
 
 }  // namespace ssg

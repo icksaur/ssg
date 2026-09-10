@@ -217,11 +217,6 @@ inline constexpr std::string_view kFooterFollowFieldNodeId = "footer.left.1";
 // keymap-derived hint text and its command is the stable hint command, both
 // written at snapshot publication.
 inline constexpr std::string_view kFooterHintNodeId = "footer.right.0";
-// The footer status-action anchor: a fixed container whose children mirror the
-// selected status item's actions, rebuilt in tree order at assembly and given
-// their resolved value/command/label at population.
-inline constexpr std::string_view kFooterStatusActionsNodeId =
-    "footer.status_actions";
 // The draft-conflict notice's semantic surface: a content child after the tab bar
 // and before the replaceable document/picker branches, hidden unless the active document has an
 // unresolved draft conflict.

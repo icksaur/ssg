@@ -209,7 +209,6 @@ void reconcileAfterOperation(
     editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
-    editor.screen.refreshStatusActions(editor.status.actionNodes());
     if (accepted &&
         existingDocumentMutated(revisionsBefore, editor.workspace)) {
         (void)editor.follow.notifyLocalEdit();
@@ -219,8 +218,8 @@ void reconcileAfterOperation(
 PromptRoutingState inputPromptState(Editor const& editor) {
     PromptRoutingState routing;
     routing.focus = editor.screen.effectiveFocus();
-    auto const promptStatus = editor.promptStatusView();
-    if (promptStatus.activeKind == PromptKind::Palette) {
+    auto const prompt = editor.promptView();
+    if (prompt.activeKind == PromptKind::Palette) {
         routing.prompt = ActivePrompt::Palette;
         return routing;
     }
@@ -441,7 +440,6 @@ ClientInputResult executeInputRoute(Editor& editor, RouteAccepted route,
     editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
-    editor.screen.refreshStatusActions(editor.status.actionNodes());
     if (!error && existingDocumentMutated(revisionsBefore, editor.workspace)) {
         (void)editor.follow.notifyLocalEdit();
     }
@@ -502,7 +500,6 @@ ClientInputResult executeInputRoute(Editor& editor, InvokeExternalAction route,
     editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
-    editor.screen.refreshStatusActions(editor.status.actionNodes());
     if (result.accepted &&
         existingDocumentMutated(revisionsBefore, editor.workspace)) {
         (void)editor.follow.notifyLocalEdit();
@@ -536,7 +533,6 @@ ClientInputResult executeInputRoute(Editor& editor, ActivateUiNode route,
     editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
-    editor.screen.refreshStatusActions(editor.status.actionNodes());
     if (result.accepted &&
         existingDocumentMutated(revisionsBefore, editor.workspace)) {
         (void)editor.follow.notifyLocalEdit();
@@ -567,7 +563,6 @@ ClientInputResult executeInputRoute(Editor& editor, ActivateTreeNode route,
     editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
-    editor.screen.refreshStatusActions(editor.status.actionNodes());
     if (result.accepted &&
         existingDocumentMutated(revisionsBefore, editor.workspace)) {
         (void)editor.follow.notifyLocalEdit();
@@ -1491,13 +1486,8 @@ void Editor::primeDeferred() {
     (void)ran;
 }
 
-void Editor::enqueueStatus(StatusPriority priority, std::string text) {
-    auto value = nextStatusId++;
-    if (status
-            .enqueue(StatusItem{StatusId{value}, priority, std::move(text), {}})
-            .accepted) {
-        screen.refreshStatusActions(status.actionNodes());
-    }
+void Editor::showStatus(std::string text) {
+    statusText = std::move(text);
 }
 
 void Editor::reconcileDraftOnOpen(FileDocumentId document) {
@@ -1742,7 +1732,6 @@ CommandResult Editor::dispatchLocked(std::string_view commandId) {
         screen.refreshNoticePresence(noticePresent());
         screen.refreshExternalModificationPresence(
             externalModificationPresent());
-        screen.refreshStatusActions(status.actionNodes());
         if (result.accepted() &&
             existingDocumentMutated(revisionsBefore, workspace)) {
             (void)follow.notifyLocalEdit();

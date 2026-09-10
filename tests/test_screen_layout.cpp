@@ -86,7 +86,7 @@ TEST(fixedHeaderAndFooterAreSemanticUiNodes) {
     const auto& hint = std::get<UiLeaf>(right.at(0).content).widget;
     ASSERT_EQ(hint.id, std::string{"footer.hint"});
     ASSERT_TRUE(hint.command && *hint.command == "help.open");
-    ASSERT_EQ(right.at(1).id.value(), std::string{kFooterStatusActionsNodeId});
+    ASSERT_EQ(right.size(), std::size_t{1});
 
     struct ExpectedStyle {
         std::string_view id;

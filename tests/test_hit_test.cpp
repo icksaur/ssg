@@ -140,31 +140,6 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     }
 }
 
-TEST(footerActionHitCarriesPublishedUiNodeIdentity) {
-    auto frame =
-        ssg::test::GridPresentationBuilder{}
-            .viewport(40, 8)
-            .status(ssg::StatusViewState{
-                {{ssg::StatusId{77}, ssg::StatusPriority::Information, 9,
-                  "status",
-                  {ssg::UiAction{"retry", "Retry", "ignored"}}}},
-                0})
-            .build();
-    ASSERT_TRUE(frame.footer.has_value());
-    if (!frame.footer) return;
-    const std::string nodeId =
-        "footer.status_action/77/9/7265747279";
-    const auto found = std::ranges::find(
-        frame.footer->items, nodeId,
-        &ssg::SolvedUiItem::id);
-    ASSERT_TRUE(found != frame.footer->items.end());
-    if (found == frame.footer->items.end()) return;
-    auto hit = ssg::HitTester{frame}.at(found->rect.x, found->rect.y);
-    ASSERT_EQ(hit.region, ssg::HitRegion::FooterField);
-    ASSERT_EQ(hit.fieldId, std::optional<std::string>{nodeId});
-    ASSERT_EQ(hit.commandId, std::optional<std::string>{"ignored"});
-}
-
 TEST(headerInputAndGhostUseSolvedUiRegionHits) {
     auto frame =
         ssg::test::GridPresentationBuilder{}
@@ -1078,7 +1053,6 @@ SSG_TEST_SUITE(test_hit_test) {
     RUN(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen);
     RUN(tabBarCellMapsToItsTabIndex);
     RUN(tabHitsUseSemanticTabsAndSolvedGeometry);
-    RUN(footerActionHitCarriesPublishedUiNodeIdentity);
     RUN(headerInputAndGhostUseSolvedUiRegionHits);
     RUN(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert);
     RUN(externalActionHitCarriesPublishedFileAndCommandIdentity);

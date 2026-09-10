@@ -187,9 +187,7 @@ ScreenState::ScreenState(UiComposition initialAssembly, TreeModel& tree,
 
 UiComposition ScreenState::assembled(
     const UiComposition& base, const PromptSurface& prompt) const {
-    UiComposition projected = withStatusActions(base, statusActions_);
-    return prompt.active() ? withFooterPrompt(std::move(projected), prompt)
-                           : projected;
+    return prompt.active() ? withFooterPrompt(base, prompt) : base;
 }
 
 UiInteractionState ScreenState::project() const {
@@ -370,32 +368,12 @@ bool ScreenState::updateComposition(UiComposition assembly) {
     return true;
 }
 
-bool ScreenState::refreshStatusActions(
-    std::vector<StatusActionNode> actions) {
-    auto& state = *this;
-    if (actions == state.statusActions_) return false;
-    UiSchema candidate{
-        state.assembled(state.baseComposition_, state.prompt_).root};
-    UiComposition projected = withStatusActions(state.baseComposition_, actions);
-    if (state.prompt_.active()) {
-        projected = withFooterPrompt(std::move(projected), state.prompt_);
-    }
-    (void)updateSchema(candidate, std::move(projected));
-    state.statusActions_ = std::move(actions);
-    return true;
-}
-
 PromptSurface& ScreenState::prompt() noexcept {
     return prompt_;
 }
 
 const PromptSurface& ScreenState::prompt() const noexcept {
     return prompt_;
-}
-
-const std::vector<StatusActionNode>& ScreenState::statusActions() const
-    noexcept {
-    return statusActions_;
 }
 
 FocusTarget ScreenState::effectiveFocus() const noexcept {

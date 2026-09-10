@@ -94,10 +94,12 @@ bool hasNoticeBar(const ssg::GridPresentation& snapshot) {
 bool statusMentions(ssg::Editor& runtime, std::string_view needle) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     if (!snapshot) return false;
-    for (const auto& item : snapshot->promptStatus.status.items) {
-        if (item.accessibleLabel.find(needle) != std::string::npos) return true;
-    }
-    return false;
+    const auto* node =
+        ssg::findUiNode(
+            snapshot->uiTree,
+            ssg::UiNodeId{std::string{ssg::kFooterStatusFieldNodeId}});
+    return node && node->resolved &&
+           node->resolved->value.find(needle) != std::string::npos;
 }
 
 // Edit note.txt to a dirty draft, flush it, then drop the runtime — leaving a
@@ -733,6 +735,29 @@ TEST(oversizedBufferIsNotAutosavedAndIsReportedOnce) {
     ASSERT_FALSE(activeTabDirty(reopened));
 }
 
+TEST(lastStatusWriterReplacesTheResolvedFooterValue) {
+    auto root = uniqueRoot("status_last_writer");
+    auto created = ssg::createEditor(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.session;
+
+    runtime.showStatus("first status");
+    runtime.showStatus("second status");
+    ASSERT_FALSE(statusMentions(runtime, "first status"));
+    ASSERT_TRUE(statusMentions(runtime, "second status"));
+
+    runtime.showStatus({});
+    auto snapshot = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    const auto* node =
+        ssg::findUiNode(
+            snapshot->uiTree,
+            ssg::UiNodeId{std::string{ssg::kFooterStatusFieldNodeId}});
+    ASSERT_TRUE(node != nullptr);
+    if (node) ASSERT_FALSE(node->resolved.has_value());
+}
+
 TEST(loweringAutosaveDebounceMsEnablesAFlushTheDefaultSuppresses) {
     // Hardening (M15 p7): the flush-interval setting is read and applied each
     // tick. With the default 10s interval a second edit is debounced (no flush);
@@ -1124,6 +1149,7 @@ SSG_TEST_SUITE(test_session_notices) {
 SSG_TEST_SUITE(test_session_conflicts) {
     RUN(binaryDiskReplacementRaisesConflictNotSilentDraftLoss);
     RUN(oversizedBufferIsNotAutosavedAndIsReportedOnce);
+    RUN(lastStatusWriterReplacesTheResolvedFooterValue);
     RUN(loweringAutosaveDebounceMsEnablesAFlushTheDefaultSuppresses);
     RUN(touchingTheFileWithIdenticalBytesIsNotAFalseConflict);
     RUN(liveDiffVirtualDocumentIsNotAutosavedAsADraft);

@@ -60,7 +60,7 @@ bool updatePromptValue(ssg::Editor& runtime, std::size_t index, std::string valu
 bool pathPromptOpen(ssg::Editor& runtime) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     if (!snapshot) return false;
-    return snapshot->promptStatus.activeKind ==
+    return snapshot->prompt.activeKind ==
            ssg::PromptKind::Path;
 }
 

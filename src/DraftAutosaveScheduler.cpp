@@ -122,8 +122,7 @@ std::size_t DraftAutosaveScheduler::persistDraft(
     if (text.size() > draftByteCap) {
         if (oversizeReported_.insert(document.value()).second) {
             editor.scratch.removeDocument(state->key);
-            editor.enqueueStatus(
-                StatusPriority::Warning,
+            editor.showStatus(
                 "file is too large to autosave a draft; unsaved edits are not "
                 "crash-protected until saved");
         }

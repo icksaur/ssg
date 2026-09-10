@@ -1910,10 +1910,6 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
                 {{"path", "Working directory", "~/project"}},
                 {{"status", "Encoding", "UTF-8"}}})
             .helpHint("help")
-            .status(ssg::StatusViewState{{ssg::StatusItemView{
-                ssg::StatusId{1}, ssg::StatusPriority::Information, 1,
-                "Status message",
-                {ssg::UiAction{"footer.act", "Save", "footer.act"}}}}, 0})
             .tabs({{"a.txt", "Tab a.txt", true, false},
                    {"b.txt", "Tab b.txt", false, false}})
             .noticePresent()

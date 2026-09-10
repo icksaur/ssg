@@ -131,9 +131,6 @@ There are 162 commands.
 | `prompt.next` | Next | none | lua |
 | `prompt.previous` | Previous | none | lua |
 | `prompt.focus_next_control` | Focus Next Field | none | lua |
-| `status.next` | Next | none | lua |
-| `status.previous` | Previous | none | lua |
-| `status.dismiss` | Dismiss | none | lua |
 
 ## search-palette
 

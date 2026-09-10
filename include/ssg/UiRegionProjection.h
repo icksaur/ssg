@@ -13,8 +13,6 @@
 
 namespace ssg {
 
-struct StatusViewState;
-
 // The result of projecting a medium-agnostic UI region tree: on a malformed
 // tree shape, a named error and no nodes emitted (fail-loud, never a plausible
 // partial); otherwise the row's consumed right edge -- the absolute right edge
@@ -92,7 +90,6 @@ struct PromptInputProjection {
     const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
     const Style& style,
     SolvedUiRegion& out,
-    const StatusViewState* statusView = nullptr,
     const PromptInputProjection* input = nullptr);
 
 }  // namespace ssg

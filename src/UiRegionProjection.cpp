@@ -2,7 +2,6 @@
 
 #include <ssg/GraphemeLayout.h>
 #include <ssg/StatusFields.h>
-#include <ssg/StatusBar.h>
 #include <ssg/WidgetLayout.h>
 
 #include <optional>
@@ -100,8 +99,7 @@ int displayCells(std::string_view text) {
 int widgetDesired(const WidgetDescriptor& w, const Resolved& resolved,
                   const Style& style) {
     if (w.kind == WidgetKind::Spacer) return w.width.value_or(0);
-    if (w.kind == WidgetKind::StatusActions ||
-        (w.kind == WidgetKind::Field && w.id == "footer.hint")) {
+    if (w.kind == WidgetKind::Field && w.id == "footer.hint") {
         return std::max(1, displayCells(resolved.content) +
                                style.dimensions.labelPadding);
     }
@@ -132,46 +130,13 @@ static int lowerUiRegionGroups(
     const std::vector<RegionLeaf>& right,
     const RegionLeaf* center, int separator, CenterWidth centerWidth,
     int centerFixed, const Rect& rect, SemanticRole defaultRole, const Style& style,
-    std::vector<SolvedUiItem>& out, const StatusViewState* statusView) {
+    std::vector<SolvedUiItem>& out) {
     WidgetStack stack{separator};
     std::vector<Packed> packed;
 
     const auto pack = [&](const RegionLeaf& source, const std::string& stackId,
                           bool isLeft, bool isCenter) {
         const WidgetDescriptor& w = *source.descriptor;
-        if (w.kind == WidgetKind::StatusActions) {
-            if (!statusView || statusView->items.empty() ||
-                statusView->selected >= statusView->items.size()) {
-                return;
-            }
-            const auto& itemView =
-                statusView->items[statusView->selected];
-            const auto actionNodes = projectStatusActionNodes(*statusView);
-            for (std::size_t actionIndex = 0; actionIndex < itemView.actions.size(); ++actionIndex) {
-                const auto& action = itemView.actions[actionIndex];
-                if (action.label.empty()) continue;
-                const auto& actionNode = actionNodes[actionIndex];
-                Resolved resolved;
-                resolved.content = action.label;
-                resolved.label = action.label;
-                const std::string actionStackId = stackId + ".A" + std::to_string(actionIndex);
-                StackItem stackItem = stackItemFor(w, actionStackId, resolved, style);
-                stackItem.rank = w.rank;
-                stackItem.overflow = Overflow::Truncate;
-                if (isCenter) {
-                    stack.center(std::move(stackItem), centerWidth, centerFixed);
-                } else if (isLeft) {
-                    stack.packLeft(std::move(stackItem));
-                } else {
-                    stack.packRight(std::move(stackItem));
-                }
-                packed.push_back(
-                    {actionStackId, &w, actionNode.id.value(), actionNode.id,
-                     resolved.content, resolved.label, actionNode.commandId,
-                     SemanticRole::StatusInfo});
-            }
-            return;
-        }
         const Resolved resolved = resolveWidget(w, *source.resolved, defaultRole, style);
         if (resolved.drop) return;
         StackItem item = stackItemFor(w, stackId, resolved, style);
@@ -250,18 +215,7 @@ std::optional<std::vector<RegionLeaf>> groupLeaves(
             widgets.push_back({child.id, &leaf->widget, &child.resolved});
             continue;
         }
-        if (child.id.value() != kFooterStatusActionsNodeId) {
-            return std::nullopt;
-        }
-        const auto* actions = std::get_if<UiContainer>(&child.content);
-        if (!actions || actions->axis != Axis::Row) return std::nullopt;
-        for (const auto& action : actions->children) {
-            const auto* actionLeaf = std::get_if<UiLeaf>(&action.content);
-            if (!actionLeaf || action.size.kind() != SizeKind::Auto) {
-                return std::nullopt;
-            }
-            widgets.push_back({action.id, &actionLeaf->widget, &action.resolved});
-        }
+        return std::nullopt;
     }
     return widgets;
 }
@@ -271,8 +225,7 @@ std::optional<std::vector<RegionLeaf>> groupLeaves(
 UiRegionProjectionResult projectUiRegion(
     const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
     const Style& style,
-    SolvedUiRegion& out, const StatusViewState* statusView,
-    const PromptInputProjection* input) {
+    SolvedUiRegion& out, const PromptInputProjection* input) {
     out = SolvedUiRegion{rect};
     // The canonical UI-region shape: a Row root of exactly three groups --
     // left(Auto, Row), middle(Flex, Row), right(Auto, Row) -- so the packing is
@@ -422,8 +375,7 @@ UiRegionProjectionResult projectUiRegion(
     const int rightEdge = lowerUiRegionGroups(
         *leftWidgets, *rightWidgets, center ? &*center : nullptr, separator,
         centerWidth, centerFixed,
-        groupsRect, defaultRole, style, out.items,
-        statusView);
+        groupsRect, defaultRole, style, out.items);
 
     // The input line grows across the header's remaining width after the groups'
     // consumed right edge (which includes node-less spacers), then scrolls its own

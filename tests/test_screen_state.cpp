@@ -282,38 +282,6 @@ TEST(updateCompositionWithoutStructuralChangeDoesNotAdvance) {
     ASSERT_FALSE(authority.updateComposition(assemble(StyleDimensions{})));
 }
 
-TEST(statusOverlaySurvivesPromptAndEquivalentRebuilds) {
-    TreeModel tree = seededTree();
-    ScreenState authority{assemble(StyleDimensions{}), tree};
-    const UiNodeId actionId{"footer.status_action/7/3/72756e"};
-    ASSERT_TRUE(authority.refreshStatusActions(
-        {{actionId, "Run", "build.run"}}));
-    ASSERT_TRUE(uiSchemaNodeIds(authority.schema())
-                    .contains(actionId));
-
-    ASSERT_TRUE(openGenericPrompt(authority.prompt(), footerPrompt()).accepted());
-    ASSERT_TRUE(authority.refreshStatusActions(
-        {{actionId, "Run now", "build.run"}}));
-    ASSERT_TRUE(authority.prompt().active());
-    ASSERT_EQ(authority.effectiveFocus(), FocusTarget::Prompt);
-    ASSERT_EQ(authority.statusActions()[0].accessibleLabel,
-              std::string{"Run now"});
-
-    ASSERT_FALSE(
-        authority.updateComposition(assemble(StyleDimensions{})));
-    ASSERT_TRUE(uiSchemaNodeIds(authority.schema())
-                    .contains(actionId));
-    ASSERT_EQ(authority.statusActions()[0].id, actionId);
-    ASSERT_TRUE(authority.prompt().active());
-
-    ASSERT_FALSE(authority.updateComposition(assemble(StyleDimensions{})));
-    ASSERT_TRUE(uiSchemaNodeIds(authority.schema())
-                    .contains(actionId));
-    ASSERT_EQ(authority.statusActions()[0].id, actionId);
-    ASSERT_TRUE(authority.prompt().active());
-    ASSERT_EQ(authority.effectiveFocus(), FocusTarget::Prompt);
-}
-
 // --- Editor/panel focus -------------------------------------------------------------
 
 TEST(promptOverPanelClosesBackToPanelFocus) {
@@ -482,7 +450,6 @@ SSG_TEST_SUITE(test_screen_state) {
     RUN(providerCycleIncludesSearchInBothDirections);
     RUN(updateCompositionMigratesPreservingPanelAndPromptTruth);
     RUN(updateCompositionWithoutStructuralChangeDoesNotAdvance);
-    RUN(statusOverlaySurvivesPromptAndEquivalentRebuilds);
     RUN(focusPanelRequiresThePanelThenFocusEditorReturns);
     RUN(focusChangeUnderAnOpenPromptSurfacesWhenThePromptCloses);
     RUN(promptOverPanelClosesBackToPanelFocus);

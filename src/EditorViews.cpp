@@ -15,7 +15,6 @@ namespace {
 struct UiTreeValues {
     StatusFieldProjection status;
     std::string helpHintLabel;
-    std::vector<StatusActionNode> statusActions;
 };
 
 std::string helpHintLabel(const KeymapViewState& keymap) {
@@ -83,15 +82,6 @@ WidgetDescriptor& requireLeaf(UiNode& node, WidgetKind kind,
     return leaf->widget;
 }
 
-UiContainer& requireContainer(UiNode& node, std::string_view id) {
-    auto* container = std::get_if<UiContainer>(&node.content);
-    if (!container) {
-        throw std::logic_error("populateUiTree: node \"" + std::string{id} +
-                               "\" is not a container");
-    }
-    return *container;
-}
-
 SemanticRole roleOr(const std::optional<std::string>& authored,
                     SemanticRole fallback) {
     if (authored) {
@@ -134,29 +124,6 @@ void populateHelpHint(UiSchema& schema, const std::string& helpHintLabel) {
     node.resolved = UiLeafState{helpHintLabel, helpHintLabel, widget.command,
                                 std::nullopt,
                                 roleOr(widget.role, SemanticRole::Footer)};
-}
-
-void populateStatusActions(UiSchema& schema,
-                           const std::vector<StatusActionNode>& actions) {
-    UiNode& node = requireNode(schema, kFooterStatusActionsNodeId);
-    UiContainer& container =
-        requireContainer(node, kFooterStatusActionsNodeId);
-    for (auto& child : container.children) {
-        WidgetDescriptor& widget =
-            requireLeaf(child, WidgetKind::Field, child.id.value());
-        const auto found = std::find_if(
-            actions.begin(), actions.end(), [&](const StatusActionNode& action) {
-                return action.id == child.id;
-            });
-        if (found == actions.end() || found->accessibleLabel.empty()) {
-            child.resolved.reset();
-            continue;
-        }
-        child.resolved = UiLeafState{
-            found->accessibleLabel, found->accessibleLabel,
-            std::optional<std::string>{found->commandId}, std::nullopt,
-            roleOr(widget.role, SemanticRole::StatusInfo)};
-    }
 }
 
 WidgetKind expectedPromptControlKind(PromptControlKind kind) {
@@ -218,11 +185,10 @@ void populateUiTree(UiSchema& schema, const UiTreeValues& values) {
     populateStatusField(schema, kHeaderBranchFieldNodeId, values.status.header,
                         kBranchStatusFieldId, SemanticRole::Header);
     populateStatusField(schema, kFooterStatusFieldNodeId, values.status.footer,
-                        kStatusValueFieldId, SemanticRole::Footer);
+                        kStatusValueFieldId, SemanticRole::StatusInfo);
     populateStatusField(schema, kFooterFollowFieldNodeId, values.status.footer,
                         kFollowStatusFieldId, SemanticRole::Footer);
     populateHelpHint(schema, values.helpHintLabel);
-    populateStatusActions(schema, values.statusActions);
 }
 
 } // namespace
@@ -270,13 +236,9 @@ Editor::resolvedPromptControls() const {
     return resolved;
 }
 
-PromptStatusViewState Editor::promptStatusView() const {
-    // Semantic prompt state: which prompt is open (authoritative, present even for
-    // a header-hosted prompt with no footer view) and the status bar. No
-    // dimensions are needed to resolve this semantic state.
-    PromptStatusViewState view;
+PromptViewState Editor::promptView() const {
+    PromptViewState view;
     if (screen.prompt().request()) view.activeKind = screen.prompt().request()->kind;
-    view.status = status.viewState();
     return view;
 }
 
@@ -303,7 +265,6 @@ bool Editor::noticePresent() const {
 }
 
 StatusFieldProjection Editor::uiStatusFields() const {
-    auto statusText = status.footerText();
     auto followProjection = follow.footerProjection();
     auto fields = projectStatusFields(
         {.workspaceRoot = root,
@@ -323,9 +284,7 @@ UiSchema Editor::projectedUiTree() const {
     // resolved values correspond node-for-node.
     UiSchema uiTree = screen.schema();
     populateUiTree(
-        uiTree, UiTreeValues{
-                    uiStatusFields(), helpHintLabel(keymap),
-                    screen.statusActions()});
+        uiTree, UiTreeValues{uiStatusFields(), helpHintLabel(keymap)});
     if (auto prompt = resolvedPromptControls()) {
         populatePromptControls(uiTree, prompt->controls, prompt->activeInput);
     }

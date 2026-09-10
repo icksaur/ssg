@@ -25,7 +25,6 @@
 #include <ssg/ScreenState.h>
 #include <ssg/Search.h>
 #include <ssg/Settings.h>
-#include <ssg/StatusBar.h>
 #include <ssg/StatusFields.h>
 #include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
@@ -53,9 +52,16 @@
 
 namespace ssg {
 
+struct NoticeAction {
+    std::string id;
+    std::string label;
+    std::string commandId;
+    friend bool operator==(const NoticeAction&, const NoticeAction&) = default;
+};
+
 struct NoticeView {
     std::string text;
-    std::vector<UiAction> actions;
+    std::vector<NoticeAction> actions;
     friend bool operator==(const NoticeView&, const NoticeView&) = default;
 };
 
@@ -257,7 +263,7 @@ public:
     // document identity or revision drifts from this, the controller is stale
     // and must be dismissed (see reconcile_find_document).
     std::optional<FileDocumentId> findDocumentId;
-    StatusBar status;
+    std::string statusText;
     TabManager tabs;
     DiffModel diff;
     ExternalModificationFlow external;
@@ -369,8 +375,6 @@ public:
     mutable std::optional<std::uint64_t> activeTextRevision;
     mutable std::optional<FileDocumentId> activeTextDocument;
     mutable std::string activeTextCache;
-    std::uint64_t nextStatusId = 1;
-
     // I1: Editor alone performs workspace/recovery effects for
     // close/reopen.
     [[nodiscard]] TabLifecycleResult closeTab(
@@ -415,7 +419,7 @@ public:
     [[nodiscard]] UiSchema projectedUiTree() const;
     [[nodiscard]] std::optional<ResolvedPromptControls>
     resolvedPromptControls() const;
-    [[nodiscard]] PromptStatusViewState promptStatusView() const;
+    [[nodiscard]] PromptViewState promptView() const;
     // The geometry-free semantic projection of the active footer-region prompt,
     // or nullopt unless a footer-region prompt is open.
     // The one draft-conflict notice resolver: the geometry-free NoticeView for
@@ -539,7 +543,7 @@ public:
     bool pendingSyntaxRefresh = false;
     GitDiffIngress gitDiffIngress;
 
-    void enqueueStatus(StatusPriority priority, std::string text);
+    void showStatus(std::string text);
     [[nodiscard]] int gitDiffWakeDescriptor() const;
 };
 

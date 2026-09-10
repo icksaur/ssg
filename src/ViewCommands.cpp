@@ -90,7 +90,7 @@ OperationResult shellCommand(Editor& runtime, std::string_view id) {
     return success();
 }
 
-OperationResult promptStatusCommand(Editor& runtime, std::string_view id) {
+OperationResult promptCommand(Editor& runtime, std::string_view id) {
     if (id == "prompt.submit" || id == "prompt.cancel" ||
         id == "prompt.next" || id == "prompt.previous") {
         auto const& request = runtime.screen.prompt().request();
@@ -163,9 +163,6 @@ OperationResult promptStatusCommand(Editor& runtime, std::string_view id) {
         auto result = runtime.screen.prompt().focusNextInput();
         return result.accepted() ? success() : failure(result.error->message);
     }
-    if (id == "status.next") runtime.status.next();
-    else if (id == "status.previous") runtime.status.previous();
-    else if (id == "status.dismiss") runtime.status.dismiss();
     return success();
 }
 
@@ -178,7 +175,7 @@ OperationResult settingsCommand(Editor& runtime, std::string_view id) {
         return success();
     }
     if (id == "settings.export_workspace") {
-        runtime.enqueueStatus(StatusPriority::Information, runtime.settings.exportScope(SettingScope::Workspace));
+        runtime.showStatus(runtime.settings.exportScope(SettingScope::Workspace));
         return success();
     }
     return failure("unknown settings command");
@@ -274,13 +271,11 @@ void registerSettingsCommands(Commands& commands, Editor& runtime) {
                  [run] { return run("settings.export_workspace"); });
 }
 
-// The prompt line and the status bar. All commands here take no argument;
-// prompt text edits are routed through typed UpdatePromptValueInput.
-void registerPromptStatusCommands(Commands& commands, Editor& runtime) {
+void registerPromptCommands(Commands& commands, Editor& runtime) {
     auto declare = [&](std::string id, std::string label) {
         auto name = id;
         commands.add(std::move(id), std::move(label), [&runtime, name] {
-            return promptStatusCommand(runtime, name);
+            return promptCommand(runtime, name);
         });
     };
     declare("prompt.submit", "Submit Prompt");
@@ -288,9 +283,6 @@ void registerPromptStatusCommands(Commands& commands, Editor& runtime) {
     declare("prompt.next", "Prompt Next");
     declare("prompt.previous", "Prompt Previous");
     declare("prompt.focus_next_control", "Prompt Focus Next Control");
-    declare("status.next", "Status Next");
-    declare("status.previous", "Status Previous");
-    declare("status.dismiss", "Status Dismiss");
 }
 
 // Panes, the sidebar, and distraction-free mode. None takes an argument.
@@ -384,7 +376,7 @@ void registerShellLayoutCommands(Commands& commands, Editor& runtime) {
 void bindRuntimePresentation(Commands& commands, Editor& runtime) {
     registerViewportCommands(commands, runtime);
     registerShellLayoutCommands(commands, runtime);
-    registerPromptStatusCommands(commands, runtime);
+    registerPromptCommands(commands, runtime);
     registerSettingsCommands(commands, runtime);
 }
 

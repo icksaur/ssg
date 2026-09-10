@@ -42,7 +42,7 @@ struct GridPresentation {
     std::optional<NoticeView> notice;
     ExternalModificationViewState externalModification;
     FollowMode followMode = FollowMode::Following;
-    PromptStatusViewState promptStatus;
+    PromptViewState prompt;
     PaletteViewState paletteView;
     std::optional<ClipboardWrite> clipboardWrite;
     bool wordWrap = false;

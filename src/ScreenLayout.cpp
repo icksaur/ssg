@@ -24,6 +24,7 @@ WidgetDescriptor fieldFor(std::string_view id, int collapseRank) {
     widget.kind = WidgetKind::Field;
     widget.id = std::string{id};
     widget.rank = collapseRank;
+    if (id == kStatusValueFieldId) widget.role = "status_info";
     return widget;
 }
 
@@ -176,8 +177,6 @@ UiComposition assembleScreen(
     const StyleDimensions& dimensions,
     std::string_view promptSigil) {
 
-    // The footer carries the hint and an ordinary status-action container as
-    // fixed semantic nodes.
     std::vector<WidgetDescriptor> footerRight;
     footerRight.push_back(hintField(hintCommandId));
 
@@ -189,10 +188,6 @@ UiComposition assembleScreen(
         kFooterNodeId,
         {fieldFor(kStatusValueFieldId, 0), fieldFor(kFollowStatusFieldId, 1)},
         std::move(footerRight));
-    auto& region = std::get<UiContainer>(footer.content);
-    auto& right = std::get<UiContainer>(region.children[2].content);
-    right.children.push_back(container(kFooterStatusActionsNodeId, Axis::Row,
-                                       Size::autoSize(), {}));
     header = withStyle(
         withSize(std::move(header), Size::exact(dimensions.headerHeight)),
         SemanticRole::Header, SemanticRole::HeaderBackground);
@@ -286,50 +281,6 @@ UiComposition withFooterPrompt(UiComposition base,
         throw std::logic_error("footer.prompt must be a container");
     }
     *promptNode = assembleFooterPrompt(prompt);
-    return base;
-}
-
-UiComposition withStatusActions(
-    UiComposition base, const std::vector<StatusActionNode>& actions) {
-    UiNode* actionContainer = nullptr;
-    // The fixed screen footer owns the sole status-action anchor.
-    if (auto* root = std::get_if<UiContainer>(&base.root.content)) {
-        for (auto& area : root->children) {
-            if (area.id.value() != kFooterNodeId) continue;
-            auto* region = std::get_if<UiContainer>(&area.content);
-            if (!region || region->children.size() != 3 ||
-                region->children[2].id.value() != "footer.right") {
-                break;
-            }
-            auto* right =
-                std::get_if<UiContainer>(&region->children[2].content);
-            if (!right) break;
-            for (auto& child : right->children) {
-                if (child.id.value() == kFooterStatusActionsNodeId) {
-                    actionContainer = &child;
-                    break;
-                }
-            }
-            break;
-        }
-    }
-    if (!actionContainer) return base;
-    auto* actionChildren =
-        std::get_if<UiContainer>(&actionContainer->content);
-    if (!actionChildren) {
-        throw std::logic_error(
-            "footer.status_actions must be a container");
-    }
-    actionChildren->children.clear();
-    actionChildren->children.reserve(actions.size());
-    for (const auto& action : actions) {
-        WidgetDescriptor widget;
-        widget.kind = WidgetKind::Field;
-        widget.id = action.id.value();
-        widget.role = "status_info";
-        actionChildren->children.push_back(
-            UiNode{action.id, Size::autoSize(), UiLeaf{std::move(widget)}});
-    }
     return base;
 }
 

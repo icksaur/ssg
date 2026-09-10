@@ -1,6 +1,5 @@
 #pragma once
 
-#include <ssg/StatusBar.h>
 #include <ssg/focus.h>
 
 #include <array>
@@ -137,11 +136,10 @@ struct PromptControl {
     friend bool operator==(const PromptControl&, const PromptControl&) = default;
 };
 
-struct PromptStatusViewState {
-    StatusViewState status;
+struct PromptViewState {
     std::optional<PromptKind> activeKind;
-    friend bool operator==(const PromptStatusViewState&,
-                           const PromptStatusViewState&) = default;
+    friend bool operator==(const PromptViewState&, const PromptViewState&) =
+        default;
 };
 
 enum class ActivePrompt : std::uint8_t {

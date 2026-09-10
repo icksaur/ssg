@@ -259,7 +259,7 @@ TEST(savingAHelpTabFailsGracefullyWithoutAPrompt) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
-        ASSERT_FALSE(snapshot->promptStatus.activeKind.has_value());
+        ASSERT_FALSE(snapshot->prompt.activeKind.has_value());
     }
 }
 

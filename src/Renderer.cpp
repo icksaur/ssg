@@ -387,8 +387,8 @@ CellGrid renderFrame(const GridPresentation& snapshot,
 
             // Paint the reserved prompt rows (find/replace/settings) and place
             // the hardware cursor at the query when the prompt is focused.
-            if (snapshot.promptStatus.activeKind &&
-                promptFocusRegion(*snapshot.promptStatus.activeKind) ==
+            if (snapshot.prompt.activeKind &&
+                promptFocusRegion(*snapshot.prompt.activeKind) ==
                     PromptRegion::Footer) {
                 const auto promptForegroundRole =
                     nodeForeground(ui, kFooterPromptNodeId,

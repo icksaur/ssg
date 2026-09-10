@@ -164,8 +164,8 @@ RegionHit HitTester::at(int column, int row) const {
         return {};
     }
 
-    if (snapshot.promptStatus.activeKind &&
-        promptFocusRegion(*snapshot.promptStatus.activeKind) ==
+    if (snapshot.prompt.activeKind &&
+        promptFocusRegion(*snapshot.prompt.activeKind) ==
             PromptRegion::Footer) {
         const auto* prompt =
             snapshot.layout.find(UiNodeId{std::string{kFooterPromptNodeId}});

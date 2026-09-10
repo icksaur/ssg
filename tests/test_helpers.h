@@ -85,7 +85,6 @@ inline CommandResult typeText(Editor& editor, std::string text) {
     editor.screen.refreshNoticePresence(editor.noticePresent());
     editor.screen.refreshExternalModificationPresence(
         editor.externalModificationPresent());
-    editor.screen.refreshStatusActions(editor.status.actionNodes());
     if (result.accepted && active && revisionBefore &&
         editor.activeDocumentId() == active && editor.activeDocument() != nullptr &&
         editor.activeDocument()->revision() != *revisionBefore) {

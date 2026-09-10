@@ -35,11 +35,8 @@ public:
     bool releaseExternalFocus();
 
     bool updateComposition(UiComposition assembly);
-    bool refreshStatusActions(std::vector<StatusActionNode> actions);
-
     [[nodiscard]] PromptSurface& prompt() noexcept;
     [[nodiscard]] const PromptSurface& prompt() const noexcept;
-    [[nodiscard]] const std::vector<StatusActionNode>& statusActions() const noexcept;
     [[nodiscard]] FocusTarget effectiveFocus() const noexcept;
     [[nodiscard]] std::optional<PickerKind> openPicker() const noexcept;
     [[nodiscard]] std::optional<PickerActivation>
@@ -58,7 +55,6 @@ private:
                                BaseFocus panelReturnFocus);
 
     UiComposition baseComposition_;
-    std::vector<StatusActionNode> statusActions_;
     TreeModel& tree_;
     PickerActivationId nextPickerActivation_;
     std::optional<PickerActivation> openPickerActivation_;

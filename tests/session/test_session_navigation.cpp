@@ -1187,7 +1187,7 @@ TEST(commandPickerActionThatOpensPromptDismissesPickerWithoutFailure) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_FALSE(snapshot->paletteView.activePicker.has_value());
-    ASSERT_EQ(snapshot->promptStatus.activeKind,
+    ASSERT_EQ(snapshot->prompt.activeKind,
               std::optional{ssg::PromptKind::CommandArgument});
 }
 
@@ -1815,7 +1815,7 @@ TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
         if (!snapshot) return;
         ASSERT_TRUE(activePickerMode(snapshot->paletteView) ==
                     std::optional<ssg::SearchMode>{ssg::SearchMode::File});
-        ASSERT_TRUE(snapshot->promptStatus.activeKind ==
+        ASSERT_TRUE(snapshot->prompt.activeKind ==
                     std::optional<ssg::PromptKind>{ssg::PromptKind::Palette});
         ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->uiTree) ==
                     ssg::FocusTarget::Prompt);
@@ -2302,7 +2302,7 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
     auto snapshot = ssg::test::projectGridFrame(*runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->promptStatus.activeKind,
+    ASSERT_EQ(snapshot->prompt.activeKind,
               std::optional{ssg::PromptKind::CommandArgument});
     // The generic prompt round-trip directly applies the goto.line completion.
     ASSERT_TRUE(runtime

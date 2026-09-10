@@ -109,11 +109,6 @@ public:
         schema_ = std::move(schema);
         return *this;
     }
-    GridPresentationBuilder& status(StatusViewState status) {
-        status_ = std::move(status);
-        return *this;
-    }
-
     [[nodiscard]] GridPresentation build() const {
         const auto caret = std::min(caret_, text_.size());
         UiComposition composition;
@@ -124,7 +119,6 @@ public:
                           .root;
         TreeModel treeModel;
         ScreenState screen{std::move(composition), treeModel};
-        (void)screen.refreshStatusActions(projectStatusActionNodes(status_));
         if (panel_) {
             (void)screen.togglePanel();
             if (!panelFocused_) screen.focusEditor();
@@ -136,8 +130,7 @@ public:
         if (promptInput_) (void)screen.openFinder(PickerKind::Command);
 
         UiSchema uiTree = screen.schema();
-        populateFixtureUiTree(uiTree, statusFields_, helpHintLabel_,
-                              projectStatusActionNodes(status_));
+        populateFixtureUiTree(uiTree, statusFields_, helpHintLabel_);
         uiTree.focusPath = screen.focusPath();
         uiTree = requirePublishedUiTree(std::move(uiTree));
 
@@ -176,9 +169,8 @@ public:
                           : std::nullopt,
             .externalModification = {},
             .followMode = FollowMode::Following,
-            .promptStatus = PromptStatusViewState{
-                status_, promptInput_
-                             ? std::optional<PromptKind>{PromptKind::Palette}
+            .prompt = PromptViewState{
+                promptInput_ ? std::optional<PromptKind>{PromptKind::Palette}
                              : std::nullopt},
             .paletteView = {},
         };
@@ -248,7 +240,6 @@ public:
         const auto solveRegion =
             [&](std::string_view id, SemanticRole role,
                 std::optional<SolvedUiRegion>& out,
-                const StatusViewState* status,
                 const PromptInputProjection* input) {
                 const auto* node =
                     presentation.layout.find(UiNodeId{std::string{id}});
@@ -256,9 +247,9 @@ public:
                 const auto* schemaNode = findNode(presentation.uiTree.root, id);
                 if (!schemaNode) throw std::logic_error{"missing UI node"};
                 SolvedUiRegion region;
-                auto result = projectUiRegion(
-                    *schemaNode, node->rect, role, presentation.style, region,
-                    status, input);
+                auto result =
+                    projectUiRegion(*schemaNode, node->rect, role,
+                                    presentation.style, region, input);
                 if (!result.ok()) throw std::logic_error{*result.error};
                 out = std::move(region);
             };
@@ -269,10 +260,9 @@ public:
             promptInputPointer = &promptInput;
         }
         solveRegion(kHeaderNodeId, SemanticRole::Header,
-                    presentation.header, nullptr, promptInputPointer);
+                    presentation.header, promptInputPointer);
         solveRegion(kFooterNodeId, SemanticRole::Footer,
-                    presentation.footer, &presentation.promptStatus.status,
-                    nullptr);
+                    presentation.footer, nullptr);
         if (const auto* node = presentation.layout.find(
                 UiNodeId{std::string{kPanelNodeId}})) {
             presentation.panel =
@@ -327,8 +317,7 @@ private:
 
     static void populateFixtureUiTree(
         UiSchema& schema, const StatusFieldProjection& status,
-        const std::string& helpHintLabel,
-        const std::vector<StatusActionNode>& statusActions) {
+        const std::string& helpHintLabel) {
         const auto populateField = [&](std::string_view nodeId,
                                        const std::vector<StatusField>& fields,
                                        std::string_view fieldId,
@@ -353,7 +342,7 @@ private:
         populateField(kHeaderBranchFieldNodeId, status.header, kBranchStatusFieldId,
                       SemanticRole::Header);
         populateField(kFooterStatusFieldNodeId, status.footer, kStatusValueFieldId,
-                      SemanticRole::Footer);
+                      SemanticRole::StatusInfo);
         populateField(kFooterFollowFieldNodeId, status.footer, kFollowStatusFieldId,
                       SemanticRole::Footer);
 
@@ -369,27 +358,6 @@ private:
             }
         }
 
-        if (auto* actions = mutableNode(
-                schema.root, UiNodeId{std::string{kFooterStatusActionsNodeId}})) {
-            if (auto* container = std::get_if<UiContainer>(&actions->content)) {
-                for (auto& child : container->children) {
-                    const auto found = std::ranges::find(
-                        statusActions, child.id, &StatusActionNode::id);
-                    if (found == statusActions.end() ||
-                        found->accessibleLabel.empty()) {
-                        child.resolved.reset();
-                        continue;
-                    }
-                    const auto* leaf = std::get_if<UiLeaf>(&child.content);
-                    if (!leaf) continue;
-                    child.resolved = UiLeafState{
-                        found->accessibleLabel, found->accessibleLabel,
-                        std::optional<std::string>{found->commandId},
-                        std::nullopt,
-                        roleOr(leaf->widget.role, SemanticRole::StatusInfo)};
-                }
-            }
-        }
     }
 
     struct PromptInput {
@@ -444,7 +412,6 @@ private:
     bool externalModificationPresent_ = false;
     StatusFieldProjection statusFields_;
     std::string helpHintLabel_;
-    StatusViewState status_;
 };
 
 }  // namespace ssg::test

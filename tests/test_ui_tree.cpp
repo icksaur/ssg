@@ -195,34 +195,6 @@ TEST(surfaceOnNonViewLeafIsRejected) {
     ASSERT_TRUE(!validateUiSchema(schema).ok());
 }
 
-// A StatusActions leaf carries only its id; unlike a View it may be Auto-sized (it
-// has intrinsic content -- a variable action list rendered from promptStatus).
-TEST(wellFormedStatusActionsLeafValidates) {
-    WidgetDescriptor widget;
-    widget.kind = WidgetKind::StatusActions;
-    widget.id = "sa";
-    UiSchema schema;
-    schema.root = container(
-        "root",
-        {UiNode{UiNodeId{"sa"}, Size::autoSize(), UiLeaf{std::move(widget)}}});
-    ASSERT_TRUE(validateUiSchema(schema).ok());
-}
-
-// A StatusActions leaf carrying any widget-only field (here a command) is malformed:
-// its data rides promptStatus, not the schema, and it dispatches by invocation, not a
-// commandId.
-TEST(statusActionsLeafWithAWidgetFieldIsRejected) {
-    WidgetDescriptor widget;
-    widget.kind = WidgetKind::StatusActions;
-    widget.id = "sa";
-    widget.command = "some.command";
-    UiSchema schema;
-    schema.root = container(
-        "root",
-        {UiNode{UiNodeId{"sa"}, Size::autoSize(), UiLeaf{std::move(widget)}}});
-    ASSERT_TRUE(!validateUiSchema(schema).ok());
-}
-
 UiNode* mutableUiNode(UiNode& node, const UiNodeId& id) {
     if (node.id == id) return &node;
     if (auto* container = std::get_if<UiContainer>(&node.content)) {
@@ -329,8 +301,6 @@ SSG_TEST_SUITE(test_ui_tree) {
     RUN(viewLeafWithoutSurfaceIsRejected);
     RUN(autoSizedViewLeafIsRejected);
     RUN(surfaceOnNonViewLeafIsRejected);
-    RUN(wellFormedStatusActionsLeafValidates);
-    RUN(statusActionsLeafWithAWidgetFieldIsRejected);
     RUN(publishedTreeAcceptsAValidFocusPath);
     RUN(publishedTreeRejectsAHiddenFocusEndpoint);
     RUN(publishedTreeRejectsAHiddenAncestorOfTheFocusEndpoint);

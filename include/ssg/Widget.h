@@ -15,7 +15,6 @@ enum class WidgetKind : std::uint8_t {
     TextInput = 4,
     Spacer = 5,
     View = 6,
-    StatusActions = 7,
 };
 
 // An opaque client-rendered surface. The library owns its tree placement,

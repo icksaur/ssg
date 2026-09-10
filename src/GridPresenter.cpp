@@ -66,7 +66,7 @@ std::vector<GridIntrinsicSize> intrinsicSizes(
 }
 
 SolveUiFrameResult solveFrameLayout(
-    const UiSchema& schema, const PromptStatusViewState& promptStatus,
+    const UiSchema& schema, const PromptViewState& prompt,
     bool noticePresent, const ExternalModificationViewState& external,
     bool palettePresent, GridSize dimensions, const Style& style) {
     if (dimensions.columns <= 0 || dimensions.rows <= 0 ||
@@ -120,8 +120,8 @@ SolveUiFrameResult solveFrameLayout(
         UiNodeId{std::string{kHeaderPromptInputNodeId}},
     };
     const auto* promptSchema = findUiNode(schema.root, kFooterPromptNodeId);
-    if (promptStatus.activeKind && promptSchema &&
-        promptFocusRegion(*promptStatus.activeKind) == PromptRegion::Footer) {
+    if (prompt.activeKind && promptSchema &&
+        promptFocusRegion(*prompt.activeKind) == PromptRegion::Footer) {
         const auto retainPrompt = [&](const auto& self,
                                       const UiNode& node) -> void {
             retained.insert(node.id);
@@ -134,8 +134,8 @@ SolveUiFrameResult solveFrameLayout(
     std::erase_if(result.tree->nodes, [&](const SolvedGridNode& node) {
         return !retained.contains(node.id);
     });
-    if (promptStatus.activeKind && promptSchema &&
-        promptFocusRegion(*promptStatus.activeKind) == PromptRegion::Footer) {
+    if (prompt.activeKind && promptSchema &&
+        promptFocusRegion(*prompt.activeKind) == PromptRegion::Footer) {
         const auto validPrompt = [&](const auto& self,
                                      const UiNode& schemaNode) -> bool {
             const auto* node = result.tree->find(schemaNode.id);
@@ -176,13 +176,11 @@ SolveUiFrameResult solveFrameLayout(
 
 bool solveUiRegions(
     const SolvedGridTree& layout, const UiSchema& schema,
-    const PromptStatusViewState& promptStatus,
     const PaletteViewState& paletteView, const PaletteReport& palette,
     const Style& style, std::optional<SolvedUiRegion>& header,
     std::optional<SolvedUiRegion>& footer) {
     const auto solve = [&](std::string_view id, SemanticRole role,
                            std::optional<SolvedUiRegion>& output,
-                           const StatusViewState* status,
                            const PromptInputProjection* input) {
         const auto* solved = layout.find(UiNodeId{std::string{id}});
         if (!solved) {
@@ -192,8 +190,7 @@ bool solveUiRegions(
         const auto* subtree = findUiNode(schema.root, id);
         if (!subtree) return false;
         SolvedUiRegion surface;
-        if (!projectUiRegion(*subtree, solved->rect, role, style, surface,
-                             status, input)
+        if (!projectUiRegion(*subtree, solved->rect, role, style, surface, input)
                  .ok()) {
             return false;
         }
@@ -208,9 +205,8 @@ bool solveUiRegions(
         input = {true, palette.query, palette.ghost};
         inputPtr = &input;
     }
-    return solve(kHeaderNodeId, SemanticRole::Header, header, nullptr, inputPtr) &&
-           solve(kFooterNodeId, SemanticRole::Footer, footer,
-                 &promptStatus.status, nullptr);
+    return solve(kHeaderNodeId, SemanticRole::Header, header, inputPtr) &&
+           solve(kFooterNodeId, SemanticRole::Footer, footer, nullptr);
 }
 
 }  // namespace
@@ -251,7 +247,7 @@ std::optional<GridPresentation> GridPresenter::project(
     auto notice = runtime.draftNotice();
     auto externalModification = runtime.external.viewState();
     auto followMode = runtime.follow.viewState().mode;
-    auto promptStatus = runtime.promptStatusView();
+    auto prompt = runtime.promptView();
     auto paletteView = runtime.paletteView();
     auto tree = runtime.tree.viewState();
     auto clipboardWrite = runtime.clipboard.viewState().systemWrite;
@@ -283,7 +279,7 @@ std::optional<GridPresentation> GridPresenter::project(
         static_cast<int>(request.dimensions.columns),
         static_cast<int>(request.dimensions.rows)};
     auto solved = solveFrameLayout(
-        uiTree, promptStatus, notice.has_value(), externalModification,
+        uiTree, prompt, notice.has_value(), externalModification,
         paletteView.activePicker.has_value(), gridSize, style);
     if (!solved.tree) return std::nullopt;
     auto layout = std::move(*solved.tree);
@@ -305,8 +301,8 @@ std::optional<GridPresentation> GridPresenter::project(
 
     std::optional<SolvedUiRegion> header;
     std::optional<SolvedUiRegion> footer;
-    if (!solveUiRegions(layout, uiTree, promptStatus, paletteView, palette,
-                        style, header, footer)) {
+    if (!solveUiRegions(layout, uiTree, paletteView, palette, style, header,
+                        footer)) {
         return std::nullopt;
     }
     std::optional<SolvedPanelSurface> panel;
@@ -428,7 +424,7 @@ std::optional<GridPresentation> GridPresenter::project(
         .notice = std::move(notice),
         .externalModification = std::move(externalModification),
         .followMode = followMode,
-        .promptStatus = std::move(promptStatus),
+        .prompt = std::move(prompt),
         .paletteView = std::move(paletteView),
         .clipboardWrite = std::move(clipboardWrite),
         .wordWrap = wordWrap,

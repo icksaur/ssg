@@ -90,7 +90,8 @@ TEST(sessionProjectionResolvesStatusFieldsAndHint) {
             nodeById(frame->uiTree.root, ssg::kFooterStatusFieldNodeId);
         ASSERT_TRUE(status != nullptr && status->resolved.has_value());
         if (status && status->resolved) {
-            ASSERT_TRUE(status->resolved->role == ssg::SemanticRole::Footer);
+            ASSERT_TRUE(status->resolved->role ==
+                        ssg::SemanticRole::StatusInfo);
         }
     }
     std::filesystem::remove_all(root);

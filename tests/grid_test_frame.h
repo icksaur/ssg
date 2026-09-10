@@ -77,7 +77,6 @@ inline GridPresentation copyGridFrame(
     };
     const auto solveRegion = [&](std::string_view id, SemanticRole role,
                                  std::optional<SolvedUiRegion>& output,
-                                 const StatusViewState* status,
                                  const PromptInputProjection* input) {
         const auto* rect = values.layout.find(UiNodeId{std::string{id}});
         if (!rect) {
@@ -87,18 +86,17 @@ inline GridPresentation copyGridFrame(
         const auto* node = findNode(findNode, values.uiTree.root, id);
         if (!node) throw std::logic_error{"missing UI node"};
         SolvedUiRegion region;
-        auto result = projectUiRegion(
-            *node, rect->rect, role, values.style, region, status, input);
+        auto result =
+            projectUiRegion(*node, rect->rect, role, values.style, region, input);
         if (!result.ok()) throw std::logic_error{*result.error};
         output = std::move(region);
     };
     PromptInputProjection input{
         values.paletteView.activePicker.has_value(),
         values.palette.query, values.palette.ghost};
-    solveRegion(kHeaderNodeId, SemanticRole::Header, values.header, nullptr,
+    solveRegion(kHeaderNodeId, SemanticRole::Header, values.header,
                 input.visible ? &input : nullptr);
-    solveRegion(kFooterNodeId, SemanticRole::Footer, values.footer,
-                &values.promptStatus.status, nullptr);
+    solveRegion(kFooterNodeId, SemanticRole::Footer, values.footer, nullptr);
     if (const auto* node = values.layout.find(
             UiNodeId{std::string{kDocumentViewportNodeId}})) {
         values.document = solveDocumentSurface(

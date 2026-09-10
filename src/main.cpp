@@ -270,7 +270,7 @@ class PaletteView {
             window_.paneRows = static_cast<std::uint32_t>(std::max(snapshot.document->content.height, 1));
         }
         const bool wasOpen = open_;
-        open_ = snapshot.promptStatus.activeKind == PromptKind::Palette;
+        open_ = snapshot.prompt.activeKind == PromptKind::Palette;
         if (open_ && !wasOpen) {
             window_.query.clear();
             window_.selected = 0;

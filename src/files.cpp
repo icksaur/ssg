@@ -27,8 +27,7 @@ bool mutatesTheActiveDocumentsFile(FileCommand command) {
 void pruneArchiveReportingFailures(Editor& runtime) {
     const auto report = runtime.workspace.pruneArchive();
     if (report.ok()) return;
-    runtime.enqueueStatus(
-        StatusPriority::Warning,
+    runtime.showStatus(
         "could not fully prune the deleted-file archive: " + report.message);
 }
 
@@ -236,7 +235,6 @@ OperationResult Editor::activateDocument(FileDocumentId document) {
     reconcileFindDocument();
     screen.refreshNoticePresence(noticePresent());
     screen.refreshExternalModificationPresence(externalModificationPresent());
-    screen.refreshStatusActions(status.actionNodes());
     return success();
 }
 
