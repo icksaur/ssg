@@ -248,12 +248,12 @@ std::optional<GridPresentation> GridPresenter::project(
     auto theme = runtime.theme;
     auto uiTree = runtime.projectedUiTree();
     auto tabs = runtime.tabs.viewState();
-    auto notice = runtime.noticeView();
+    auto notice = runtime.draftNotice();
     auto externalModification = runtime.external.viewState();
     auto followMode = runtime.follow.viewState().mode;
     auto promptStatus = runtime.promptStatusView();
     auto paletteView = runtime.paletteView();
-    auto tree = runtime.treeView();
+    auto tree = runtime.tree.viewState();
     auto clipboardWrite = runtime.clipboard.viewState().systemWrite;
     const bool wordWrap = runtime.wordWrap;
     const bool lineNumbers = runtime.lineNumbers;

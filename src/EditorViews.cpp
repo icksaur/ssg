@@ -298,10 +298,6 @@ std::optional<NoticeView> Editor::draftNotice() const {
          {"draft.notice.dismiss", "dismiss", "draft.dismiss"}}};
 }
 
-std::optional<NoticeView> Editor::noticeView() const {
-    return draftNotice();
-}
-
 bool Editor::noticePresent() const {
     return draftNotice().has_value();
 }
@@ -335,11 +331,6 @@ UiSchema Editor::projectedUiTree() const {
     }
     uiTree.focusPath = screen.focusPath();
     return requirePublishedUiTree(std::move(uiTree));
-}
-
-TreeViewState Editor::treeView() const {
-    // Semantic only: providers, nodes, selection, and expansion.
-    return tree.viewState();
 }
 
 PaletteViewState Editor::paletteView() const {

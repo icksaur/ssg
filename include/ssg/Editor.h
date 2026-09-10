@@ -421,8 +421,6 @@ public:
     // The one draft-conflict notice resolver: the geometry-free NoticeView for
     // the active document, or nullopt unless its reopen outcome is Conflict.
     [[nodiscard]] std::optional<NoticeView> draftNotice() const;
-    // The geometry-free draft-conflict notice used during presentation.
-    [[nodiscard]] std::optional<NoticeView> noticeView() const;
     // Whether the active document currently raises a draft-conflict notice. The
     // notice's tree-node presence lives outside the prompt/panel transitions,
     // so the runtime reconciles this into the interaction authority after each
@@ -448,8 +446,6 @@ public:
     // site.
     [[nodiscard]] StatusFieldProjection uiStatusFields() const;
     [[nodiscard]] PaletteViewState paletteView() const;
-    // The geometry-free tree state; GridPresenter resolves its visible window.
-    [[nodiscard]] TreeViewState treeView() const;
     [[nodiscard]] OperationResult updateTabsFor(FileDocumentId document);
     [[nodiscard]] OperationResult activateDocument(FileDocumentId document);
     [[nodiscard]] DiffIngressResult applyExternalDiffBurst(

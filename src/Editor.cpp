@@ -257,7 +257,7 @@ PromptRoutingState inputPromptState(Editor const& editor) {
 InputRoutingSnapshot inputRoutingSnapshot(Editor& editor) {
     auto const* document = editor.activeDocument();
     auto const* tab = editor.activeTabState();
-    auto notice = editor.noticeView();
+    auto notice = editor.draftNotice();
     std::optional<std::vector<InputRoutingNoticeAction>> noticeActions;
     if (notice) {
         noticeActions.emplace();

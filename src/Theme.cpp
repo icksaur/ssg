@@ -32,10 +32,6 @@ constexpr std::size_t position(SyntaxScope scope) noexcept {
     return static_cast<std::size_t>(scope);
 }
 
-constexpr bool valid(SemanticRole role) noexcept {
-    return position(role) < kSemanticRoleCount;
-}
-
 // Parses a "#rrggbb" literal (exactly '#' followed by 6 hex digits; no short
 // form, no alpha channel -- the one shape theme.set accepts).
 std::optional<SrgbColor> parseHexColor(std::string_view text) noexcept {
@@ -66,7 +62,9 @@ std::optional<SrgbColor> parseHexColor(std::string_view text) noexcept {
 } // namespace
 
 SrgbColor ThemeSnapshot::color(SemanticRole role) const {
-    if (!valid(role)) throw std::invalid_argument("semantic role is not recognized");
+    if (position(role) >= kSemanticRoleCount) {
+        throw std::invalid_argument("semantic role is not recognized");
+    }
     return roleColors[position(role)];
 }
 

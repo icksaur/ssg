@@ -210,14 +210,14 @@ class PaletteView {
 
     void scroll(std::int64_t delta) {
         if (!open_) return;
-        auto offset = scrollOffset();
+        ScrollOffset offset{window_.firstVisible};
         offset.byLines(delta, candidateCount(), window_.paneRows);
         window_.firstVisible = offset.firstVisible();
     }
 
     void scrollToFraction(std::uint32_t numerator, std::uint32_t denominator) {
         if (!open_) return;
-        auto offset = scrollOffset();
+        ScrollOffset offset{window_.firstVisible};
         offset.toFraction(numerator, denominator, candidateCount(), window_.paneRows);
         window_.firstVisible = offset.firstVisible();
     }
@@ -291,15 +291,13 @@ class PaletteView {
 
     [[nodiscard]] std::uint32_t candidateCount() const { return static_cast<std::uint32_t>(ranked().size()); }
 
-    [[nodiscard]] ScrollOffset scrollOffset() const { return ScrollOffset{window_.firstVisible}; }
-
     void revealSelection() {
         const auto order = ranked();
         if (window_.selected >= order.size()) {
             window_.selected = order.empty() ? 0 : order.size() - 1;
         }
         if (order.empty()) return;
-        auto offset = scrollOffset();
+        ScrollOffset offset{window_.firstVisible};
         offset.revealSelection(static_cast<std::uint32_t>(window_.selected), static_cast<std::uint32_t>(order.size()), window_.paneRows);
         window_.firstVisible = offset.firstVisible();
     }
