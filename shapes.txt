@@ -1,5 +1,4 @@
 0	Command.h	ssg::Commands::dispatch::DispatchScope	1	bool &
-0	Editor.h	ssg::Editor::DeferredCommand	1	std::string
 0	KeyCode.h	ssg::KeyCodeEntry	3	KeyCode, std::string_view, std::string_view
 0	Layout.h	ssg::SolvedExternalModificationAction	4	DiffFileId, std::string, std::string, Rect
 0	Layout.h	ssg::SolvedNoticeAction	3	std::string, std::string, Rect

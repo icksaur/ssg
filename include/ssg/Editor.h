@@ -316,67 +316,36 @@ public:
     // pushed by the host after each init.lua evaluation via
     mutable std::mutex operationMutex;
     Commands commands;
-    // Commands a running handler asked to dispatch, run in order once the
-    // operation lock releases. The operation mutex is not reentrant, so a
-    // handler cannot dispatch; this is how it asks for one.
-    //
-    // ONE queue, drained inside the dispatch wrapper, rather than a field per
-    // caller: prompt.submit and a script's ssg.command both want the same
-    // thing. Separate single-slot fields each needed their own early return,
-    // and a return that forgot to drain silently postponed the work to some
-    // later, unrelated dispatch.
-    //
-    // Deferring rather than nesting keeps each command complete before the next
-    // command starts.
-    struct DeferredCommand {
-        std::string id;
-    };
-
-    // The queue, shaped so `Editor::deferDispatch` is the only way to ADD to it
-    // -- by construction, not by convention.
-    //
-    // It was previously a bare vector that two callers pushed to directly while
-    // a third went through a checked method, so the shortest way to queue a
-    // command was the only unchecked one.  Hiding the vector alone would just
-    // move that hole to the wrapper, so writing is private and `Editor` is the
-    // only friend: a future caller cannot reach the write path at all, whereas
-    // reading (which the drain needs) is harmless and stays public.
+    // Holds command IDs requested by the active handler until it finishes.
+    // Only Editor can enqueue, so work cannot be stranded outside dispatch.
     class DeferredCommandQueue {
     public:
-        // A handler that queued without limit would spin the drain loop
-        // forever; refusing says so, where the alternative is an editor that
-        // stops responding for no visible reason.
         static constexpr std::size_t kMaximum = 64;
 
-        [[nodiscard]] bool empty() const noexcept { return commands_.empty(); }
-        [[nodiscard]] std::size_t size() const noexcept {
-            return commands_.size();
-        }
+        [[nodiscard]] bool empty() const noexcept { return ids_.empty(); }
+        [[nodiscard]] std::size_t size() const noexcept { return ids_.size(); }
         [[nodiscard]] bool contains(std::string_view commandId) const noexcept {
-            for (const auto& deferred : commands_) {
-                if (deferred.id == commandId) return true;
+            for (const auto& id : ids_) {
+                if (id == commandId) return true;
             }
             return false;
         }
-        [[nodiscard]] DeferredCommand takeFront() {
-            auto front = std::move(commands_.front());
-            commands_.erase(commands_.begin());
+        [[nodiscard]] std::string takeFront() {
+            auto front = std::move(ids_.front());
+            ids_.erase(ids_.begin());
             return front;
         }
-        void clear() noexcept { commands_.clear(); }
+        void clear() noexcept { ids_.clear(); }
 
     private:
-        // Only reachable through Editor::deferDispatch, which is what enforces
-        // that a dispatch is actually in progress.  Queueing outside one would
-        // strand the command until some later, unrelated dispatch drained it.
         friend struct Editor;
-        [[nodiscard]] bool enqueue(DeferredCommand deferred) {
-            if (commands_.size() >= kMaximum) return false;
-            commands_.push_back(std::move(deferred));
+        [[nodiscard]] bool enqueue(std::string id) {
+            if (ids_.size() >= kMaximum) return false;
+            ids_.push_back(std::move(id));
             return true;
         }
 
-        std::vector<DeferredCommand> commands_;
+        std::vector<std::string> ids_;
     };
 
     // Nested requests queue by ID and drain after the current handler,

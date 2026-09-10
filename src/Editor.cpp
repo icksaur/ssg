@@ -1719,7 +1719,7 @@ bool Editor::dispatchInProgress() const noexcept {
 
 bool Editor::deferDispatch(std::string commandId) {
     if (!commands.dispatchInProgress()) return false;
-    return deferredCommands.enqueue({std::move(commandId)});
+    return deferredCommands.enqueue(std::move(commandId));
 }
 
 CommandResult Editor::dispatchLocked(std::string_view commandId) {
@@ -1761,13 +1761,12 @@ CommandResult Editor::dispatchLocked(std::string_view commandId) {
         }
         while (!deferredCommands.empty()) {
             auto deferred = deferredCommands.takeFront();
-            auto deferredResult = dispatchAndReconcile(deferred.id);
+            auto deferredResult = dispatchAndReconcile(deferred);
             if (!deferredResult.accepted()) {
                 deferredCommands.clear();
                 return CommandResult{
                     deferredResult.error,
-                    deferred.id + ": " +
-                        deferredResult.message, std::nullopt};
+                    deferred + ": " + deferredResult.message, std::nullopt};
             }
             if (!deferredResult.viewAction) {
                 deferredResult.viewAction = std::move(outcome.viewAction);

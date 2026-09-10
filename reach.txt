@@ -200,7 +200,6 @@
 1	DocumentPointerGesture.h	struct	ssg::DocumentPointerGesture::State	DocumentPointerGesture.cpp
 1	DraftAutosaveScheduler.h	struct	ssg::DraftAutosaveScheduler::FlushRecord	DraftAutosaveScheduler.cpp
 1	EditCommands.h	enum	ssg::EditCommandError	EditCommands.cpp
-1	Editor.h	struct	ssg::Editor::DeferredCommand	Editor.cpp
 1	Editor.h	class	ssg::Editor::DeferredCommandQueue	Editor.cpp
 1	TextCodec.h	struct	ssg::EncodeTextOptions	TextCodec.cpp
 1	ExternalModificationFlow.h	enum	ssg::ExternalAction	ExternalModificationFlow.cpp
