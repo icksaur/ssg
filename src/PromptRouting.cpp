@@ -1,6 +1,5 @@
 #include <ssg/PromptSurface.h>
 
-#include <ssg/FindReplace.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Keymap.h>
 #include <ssg/TextInputCommands.h>
@@ -39,26 +38,20 @@ std::string applyPromptTextEdit(std::string_view value,
 
 namespace {
 
-// The command carrying the active input's new full value. Replace's query input
-// (0) routes to find.update_query; its replacement input (1) to
-// replace.update_replacement; Find to find.update_query; a generic TextPrompt to
-// prompt.update_value at the active index.
+// The typed route for the active input's new full value. Replace's query input
+// (0) routes to UpdateFindQuery; its replacement input (1) to UpdateReplacement;
+// Find to UpdateFindQuery; a generic TextPrompt to prompt.update_value at the
+// active index.
 PromptTextRoute dispatchActiveInput(ActivePrompt prompt, std::size_t activeInput,
                                     std::string value) {
     switch (prompt) {
     case ActivePrompt::Replace:
         if (activeInput == 0) {
-            return {PromptTextRoute::Kind::Dispatch,
-                    CommandName{"find.update_query"},
-                    FindQueryArguments{std::move(value)}, {}};
+            return {PromptTextRoute::Kind::UpdateFindQuery, std::move(value)};
         }
-        return {PromptTextRoute::Kind::Dispatch,
-                CommandName{"replace.update_replacement"},
-                FindQueryArguments{std::move(value)}, {}};
+        return {PromptTextRoute::Kind::UpdateReplacement, std::move(value)};
     case ActivePrompt::Find:
-        return {PromptTextRoute::Kind::Dispatch,
-                CommandName{"find.update_query"},
-                FindQueryArguments{std::move(value)}, {}};
+        return {PromptTextRoute::Kind::UpdateFindQuery, std::move(value)};
     case ActivePrompt::TextPrompt: {
         PromptTextRoute route;
         route.kind = PromptTextRoute::Kind::UpdatePromptValue;
@@ -87,8 +80,7 @@ PromptTextRoute routePromptTextEdit(const PromptRoutingState& state,
             // appends its own text and pops its own graphemes. Deletion is not
             // routed here.
             if (change.kind != PromptTextEdit::Kind::Append) return {};
-            return {PromptTextRoute::Kind::AppendPaletteQuery, {}, {},
-                    change.text};
+            return {PromptTextRoute::Kind::AppendPaletteQuery, {}, change.text, {}};
         }
         return dispatchActiveInput(state.prompt, state.activeInput,
                                    applyPromptTextEdit(state.currentValue,

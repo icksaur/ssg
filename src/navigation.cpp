@@ -199,10 +199,8 @@ CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::an
         }
         (void)runtime.screen.closeFinder();
     } else if (id == "search.workspace") {
-        std::string query;
-        if (auto const* text = payloadAs<std::string>(payload)) query = *text;
         const auto sourceGeneration = ++runtime.workspaceSearchGeneration;
-        runtime.startWorkspaceSearch(std::move(query), sourceGeneration);
+        runtime.startWorkspaceSearch(std::string{}, sourceGeneration);
     } else if (id == "goto.back" || id == "goto.forward") {
         bool const backward = id == "goto.back";
         auto const transition = backward ? runtime.navigation.peekBack()
@@ -711,15 +709,11 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
             }),
     });
 
-    // An absent query searches for the current one.
     {
         auto built = spec("search.workspace", "Workspace");
-        built.binding = bindOptionalInProcessHandler<std::string>(
-            [&runtime](CommandContext&,
-                       std::optional<std::string> const& query) {
-                return searchCommand(
-                    runtime, "search.workspace",
-                    query ? std::any{*query} : std::any{});
+        built.binding = bindNoArgumentHandler(
+            [&runtime](CommandContext&) {
+                return searchCommand(runtime, "search.workspace", {});
             });
         catalog.add(std::move(built));
     }

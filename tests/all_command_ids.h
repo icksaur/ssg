@@ -61,10 +61,6 @@ inline std::string_view classifyCommand(CommandFacts const& f) {
         {"tree.invoke_node_command", "remove"},
         // split: optional target with useful no-arg behavior retained as command
         {"workspace.open_directory",     "split"},
-        {"find.update_query",            "split"},
-        {"replace.update_replacement",   "split"},
-        {"replace.workspace_preview",    "split"},
-        {"replace.workspace_apply",      "split"},
         {"file.new",                     "split"},
         {"file.open",                    "split"},
         {"file.save_as",                 "split"},

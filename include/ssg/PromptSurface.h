@@ -1,10 +1,8 @@
 #pragma once
 
-#include <ssg/CommandHandle.h>
 #include <ssg/StatusBar.h>
 #include <ssg/focus.h>
 
-#include <any>
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -172,13 +170,13 @@ struct PromptTextEdit {
 
 struct PromptTextRoute {
     enum class Kind : std::uint8_t {
-        Dispatch,
+        UpdateFindQuery,
+        UpdateReplacement,
         AppendPaletteQuery,
         UpdatePromptValue,
         Ignore,
     } kind = Kind::Ignore;
-    CommandName command;
-    std::any payload;
+    std::string query;
     std::string appendText;
     PromptValueArguments promptValue;
 };

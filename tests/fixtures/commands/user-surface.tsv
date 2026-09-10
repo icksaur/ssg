@@ -62,10 +62,6 @@ find.toggle_selection	Find Toggle Selection	keep
 replace.open	Replace	keep
 replace.current	Replace Current	keep
 replace.all	Replace All	keep
-find.update_query	Find Update Query	split
-replace.update_replacement	Replace Update Replacement	split
-replace.workspace_preview	Replace Workspace Preview	split
-replace.workspace_apply	Replace Workspace Apply	split
 edit.undo	Undo	keep
 edit.redo	Redo	keep
 clipboard.copy	Copy	keep

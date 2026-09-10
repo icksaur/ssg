@@ -163,8 +163,11 @@ void registerAllCommands(CommandCatalog& catalog, Editor& runtime);
     Editor& runtime, TextInputCommand command,
     TextInputArguments arguments = {});
 [[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
-    Editor& runtime, FindReplaceCommand command,
-    std::any const& payload);
+    Editor& runtime, FindReplaceCommand command);
+[[nodiscard]] FindReplaceOperationResult applyFindQuery(
+    Editor& runtime, std::string query);
+[[nodiscard]] FindReplaceOperationResult applyReplacement(
+    Editor& runtime, std::string replacement);
 [[nodiscard]] CommandHandlerResult activateTab(Editor& runtime, TabId tabId);
 [[nodiscard]] CommandHandlerResult closeTabById(Editor& runtime, TabId tabId);
 [[nodiscard]] CommandHandlerResult activateTreeNode(Editor& runtime,
@@ -211,6 +214,15 @@ public:
     void resetKeymapToDefault();
     [[nodiscard]] CompiledKeymap const& resolveInputKeymap();
     void focusEditor();
+
+    [[nodiscard]] WorkspacePreviewResult workspacePreview(
+        WorkspaceReplaceArguments args);
+    [[nodiscard]] WorkspaceApplyResult workspaceApply(
+        std::optional<WorkspaceReplacePreview> expected = std::nullopt);
+    [[nodiscard]] WorkspaceSearchState workspaceSearch(std::string query);
+    [[nodiscard]] FindReplaceOperationResult updateFindQuery(std::string query);
+    [[nodiscard]] FindReplaceOperationResult updateReplacement(
+        std::string replacement);
 
     struct ResolvedPromptControls {
         std::vector<PromptControl> controls;

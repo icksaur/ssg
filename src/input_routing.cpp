@@ -111,8 +111,11 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
     }
     auto routeTextEdit = [&](PromptTextEdit edit) -> RoutedInput {
         auto const route = routePromptTextEdit(routing, edit);
-        if (route.kind == PromptTextRoute::Kind::Dispatch) {
-            return dispatch(route.command, route.payload);
+        if (route.kind == PromptTextRoute::Kind::UpdateFindQuery) {
+            return accepted(UpdateFindQuery{route.query});
+        }
+        if (route.kind == PromptTextRoute::Kind::UpdateReplacement) {
+            return accepted(UpdateReplacement{route.query});
         }
         if (route.kind == PromptTextRoute::Kind::UpdatePromptValue) {
             return accepted(EditorMutation{route.promptValue});

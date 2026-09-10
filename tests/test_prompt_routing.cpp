@@ -4,7 +4,6 @@
 
 #include "test_helpers.h"
 
-#include <any>
 #include <string>
 
 namespace {
@@ -32,65 +31,50 @@ TEST(paletteFocusAppendsToTheClientOwnedQueryOnly) {
         {PromptTextEdit::Kind::Append, "a"});
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::AppendPaletteQuery);
     ASSERT_EQ(route.appendText, std::string{"a"});
-    ASSERT_TRUE(route.command.empty());
+    ASSERT_TRUE(route.query.empty());
 }
 
 TEST(findPromptRoutesTheWholeNewQueryValue) {
     auto const route = routePromptTextEdit(
         atPrompt(ActivePrompt::Find, "foo"),
         {PromptTextEdit::Kind::Append, "d"});
-    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
-    ASSERT_TRUE(route.command == CommandName{"find.update_query"});
-    auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
-    ASSERT_TRUE(args != nullptr);
-    ASSERT_EQ(args->query, std::string{"food"});
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::UpdateFindQuery);
+    ASSERT_EQ(route.query, std::string{"food"});
 }
 
 TEST(replacePromptRoutesTheWholeNewReplacementValue) {
     auto const route = routePromptTextEdit(
         atPrompt(ActivePrompt::Replace, "ba", 1),
         {PromptTextEdit::Kind::Append, "r"});
-    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
-    ASSERT_TRUE(route.command == CommandName{"replace.update_replacement"});
-    auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
-    ASSERT_TRUE(args != nullptr);
-    ASSERT_EQ(args->query, std::string{"bar"});
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::UpdateReplacement);
+    ASSERT_EQ(route.query, std::string{"bar"});
 }
 
 TEST(replaceQueryInputRoutesToFindUpdateQuery) {
     // Replace's query input (active index 0) edits the SAME query as Find, so it
-    // must route to find.update_query, not replace.update_replacement.
+    // must route to UpdateFindQuery, not UpdateReplacement.
     auto const route = routePromptTextEdit(
         atPrompt(ActivePrompt::Replace, "fo", 0),
         {PromptTextEdit::Kind::Append, "o"});
-    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
-    ASSERT_TRUE(route.command == CommandName{"find.update_query"});
-    auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
-    ASSERT_TRUE(args != nullptr);
-    ASSERT_EQ(args->query, std::string{"foo"});
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::UpdateFindQuery);
+    ASSERT_EQ(route.query, std::string{"foo"});
 }
 
 TEST(promptEditDeletesOneGraphemeBackFromTheActiveInput) {
     PromptTextEdit back{PromptTextEdit::Kind::DeleteGraphemeBack, {}};
     auto const route =
         routePromptTextEdit(atPrompt(ActivePrompt::Find, "café", 0), back);
-    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
-    ASSERT_TRUE(route.command == CommandName{"find.update_query"});
-    auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
-    ASSERT_TRUE(args != nullptr);
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::UpdateFindQuery);
     // The multi-byte 'é' is one grapheme, so one backspace removes it whole.
-    ASSERT_EQ(args->query, std::string{"caf"});
+    ASSERT_EQ(route.query, std::string{"caf"});
 }
 
 TEST(promptEditDeletesOneWordBackFromTheActiveReplacement) {
     PromptTextEdit back{PromptTextEdit::Kind::DeleteWordBack, {}};
     auto const route = routePromptTextEdit(
         atPrompt(ActivePrompt::Replace, "one two ", 1), back);
-    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
-    ASSERT_TRUE(route.command == CommandName{"replace.update_replacement"});
-    auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
-    ASSERT_TRUE(args != nullptr);
-    ASSERT_EQ(args->query, std::string{"one "});
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::UpdateReplacement);
+    ASSERT_EQ(route.query, std::string{"one "});
 }
 
 TEST(paletteDeletionIsNotRoutedThroughTheSeam) {

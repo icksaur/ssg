@@ -213,7 +213,7 @@ CommandHandlerResult bindClipboard(Editor& runtime,
 }
 
 // Move the primary selection onto the active find match and reveal it so the
-// viewport scrolls to follow find navigation (find.next/previous/update_query).
+// viewport scrolls to follow find navigation (find.next/previous).
 void revealActiveFindMatch(Editor& runtime) {
     auto const& state = runtime.findReplace.viewState();
     if (!state.open || !state.activeMatch ||
@@ -264,26 +264,22 @@ std::vector<PromptToggle> findOptionToggles(Editor& runtime) {
 }
 
 CommandHandlerResult bindFindReplace(Editor& runtime,
-                                     FindReplaceCommand command,
-                                     std::any const& payload) {
+                                     FindReplaceCommand command) {
     if (runtime.activeTabIsLiveDiff() &&
         (command == FindReplaceCommand::ReplaceOpen ||
          command == FindReplaceCommand::ReplaceCurrent ||
-         command == FindReplaceCommand::ReplaceAll ||
-         command == FindReplaceCommand::ReplaceWorkspaceApply)) {
+         command == FindReplaceCommand::ReplaceAll)) {
         return failure("replace commands are unavailable in diff mode");
     }
     auto* document = runtime.activeDocument();
-    auto query = payloadAs<std::string>(payload) ? *payloadAs<std::string>(payload) : runtime.findReplace.viewState().query;
+    auto query = runtime.findReplace.viewState().query;
     std::optional<ByteRange> range;
     DocumentSnapshot snapshot{{}, std::uint64_t{0}, DocumentMode::Edit, false};
     if (document != nullptr) {
         snapshot = document->snapshot();
         auto selected = runtime.selection.selections.primary();
         if (!selected.isCaret()) range = ByteRange{selected.lower().byteOffset, selected.upper().byteOffset};
-    } else if (command != FindReplaceCommand::ReplaceWorkspacePreview &&
-               command != FindReplaceCommand::ReplaceWorkspaceApply &&
-               command != FindReplaceCommand::FindClose &&
+    } else if (command != FindReplaceCommand::FindClose &&
                command != FindReplaceCommand::FindNext &&
                command != FindReplaceCommand::FindPrevious) {
         return failure("no active document");
@@ -346,14 +342,6 @@ CommandHandlerResult bindFindReplace(Editor& runtime,
                 return failure(opened.error->message);
             }
             return success();
-        case FindReplaceCommand::ReplaceUpdateReplacement: {
-            if (!replacePromptActive(runtime)) return success();
-            auto const* arguments = payloadAs<FindQueryArguments>(payload);
-            if (arguments == nullptr) return failure("replace.update_replacement requires a replacement payload");
-            runtime.findReplace.updateReplacement(arguments->query);
-            runtime.findDocumentId = runtime.activeDocumentId();
-            return success();
-        }
         case FindReplaceCommand::FindClose:
             runtime.findReplace.close();
             runtime.findDocumentId.reset();
@@ -376,14 +364,6 @@ CommandHandlerResult bindFindReplace(Editor& runtime,
             runtime.findReplace.previous();
             revealActiveFindMatch(runtime);
             return success();
-        case FindReplaceCommand::FindUpdateQuery: {
-            auto const* arguments = payloadAs<FindQueryArguments>(payload);
-            if (arguments == nullptr) return failure("find.update_query requires a query payload");
-            runtime.findReplace.updateQuery(snapshot, arguments->query, range);
-            runtime.findDocumentId = runtime.activeDocumentId();
-            revealActiveFindMatch(runtime);
-            return success();
-        }
         case FindReplaceCommand::FindToggleCase:
             if (!findOrReplacePromptActive(runtime)) return success();
             runtime.findReplace.toggleCase(snapshot);
@@ -430,44 +410,38 @@ CommandHandlerResult bindFindReplace(Editor& runtime,
             }
             return tabsResult;
         }
-        case FindReplaceCommand::ReplaceWorkspacePreview:
-        {
-            auto const* arguments = payloadAs<WorkspaceReplaceArguments>(payload);
-            if (arguments == nullptr) {
-                return failure("replace.workspace_preview requires a workspace replace payload");
-            }
-            auto result = previewWorkspaceReplace(
-                runtime.snapshot(++runtime.workspaceReplaceGeneration),
-                arguments->request, arguments->replacement);
-            if (!result.accepted()) return failure(result.message);
-            runtime.workspaceReplacePreview = std::move(result.preview);
-            return success();
-        }
-        case FindReplaceCommand::ReplaceWorkspaceApply: {
-            auto const* explicitPreview = payloadAs<WorkspaceReplacePreview>(payload);
-            if (payload.has_value() && explicitPreview == nullptr) {
-                return failure("replace.workspace_apply payload has the wrong type");
-            }
-            auto const* preview = runtime.workspaceReplacePreview
-                ? &*runtime.workspaceReplacePreview
-                : nullptr;
-            if (preview == nullptr) {
-                return failure("replace.workspace_apply requires a workspace replace preview payload");
-            }
-            if (explicitPreview != nullptr && *explicitPreview != *preview) {
-                return failure("replace.workspace_apply payload does not match the current workspace preview");
-            }
-            auto result = runtime.applyWorkspaceReplace(*preview);
-            if (!result.accepted()) return failure(result.message);
-            runtime.workspaceReplacePreview.reset();
-            (void)runtime.refreshTree();
-            return success();
-        }
     }
     return failure("unknown find/replace command");
 }
 
 } // namespace
+
+FindReplaceOperationResult applyFindQuery(Editor& runtime, std::string query) {
+    auto* document = runtime.activeDocument();
+    if (document == nullptr) {
+        return {FindReplaceError::DocumentRejected, 0, "no active document"};
+    }
+    DocumentSnapshot snapshot{{}, std::uint64_t{0}, DocumentMode::Edit, false};
+    std::optional<ByteRange> range;
+    snapshot = document->snapshot();
+    auto selected = runtime.selection.selections.primary();
+    if (!selected.isCaret()) {
+        range = ByteRange{selected.lower().byteOffset,
+                          selected.upper().byteOffset};
+    }
+    runtime.findReplace.updateQuery(snapshot, query, range);
+    runtime.findDocumentId = runtime.activeDocumentId();
+    revealActiveFindMatch(runtime);
+    return {};
+}
+
+FindReplaceOperationResult applyReplacement(Editor& runtime,
+                                            std::string replacement) {
+    if (!replacePromptActive(runtime)) return {};
+    runtime.findReplace.updateReplacement(std::move(replacement));
+    runtime.findDocumentId = runtime.activeDocumentId();
+    return {};
+}
 
 CommandHandlerResult applyEditorSelections(Editor& runtime,
                                           ApplySelections mutation) {
@@ -492,9 +466,8 @@ CommandHandlerResult applyEditorTextInput(Editor& runtime,
 }
 
 CommandHandlerResult executeFindReplaceCommand(Editor& runtime,
-                                                FindReplaceCommand command,
-                                                std::any const& payload) {
-    return bindFindReplace(runtime, command, payload);
+                                                FindReplaceCommand command) {
+    return bindFindReplace(runtime, command);
 }
 
 void registerTextInputCommands(CommandCatalog& catalog,
@@ -642,8 +615,7 @@ void registerFindReplaceCommands(CommandCatalog& catalog,
         auto built = spec(std::move(id), std::move(summary));
         built.binding = bindNoArgumentHandler(
             [&runtime, command](CommandContext&) {
-                return executeFindReplaceCommand(
-                    runtime, command, {});
+                return executeFindReplaceCommand(runtime, command);
             });
         if (!label.empty()) built.label = std::move(label);
         catalog.add(std::move(built));
@@ -666,35 +638,6 @@ void registerFindReplaceCommands(CommandCatalog& catalog,
     bare("replace.open", "Replace", "Replace", FindReplaceCommand::ReplaceOpen);
     bare("replace.current", "", "Current", FindReplaceCommand::ReplaceCurrent);
     bare("replace.all", "", "All", FindReplaceCommand::ReplaceAll);
-
-    // These four carry a payload, and each has a defined meaning without one:
-    // an absent query keeps the current one, and an absent preview applies the
-    // one already held.  Demanding a payload would refuse calls that work.
-    auto carrying = [&]<typename Arguments>(std::string id, std::string summary,
-                                            FindReplaceCommand command,
-                                            Arguments const*) {
-        auto built = spec(std::move(id), std::move(summary));
-        built.binding = bindOptionalWireHandler<Arguments>(
-            [&runtime, command](CommandContext&,
-                                std::optional<Arguments> const& arguments) {
-                return executeFindReplaceCommand(
-                    runtime, command,
-                    arguments ? std::any{*arguments} : std::any{});
-            });
-        catalog.add(std::move(built));
-    };
-    carrying("find.update_query", "Update Query",
-             FindReplaceCommand::FindUpdateQuery,
-             static_cast<FindQueryArguments const*>(nullptr));
-    carrying("replace.update_replacement", "Update Replacement",
-             FindReplaceCommand::ReplaceUpdateReplacement,
-             static_cast<FindQueryArguments const*>(nullptr));
-    carrying("replace.workspace_preview", "Workspace Preview",
-             FindReplaceCommand::ReplaceWorkspacePreview,
-             static_cast<WorkspaceReplaceArguments const*>(nullptr));
-    carrying("replace.workspace_apply", "Workspace Apply",
-             FindReplaceCommand::ReplaceWorkspaceApply,
-             static_cast<WorkspaceReplacePreview const*>(nullptr));
 }
 
 // Moving the caret and changing the selection. Explicit placement stays typed in

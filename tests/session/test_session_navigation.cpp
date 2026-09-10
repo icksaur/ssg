@@ -814,12 +814,10 @@ TEST(followPauseOnEditTransitionTable) {
                         ->dispatch({"replace.open",  {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch({"find.update_query",
-                                    ssg::FindQueryArguments{"needle"}})
+                        ->updateFindQuery("needle")
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch({"replace.update_replacement",
-                                    ssg::FindQueryArguments{"pin"}})
+                        ->updateReplacement("pin")
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
         ASSERT_TRUE(runtime

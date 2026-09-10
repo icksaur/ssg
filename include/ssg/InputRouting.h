@@ -84,9 +84,18 @@ struct ActivateTreeNode {
     TreeNodeId nodeId;
 };
 
+struct UpdateFindQuery {
+    std::string query;
+};
+
+struct UpdateReplacement {
+    std::string replacement;
+};
+
 using EditorMutation =
     std::variant<ApplyTextInput, ApplySelections, FocusPane, SearchQueryChange,
-                 ActivateTab, CloseTab, PromptValueArguments>;
+                 ActivateTab, CloseTab, PromptValueArguments, UpdateFindQuery,
+                 UpdateReplacement>;
 
 struct RouteUnhandled {};
 

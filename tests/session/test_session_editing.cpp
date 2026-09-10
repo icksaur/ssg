@@ -123,9 +123,9 @@ TEST(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply) {
     ASSERT_TRUE(oracle.accepted());
     ASSERT_EQ(oracle.preview->changes.size(), std::size_t{1});
 
-    auto preview = runtime.dispatch({"replace.workspace_preview",  ssg::WorkspaceReplaceArguments{request, "dog"}});
+    auto preview = runtime.workspacePreview(ssg::WorkspaceReplaceArguments{request, "dog"});
     ASSERT_TRUE(preview.accepted());
-    auto apply = runtime.dispatch({"replace.workspace_apply",  {}});
+    auto apply = runtime.workspaceApply();
     ASSERT_TRUE(apply.accepted());
     ASSERT_EQ(readText(root / "workspace" / "other.txt"), std::string{"dog"});
     ASSERT_EQ(readText(root / "workspace" / "edit.txt"), std::string{"abc"});
@@ -149,11 +149,11 @@ TEST(workspaceReplaceRejectsStaleAndOutOfBoundsPreview) {
     auto oracle = ssg::previewWorkspaceReplace(
         diskSnapshot(workspace, 1), request, "dog");
     ASSERT_TRUE(oracle.accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.workspace_preview",  ssg::WorkspaceReplaceArguments{request, "dog"}}).accepted());
+    ASSERT_TRUE(runtime.workspacePreview(ssg::WorkspaceReplaceArguments{request, "dog"}).accepted());
 
     auto escaped = *oracle.preview;
     escaped.changes.front().path = "../outside.txt";
-    auto rejectedPath = runtime.dispatch({"replace.workspace_apply",  escaped});
+    auto rejectedPath = runtime.workspaceApply(escaped);
     ASSERT_FALSE(rejectedPath.accepted());
     ASSERT_FALSE(std::filesystem::exists(root / "outside.txt"));
 
@@ -162,16 +162,12 @@ TEST(workspaceReplaceRejectsStaleAndOutOfBoundsPreview) {
     runtimeState.changes.front().path = ".ssg/scratch/hidden.txt";
     runtimeState.changes.front().before = "cat";
     runtimeState.changes.front().after = "dog";
-    auto rejectedState = runtime.dispatch({"replace.workspace_apply",  runtimeState});
+    auto rejectedState = runtime.workspaceApply(runtimeState);
     ASSERT_FALSE(rejectedState.accepted());
     ASSERT_EQ(readText(workspace / ".ssg" / "scratch" / "hidden.txt"), std::string{"cat"});
 
-    auto rejectedType = runtime.dispatch({"replace.workspace_apply",  std::string{"wrong"}});
-    ASSERT_FALSE(rejectedType.accepted());
-    ASSERT_EQ(readText(workspace / "other.txt"), std::string{"cat"});
-
     std::ofstream{workspace / "other.txt", std::ios::binary | std::ios::trunc} << "fresh";
-    auto rejectedStale = runtime.dispatch({"replace.workspace_apply",  {}});
+    auto rejectedStale = runtime.workspaceApply();
     ASSERT_FALSE(rejectedStale.accepted());
     ASSERT_EQ(readText(workspace / "other.txt"), std::string{"fresh"});
 }
@@ -189,8 +185,8 @@ TEST(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk) {
     auto oracle = ssg::previewWorkspaceReplace(
         diskSnapshot(root / "workspace", 1), request, "dog");
     ASSERT_TRUE(oracle.accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.workspace_preview",  ssg::WorkspaceReplaceArguments{request, "dog"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.workspace_apply",  {}}).accepted());
+    ASSERT_TRUE(runtime.workspacePreview(ssg::WorkspaceReplaceArguments{request, "dog"}).accepted());
+    ASSERT_TRUE(runtime.workspaceApply().accepted());
     ASSERT_EQ(readText(root / "workspace" / "edit.txt"), std::string{"dog dog"});
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"dog dog"});
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
@@ -214,10 +210,10 @@ TEST(workspaceSearchAndReplaceExcludeRuntimeStateRoots) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
 
-    ASSERT_TRUE(runtime.dispatch({"search.workspace",  std::string{"#secret"}}).accepted());
+    (void)runtime.workspaceSearch("#secret");
     ssg::FindRequest request{"secret", {}, std::nullopt, 100000, nullptr};
-    ASSERT_TRUE(runtime.dispatch({"replace.workspace_preview",  ssg::WorkspaceReplaceArguments{request, "public"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.workspace_apply",  {}}).accepted());
+    ASSERT_TRUE(runtime.workspacePreview(ssg::WorkspaceReplaceArguments{request, "public"}).accepted());
+    ASSERT_TRUE(runtime.workspaceApply().accepted());
     ASSERT_EQ(readText(workspace / "visible.txt"), std::string{"public"});
     ASSERT_EQ(readText(workspace / ".ssg" / "scratch" / "hidden.txt"), std::string{"secret"});
     ASSERT_EQ(readText(workspace / ".ssg" / "recovery" / "journal.txt"), std::string{"secret"});
@@ -242,8 +238,7 @@ TEST(workspaceSearchAndReplaceHonorIgnoreWithOpenBufferPrecedence) {
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"ignored-open.txt"}).accepted());
     ASSERT_TRUE(ssg::test::typeText(runtime, "unsaved ").accepted());
 
-    ASSERT_TRUE(runtime.dispatch(
-        {"search.workspace", std::string{"#secret"}}).accepted());
+    (void)runtime.workspaceSearch("#secret");
     while (runtime.workspaceSearchPending()) {
         runtime.advanceWorkspaceSearch();
     }
@@ -256,11 +251,9 @@ TEST(workspaceSearchAndReplaceHonorIgnoreWithOpenBufferPrecedence) {
 
     ssg::FindRequest request{"secret", {}, std::nullopt,
                              100000, nullptr};
-    ASSERT_TRUE(runtime.dispatch(
-        {"replace.workspace_preview",
-         ssg::WorkspaceReplaceArguments{request, "public"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(
-        {"replace.workspace_apply", {}}).accepted());
+    ASSERT_TRUE(runtime.workspacePreview(
+        ssg::WorkspaceReplaceArguments{request, "public"}).accepted());
+    ASSERT_TRUE(runtime.workspaceApply().accepted());
     ASSERT_EQ(readText(workspace / "visible.txt"),
               std::string{"public"});
     ASSERT_EQ(readText(workspace / "ignored-closed.txt"),
@@ -329,8 +322,7 @@ TEST(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork) {
     ASSERT_EQ(active->nodes[2].node.workspacePath,
               std::optional<std::string>{"other.txt"});
 
-    ASSERT_TRUE(
-        runtime.dispatch({"search.workspace", std::string{"a"}}).accepted());
+    (void)runtime.workspaceSearch("a");
     while (runtime.workspaceSearchPending()) runtime.advanceWorkspaceSearch();
     active = ssg::activeTreeProvider(runtime.tree.viewState());
     ASSERT_EQ(active->nodes.size(), std::size_t{3});
@@ -464,7 +456,7 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"hits.txt"}).accepted());
 
     ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
+    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
 
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
@@ -559,7 +551,7 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"a.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
+    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
     {
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
@@ -602,7 +594,7 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
     }
 
     ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"target"}}).accepted());
+    ASSERT_TRUE(runtime.updateFindQuery("target").accepted());
 
     // The match on line 40 lies below the initial 24-row viewport, so revealing
     // it must scroll down and the match's logical line must be visible.
@@ -630,8 +622,8 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"r.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.open",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.update_replacement",  ssg::FindQueryArguments{"dog"}}).accepted());
+    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
+    ASSERT_TRUE(runtime.updateReplacement("dog").accepted());
 
     {
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -673,8 +665,8 @@ TEST(replaceAllReplacesEveryMatch) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"r.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.open",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.update_replacement",  ssg::FindQueryArguments{"dog"}}).accepted());
+    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
+    ASSERT_TRUE(runtime.updateReplacement("dog").accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.all",  {}}).accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"dog dog dog"});
     auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -700,8 +692,8 @@ TEST(replaceCommandsAreBenignNoOpsWithoutAReplacePrompt) {
     // A find prompt (not replace) is open: replace commands must be benign
     // success no-ops that do not mutate the document or controller state.
     ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.update_replacement",  ssg::FindQueryArguments{"dog"}}).accepted());
+    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
+    ASSERT_TRUE(runtime.updateReplacement("dog").accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.current",  {}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.all",  {}}).accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"cat cat cat"});
@@ -732,7 +724,7 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
     }
 
     ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
+    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
     {
         // Case-insensitive (default): all three "cat"s match.
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -762,7 +754,7 @@ TEST(replaceOpenPreservesFindOptions) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"m.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
+    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
     ASSERT_TRUE(runtime.dispatch({"find.toggle_case",  {}}).accepted());
     // Case-sensitive find matched only the lowercase "cat".
     {
@@ -1199,8 +1191,8 @@ TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
     ASSERT_EQ(firstRow(), 0U);  // caret at top; the match is off-screen far below
 
     ASSERT_TRUE(runtime.dispatch({"replace.open",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"needle"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.update_replacement",  ssg::FindQueryArguments{"pin"}}).accepted());
+    ASSERT_TRUE(runtime.updateFindQuery("needle").accepted());
+    ASSERT_TRUE(runtime.updateReplacement("pin").accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.all",  {}}).accepted());
     // No match remains, but the caret (now at the replaced text near the bottom)
     // is revealed rather than left off-screen.
@@ -1225,8 +1217,7 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
 
     ASSERT_TRUE(runtime.dispatch({"find.open",  {}})
                     .accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.update_query",
-                                  ssg::FindQueryArguments{"cat"}})
+    ASSERT_TRUE(runtime.updateFindQuery("cat")
                     .accepted());
     ASSERT_TRUE(runtime.dispatch({"prompt.submit",  {}})
                     .accepted());
@@ -1254,8 +1245,7 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
 
     ASSERT_TRUE(runtime.dispatch({"replace.open",  {}})
                     .accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.update_replacement",
-                                  ssg::FindQueryArguments{"dog"}})
+    ASSERT_TRUE(runtime.updateReplacement("dog")
                     .accepted());
     ASSERT_TRUE(runtime.dispatch({"prompt.submit",  {}})
                     .accepted());

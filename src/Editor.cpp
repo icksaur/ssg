@@ -376,6 +376,16 @@ std::optional<std::string> applyInputMutation(
         if (!result.accepted()) return result.error->message;
         return std::nullopt;
     }
+    if (auto* update = std::get_if<UpdateFindQuery>(&*mutation)) {
+        auto result = applyFindQuery(editor, std::move(update->query));
+        if (!result.accepted()) return result.message;
+        return std::nullopt;
+    }
+    if (auto* update = std::get_if<UpdateReplacement>(&*mutation)) {
+        auto result = applyReplacement(editor, std::move(update->replacement));
+        if (!result.accepted()) return result.message;
+        return std::nullopt;
+    }
 
     const auto change = std::get<SearchQueryChange>(*mutation);
     const auto binding = editor.tree.activeProviderBinding();
@@ -1707,6 +1717,78 @@ CompiledKeymap const& Editor::resolveInputKeymap() {
 void Editor::focusEditor() {
     std::lock_guard operationLock{operationMutex};
     screen.focusEditor();
+}
+
+WorkspacePreviewResult Editor::workspacePreview(WorkspaceReplaceArguments args) {
+    std::lock_guard g{operationMutex};
+    const auto revisionsBefore = documentRevisions(workspace);
+    screen.refreshExternalModificationPresence(externalModificationPresent());
+    auto r = previewWorkspaceReplace(
+        snapshot(++workspaceReplaceGeneration), args.request, args.replacement);
+    if (r.accepted()) workspaceReplacePreview = r.preview;
+    reconcileFindDocument();
+    screen.refreshNoticePresence(noticePresent());
+    screen.refreshExternalModificationPresence(externalModificationPresent());
+    screen.refreshStatusActions(status.actionNodes());
+    if (r.accepted() && existingDocumentMutated(revisionsBefore, workspace)) {
+        (void)follow.notifyLocalEdit();
+    }
+    return r;
+}
+
+WorkspaceApplyResult Editor::workspaceApply(
+    std::optional<WorkspaceReplacePreview> expected) {
+    std::lock_guard g{operationMutex};
+    const auto revisionsBefore = documentRevisions(workspace);
+    screen.refreshExternalModificationPresence(externalModificationPresent());
+    WorkspaceApplyResult result = [&] {
+        auto const* preview = workspaceReplacePreview
+            ? &*workspaceReplacePreview : nullptr;
+        if (preview == nullptr) {
+            return WorkspaceApplyResult{FindReplaceError::WorkspaceRejected, 0,
+                "workspace apply requires a workspace replace preview",
+                };
+        }
+        if (expected && *expected != *preview) {
+            return WorkspaceApplyResult{FindReplaceError::WorkspaceRejected, 0,
+                "workspace apply input does not match the current preview",
+                };
+        }
+        auto r = applyWorkspaceReplace(*preview);
+        if (!r.accepted()) {
+            return r;
+        }
+        workspaceReplacePreview.reset();
+        (void)refreshTree();
+        return r;
+    }();
+    reconcileFindDocument();
+    screen.refreshNoticePresence(noticePresent());
+    screen.refreshExternalModificationPresence(externalModificationPresent());
+    screen.refreshStatusActions(status.actionNodes());
+    if (result.accepted() && existingDocumentMutated(revisionsBefore, workspace)) {
+        (void)follow.notifyLocalEdit();
+    }
+    return result;
+}
+
+WorkspaceSearchState Editor::workspaceSearch(std::string query) {
+    std::lock_guard g{operationMutex};
+    const auto sourceGeneration = ++workspaceSearchGeneration;
+    startWorkspaceSearch(std::move(query), sourceGeneration);
+    return *workspaceSearchState;
+}
+
+FindReplaceOperationResult Editor::updateFindQuery(std::string query) {
+    std::lock_guard g{operationMutex};
+    auto r = applyFindQuery(*this, std::move(query));
+    return r;
+}
+
+FindReplaceOperationResult Editor::updateReplacement(std::string replacement) {
+    std::lock_guard g{operationMutex};
+    auto r = applyReplacement(*this, std::move(replacement));
+    return r;
 }
 
 EditorCreateResult createEditor(EditorConfig config) {

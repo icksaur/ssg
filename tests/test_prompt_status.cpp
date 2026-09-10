@@ -81,26 +81,21 @@ TEST(promptFocusOnlyAddressesAnInputNeverAToggleOrCount) {
 }
 
 TEST(promptControlsCarryTheirOperatingCommands) {
-    // The input control carries the command that operates it -- a client never
-    // hardcodes a per-field id. With the production input ids, Find's input drives
-    // find.update_query and Replace's replacement input drives
-    // replace.update_replacement; every other input is operated through typed
-    // routing and has no command string.
+    // Toggle controls carry the command that operates them; inputs are operated
+    // through typed routing and carry no command string.
     PromptRequest findReq;
     findReq.kind = PromptKind::Find;
     findReq.accessibleLabel = "Find";
     findReq.inputs.push_back({"find.query", "Find text", "needle"});
-    ASSERT_EQ(resolvePromptControls(findReq).front().command,
-              std::string{"find.update_query"});
+    ASSERT_TRUE(resolvePromptControls(findReq).front().command.empty());
     PromptRequest replaceReq;
     replaceReq.kind = PromptKind::Replace;
     replaceReq.accessibleLabel = "Replace";
     replaceReq.inputs.push_back({"find.query", "Find text", "needle"});
     replaceReq.inputs.push_back({"replace.replacement", "Replacement text", "value"});
     const auto replaceControls = resolvePromptControls(replaceReq);
-    ASSERT_EQ(replaceControls.at(0).command, std::string{"find.update_query"});
-    ASSERT_EQ(replaceControls.at(1).command,
-              std::string{"replace.update_replacement"});
+    ASSERT_TRUE(replaceControls.at(0).command.empty());
+    ASSERT_TRUE(replaceControls.at(1).command.empty());
     PromptRequest pathReq;
     pathReq.kind = PromptKind::Path;
     pathReq.accessibleLabel = "Path";

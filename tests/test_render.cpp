@@ -848,7 +848,7 @@ TEST(renderPaintsFindMatchesAndActiveMatch) {
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"find.txt"});
     (void)runtime->dispatch({"find.open",  {}});
-    (void)runtime->dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}});
+    (void)runtime->updateFindQuery("cat");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -893,7 +893,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"stale.txt"});
     (void)runtime->dispatch({"find.open",  {}});
-    (void)runtime->dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}});
+    (void)runtime->updateFindQuery("cat");
 
     // Editing the document advances its revision without re-evaluating find, so
     // the controller is stale: reconcile closes it and no matches are painted.
@@ -923,8 +923,8 @@ TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"rep.txt"});
     (void)runtime->dispatch({"replace.open",  {}});
-    (void)runtime->dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}});
-    (void)runtime->dispatch({"replace.update_replacement",  ssg::FindQueryArguments{"dog"}});
+    (void)runtime->updateFindQuery("cat");
+    (void)runtime->updateReplacement("dog");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -949,7 +949,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"opt.txt"});
     (void)runtime->dispatch({"find.open",  {}});
-    (void)runtime->dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}});
+    (void)runtime->updateFindQuery("cat");
 
     // Default options: all three indicators render unchecked.
     {

@@ -92,8 +92,7 @@ CommandHandlerResult shellCommand(Editor& runtime,
 }
 
 CommandHandlerResult promptStatusCommand(Editor& runtime,
-                                         std::string_view id,
-                                         std::any const& payload) {
+                                         std::string_view id) {
     if (id == "prompt.submit" || id == "prompt.cancel" ||
         id == "prompt.next" || id == "prompt.previous") {
         auto const& request = runtime.screen.prompt().request();
@@ -106,23 +105,19 @@ CommandHandlerResult promptStatusCommand(Editor& runtime,
                 auto command = request->kind == PromptKind::Replace
                                    ? FindReplaceCommand::ReplaceCurrent
                                    : FindReplaceCommand::FindNext;
-                return executeFindReplaceCommand(
-                    runtime, command, payload);
+                return executeFindReplaceCommand(runtime, command);
             }
             if (id == "prompt.cancel") {
                 return executeFindReplaceCommand(
-                    runtime, FindReplaceCommand::FindClose,
-                    payload);
+                    runtime, FindReplaceCommand::FindClose);
             }
             if (id == "prompt.next") {
                 return executeFindReplaceCommand(
-                    runtime, FindReplaceCommand::FindNext,
-                    payload);
+                    runtime, FindReplaceCommand::FindNext);
             }
             if (id == "prompt.previous") {
                 return executeFindReplaceCommand(
-                    runtime, FindReplaceCommand::FindPrevious,
-                    payload);
+                    runtime, FindReplaceCommand::FindPrevious);
             }
             return failure("command is not valid for a find/replace prompt");
         }
@@ -396,7 +391,7 @@ void registerPromptStatusCommands(CommandCatalog& catalog,
         auto built = spec(std::move(id), std::move(summary));
         built.binding = bindNoArgumentHandler(
             [&runtime, name](CommandContext&) {
-                return promptStatusCommand(runtime, name, {});
+                return promptStatusCommand(runtime, name);
             });
         if (!label.empty()) built.label = std::move(label);
         catalog.add(std::move(built));

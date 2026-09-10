@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 175 commands.
+There are 171 commands.
 
 ## clipboard-register
 
@@ -94,10 +94,6 @@ There are 175 commands.
 | `replace.open` | Replace | none | lua |
 | `replace.current` | Current | none | lua |
 | `replace.all` | All | none | lua |
-| `find.update_query` | Update Query | query | lua |
-| `replace.update_replacement` | Update Replacement | query | lua |
-| `replace.workspace_preview` | Workspace Preview | workspace replace | lua |
-| `replace.workspace_apply` | Workspace Apply | workspace apply | lua |
 
 ## follow-edits
 
