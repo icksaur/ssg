@@ -167,7 +167,8 @@ TEST(firstSaveOfANewFileDoesNotClobberAFileCreatedMeanwhile) {
               std::string{"someone else"});
 }
 
-TEST(recentFilesAreBoundedMruAndDropMissingEntries) {    TemporaryDirectory temporary;
+TEST(recentFilesAreBoundedMruAndDropMissingEntries) {
+    TemporaryDirectory temporary;
     auto recovery =
         ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
@@ -176,15 +177,16 @@ TEST(recentFilesAreBoundedMruAndDropMissingEntries) {    TemporaryDirectory temp
         writeBytes(temporary.path() / name, name);
         ASSERT_TRUE(workspace.openFile(name).accepted());
     }
-    const auto recent = workspace.recentFiles();
-    ASSERT_EQ(recent.size(), std::size_t{32});
-    ASSERT_EQ(recent.front(), std::string{"33.txt"});
-    ASSERT_EQ(recent.back(), std::string{"2.txt"});
+    const auto mostRecent = workspace.openRecent(0);
+    ASSERT_TRUE(mostRecent.accepted());
+    ASSERT_EQ(workspace.state(*mostRecent.document)->key.savedPath(), "33.txt");
+    ASSERT_EQ(workspace.openRecent(32).error, ssg::WorkspaceError::NotFound);
 
     std::filesystem::remove(temporary.path() / "33.txt");
     ASSERT_EQ(workspace.openRecent(0).error, ssg::WorkspaceError::NotFound);
-    const auto afterMissing = workspace.recentFiles();
-    ASSERT_EQ(afterMissing.front(), std::string{"32.txt"});
+    const auto afterMissing = workspace.openRecent(0);
+    ASSERT_TRUE(afterMissing.accepted());
+    ASSERT_EQ(workspace.state(*afterMissing.document)->key.savedPath(), "32.txt");
 }
 
 TEST(renameDeleteAndOpenDirectoryUpdateWorkspaceState) {

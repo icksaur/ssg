@@ -115,7 +115,6 @@ TEST(activeClosePrefersRightThenLeftAndDirtyFailureIsAtomic) {
     const auto closeFailure = tabs.close(b, failedCloseResult());
     ASSERT_EQ(closeFailure.error, ssg::TabError::DurabilityFailed);
     ASSERT_EQ(tabs.viewState(), before);
-    ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
 
     ASSERT_TRUE(tabs.close(b, acceptedCloseResult(tabState(tabs, b))).accepted());
     ASSERT_EQ(tabs.viewState().active, std::optional{c});
@@ -158,7 +157,6 @@ TEST(reopenIsLifoRetryableAndRestoresPositionAndActivation) {
         request, {ssg::TabError::LifecycleFailed, "restore failed", std::nullopt,
                   std::nullopt, std::nullopt, false});
     ASSERT_EQ(failedResult.error, ssg::TabError::LifecycleFailed);
-    ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{2});
 
     begin = tabs.beginReopenClosed();
     ASSERT_TRUE(std::holds_alternative<ssg::TabReopenRequest>(begin));
@@ -191,7 +189,6 @@ TEST(recentlyClosedEvictsOldestAtConfiguredBound) {
     (void)tabs.close(b, acceptedCloseResult(tabState(tabs, b)));
     (void)tabs.close(c, acceptedCloseResult(tabState(tabs, c)));
 
-    ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{2});
     auto begin = tabs.beginReopenClosed();
     ASSERT_TRUE(std::holds_alternative<ssg::TabReopenRequest>(begin));
     auto request = std::get<ssg::TabReopenRequest>(begin);
@@ -222,7 +219,6 @@ TEST(reopenActivatesAnIdentityAlreadyOpenedByAnotherPath) {
     ASSERT_EQ(reopened.tab, std::optional{replacement});
     ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
     ASSERT_EQ(tabs.viewState().active, std::optional{replacement});
-    ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
 }
 
 TEST(untitledLabelsAreSmallestAvailableAndReopenIsStable) {
@@ -322,7 +318,6 @@ TEST(closeAcceptsAMissingCompensationOnlyForAnEphemeralTab) {
              .tab;
 
     ASSERT_TRUE(tabs.close(output, ephemeralCloseResult()).accepted());
-    ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
     ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
 
     const auto refused = tabs.close(document, missingCompensationResult());

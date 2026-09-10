@@ -24,17 +24,6 @@ struct WorkspaceCorpusOptions {
     std::vector<std::filesystem::path> excludedDirectories;
 };
 
-enum class WorkspaceCorpusOutcome {
-    Complete,
-    Truncated,
-    Failed,
-};
-
-struct WorkspaceCorpusStatus {
-    WorkspaceCorpusOutcome outcome = WorkspaceCorpusOutcome::Complete;
-    std::string message;
-};
-
 using WorkspaceCorpusReader =
     std::function<FileReadResult(const std::filesystem::path&)>;
 
@@ -54,7 +43,6 @@ public:
                     WorkspaceCorpusOptions options = {});
 
     [[nodiscard]] const std::vector<std::string>& paths() const noexcept;
-    [[nodiscard]] const WorkspaceCorpusStatus& status() const noexcept;
     [[nodiscard]] std::optional<WorkspaceCorpusFile> read(
         std::size_t index) const;
 
@@ -64,7 +52,6 @@ private:
     std::map<std::string,
              std::function<std::optional<std::string>()>> openBuffers_;
     WorkspaceCorpusReader reader_;
-    WorkspaceCorpusStatus status_;
 };
 
 }  // namespace ssg

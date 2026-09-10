@@ -38,7 +38,6 @@ class TerminalCapabilities {
     [[nodiscard]] std::string beginProbe();
     void observeReply(std::string_view reply);
     void endProbe();
-    [[nodiscard]] bool probing() const;
     [[nodiscard]] bool has(Capability capability) const;
     [[nodiscard]] ColorDepth colorDepth() const;
 

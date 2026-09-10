@@ -1,13 +1,3 @@
-ssg::TabManager::recentlyClosedCount() const	CMakeFiles/ssg_core.dir/src/TabManager.cpp.o
-ssg::TerminalCapabilities::probing() const	CMakeFiles/ssg_terminal_objects.dir/src/TerminalCapabilities.cpp.o
-ssg::TerminalModes::depth() const	CMakeFiles/ssg_terminal_objects.dir/src/Terminal.cpp.o
-ssg::TreeModel::activeVisibleNodeCount() const	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
-ssg::TreeModel::resetVisibleNodesRecomputeCount()	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
-ssg::TreeModel::toggleSelected()	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
-ssg::TreeModel::visibleNodesRecomputeCount()	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
-ssg::TreeProviderSnapshot::fromFilesystem(ssg::TreeProviderId, std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
-ssg::Workspace::recentFiles[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/Workspace.cpp.o
-ssg::WorkspaceCorpus::status() const	CMakeFiles/ssg_core.dir/src/WorkspaceCorpus.cpp.o
 ssg::cellRunCalls()	CMakeFiles/ssg_core.dir/src/GraphemeLayout.cpp.o
 ssg::colorDepthName(ssg::ColorDepth)	CMakeFiles/ssg_terminal_objects.dir/src/TerminalOutput.cpp.o
 ssg::deriveViewportDelta(ssg::ViewportViewState const&, ssg::ViewportViewState const&)	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o

@@ -131,8 +131,6 @@ public:
     TabManager& operator=(TabManager&&) noexcept;
 
     [[nodiscard]] const TabViewState& viewState() const noexcept;
-    [[nodiscard]] std::size_t recentlyClosedCount() const noexcept;
-
     [[nodiscard]] TabResult openDocument(
         FileDocumentId document, JournalDocumentKey identity,
         std::string_view label, DocumentMode mode, bool dirty,

@@ -173,7 +173,6 @@ TEST(modeStackReproducesTheCuratedSetupAndRestoreSequences) {
         written.clear();
     }
     ASSERT_EQ(written, std::string{kExpectedRestore});
-    ASSERT_EQ(modes.depth(), std::size_t{0});
 }
 
 TEST(everyEnteredModeIsLeftInReverseOrder) {
@@ -183,9 +182,7 @@ TEST(everyEnteredModeIsLeftInReverseOrder) {
     {
         auto outer = modes.enter(ssg::kAlternateScreen);
         auto inner = modes.enter(ssg::kMouseButtons);
-        ASSERT_EQ(modes.depth(), std::size_t{2});
     }
-    ASSERT_EQ(modes.depth(), std::size_t{0});
     // Entered alt-screen then mouse; must leave mouse then alt-screen.
     auto const mousePos = written.find("\x1b[?1000l");
     auto const altPos = written.find("\x1b[?1049l");

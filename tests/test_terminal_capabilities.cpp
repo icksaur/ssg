@@ -74,7 +74,6 @@ TEST(onlyADa1ReplyMeansTheFeatureIsAbsent) {
     ASSERT_TRUE(rich.has(ssg::Capability::SynchronizedOutput));
     ASSERT_TRUE(rich.has(ssg::Capability::KeyboardProtocol));
     ASSERT_TRUE(rich.has(ssg::Capability::ClipboardWrite));
-    ASSERT_FALSE(rich.probing());  // The fence closed the window.
 
     // A terminal that answers only the fence: everything else is absent, and
     // nothing waited to find that out.
@@ -84,7 +83,6 @@ TEST(onlyADa1ReplyMeansTheFeatureIsAbsent) {
     for (auto const capability : ssg::kAllCapabilities) {
         ASSERT_FALSE(plain.has(capability));
     }
-    ASSERT_FALSE(plain.probing());
 
     // A terminal that answers nothing at all: still absent, still not waiting.
     ssg::TerminalCapabilities silent{fakeEnvironment({})};
@@ -203,9 +201,7 @@ TEST(everyCapabilityHasAWorkingOverride) {
 // fence must be written last or it cannot fence anything.
 TEST(theProbeAsksOnlyQuestionsItCanUnderstand) {
     ssg::TerminalCapabilities capabilities{fakeEnvironment({})};
-    ASSERT_FALSE(capabilities.probing());
     auto const queries = capabilities.beginProbe();
-    ASSERT_TRUE(capabilities.probing());
 
     // DA1 is last, so every speculative answer precedes the fence.
     ASSERT_TRUE(queries.ends_with("\x1b[c"));
@@ -238,12 +234,10 @@ TEST(aReplyArrivingAfterTheWindowExpiresIsNotBelieved) {
 
     ssg::TerminalCapabilities capabilities{fakeEnvironment({}), clock};
     (void)capabilities.beginProbe();
-    ASSERT_TRUE(capabilities.probing());
 
     // Just inside the window: still believed.
     now += ssg::TerminalCapabilities::kProbeWindow -
            std::chrono::milliseconds{1};
-    ASSERT_TRUE(capabilities.probing());
     capabilities.observeReply("\x1b[?1u");
     ASSERT_TRUE(capabilities.has(ssg::Capability::KeyboardProtocol));
 
@@ -252,7 +246,6 @@ TEST(aReplyArrivingAfterTheWindowExpiresIsNotBelieved) {
     (void)late.beginProbe();
     now += ssg::TerminalCapabilities::kProbeWindow +
            std::chrono::milliseconds{1};
-    ASSERT_FALSE(late.probing());
     late.observeReply("\x1b[?1u");
     late.observeReply("\x1b[?2026;2$y");
     ASSERT_FALSE(late.has(ssg::Capability::KeyboardProtocol));

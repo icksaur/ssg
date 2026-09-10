@@ -155,8 +155,6 @@ public:
     [[nodiscard]] const Document& document(FileDocumentId document) const;
     [[nodiscard]] TransactionResult apply(
         FileDocumentId document, const EditTransaction& transaction);
-    [[nodiscard]] std::vector<std::string> recentFiles() const;
-
     [[nodiscard]] WorkspaceResult openDirectory(
         const std::filesystem::path& path);
 

@@ -67,10 +67,6 @@ void TerminalModes::leaveThrough(std::size_t depth) noexcept {
     }
 }
 
-std::size_t TerminalModes::depth() const noexcept {
-    return impl_->entered.size();
-}
-
 TerminalModes::Guard::~Guard() {
     if (owner_ != nullptr) owner_->leaveThrough(depth_ - 1);
 }

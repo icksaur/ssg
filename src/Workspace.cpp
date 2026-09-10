@@ -680,10 +680,6 @@ TransactionResult Workspace::apply(
     return result;
 }
 
-std::vector<std::string> Workspace::recentFiles() const {
-    return impl_->recent;
-}
-
 WorkspaceResult Workspace::openDirectory(
     const std::filesystem::path& path) {
     std::error_code code;

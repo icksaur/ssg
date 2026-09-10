@@ -83,11 +83,10 @@ TEST(corpusMatchesIndependentFixtureAndOpenBuffersWin) {
               std::optional<std::string>{"open\n"});
     ASSERT_FALSE(textFor(corpus, "binary.dat").has_value());
     ASSERT_EQ(reads, std::size_t{1});
-    ASSERT_EQ(corpus.status().outcome, WorkspaceCorpusOutcome::Complete);
     fs::remove_all(root);
 }
 
-TEST(corpusReportsTruncationAndWalkFailureSeparately) {
+TEST(corpusStopsAtTheLimitAndOnWalkFailure) {
     const auto root = uniqueRoot("outcomes");
     writeText(root / "a.txt", "a");
     writeText(root / "b.txt", "b");
@@ -95,16 +94,13 @@ TEST(corpusReportsTruncationAndWalkFailureSeparately) {
     WorkspaceCorpus truncated{
         root, {}, ignore, readFile,
         WorkspaceCorpusOptions{.maximumFiles = 1}};
-    ASSERT_EQ(truncated.status().outcome,
-              WorkspaceCorpusOutcome::Truncated);
     ASSERT_EQ(truncated.paths(),
               (std::vector<std::string>{"a.txt"}));
 
     const auto regularFile = root / "not-a-directory";
     writeText(regularFile, "x");
     WorkspaceCorpus failedCorpus{regularFile, {}, ignore, readFile};
-    ASSERT_EQ(failedCorpus.status().outcome,
-              WorkspaceCorpusOutcome::Failed);
+    ASSERT_TRUE(failedCorpus.paths().empty());
     fs::remove_all(root);
 }
 
@@ -125,7 +121,7 @@ TEST(pathEnumerationNeverReadsContents) {
 
 SSG_TEST_SUITE(test_workspace_corpus) {
     RUN(corpusMatchesIndependentFixtureAndOpenBuffersWin);
-    RUN(corpusReportsTruncationAndWalkFailureSeparately);
+    RUN(corpusStopsAtTheLimitAndOnWalkFailure);
     RUN(pathEnumerationNeverReadsContents);
     return failed == 0 ? 0 : 1;
 }

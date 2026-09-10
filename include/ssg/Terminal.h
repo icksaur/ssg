@@ -70,8 +70,6 @@ class TerminalModes {
     };
 
     [[nodiscard]] Guard enter(TerminalMode mode);
-    [[nodiscard]] std::size_t depth() const noexcept;
-
   private:
     void leaveThrough(std::size_t depth) noexcept;
 

@@ -174,8 +174,6 @@ bool TerminalCapabilities::expired() const {
     return probing_ && clock_ && clock_() > deadline_;
 }
 
-bool TerminalCapabilities::probing() const { return probing_ && !expired(); }
-
 std::optional<bool> TerminalCapabilities::overrideFor(Capability capability) const {
     if (!lookup_) return std::nullopt;
     char const* const value = lookup_(overrideVariable(capability));

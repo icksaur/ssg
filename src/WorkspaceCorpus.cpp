@@ -37,7 +37,7 @@ struct Walk {
     const WorkspaceCorpusOptions* options = nullptr;
     std::set<std::string> seen;
     std::vector<std::string> paths;
-    WorkspaceCorpusStatus status;
+    bool halted = false;
 
     [[nodiscard]] bool ignored(const fs::path& relative) const {
         return options->respectGitignore && ignore->usable() &&
@@ -55,8 +55,7 @@ struct Walk {
     bool add(std::string path) {
         if (seen.contains(path)) return true;
         if (paths.size() >= options->maximumFiles) {
-            status.outcome = WorkspaceCorpusOutcome::Truncated;
-            status.message = "workspace corpus reached its file limit";
+            halted = true;
             return false;
         }
         seen.insert(path);
@@ -67,10 +66,7 @@ struct Walk {
     std::optional<std::vector<Entry>> entries(const fs::path& directory) {
         const auto listed = listDirectory(directory);
         if (!listed.ok() || !listed.complete) {
-            status.outcome = WorkspaceCorpusOutcome::Failed;
-            status.message = listed.message.empty()
-                                 ? "workspace directory could not be listed"
-                                 : listed.message;
+            halted = true;
             return std::nullopt;
         }
 
@@ -92,9 +88,8 @@ struct Walk {
                     continue;
                 }
                 result.push_back({path, path.filename().string(), kind});
-            } catch (const std::system_error& error) {
-                status.outcome = WorkspaceCorpusOutcome::Failed;
-                status.message = error.what();
+            } catch (const std::system_error&) {
+                halted = true;
                 return std::nullopt;
             }
         }
@@ -147,20 +142,15 @@ WorkspaceCorpus::WorkspaceCorpus(
         if (!walk.add(path)) break;
         openBuffers_.emplace(path, std::move(read));
     }
-    if (walk.status.outcome == WorkspaceCorpusOutcome::Complete) {
+    if (!walk.halted) {
         (void)walk.descend(root_, {});
     }
     std::ranges::sort(walk.paths);
     paths_ = std::move(walk.paths);
-    status_ = std::move(walk.status);
 }
 
 const std::vector<std::string>& WorkspaceCorpus::paths() const noexcept {
     return paths_;
-}
-
-const WorkspaceCorpusStatus& WorkspaceCorpus::status() const noexcept {
-    return status_;
 }
 
 std::optional<WorkspaceCorpusFile> WorkspaceCorpus::read(

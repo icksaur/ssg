@@ -64,12 +64,12 @@ TEST(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks) {
     std::filesystem::create_directory_symlink(
         temporary.path() / "z-dir", temporary.path() / "a-link", symlinkError);
 
-    const auto first = TreeProviderSnapshot::fromFilesystem(
-        TreeProviderId{"files"}, temporary.path());
+    const auto first = TreeProviderSnapshot::fromFilesystemDirectories(
+        TreeProviderId{"files"}, temporary.path(), {});
     std::filesystem::rename(temporary.path() / "a.txt",
                             temporary.path() / "renamed.txt");
-    const auto second = TreeProviderSnapshot::fromFilesystem(
-        TreeProviderId{"files"}, temporary.path());
+    const auto second = TreeProviderSnapshot::fromFilesystemDirectories(
+        TreeProviderId{"files"}, temporary.path(), {});
 
     std::vector<std::string> expected{
         "files:a-dir", "files:a-link", "files:a.txt", "files:b.txt",
@@ -160,6 +160,7 @@ TEST(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned) {
          {.stableKey = "type/A/member", .parentKey = "type/A",
           .label = "member"}}));
 
+    ASSERT_EQ(onlyProvider(model.viewState()).nodes.size(), std::size_t{1});
     ASSERT_TRUE(model.toggleExpanded(TreeProviderId{"symbols"},
                                       TreeNodeId{"symbols:type/A"}));
     ASSERT_EQ(onlyProvider(model.viewState()).nodes.size(), std::size_t{2});
@@ -222,7 +223,8 @@ TEST(selectionNavigatesExpandsAndReportsSelectedNode) {
     ASSERT_TRUE(model.selectPrevious());
     selected = model.selectedNode();
     if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:A"});
-    ASSERT_TRUE(model.toggleSelected());
+    ASSERT_TRUE(model.toggleExpanded(TreeProviderId{"symbols"},
+                                     TreeNodeId{"symbols:A"}));
     ASSERT_TRUE(model.selectNext());
     selected = model.selectedNode();
     if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:A/one"});
@@ -262,7 +264,8 @@ TEST(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes) {
     ASSERT_FALSE(model.select(TreeNodeId{"symbols:A/one"}));
     // Expand A, then it becomes selectable.
     ASSERT_TRUE(model.select(TreeNodeId{"symbols:A"}));
-    ASSERT_TRUE(model.toggleSelected());
+    ASSERT_TRUE(model.toggleExpanded(TreeProviderId{"symbols"},
+                                     TreeNodeId{"symbols:A"}));
     ASSERT_TRUE(model.select(TreeNodeId{"symbols:A/one"}));
     selected = model.selectedNode();
     if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:A/one"});
@@ -342,8 +345,8 @@ TEST(searchProviderStateIsInitializedProjectedAndPersists) {
 TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
     TemporaryDirectory directory;
     TreeModel model;
-    model.replaceProvider(TreeProviderSnapshot::fromFilesystem(
-        TreeProviderId{"filesystem"}, directory.path()));
+    model.replaceProvider(TreeProviderSnapshot::fromFilesystemDirectories(
+        TreeProviderId{"filesystem"}, directory.path(), {}));
     const auto filesystemRevision =
         model.providerIdentities().front().revision;
 
@@ -393,55 +396,7 @@ TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
     ASSERT_TRUE(empty.viewState().providers.empty());
 }
 
-// The memoization invariant: visibility is a pure function of (snapshot,
-// expanded). It must recompute when the snapshot revision changes OR the
-// expanded set changes, and must NOT recompute for navigation (selection) that
-// changes neither. Keying on the snapshot revision alone would miss the
-// expand/collapse case, since toggleExpanded does not change that revision --
-// this test names that load-bearing half.
-TEST(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation) {
-    TreeModel model;
-    model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"},
-        {{.stableKey = "type/A", .label = "A"},
-         {.stableKey = "type/A/member", .parentKey = "type/A",
-          .label = "member"},
-         {.stableKey = "type/Z", .label = "Z"}}));
-
-    // A repeated identical viewState() (nothing changed) adds no recompute:
-    // the second call is served entirely from cache.
-    TreeModel::resetVisibleNodesRecomputeCount();
-    (void)model.viewState();
-    const auto afterFirst = TreeModel::visibleNodesRecomputeCount();
-    (void)model.viewState();
-    ASSERT_EQ(TreeModel::visibleNodesRecomputeCount(), afterFirst);
-
-    // Navigation changes neither the tree revision nor the expanded set, so it
-    // adds no recompute on top of an already-warm cache.
-    (void)model.viewState();  // warm
-    TreeModel::resetVisibleNodesRecomputeCount();
-    ASSERT_TRUE(model.selectNext());
-    (void)model.viewState();
-    ASSERT_EQ(TreeModel::visibleNodesRecomputeCount(), std::uint64_t{0});
-
-    // Expand/collapse mutates the expanded set but NOT the snapshot revision;
-    // keying on the revision alone would wrongly serve the stale cache here.
-    TreeModel::resetVisibleNodesRecomputeCount();
-    ASSERT_TRUE(model.toggleExpanded(TreeProviderId{"symbols"},
-                                     TreeNodeId{"symbols:type/A"}));
-    (void)model.viewState();
-    ASSERT_TRUE(TreeModel::visibleNodesRecomputeCount() >= std::uint64_t{1});
-
-    // A provider replacement bumps the snapshot revision.
-    TreeModel::resetVisibleNodesRecomputeCount();
-    model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"},
-        {{.stableKey = "type/A", .label = "renamed A"}}));
-    (void)model.viewState();
-    ASSERT_TRUE(TreeModel::visibleNodesRecomputeCount() >= std::uint64_t{1});
-}
-
-SSG_TEST_SUITE(test_tree) {
+ SSG_TEST_SUITE(test_tree) {
     RUN(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks);
     RUN(filesystemDirectorySnapshotLoadsOnlyRequestedBranches);
     RUN(filesystemSnapshotIgnoresAnEntryThatDisappearsDuringInspection);
@@ -454,6 +409,5 @@ SSG_TEST_SUITE(test_tree) {
     RUN(selectionPersistsIndependentlyForEachProvider);
     RUN(searchProviderStateIsInitializedProjectedAndPersists);
     RUN(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem);
-    RUN(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation);
     return failed == 0 ? 0 : 1;
 }

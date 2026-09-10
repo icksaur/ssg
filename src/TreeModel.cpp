@@ -180,10 +180,6 @@ std::vector<TreeNodeView> computeVisibleNodes(
     return result;
 }
 
-// Per-thread, like the render segmentation counter: tests run single-threaded,
-// and a per-thread counter needs no synchronization on the hot path.
-thread_local std::uint64_t g_visibleNodesRecomputes = 0;
-
 } // namespace
 
 GitTreeAffordance gitTreeAffordance(DiffFileStatus status) {
@@ -240,19 +236,10 @@ TreeModel::ProviderState::ProviderState(TreeProviderSnapshot value)
 const std::vector<TreeNodeView>& TreeModel::ProviderState::visibleNodes() const {
     if (!visibleCache || visibleCache->revision != snapshot.revision() ||
         visibleCache->expandedVersion != expandedVersion) {
-        ++g_visibleNodesRecomputes;
         visibleCache = VisibleCache{snapshot.revision(), expandedVersion,
                                     computeVisibleNodes(snapshot, expanded)};
     }
     return visibleCache->nodes;
-}
-
-std::uint64_t TreeModel::visibleNodesRecomputeCount() {
-    return g_visibleNodesRecomputes;
-}
-
-void TreeModel::resetVisibleNodesRecomputeCount() {
-    g_visibleNodesRecomputes = 0;
 }
 
 TreeProviderId::TreeProviderId(std::string value) : value_(std::move(value)) {
@@ -270,33 +257,6 @@ TreeProviderSnapshot::TreeProviderSnapshot(
       revision_(0),
       nodes_(std::move(nodes)) {
     validateAndSortNodes(providerId_, nodes_);
-}
-
-TreeProviderSnapshot TreeProviderSnapshot::fromFilesystem(
-    TreeProviderId providerId, const std::filesystem::path& canonicalCwd) {
-    std::error_code error;
-    const auto root = canonicalPath(canonicalCwd, error);
-    const auto rootStat = error ? std::optional<FileStat>{} : statFile(root);
-    if (error || !rootStat || rootStat->kind != FileKind::Directory) {
-        throw std::invalid_argument(
-            "filesystem tree CWD must be an existing accessible directory");
-    }
-
-    std::vector<TreeNode> nodes;
-    const auto listed = listDirectory(root, DirectoryTraversal::Recursive);
-    if (!listed.ok() && listed.status != FileIoStatus::NotFound) {
-        throw std::runtime_error("failed to scan filesystem tree: " +
-                                 listed.message);
-    }
-    for (const auto& entry : listed.entries) {
-        auto node = detail::inspectFilesystemTreeEntry(providerId, root, entry);
-        if (node) nodes.push_back(std::move(*node));
-    }
-    if (listed.status != FileIoStatus::NotFound && !listed.complete) {
-        throw std::runtime_error("filesystem tree scan was incomplete");
-    }
-    return TreeProviderSnapshot{std::move(providerId),
-                                TreeProviderKind::Filesystem, std::move(nodes)};
 }
 
 TreeProviderSnapshot TreeProviderSnapshot::fromFilesystemDirectories(
@@ -555,12 +515,6 @@ bool TreeModel::select(const TreeNodeId& nodeId) {
     return true;
 }
 
-bool TreeModel::toggleSelected() {
-    auto* provider = activeProvider();
-    if (provider == nullptr || !provider->selected) return false;
-    return toggleExpanded(provider->snapshot.providerId(), *provider->selected);
-}
-
 std::optional<TreeNode> TreeModel::selectedNode() const {
     const auto* provider = activeProvider();
     if (provider == nullptr || !provider->selected) return std::nullopt;
@@ -715,12 +669,6 @@ std::optional<TreeCommandInvocation> TreeModel::invokeNodeCommand(
     }
     return TreeCommandInvocation{providerId, nodeId,
                                  std::string{commandId}};
-}
-
-std::size_t TreeModel::activeVisibleNodeCount() const {
-    const auto* active = activeProvider();
-    if (active == nullptr) return 0;
-    return active->visibleNodes().size();
 }
 
 TreeViewState TreeModel::viewState() const {

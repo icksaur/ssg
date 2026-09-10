@@ -201,10 +201,6 @@ const TabViewState& TabManager::viewState() const noexcept {
     return impl_->view;
 }
 
-std::size_t TabManager::recentlyClosedCount() const noexcept {
-    return impl_->recentlyClosed.size();
-}
-
 TabResult TabManager::openDocument(FileDocumentId document,
                                    JournalDocumentKey identity,
                                    std::string_view label,

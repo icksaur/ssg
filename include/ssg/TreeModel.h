@@ -124,8 +124,6 @@ class TreeProviderSnapshot {
 public:
     TreeProviderSnapshot(TreeProviderId providerId, TreeProviderKind kind,
                          std::vector<TreeNode> nodes);
-    static TreeProviderSnapshot fromFilesystem(
-        TreeProviderId providerId, const std::filesystem::path& canonicalCwd);
     // Lists root entries and direct children of root/requested directories.
     // Requested paths are relative, ancestor-closed during traversal, and
     // never followed when their no-follow status is a symlink.
@@ -272,26 +270,9 @@ public:
     // the selection unchanged) when no provider is active or the id is not among
     // the active provider's visible nodes.
     bool select(const TreeNodeId& nodeId);
-    bool toggleSelected();
     [[nodiscard]] std::optional<TreeNode> selectedNode() const;
 
     TreeViewState viewState() const;
-
-    // Test instrumentation: the number of full visibleNodes recomputations
-    // (cache misses) performed since the last reset. A navigation that changes
-    // neither a provider's tree revision nor its expanded set must recompute
-    // nothing; this counter is what lets a test assert that, without timing.
-    // Per-thread, like renderSegmentationCalls.
-    [[nodiscard]] static std::uint64_t visibleNodesRecomputeCount();
-    static void resetVisibleNodesRecomputeCount();
-
-    // How many nodes the ACTIVE provider currently shows. Cheaper than
-    // viewState(), which builds EVERY provider's view and copies each node
-    // list, when the scroll paths need only this one number -- a thumb drag
-    // asks once per pointer motion. It still walks the active provider, and
-    // deliberately reuses the same traversal viewState() does rather than
-    // adding a second definition of "which nodes are visible".
-    [[nodiscard]] std::size_t activeVisibleNodeCount() const;
 
 private:
     struct ProviderState {
