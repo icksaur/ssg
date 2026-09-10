@@ -1,6 +1,7 @@
 #include <ssg/Editor.h>
 
 #include <ssg/CommandCatalog.h>
+#include "grid_test_frame.h"
 #include "test_helpers.h"
 
 #include <algorithm>
@@ -52,7 +53,7 @@ TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
 
-    (void)runtime->registerCommand(ssg::CommandSpec{
+    (void)ssg::test::registerCommand(*runtime, ssg::CommandSpec{
         .id = "oracle.view_action",
         .owner = "test-oracle",
         .summary = "returns one typed view action",
@@ -115,7 +116,7 @@ TEST(inputKeymapRebuildsForKeymapAndCatalogChanges) {
     }
 
     int calls = 0;
-    (void)runtime->registerCommand(ssg::CommandSpec{
+    (void)ssg::test::registerCommand(*runtime, ssg::CommandSpec{
         .id = "oracle.late_command",
         .owner = "test-oracle",
         .summary = "records keymap cache invalidation",
@@ -180,8 +181,7 @@ TEST(aHandlerThatDispatchesIsToldToDeferInstead) {
 
     ssg::CommandResult nested{};
     ASSERT_TRUE(
-        runtime
-            ->registerCommand(ssg::CommandSpec{
+        ssg::test::registerCommand(*runtime, ssg::CommandSpec{
                 .id = "oracle.dispatches",
                 .owner = "test-oracle",
                 .summary = "dispatches from its handler",
@@ -218,7 +218,7 @@ TEST(routingCommandsQueueExactlyOneDirectOrdinaryTarget) {
     if (!runtime) return;
 
     int mutations = 0;
-    ASSERT_TRUE(runtime->registerCommand(ssg::CommandSpec{
+    ASSERT_TRUE(ssg::test::registerCommand(*runtime, ssg::CommandSpec{
         .id = "oracle.route_target",
         .owner = "test-oracle",
         .summary = "target",
@@ -229,7 +229,7 @@ TEST(routingCommandsQueueExactlyOneDirectOrdinaryTarget) {
         }),
     })
                     .valid());
-    ASSERT_TRUE(runtime->registerCommand(ssg::CommandSpec{
+    ASSERT_TRUE(ssg::test::registerCommand(*runtime, ssg::CommandSpec{
         .id = "oracle.route_once",
         .owner = "test-oracle",
         .summary = "route once",
@@ -242,7 +242,7 @@ TEST(routingCommandsQueueExactlyOneDirectOrdinaryTarget) {
             }),
     })
                     .valid());
-    ASSERT_TRUE(runtime->registerCommand(ssg::CommandSpec{
+    ASSERT_TRUE(ssg::test::registerCommand(*runtime, ssg::CommandSpec{
         .id = "oracle.route_none",
         .owner = "test-oracle",
         .summary = "route none",
@@ -252,7 +252,7 @@ TEST(routingCommandsQueueExactlyOneDirectOrdinaryTarget) {
         }),
     })
                     .valid());
-    ASSERT_TRUE(runtime->registerCommand(ssg::CommandSpec{
+    ASSERT_TRUE(ssg::test::registerCommand(*runtime, ssg::CommandSpec{
         .id = "oracle.route_twice",
         .owner = "test-oracle",
         .summary = "route twice",
@@ -267,7 +267,7 @@ TEST(routingCommandsQueueExactlyOneDirectOrdinaryTarget) {
             }),
     })
                     .valid());
-    ASSERT_TRUE(runtime->registerCommand(ssg::CommandSpec{
+    ASSERT_TRUE(ssg::test::registerCommand(*runtime, ssg::CommandSpec{
         .id = "oracle.route_nested",
         .owner = "test-oracle",
         .summary = "route nested",
@@ -303,8 +303,7 @@ TEST(aHandlerCannotMutateTheCommandCatalogReentrantly) {
     bool registrationRefused = false;
     bool replacementRefused = false;
     ASSERT_TRUE(
-        runtime
-            ->registerCommand(ssg::CommandSpec{
+        ssg::test::registerCommand(*runtime, ssg::CommandSpec{
                 .id = "oracle.registers",
                 .owner = "test-oracle",
                 .summary = "attempts catalog mutation",
@@ -312,7 +311,7 @@ TEST(aHandlerCannotMutateTheCommandCatalogReentrantly) {
                 .binding = ssg::bindNoArgumentHandler(
                     [&](ssg::CommandContext&) {
                         try {
-                            (void)runtime->registerCommand(ssg::CommandSpec{
+                            (void)ssg::test::registerCommand(*runtime, ssg::CommandSpec{
                                 .id = "oracle.illegal",
                                 .owner = "test-oracle",
                                 .summary = "must not be registered",

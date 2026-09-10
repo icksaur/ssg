@@ -38,7 +38,6 @@
 #include <ssg/WorkspaceFileIndex.h>
 
 #include <any>
-#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -139,32 +138,16 @@ struct DocumentRuntimeState {
     explicit DocumentRuntimeState(
         const SettingsModel& settings,
         std::shared_ptr<SyntaxParser> parser = nullptr)
-        : history{settings}, syntax{std::move(parser)} {
-        ++liveCount;
-    }
-
-    DocumentRuntimeState(DocumentRuntimeState&& other) noexcept
-        : history{std::move(other.history)}, syntax{std::move(other.syntax)},
-          reopen{other.reopen} {
-        ++liveCount;
-    }
+        : history{settings}, syntax{std::move(parser)} {}
 
     DocumentRuntimeState(const DocumentRuntimeState&) = delete;
     DocumentRuntimeState& operator=(const DocumentRuntimeState&) = delete;
+    DocumentRuntimeState(DocumentRuntimeState&&) noexcept = default;
     DocumentRuntimeState& operator=(DocumentRuntimeState&&) = default;
-
-    ~DocumentRuntimeState() { --liveCount; }
-
-    static std::uint64_t liveInstances() noexcept {
-        return liveCount.load(std::memory_order_relaxed);
-    }
 
     DocumentHistory history;
     SyntaxModel syntax;
     DraftReopenOutcome reopen = DraftReopenOutcome::None;
-
-private:
-    inline static std::atomic<std::uint64_t> liveCount{0};
 };
 
 void bindRuntimeEditing(CommandCatalog& catalog, Editor& runtime);
@@ -204,11 +187,9 @@ public:
     [[nodiscard]] bool deferDispatch(ClientCommand command);
     [[nodiscard]] bool dispatchInProgress() const noexcept;
     [[nodiscard]] CommandCatalog const& commandCatalog() const;
-    [[nodiscard]] CommandHandle registerCommand(CommandSpec command);
     [[nodiscard]] std::vector<CommandHandle> replaceCommandGeneration(
         std::span<CommandHandle const> retire,
         std::vector<CommandSpec> commands);
-    [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
     void startWorkspaceSearch(std::string query, std::uint64_t sourceRevision);
     void startWorkspaceSearch(ParsedSearchQuery query,
                               std::uint64_t sourceRevision);
@@ -217,17 +198,6 @@ public:
     void resetKeymapToDefault();
     [[nodiscard]] CompiledKeymap const& resolveInputKeymap();
     void focusEditor();
-
-    struct DeferredWorkCounts {
-        std::uint64_t syntaxRuns = 0;
-        std::uint64_t treeScans = 0;
-    };
-    [[nodiscard]] DeferredWorkCounts deferredWorkCounts() const;
-    [[nodiscard]] static std::uint64_t liveDocumentRuntimeStateCountForTests();
-    [[nodiscard]] std::string activeDocumentText() const;
-
-    enum class DraftReopenNotice { None, Restored, Conflict };
-    [[nodiscard]] DraftReopenNotice activeDraftReopenNotice() const;
 
     struct ResolvedPromptControls {
         std::vector<PromptControl> controls;
@@ -493,7 +463,6 @@ public:
     [[nodiscard]] CommandHandlerResult activateDocument(FileDocumentId document);
     [[nodiscard]] DiffIngressResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
-    [[nodiscard]] DiffIngressResult applyGitDiffScan(GitDiffScan scan);
     // Records that SSG itself wrote `relativePath`, so the matching watcher
     // event is correlated as a self-save and never raises a false external
     // conflict. Ordered by the save primitive before the write is observable;
@@ -583,8 +552,6 @@ public:
     bool deferringEnrichment = false;
     bool pendingTreeRefresh = false;
     bool pendingSyntaxRefresh = false;
-    std::uint64_t treeScanCount = 0;
-    std::uint64_t syntaxRunCount = 0;
     GitDiffIngress gitDiffIngress;
 
     void enqueueStatus(StatusPriority priority, std::string text);

@@ -20,6 +20,22 @@ inline std::optional<GridPresentation> projectGridFrame(
     return projectGridFrame(session, {80, 24});
 }
 
+inline std::string activeDocumentText(Editor& session) {
+    auto frame = projectGridFrame(session);
+    return frame ? std::move(frame->documentText) : std::string{};
+}
+
+inline DiffIngressResult applyGitDiffScan(Editor& session, GitDiffScan scan) {
+    std::lock_guard lock{session.operationMutex};
+    return session.gitDiffIngress.applyGitDiffScanLocked(std::move(scan));
+}
+
+inline CommandHandle registerCommand(Editor& session, CommandSpec command) {
+    std::vector<CommandSpec> commands;
+    commands.push_back(std::move(command));
+    return session.replaceCommandGeneration({}, std::move(commands)).front();
+}
+
 inline GridPresentation copyGridFrame(
     GridPresentation const& source,
     GridPresentation values,

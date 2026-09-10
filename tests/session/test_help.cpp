@@ -131,7 +131,7 @@ TEST(helpDocumentContainsProseAndTheLiveKeybinding) {
 
     ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
-    const auto text = runtime.activeDocumentText();
+    const auto text = ssg::test::activeDocumentText(runtime);
     ASSERT_TRUE(contains(text, "SSG Help"));
     ASSERT_TRUE(contains(text, "Mouse"));
     // The default Mod+H binding for help.open is generated into the keybindings
@@ -167,7 +167,7 @@ TEST(helpDocumentListsChromeGlyphsIncludingTabGlyphsWithValues) {
 
     ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
-    const auto text = runtime.activeDocumentText();
+    const auto text = ssg::test::activeDocumentText(runtime);
     // The glyph listing is generated from styleGlyphValues, so both a fixed-slot
     // glyph and the new variable tab glyphs appear -- a newly added glyph would
     // document itself here with no separate list to update.
@@ -191,7 +191,7 @@ TEST(helpGlyphListingEscapesQuotesSoItStaysCopyPasteable) {
             .accepted());
     ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
-    const auto text = runtime.activeDocumentText();
+    const auto text = ssg::test::activeDocumentText(runtime);
     // The quote is backslash-escaped so the listed value is a valid Lua string.
     ASSERT_TRUE(contains(text, "`tab_separator` = \"\\\"\""));
 }
@@ -209,7 +209,7 @@ TEST(helpKeybindingSectionReflectsACustomBind) {
             .accepted());
     ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
-    const auto text = runtime.activeDocumentText();
+    const auto text = ssg::test::activeDocumentText(runtime);
     // A user's custom binding appears because help reads the live keymap
     // (display format lowercases the non-shifted letter: "Mod+g").
     ASSERT_TRUE(contains(text, "Mod+g"));
@@ -232,7 +232,7 @@ TEST(helpOpenIsIdempotentAndRefreshes) {
     auto tab = activeTab(runtime);
     ASSERT_TRUE(tab.has_value());
     if (tab) ASSERT_TRUE(tab->mode == ssg::DocumentMode::ReadOnly);
-    ASSERT_TRUE(contains(runtime.activeDocumentText(), "SSG Help"));
+    ASSERT_TRUE(contains(ssg::test::activeDocumentText(runtime), "SSG Help"));
 }
 
 TEST(helpTabRejectsEditsAndLeavesTheBufferUnchanged) {
@@ -243,12 +243,12 @@ TEST(helpTabRejectsEditsAndLeavesTheBufferUnchanged) {
 
     ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
-    const auto before = runtime.activeDocumentText();
+    const auto before = ssg::test::activeDocumentText(runtime);
     // Any mutating command is rejected at the read-only chokepoint.
     ASSERT_FALSE(runtime.dispatch({"text.insert",
                                    ssg::TextInputArguments{"X"}})
                      .accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), before);
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), before);
 }
 
 TEST(savingAHelpTabFailsGracefullyWithoutAPrompt) {

@@ -160,7 +160,7 @@ TEST(aCleanOpenDocumentChangedOnDiskAutoReloadsWithoutRaisingActions) {
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
 
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
-    ASSERT_EQ(session.runtime->activeDocumentText(), "external\n");
+    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime), "external\n");
 }
 
 TEST(externalReloadCommitsDiskIntoTheWorkspaceAndClearsTheSection) {
@@ -177,12 +177,12 @@ TEST(externalReloadCommitsDiskIntoTheWorkspaceAndClearsTheSection) {
                     .accepted());
 
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
-    ASSERT_EQ(session.runtime->activeDocumentText(), "external\n");
+    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime), "external\n");
 }
 
 TEST(externalKeepBufferClearsTheSectionWithoutTouchingTheBuffer) {
     auto session = Session::open("keep_buffer", "hi\n", true);
-    const auto buffer = session.runtime->activeDocumentText();
+    const auto buffer = ssg::test::activeDocumentText(*session.runtime);
     writeFile(session.workspacePath("note.txt"), "external\n");
     session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
@@ -194,7 +194,7 @@ TEST(externalKeepBufferClearsTheSectionWithoutTouchingTheBuffer) {
                     .accepted());
 
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
-    ASSERT_EQ(session.runtime->activeDocumentText(), buffer);
+    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime), buffer);
 }
 
 TEST(externalOpenDiffOpensALiveDiffTabForThatFile) {
@@ -323,7 +323,7 @@ TEST(aCleanExternalReloadDecodesNonUtf8BytesThroughTheDocumentsEncoding) {
     // The clean auto-reload decoded the raw disk bytes through the document's
     // encoding (each 0xE9 -> U+00E9 -> UTF-8 "\xC3\xA9"), never assuming UTF-8, so
     // the buffer is neither corrupted nor emptied.
-    ASSERT_EQ(session.runtime->activeDocumentText(),
+    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime),
               std::string{"\xC3\xA9\xC3\xA9\n"});
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 }
@@ -384,7 +384,7 @@ TEST(aRenamedOpenDocumentFollowsItsFileWithoutASpuriousRemove) {
         session.runtime->workspace.state(*session.runtime->activeDocumentId());
     ASSERT_TRUE(state.has_value());
     ASSERT_EQ(state->key.savedPath(), "renamed.txt");
-    ASSERT_EQ(session.runtime->activeDocumentText(), "hi\n");
+    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime), "hi\n");
 }
 
 TEST(theExternalIdNeverCollidesWithAGitPathId) {
@@ -441,7 +441,7 @@ TEST(aCleanExternalReloadDecodesUtf16BytesWithNulThroughTheDocumentsEncoding) {
     // The clean auto-reload decoded the UTF-16LE disk bytes through the document's
     // encoding ("hi!\n"), never treating the legitimate NUL bytes as binary, so
     // the buffer is neither corrupted nor emptied.
-    ASSERT_EQ(session.runtime->activeDocumentText(), std::string{"hi!\n"});
+    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime), std::string{"hi!\n"});
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 }
 
@@ -515,7 +515,7 @@ TEST(anOverflowDoesNotResurrectAConflictDismissedByKeepBuffer) {
 
 TEST(keepBufferAdvancesTheExternalBaselineToTheDismissedDiskState) {
     auto session = Session::open("keep_advances", "hi\n", true);
-    const auto buffer = session.runtime->activeDocumentText();
+    const auto buffer = ssg::test::activeDocumentText(*session.runtime);
     writeFile(session.workspacePath("note.txt"), "external\n");
     session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
@@ -532,12 +532,12 @@ TEST(keepBufferAdvancesTheExternalBaselineToTheDismissedDiskState) {
     session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 2)});
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
-    ASSERT_EQ(session.runtime->activeDocumentText(), buffer);
+    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime), buffer);
 }
 
 TEST(keepBufferOnARemovedFileSetsTheExternalBaselineMissing) {
     auto session = Session::open("keep_removed", "hi\n", true);
-    const auto buffer = session.runtime->activeDocumentText();
+    const auto buffer = ssg::test::activeDocumentText(*session.runtime);
     std::filesystem::remove(session.workspacePath("note.txt"));
     session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
@@ -554,7 +554,7 @@ TEST(keepBufferOnARemovedFileSetsTheExternalBaselineMissing) {
     // resync with the file still absent does not re-raise the dismissed removal.
     session.runtime->external.reconcileAllOpenDocumentsAgainstDisk();
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
-    ASSERT_EQ(session.runtime->activeDocumentText(), buffer);
+    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime), buffer);
 }
 
 TEST(anEventObservingANonRegularOrUnreadablePathAlwaysRaises) {
@@ -767,7 +767,7 @@ TEST(aRealChangeAfterKeepBufferStillRaises) {
 
 TEST(keepBufferLeavesTheBufferAndEncodingUntouched) {
     auto session = Session::open("keep_untouched", "hi\n", true);
-    const auto buffer = session.runtime->activeDocumentText();
+    const auto buffer = ssg::test::activeDocumentText(*session.runtime);
     writeFile(session.workspacePath("note.txt"), "external\n");
     session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
@@ -779,13 +779,13 @@ TEST(keepBufferLeavesTheBufferAndEncodingUntouched) {
                     .accepted());
     // The dismissal moves only the branched-from baseline: the visible buffer (and
     // hence the document's live text and encoding) is untouched.
-    ASSERT_EQ(session.runtime->activeDocumentText(), buffer);
+    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime), buffer);
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 }
 
 TEST(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile) {
     auto session = Session::open("offered_guard", "hi\n", true);
-    const auto buffer = session.runtime->activeDocumentText();
+    const auto buffer = ssg::test::activeDocumentText(*session.runtime);
     std::filesystem::remove(session.workspacePath("note.txt"));
     session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
@@ -810,7 +810,7 @@ TEST(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile) {
     files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
     ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
-    ASSERT_EQ(session.runtime->activeDocumentText(), buffer);
+    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime), buffer);
 
     // The offered KeepBuffer, by contrast, resolves the selected file.
     auto offeredAction = session.runtime->input(ssg::ExternalActionPointerInput{

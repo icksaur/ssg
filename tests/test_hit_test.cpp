@@ -892,7 +892,7 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
     ssg::GitDiffScan scan;
     scan.revision = std::uint64_t{1};
     scan.currentBranch = std::string{"main"};
-    ASSERT_TRUE(runtime->applyGitDiffScan(std::move(scan)).accepted());
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(*runtime, std::move(scan)).accepted());
 
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
@@ -962,7 +962,7 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
                    .path = "doc.txt",
                    .baselineContent = std::string{"alpha\n"},
                    .workingContent = std::string{"alpha changed\n"}}}};
-    ASSERT_TRUE(runtime->applyGitDiffScan(std::move(scan)).accepted());
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(*runtime, std::move(scan)).accepted());
 
     const auto clickField = [&](bool header, std::string_view id) {
         auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});

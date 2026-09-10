@@ -67,14 +67,14 @@ TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
     ASSERT_TRUE(setPosition.accepted());
     auto typed = runtime.dispatch({"text.insert",  ssg::TextInputArguments{"d"}});
     ASSERT_TRUE(typed.accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"abcd"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcd"});
 
     auto undo = runtime.dispatch({"edit.undo",  {}});
     ASSERT_TRUE(undo.accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"abc"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abc"});
     auto redo = runtime.dispatch({"edit.redo",  {}});
     ASSERT_TRUE(redo.accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"abcd"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcd"});
 }
 
 TEST(typingUndoBreaksOnWordAndLineBoundaries) {
@@ -90,22 +90,22 @@ TEST(typingUndoBreaksOnWordAndLineBoundaries) {
         return runtime.dispatch({"text.insert",  ssg::TextInputArguments{std::string{character}}}).accepted();
     };
     for (char character : std::string{"foo bar"}) ASSERT_TRUE(type(character));
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"abcfoo bar"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcfoo bar"});
 
     // The space sealed the "foo " unit, so the first undo removes only "bar".
     ASSERT_TRUE(runtime.dispatch({"edit.undo",  {}}).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"abcfoo "});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcfoo "});
     // The second undo removes the "foo " word unit.
     ASSERT_TRUE(runtime.dispatch({"edit.undo",  {}}).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"abc"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abc"});
 
     // Newlines seal a unit per line.
     ASSERT_TRUE(type('x'));
     ASSERT_TRUE(runtime.dispatch({"text.newline",  {}}).accepted());
     ASSERT_TRUE(type('y'));
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"abcx\ny"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcx\ny"});
     ASSERT_TRUE(runtime.dispatch({"edit.undo",  {}}).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"abcx\n"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcx\n"});
 }
 
 TEST(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply) {
@@ -129,7 +129,7 @@ TEST(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply) {
     ASSERT_TRUE(apply.accepted());
     ASSERT_EQ(readText(root / "workspace" / "other.txt"), std::string{"dog"});
     ASSERT_EQ(readText(root / "workspace" / "edit.txt"), std::string{"abc"});
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"abc"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abc"});
 }
 
 TEST(workspaceReplaceRejectsStaleAndOutOfBoundsPreview) {
@@ -192,7 +192,7 @@ TEST(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk) {
     ASSERT_TRUE(runtime.dispatch({"replace.workspace_preview",  ssg::WorkspaceReplaceArguments{request, "dog"}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.workspace_apply",  {}}).accepted());
     ASSERT_EQ(readText(root / "workspace" / "edit.txt"), std::string{"dog dog"});
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"dog dog"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"dog dog"});
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_EQ(snapshot->documentText, std::string{"dog dog"});
@@ -399,7 +399,7 @@ TEST(searchPanelActivatesTheSelectedResultAtItsMatchColumn) {
     const auto resultActivation = runtime.input(ssg::ClientKeyInput{
         ssg::KeyStroke{.code = ssg::KeyCode::Enter}, {}});
     ASSERT_EQ(resultActivation.outcome, ssg::ClientInputOutcome::ViewOwned);
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"zero\nalpha here\n"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"zero\nalpha here\n"});
     ASSERT_EQ(runtime.selection.selections.primary().active.byteOffset,
               ssg::ByteOffset{7});
     ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Editor);
@@ -647,7 +647,7 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
     }
 
     ASSERT_TRUE(runtime.dispatch({"replace.current",  {}}).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"dog cat cat"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"dog cat cat"});
     auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
@@ -678,7 +678,7 @@ TEST(replaceAllReplacesEveryMatch) {
     ASSERT_TRUE(runtime.dispatch({"find.update_query",  ssg::FindQueryArguments{"cat"}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.update_replacement",  ssg::FindQueryArguments{"dog"}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.all",  {}}).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"dog dog dog"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"dog dog dog"});
     auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
@@ -706,7 +706,7 @@ TEST(replaceCommandsAreBenignNoOpsWithoutAReplacePrompt) {
     ASSERT_TRUE(runtime.dispatch({"replace.update_replacement",  ssg::FindQueryArguments{"dog"}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.current",  {}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.all",  {}}).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"cat cat cat"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"cat cat cat"});
     auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (snap) ASSERT_TRUE(snap->findReplace.replacement.empty());
@@ -941,7 +941,7 @@ TEST(tabKeyInsertsATabInTheEditor) {
     const auto tab = runtime.input(ssg::ClientKeyInput{
         ssg::KeyStroke{.code = ssg::KeyCode::Tab}, {}});
     ASSERT_EQ(tab.outcome, ssg::ClientInputOutcome::Dispatched);
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"\t"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"\t"});
     std::filesystem::remove_all(root);
 }
 
@@ -987,7 +987,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
 
     // Move the caret to the last line (navigation reveals it to the bottom), then
     // free-scroll to the top so the caret is off-screen below.
-    auto doc = runtime.activeDocumentText();
+    auto doc = ssg::test::activeDocumentText(runtime);
     auto endPos = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size())});
     ASSERT_TRUE(endPos.has_value());
     ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{endPos, std::nullopt}}).accepted());
@@ -999,7 +999,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
 
     // Two cursors: secondary near the top (line 0), PRIMARY near the bottom (the
     // back selection). select.add_range pushes the new range to the back.
-    doc = runtime.activeDocumentText();
+    doc = ssg::test::activeDocumentText(runtime);
     auto top = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{0});
     auto bottomLineStart = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size()) - 2});
     ASSERT_TRUE(top.has_value());
@@ -1097,7 +1097,7 @@ TEST(multiCursorPastePreservesAllCursors) {
 
     // Build two cursors (top of line 0 and top of line 1), copy, then paste. The
     // paste must not collapse the multi-cursor set to a single caret.
-    auto doc = runtime.activeDocumentText();
+    auto doc = ssg::test::activeDocumentText(runtime);
     auto p0 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{0});
     auto p1 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{4});
     ASSERT_TRUE(p0.has_value() && p1.has_value());
@@ -1135,7 +1135,7 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
 
     // Two RANGE selections over "aaa" and "bbb" (as Alt+d would build over a
     // repeated word).
-    auto doc = runtime.activeDocumentText();
+    auto doc = ssg::test::activeDocumentText(runtime);
     auto p0 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{0});
     auto p3 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{3});
     auto p4 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{4});
@@ -1153,14 +1153,14 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
     // multi-cursor must survive (regression: it used to collapse to one).
     ASSERT_TRUE(runtime.dispatch({"text.insert",
                                   ssg::TextInputArguments{"X"}}).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"X\nX\nccc\n"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"X\nX\nccc\n"});
     ASSERT_EQ(selectionCount(), std::size_t{2});
 
     // Continuing to type inserts at BOTH carets, so multi-cursor editing works
     // across successive keystrokes.
     ASSERT_TRUE(runtime.dispatch({"text.insert",
                                   ssg::TextInputArguments{"Y"}}).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"XY\nXY\nccc\n"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"XY\nXY\nccc\n"});
     ASSERT_EQ(selectionCount(), std::size_t{2});
 
     // Undo and redo across the multi-cursor edits keep all cursors too (the
@@ -1168,7 +1168,7 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
     ASSERT_TRUE(runtime.dispatch({"edit.undo",  {}}).accepted());
     ASSERT_EQ(selectionCount(), std::size_t{2});
     ASSERT_TRUE(runtime.dispatch({"edit.redo",  {}}).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"XY\nXY\nccc\n"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"XY\nXY\nccc\n"});
     ASSERT_EQ(selectionCount(), std::size_t{2});
     std::filesystem::remove_all(root);
 }
@@ -1259,7 +1259,7 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
                     .accepted());
     ASSERT_TRUE(runtime.dispatch({"prompt.submit",  {}})
                     .accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"dog cat cat"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"dog cat cat"});
     auto replaceAfterSubmit =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(replaceAfterSubmit.has_value());

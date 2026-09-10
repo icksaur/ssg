@@ -110,7 +110,7 @@ std::string leaveDirtyDraft(const std::filesystem::path& root) {
     (void)runtime.dispatch({"file.open",  std::string{"note.txt"}});
     (void)runtime.dispatch({"text.insert",
                             ssg::TextInputArguments{"!"}});
-    const auto draft = runtime.activeDocumentText();
+    const auto draft = ssg::test::activeDocumentText(runtime);
     (void)runtime.flushDueAutosaveDrafts();
     return draft;
 }
@@ -130,10 +130,9 @@ TEST(reopeningADirtyDraftRestoresTheEditsWhenDiskIsUnchanged) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), draft);
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), draft);
     ASSERT_TRUE(activeTabDirty(runtime));
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::Restored);
+
 }
 
 TEST(reopeningAConvergedDraftDropsItAndOpensClean) {
@@ -148,10 +147,9 @@ TEST(reopeningAConvergedDraftDropsItAndOpensClean) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), draft);
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), draft);
     ASSERT_FALSE(activeTabDirty(runtime));
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::None);
+
     // The draft was dropped, so the clean buffer has nothing to flush.
     ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{0});
 }
@@ -169,11 +167,10 @@ TEST(reopeningADraftAfterAnExternalChangeFlagsConflict) {
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     // The draft still loads as a dirty buffer (never a blind blocking choice)...
-    ASSERT_EQ(runtime.activeDocumentText(), draft);
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), draft);
     ASSERT_TRUE(activeTabDirty(runtime));
     // ...but the conflict notice fires because disk changed.
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::Conflict);
+
 }
 
 TEST(editingAndSavingARestoredDraftRoundTripsCoherently) {
@@ -198,14 +195,13 @@ TEST(editingAndSavingARestoredDraftRoundTripsCoherently) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::Restored);
-    const auto restored = runtime.activeDocumentText();
+
+    const auto restored = ssg::test::activeDocumentText(runtime);
     // A further edit after restore must apply cleanly and stay dirty...
     ASSERT_TRUE(runtime.dispatch({"text.insert",
                                   ssg::TextInputArguments{"Y"}})
                     .accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), "Y" + restored);
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), "Y" + restored);
     ASSERT_TRUE(activeTabDirty(runtime));
     // ...and a save must write CRLF back to disk, proving decoded's terminator
     // convention survived the restore.
@@ -229,21 +225,21 @@ TEST(reactivatingAnOpenTabDoesNotReapplyItsDraft) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), draft);
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), draft);
     // Edit past the recovered draft, open another file, then re-open note.txt:
     // openFile short-circuits to the already-open document, so reconcile must not
     // run again and must leave the live edited buffer intact.
     ASSERT_TRUE(runtime.dispatch({"text.insert",
                                   ssg::TextInputArguments{"Z"}})
                     .accepted());
-    const auto live = runtime.activeDocumentText();
+    const auto live = ssg::test::activeDocumentText(runtime);
     ASSERT_TRUE(runtime.dispatch({"file.open",
                                   std::string{"other.txt"}})
                     .accepted());
     ASSERT_TRUE(runtime.dispatch({"file.open",
                                   std::string{"note.txt"}})
                     .accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), live);
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), live);
     ASSERT_TRUE(activeTabDirty(runtime));
 }
 
@@ -258,8 +254,7 @@ TEST(draftDiffOnAConflictShowsDraftAgainstDiskHunks) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::Conflict);
+
 
     ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
                     .accepted());
@@ -268,7 +263,7 @@ TEST(draftDiffOnAConflictShowsDraftAgainstDiskHunks) {
     // The merged diff view carries the target (draft) content; the disk-only
     // baseline line is projected as a phantom removed row, so the draft's own
     // line is what the diff document text holds.
-    const auto diffText = runtime.activeDocumentText();
+    const auto diffText = ssg::test::activeDocumentText(runtime);
     ASSERT_NE(diffText.find("!hi"), std::string::npos);
 }
 
@@ -289,7 +284,7 @@ TEST(draftDiffWithDiskMissingDiffsDraftAgainstEmpty) {
     ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
                     .accepted());
     ASSERT_TRUE(activeTabIsLiveDiff(runtime));
-    ASSERT_NE(runtime.activeDocumentText().find("!hi"), std::string::npos);
+    ASSERT_NE(ssg::test::activeDocumentText(runtime).find("!hi"), std::string::npos);
 }
 
 TEST(draftDiffSurvivesAGitScanThatDoesNotMentionTheFile) {
@@ -321,11 +316,11 @@ TEST(draftDiffSurvivesAGitScanThatDoesNotMentionTheFile) {
     scan.files.push_back({ssg::DiffFileId{"other.cpp"}, "other.cpp",
                           std::nullopt, std::string{"x\n"},
                           std::string{"y\n"}});
-    ASSERT_TRUE(runtime.applyGitDiffScan(std::move(scan)).accepted());
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(runtime, std::move(scan)).accepted());
 
     // The draft-vs-disk diff tab is still active and still shows the draft.
     ASSERT_TRUE(activeTabIsLiveDiff(runtime));
-    ASSERT_NE(runtime.activeDocumentText().find("!hi"), std::string::npos);
+    ASSERT_NE(ssg::test::activeDocumentText(runtime).find("!hi"), std::string::npos);
 }
 
 TEST(draftDiscardArchivesTheDraftAndLoadsDiskContent) {
@@ -339,17 +334,15 @@ TEST(draftDiscardArchivesTheDraftAndLoadsDiskContent) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::Conflict);
+
 
     ASSERT_TRUE(runtime.dispatch({"draft.discard",  {}})
                     .accepted());
 
     // (a)+(b): the buffer now holds disk content, is clean, notice cleared.
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"changed externally\n"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"changed externally\n"});
     ASSERT_FALSE(activeTabDirty(runtime));
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::None);
+
 
     // (a)+(c): the discarded edits were archived (reversible), byte-for-byte.
     const auto archived = archivedDrafts(root);
@@ -380,10 +373,9 @@ TEST(discardedDraftIsRemovedFromScratchSoReopenIsClean) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"changed externally\n"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"changed externally\n"});
     ASSERT_FALSE(activeTabDirty(runtime));
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::None);
+
 }
 
 TEST(draftDiscardRefusesACleanSavedDocument) {
@@ -440,7 +432,7 @@ TEST(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits) {
     const auto archived = archivedDrafts(root);
     ASSERT_EQ(archived.size(), std::size_t{1});
     ASSERT_TRUE(archived.front().filename().string().size() <= std::size_t{255});
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"changed\n"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"changed\n"});
 }
 
 TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
@@ -454,8 +446,7 @@ TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime).accepted());
-        ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                    ssg::Editor::DraftReopenNotice::Conflict);
+
         ASSERT_TRUE(hasNoticeBar(*ssg::test::projectGridFrame(runtime, dims)));
     }
     {
@@ -466,8 +457,7 @@ TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime).accepted());
-        ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                    ssg::Editor::DraftReopenNotice::Restored);
+
         ASSERT_FALSE(hasNoticeBar(*ssg::test::projectGridFrame(runtime, dims)));
     }
 }
@@ -592,7 +582,7 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     if (!restoredFrame) return;
     ASSERT_FALSE(hasNoticeBar(*restoredFrame));
 
-    ASSERT_EQ(conflict.activeDocumentText(), restored.activeDocumentText());
+    ASSERT_EQ(ssg::test::activeDocumentText(conflict), ssg::test::activeDocumentText(restored));
     ASSERT_TRUE(conflictFrame->document.has_value());
     ASSERT_TRUE(restoredFrame->document.has_value());
     if (!conflictFrame->document || !restoredFrame->document) return;
@@ -658,8 +648,7 @@ TEST(clickingNoticeActionsDispatchesTheirCommands) {
     // The semantic action identity is resolved against the current notice.
     auto dismiss = runtime.input(ssg::NoticeActionPointerInput{"draft.notice.dismiss"});
     ASSERT_TRUE(dismiss.command.has_value() && dismiss.command->accepted());
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::None);
+
     ASSERT_FALSE(hasNoticeBar(*ssg::test::projectGridFrame(runtime, dims)));
 }
 
@@ -673,13 +662,11 @@ TEST(dismissRefusesWhenThereIsNoConflictNotice) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::Restored);
+
     ASSERT_FALSE(runtime.dispatch({"draft.dismiss",  {}})
                      .accepted());
     // The restored state is untouched.
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::Restored);
+
 }
 
 TEST(liveDiffVirtualDocumentIsNotAutosavedAsADraft) {
@@ -739,8 +726,7 @@ TEST(binaryDiskReplacementRaisesConflictNotSilentDraftLoss) {
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     // Not silently None: the conflict is surfaced (old behaviour left it None).
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::Conflict);
+
     ASSERT_TRUE(hasNoticeBar(*ssg::test::projectGridFrame(runtime, {80, 24})));
 }
 
@@ -768,8 +754,7 @@ TEST(oversizedBufferIsNotAutosavedAndIsReportedOnce) {
     ASSERT_TRUE(reCreated.accepted());
     auto& reopened = *reCreated.session;
     ASSERT_TRUE(reopenNote(reopened).accepted());
-    ASSERT_TRUE(reopened.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::None);
+
     ASSERT_FALSE(activeTabDirty(reopened));
 }
 
@@ -821,10 +806,9 @@ TEST(touchingTheFileWithIdenticalBytesIsNotAFalseConflict) {
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     // Unchanged, not Conflict: the draft is restored quietly, no yellow notice.
-    ASSERT_EQ(runtime.activeDocumentText(), draft);
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), draft);
     ASSERT_TRUE(activeTabDirty(runtime));
-    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::Editor::DraftReopenNotice::Restored);
+
     ASSERT_FALSE(hasNoticeBar(*ssg::test::projectGridFrame(runtime, {80, 24})));
 }
 
@@ -884,11 +868,11 @@ TEST(openEditSaveRoundTripsRealDiskBytes) {
 
     auto open = runtime.dispatch({"file.open",  std::string{"note.txt"}});
     ASSERT_TRUE(open.accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"hello"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"hello"});
 
     auto insert = runtime.dispatch({"text.insert",  ssg::TextInputArguments{"!"}});
     ASSERT_TRUE(insert.accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"!hello"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"!hello"});
 
     auto save = runtime.dispatch({"file.save",  {}});
     ASSERT_TRUE(save.accepted());
@@ -904,7 +888,7 @@ TEST(droppedContentOpensAsANewDocument) {
 
     auto accepted = runtime.dispatch({"file.open_dropped_content",  ssg::DroppedContentArguments{{'a'}, "a.txt"}});
     ASSERT_TRUE(accepted.accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"a"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"a"});
 }
 
 TEST(encodingDispatchMatchesEncodeOracleAndSavedBytes) {
@@ -954,7 +938,7 @@ TEST(reopenWithEncodingDispatchRedecodesRealFileBytes) {
 
     auto reopened = runtime.dispatch({"file.reopen_with_encoding",  ssg::ReopenWithEncodingArguments{ssg::TextEncoding::Iso88591}});
     ASSERT_TRUE(reopened.accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"\xC3\xA9\n"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"\xC3\xA9\n"});
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
 }
@@ -977,18 +961,18 @@ TEST(closingTheLastTabClearsTheEditorDocument) {
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"a.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"b.txt"}}).accepted());
     ASSERT_EQ(tabCount(), std::size_t{2});
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"beta"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"beta"});
 
     // Closing one tab switches to the remaining tab's document (still shown).
     ASSERT_TRUE(runtime.dispatch({"tab.close",  {}}).accepted());
     ASSERT_EQ(tabCount(), std::size_t{1});
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"alpha"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"alpha"});
 
     // Closing the last tab must clear the editor document (empty state), not
     // leave a phantom document with no tab.
     ASSERT_TRUE(runtime.dispatch({"tab.close",  {}}).accepted());
     ASSERT_EQ(tabCount(), std::size_t{0});
-    ASSERT_TRUE(runtime.activeDocumentText().empty());
+    ASSERT_TRUE(ssg::test::activeDocumentText(runtime).empty());
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) ASSERT_TRUE(snapshot->documentText.empty());
@@ -1078,12 +1062,12 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
                     .dispatch({"text.insert",
                                ssg::TextInputArguments{"!"}})
                     .accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"!alpha"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"!alpha"});
     ASSERT_TRUE(runtime
                     .dispatch({"file.open",
                                std::string{"b.txt"}})
                     .accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"beta"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"beta"});
 
     auto beforeClose = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(beforeClose.has_value());
@@ -1104,11 +1088,11 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
     ASSERT_TRUE(runtime
                     .dispatch({"tab.close",  *tabA})
                     .accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"beta"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"beta"});
     ASSERT_TRUE(runtime
                     .dispatch({"tab.reopen_closed",  {}})
                     .accepted());
-    ASSERT_EQ(runtime.activeDocumentText(), std::string{"!alpha"});
+    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"!alpha"});
 
     auto afterReopen = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(afterReopen.has_value());

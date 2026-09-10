@@ -1216,7 +1216,7 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
                                                  std::string{"f.txt"}})
                     .accepted());
 
-    auto const doc = runtime.activeDocumentText();
+    auto const doc = ssg::test::activeDocumentText(runtime);
     auto const p2 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{2});
     auto const p7 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{7});
     ASSERT_TRUE(p2.has_value() && p7.has_value());

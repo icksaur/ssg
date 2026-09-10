@@ -357,12 +357,4 @@ void DocumentHistory::breakCoalescing() noexcept {
     impl_->barrier = true;
 }
 
-std::uint64_t DocumentHistory::retainedBytes() const noexcept {
-    return impl_->retained;
-}
-
-HistoryViewState DocumentHistory::viewState() const noexcept {
-    return {!impl_->undo.empty(), !impl_->redo.empty(), retainedBytes()};
-}
-
 }  // namespace ssg

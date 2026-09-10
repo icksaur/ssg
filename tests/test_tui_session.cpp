@@ -40,7 +40,7 @@ TEST(terminalEventsResolveThroughRuntimeInput) {
     auto text = fixture.runtime->input(
         ssg::ClientKeyInput{{}, "hello"});
     ASSERT_EQ(text.outcome, ssg::ClientInputOutcome::Dispatched);
-    ASSERT_EQ(fixture.runtime->activeDocumentText(), std::string{"hello"});
+    ASSERT_EQ(ssg::test::activeDocumentText(*fixture.runtime), std::string{"hello"});
 
     auto close = fixture.runtime->input(ssg::ClientKeyInput{
         ssg::KeyStroke{ssg::KeyCode::KeyW, true, false, false}, {}});

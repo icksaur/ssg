@@ -1264,7 +1264,6 @@ bool Editor::refreshTree() {
         pendingTreeRefresh = true;
         return false;
     }
-    ++treeScanCount;
     tree.replaceProvider(TreeProviderSnapshot::fromFilesystemDirectories(
         TreeProviderId{"filesystem"}, root, loadedFilesystemDirectories));
     if (screen.openPicker() == PickerKind::File) rebuildFileCandidates();
@@ -1385,7 +1384,6 @@ void Editor::refreshSyntax(std::vector<SyntaxEdit> edits) {
             return;
         }
     }
-    ++syntaxRunCount;
     if (!model.canIncrementallyParse(language)) edits.clear();
     (void)model.parse(revision, std::move(language), std::move(text),
                       std::move(edits));
@@ -1624,15 +1622,6 @@ PumpResult Editor::pump() {
     return {gitDiffIngress.drainGitDiffWorker()};
 }
 
-Editor::DeferredWorkCounts Editor::deferredWorkCounts() const {
-    std::lock_guard operationLock{operationMutex};
-    return {syntaxRunCount, treeScanCount};
-}
-
-std::uint64_t Editor::liveDocumentRuntimeStateCountForTests() {
-    return DocumentRuntimeState::liveInstances();
-}
-
 bool Editor::dispatchInProgress() const noexcept {
     return catalog.dispatchInProgress();
 }
@@ -1779,14 +1768,6 @@ CommandCatalog const& Editor::commandCatalog() const {
     return catalog;
 }
 
-CommandHandle Editor::registerCommand(CommandSpec command) {
-    if (dispatchInProgress()) {
-        throw std::logic_error{"commands cannot be registered during dispatch"};
-    }
-    std::lock_guard operationLock{operationMutex};
-    return catalog.add(std::move(command));
-}
-
 std::vector<CommandHandle> Editor::replaceCommandGeneration(
     std::span<CommandHandle const> retire,
     std::vector<CommandSpec> commands) {
@@ -1796,34 +1777,6 @@ std::vector<CommandHandle> Editor::replaceCommandGeneration(
     }
     std::lock_guard operationLock{operationMutex};
     return catalog.replaceGeneration(retire, std::move(commands));
-}
-
-std::filesystem::path const& Editor::workspaceRoot() const noexcept {
-    return root;
-}
-
-DiffIngressResult Editor::applyGitDiffScan(GitDiffScan scan) {
-    std::lock_guard operationLock{operationMutex};
-    return gitDiffIngress.applyGitDiffScanLocked(std::move(scan));
-}
-
-std::string Editor::activeDocumentText() const {
-    std::lock_guard operationLock{operationMutex};
-    return activeText();
-}
-
-Editor::DraftReopenNotice Editor::activeDraftReopenNotice() const {
-    std::lock_guard operationLock{operationMutex};
-    const auto id = activeDocumentId();
-    if (!id) return DraftReopenNotice::None;
-    const auto found = documentRuntimeStates.find(id->value());
-    if (found == documentRuntimeStates.end()) return DraftReopenNotice::None;
-    switch (found->second.reopen) {
-        case DraftReopenOutcome::None: return DraftReopenNotice::None;
-        case DraftReopenOutcome::Restored: return DraftReopenNotice::Restored;
-        case DraftReopenOutcome::Conflict: return DraftReopenNotice::Conflict;
-    }
-    return DraftReopenNotice::None;
 }
 
 } // namespace ssg

@@ -1,13 +1,3 @@
-ssg::DocumentHistory::retainedBytes() const	CMakeFiles/ssg_core.dir/src/DocumentHistory.cpp.o
-ssg::DocumentHistory::viewState() const	CMakeFiles/ssg_core.dir/src/DocumentHistory.cpp.o
-ssg::DocumentRuntimeState::liveInstances()	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
-ssg::Editor::activeDocumentText[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
-ssg::Editor::activeDraftReopenNotice() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
-ssg::Editor::applyGitDiffScan(ssg::GitDiffScan)	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
-ssg::Editor::deferredWorkCounts() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
-ssg::Editor::liveDocumentRuntimeStateCountForTests()	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
-ssg::Editor::registerCommand(ssg::CommandSpec)	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
-ssg::Editor::workspaceRoot[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
 ssg::FollowEditsModel::acceptExternalChange(ssg::DiffFileView const&, unsigned long)	CMakeFiles/ssg_core.dir/src/FollowEditsModel.cpp.o
 ssg::GitDiffIngress::savedPathFromExternalDiffId[abi:cxx11](ssg::DiffFileId const&)	CMakeFiles/ssg_core.dir/src/GitDiffIngress.cpp.o
 ssg::GitDiffWorker::registerSavedPath(ssg::SaveExpectation)	CMakeFiles/ssg_core.dir/src/GitDiffWorker.cpp.o

@@ -336,7 +336,7 @@ TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
              .baselineContent = std::string{"b\n"},
              .workingContent = std::string{"b changed\n"}},
         }};
-    ASSERT_TRUE(runtime.applyGitDiffScan(scan).accepted());
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(runtime, scan).accepted());
 
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -352,7 +352,7 @@ TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
                    .path = "a.txt",
                    .baselineContent = std::string{"a\n"},
                    .workingContent = std::string{"a changed again\n"}}}};
-    auto staleResult = runtime.applyGitDiffScan(std::move(stale));
+    auto staleResult = ssg::test::applyGitDiffScan(runtime, std::move(stale));
     ASSERT_FALSE(staleResult.accepted());
     ASSERT_EQ(staleResult.error, ssg::DiffIngressError::DiffRejected);
 }
@@ -372,8 +372,7 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
                     .dispatch({"follow_edits.pause",  {}})
                     .accepted());
 
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(runtime,
                         {.revision = std::uint64_t{20},
                          .baselineIdentity = "head-2:index-1",
                          .files = {{.id = ssg::DiffFileId{"needle.txt"},
@@ -416,8 +415,7 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
                                std::string{"coexist.txt"}})
                     .accepted());
 
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(runtime,
                         {.revision = std::uint64_t{30},
                          .baselineIdentity = "head-x:index-1",
                          .files = {{.id = ssg::DiffFileId{"coexist-id"},
@@ -478,8 +476,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
                     .dispatch({"file.open",
                                std::string{"coexist.txt"}})
                     .accepted());
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(runtime,
                         {.revision = std::uint64_t{32},
                          .baselineIdentity = "head-z:index-1",
                          .files = {{.id = ssg::DiffFileId{"coexist-id"},
@@ -580,8 +577,7 @@ TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {
     auto& runtime = *created.session;
     ASSERT_FALSE(std::filesystem::exists(root / "workspace" / "gone.txt"));
 
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(runtime,
                         {.revision = std::uint64_t{31},
                          .baselineIdentity = "head-x:index-2",
                          .files = {{.id = ssg::DiffFileId{"deleted-id"},
@@ -636,8 +632,7 @@ TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
     ASSERT_TRUE(runtime
                     .dispatch({"follow_edits.pause",  {}})
                     .accepted());
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(runtime,
                         {.revision = std::uint64_t{40},
                          .baselineIdentity = "head-y:index-1",
                          .files = {{.id = ssg::DiffFileId{"programmatic-id"},
@@ -759,8 +754,8 @@ TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
                    .path = "needle.txt",
                    .baselineContent = std::string{"alpha needle omega"},
                    .workingContent = std::string{"alpha needle omega plus"}}}};
-    ASSERT_TRUE(pauseResume->applyGitDiffScan(scan).accepted());
-    ASSERT_TRUE(togglePath->applyGitDiffScan(scan).accepted());
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(*pauseResume, scan).accepted());
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(*togglePath, scan).accepted());
 
     const auto pausedQueuedWithPause = followState(*pauseResume);
     const auto pausedQueuedWithToggle = followState(*togglePath);
@@ -1867,7 +1862,7 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
             .outcome,
         ssg::ClientInputOutcome::Dispatched);
     const auto second = ssg::resolveSelectionPosition(
-        runtime.activeDocumentText(), ssg::ByteOffset{7});
+        ssg::test::activeDocumentText(runtime), ssg::ByteOffset{7});
     ASSERT_TRUE(second.has_value());
     if (!second) return;
     ASSERT_TRUE(runtime
@@ -1918,7 +1913,7 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     std::optional<ssg::PickerActivation> nestedActivation;
-    auto const failureCommand = runtime.registerCommand(ssg::CommandSpec{
+    auto const failureCommand = ssg::test::registerCommand(runtime, ssg::CommandSpec{
         .id = "test.picker_failure",
         .owner = "test",
         .summary = "Picker failure",
@@ -1928,7 +1923,7 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
         }),
     });
     ASSERT_TRUE(failureCommand.valid());
-    auto const nestedFailure = runtime.registerCommand(ssg::CommandSpec{
+    auto const nestedFailure = ssg::test::registerCommand(runtime, ssg::CommandSpec{
         .id = "test.picker_nested_failure",
         .owner = "test",
         .summary = "Picker nested failure",
@@ -1939,7 +1934,7 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
         }),
     });
     ASSERT_TRUE(nestedFailure.valid());
-    auto const deferringCommand = runtime.registerCommand(ssg::CommandSpec{
+    auto const deferringCommand = ssg::test::registerCommand(runtime, ssg::CommandSpec{
         .id = "test.picker_defers_failure",
         .owner = "test",
         .summary = "Picker defers failure",
@@ -1956,7 +1951,7 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
             }),
     });
     ASSERT_TRUE(deferringCommand.valid());
-    auto const nestedSubmit = runtime.registerCommand(ssg::CommandSpec{
+    auto const nestedSubmit = ssg::test::registerCommand(runtime, ssg::CommandSpec{
         .id = "test.picker_defers_submit",
         .owner = "test",
         .summary = "Picker defers another submit",

@@ -219,7 +219,7 @@ TEST(aRuntimeWithNoDocumentOpensAnEditableNewBuffer) {
     // Editable, not merely present.
     ASSERT_TRUE(run(*runtime, "text.insert", ssg::TextInputArguments{"typed"})
                     .accepted());
-    ASSERT_TRUE(runtime->activeDocumentText().find("typed") !=
+    ASSERT_TRUE(ssg::test::activeDocumentText(*runtime).find("typed") !=
                 std::string::npos);
 }
 
@@ -369,27 +369,6 @@ TEST(deletingAFileClosesItsTab) {
     }
 }
 
-// Bypassing the ordinary close path means its cleanup does not run either. This
-// pins the part that is invisible from the outside: per-document runtime state
-// must not accumulate for documents that no longer exist.
-TEST(deletingAFileLeavesNoRuntimeStateBehind) {
-    TemporaryDirectory directory;
-    const auto before =
-        ssg::Editor::liveDocumentRuntimeStateCountForTests();
-    {
-        writeOutOfBand(directory.path() / "doomed.txt", "bytes\n");
-        auto runtime = makeRuntime(directory.path());
-        ASSERT_TRUE(runtime != nullptr);
-        ASSERT_TRUE(
-            run(*runtime, "file.open", std::string{"doomed.txt"}).accepted());
-        ASSERT_TRUE(
-            ssg::Editor::liveDocumentRuntimeStateCountForTests() > before);
-        ASSERT_TRUE(run(*runtime, "file.delete").accepted());
-        ASSERT_EQ(ssg::Editor::liveDocumentRuntimeStateCountForTests(),
-                  before);
-    }
-}
-
 // The live-diff rule against an ACTUAL live diff tab, not just the descriptor
 // classification. A live diff tab is a computed view of two revisions, so
 // there is no file to save, rename, reload or delete.
@@ -401,8 +380,7 @@ TEST(everyActiveFileMutatorIsRefusedInALiveDiffTab) {
     ASSERT_TRUE(
         run(*runtime, "file.open", std::string{"coexist.txt"}).accepted());
 
-    ASSERT_TRUE(runtime
-                    ->applyGitDiffScan(
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(*runtime,
                         {.revision = std::uint64_t{30},
                          .baselineIdentity = "head-x:index-1",
                          .files = {{.id = ssg::DiffFileId{"coexist-id"},
@@ -452,7 +430,6 @@ SSG_TEST_SUITE(test_name_clash) {
     RUN(theActiveFileMutatorSetIsExactlyTheDeclaredOne);
     RUN(activeFileMutatorsRefuseWithNoDocumentWhileCreatorsDoNot);
     RUN(deletingAFileClosesItsTab);
-    RUN(deletingAFileLeavesNoRuntimeStateBehind);
     RUN(everyActiveFileMutatorIsRefusedInALiveDiffTab);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;

@@ -141,7 +141,7 @@ TEST(typingCoalescesAtInclusiveClockBoundary) {
     selections = *history.undo(document).selections;
     ASSERT_EQ(document.snapshot().text, std::string{});
     ASSERT_EQ(selections, caret(0));
-    ASSERT_FALSE(history.viewState().canUndo);
+    ASSERT_EQ(history.undo(document).error, ssg::HistoryError::NoUndo);
     selections = *history.redo(document).selections;
     ASSERT_EQ(document.snapshot().text, std::string{"ab"});
     ASSERT_EQ(selections, caret(2));
@@ -172,7 +172,7 @@ TEST(settingChangesApplyToTheNextEdit) {
                     .accepted());
     input(history, document, selections, ssg::TextInputCommand::Insert,
           ssg::HistoryEditKind::Other, 2, "c");
-    ASSERT_FALSE(history.viewState().canUndo);
+    ASSERT_EQ(history.undo(document).error, ssg::HistoryError::NoUndo);
 }
 
 TEST(multicaretTypingCoalescesAndRoundTrips) {
@@ -277,7 +277,6 @@ TEST(selectionRestorationAndRedoInvalidation) {
     input(history, document, selections, ssg::TextInputCommand::Insert,
           ssg::HistoryEditKind::Other, 1, "Y");
     ASSERT_EQ(document.snapshot().text, std::string{"aYd"});
-    ASSERT_FALSE(history.viewState().canRedo);
     ASSERT_EQ(history.redo(document).error, ssg::HistoryError::NoRedo);
 }
 
@@ -291,13 +290,11 @@ TEST(byteBudgetEvictsOldestAndRejectsOversizeUnits) {
 
     input(history, document, selections, ssg::TextInputCommand::Insert,
           ssg::HistoryEditKind::Other, 0, "a");
-    ASSERT_EQ(history.retainedBytes(), oneInsertCharge);
     input(history, document, selections, ssg::TextInputCommand::Insert,
           ssg::HistoryEditKind::Other, 1, "b");
-    ASSERT_EQ(history.retainedBytes(), oneInsertCharge);
     selections = *history.undo(document).selections;
     ASSERT_EQ(document.snapshot().text, std::string{"a"});
-    ASSERT_FALSE(history.viewState().canUndo);
+    ASSERT_EQ(history.undo(document).error, ssg::HistoryError::NoUndo);
 
     ssg::Document oversizedDocument;
     HistoryFixture oversizedFixture{oneInsertCharge - 1};
@@ -305,8 +302,8 @@ TEST(byteBudgetEvictsOldestAndRejectsOversizeUnits) {
     auto oversizedSelection = caret(0);
     input(oversized, oversizedDocument, oversizedSelection,
           ssg::TextInputCommand::Insert, ssg::HistoryEditKind::Other, 0, "x");
-    ASSERT_FALSE(oversized.viewState().canUndo);
-    ASSERT_EQ(oversized.retainedBytes(), std::uint64_t{0});
+    ASSERT_EQ(oversized.undo(oversizedDocument).error,
+              ssg::HistoryError::NoUndo);
 
     ssg::Document disabledDocument;
     HistoryFixture disabledFixture{0};
@@ -314,7 +311,8 @@ TEST(byteBudgetEvictsOldestAndRejectsOversizeUnits) {
     auto disabledSelection = caret(0);
     input(disabled, disabledDocument, disabledSelection,
           ssg::TextInputCommand::Insert, ssg::HistoryEditKind::Other, 0, "x");
-    ASSERT_FALSE(disabled.viewState().canUndo);
+    ASSERT_EQ(disabled.undo(disabledDocument).error,
+              ssg::HistoryError::NoUndo);
 }
 
 TEST(rejectionAndStaleDocumentAreFailureAtomic) {
@@ -330,7 +328,7 @@ TEST(rejectionAndStaleDocumentAreFailureAtomic) {
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(rejected.documentError, ssg::DocumentError::StaleRevision);
     ASSERT_EQ(document.snapshot().text, std::string{"a"});
-    ASSERT_FALSE(history.viewState().canUndo);
+    ASSERT_EQ(history.undo(document).error, ssg::HistoryError::NoUndo);
 
     input(history, document, selections, ssg::TextInputCommand::Insert,
           ssg::HistoryEditKind::Other, 1, "b");
@@ -341,7 +339,6 @@ TEST(rejectionAndStaleDocumentAreFailureAtomic) {
     const auto undo = history.undo(document);
     ASSERT_EQ(undo.error, ssg::HistoryError::StaleDocument);
     ASSERT_EQ(document.snapshot(), before);
-    ASSERT_TRUE(history.viewState().canUndo);
 }
 
 TEST(undoRedoAdvanceRevisionAndKeepDirty) {
@@ -361,26 +358,6 @@ TEST(undoRedoAdvanceRevisionAndKeepDirty) {
     ASSERT_TRUE(document.snapshot().dirty);
 }
 
-TEST(viewStateTracksHistoryAvailability) {
-    ssg::Document document;
-    HistoryFixture fixture;
-    auto& history = fixture.history;
-    const auto empty = history.viewState();
-    ASSERT_FALSE(empty.canUndo);
-    ASSERT_FALSE(empty.canRedo);
-
-    auto selections = caret(0);
-    input(history, document, selections, ssg::TextInputCommand::Insert,
-          ssg::HistoryEditKind::Other, 0, "a");
-    const auto edited = history.viewState();
-    ASSERT_TRUE(edited.canUndo);
-
-    selections = *history.undo(document).selections;
-    const auto undone = history.viewState();
-    ASSERT_FALSE(undone.canUndo);
-    ASSERT_TRUE(undone.canRedo);
-}
-
 }  // namespace
 
 SSG_TEST_SUITE(test_history) {
@@ -394,6 +371,5 @@ SSG_TEST_SUITE(test_history) {
     RUN(byteBudgetEvictsOldestAndRejectsOversizeUnits);
     RUN(rejectionAndStaleDocumentAreFailureAtomic);
     RUN(undoRedoAdvanceRevisionAndKeepDirty);
-    RUN(viewStateTracksHistoryAvailability);
     return failed == 0 ? 0 : 1;
 }

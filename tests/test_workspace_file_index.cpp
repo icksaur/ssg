@@ -1,6 +1,7 @@
 #include <ssg/WorkspaceFileIndex.h>
 #include <ssg/Editor.h>
 
+#include "grid_test_frame.h"
 #include "test_helpers.h"
 
 #include <chrono>
@@ -264,7 +265,7 @@ TEST(indexOffersSymlinkedFilesThatTheEditorCanOpen) {
     if (created.accepted() && linked != result.candidates.end()) {
         ASSERT_TRUE(
             created.session->dispatch({"file.open", linked->id}).accepted());
-        ASSERT_EQ(created.session->activeDocumentText(), std::string{"linked\n"});
+        ASSERT_EQ(ssg::test::activeDocumentText(*created.session), std::string{"linked\n"});
     }
     fs::remove_all(root);
 }

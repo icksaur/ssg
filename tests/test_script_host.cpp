@@ -4,6 +4,7 @@
 #include <ssg/Editor.h>
 #include <ssg/GridPresenter.h>
 
+#include "grid_test_frame.h"
 #include "test_helpers.h"
 
 #include <filesystem>
@@ -71,7 +72,7 @@ TEST(viewActionsRequireAndUseAHostSuppliedSink) {
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
-    auto command = runtime->registerCommand(ssg::CommandSpec{
+    auto command = ssg::test::registerCommand(*runtime, ssg::CommandSpec{
         .id = "oracle.view_action",
         .owner = "test-oracle",
         .summary = "returns one typed view action",

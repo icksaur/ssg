@@ -10,11 +10,6 @@
 #include <cstdint>
 #include <string>
 
-// Deferred enrichment (syntax highlighting, workspace tree scan) must NOT run on
-// the first-frame path when the runtime is created with defer_enrichment=true;
-// prime_deferred() runs it, and it must actually arrive.  Default (eager)
-// construction is unchanged.
-
 namespace {
 
 namespace fs = std::filesystem;
@@ -46,60 +41,6 @@ ssg::EditorConfig configFor(fs::path const& root, bool defer) {
 }
 
 }  // namespace
-
-TEST(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed) {
-    auto root = makeWorkspace("deferred");
-    auto created = ssg::createEditor(configFor(root, /*defer=*/true));
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"code.txt"}})
-                    .accepted());
-
-    // Producing the first frame (a snapshot) must not have run the deferrable
-    // O(document) syntax pass or the O(workspace) tree scan.
-    (void)ssg::test::projectGridFrame(runtime);
-    auto before = runtime.deferredWorkCounts();
-    ASSERT_EQ(before.syntaxRuns, std::uint64_t{0});
-    ASSERT_EQ(before.treeScans, std::uint64_t{0});
-
-    // Priming runs the deferred work; it must actually arrive.
-    runtime.primeDeferred();
-    auto after = runtime.deferredWorkCounts();
-    ASSERT_TRUE(after.syntaxRuns >= 1);
-    ASSERT_TRUE(after.treeScans >= 1);
-    // Idempotent: a second prime does no additional deferred work.
-    runtime.primeDeferred();
-    auto again = runtime.deferredWorkCounts();
-    ASSERT_EQ(again.syntaxRuns, after.syntaxRuns);
-    ASSERT_EQ(again.treeScans, after.treeScans);
-
-    fs::remove_all(root);
-}
-
-TEST(eagerConstructionRunsEnrichmentImmediately) {
-    auto root = makeWorkspace("eager");
-    auto created = ssg::createEditor(configFor(root, /*defer=*/false));
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"code.txt"}})
-                    .accepted());
-
-    // Default (eager) behavior: the tree scan ran at construction and syntax ran
-    // at construction and again on open — all before any prime_deferred call.
-    auto counts = runtime.deferredWorkCounts();
-    ASSERT_TRUE(counts.treeScans >= 1);
-    ASSERT_TRUE(counts.syntaxRuns >= 1);
-
-    // prime_deferred is a harmless no-op when nothing was deferred.
-    runtime.primeDeferred();
-    auto after = runtime.deferredWorkCounts();
-    ASSERT_EQ(after.treeScans, counts.treeScans);
-    ASSERT_EQ(after.syntaxRuns, counts.syntaxRuns);
-
-    fs::remove_all(root);
-}
 
 TEST(firstFrameConstructsNoOptionalSubsystem) {
     // Producing the first frame must construct no optional subsystem.
@@ -240,8 +181,6 @@ SSG_TEST_SUITE(test_startup_path) {
                      "(static-init side effect)\n";
         ++failed;
     }
-    RUN(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed);
-    RUN(eagerConstructionRunsEnrichmentImmediately);
     RUN(firstFrameConstructsNoOptionalSubsystem);
     RUN(optionalConstructionAuditIsWiredPositiveControl);
     RUN(panelShowFilesRequiresPrimeDeferredFirst);

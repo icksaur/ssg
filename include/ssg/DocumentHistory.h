@@ -56,14 +56,6 @@ struct HistoryResult {
     }
 };
 
-struct HistoryViewState {
-    bool canUndo;
-    bool canRedo;
-    std::uint64_t retainedBytes;
-
-    bool operator==(const HistoryViewState&) const noexcept = default;
-};
-
 class DocumentHistory {
 public:
     explicit DocumentHistory(const SettingsModel& settings);
@@ -83,9 +75,6 @@ public:
     [[nodiscard]] HistoryResult redo(Document& document);
 
     void breakCoalescing() noexcept;
-
-    [[nodiscard]] std::uint64_t retainedBytes() const noexcept;
-    [[nodiscard]] HistoryViewState viewState() const noexcept;
 
 private:
     struct Impl;

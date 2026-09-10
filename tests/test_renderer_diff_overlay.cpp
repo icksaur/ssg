@@ -107,8 +107,7 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
     if (!fixture.runtime) return;
     auto& runtime = *fixture.runtime;
 
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(runtime,
                         {.revision = std::uint64_t{1},
                          .baselineIdentity = "head-1:index-1",
                          .files = {{.id = ssg::DiffFileId{"overlay-id"},

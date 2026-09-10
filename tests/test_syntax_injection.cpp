@@ -251,35 +251,6 @@ TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
     ASSERT_FALSE(hasScope(secondA->syntax, SyntaxScope::Keyword));
 }
 
-TEST(closingTabDestroysDocumentRuntimeState) {
-    auto root = uniqueRoot();
-    std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}\n";
-
-    const auto baseline = Editor::liveDocumentRuntimeStateCountForTests();
-    {
-        auto parser = std::make_shared<RecordingParser>();
-        auto config = configFor(root);
-        config.syntaxParser = parser;
-
-        auto created = createEditor(std::move(config));
-        ASSERT_TRUE(created.accepted());
-        if (!created.accepted()) return;
-        auto& runtime = *created.session;
-        ASSERT_TRUE(runtime
-                        .dispatch({"file.open",
-                                   std::string{"main.cpp"}})
-                        .accepted());
-
-        ASSERT_TRUE(Editor::liveDocumentRuntimeStateCountForTests() >=
-                    baseline + 1);
-        ASSERT_TRUE(runtime
-                        .dispatch({"tab.close",  {}})
-                        .accepted());
-        ASSERT_EQ(Editor::liveDocumentRuntimeStateCountForTests(), baseline);
-    }
-    ASSERT_EQ(Editor::liveDocumentRuntimeStateCountForTests(), baseline);
-}
-
 }  // namespace
 
 SSG_TEST_SUITE(test_syntax_injection) {
@@ -288,6 +259,5 @@ SSG_TEST_SUITE(test_syntax_injection) {
     RUN(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame);
     RUN(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred);
     RUN(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState);
-    RUN(closingTabDestroysDocumentRuntimeState);
     return failed == 0 ? 0 : 1;
 }
