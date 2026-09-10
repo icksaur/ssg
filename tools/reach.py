@@ -190,18 +190,21 @@ def references(entry: dict, root: pathlib.Path) -> tuple[str, set[str]]:
             if parent_usr:
                 seen.add(parent_usr)
 
-    for cursor in unit.cursor.walk_preorder():
-        # Only an explicit reference counts. Using cursor.type.get_declaration()
-        # as a fallback would count every type merely *declared* in an included
-        # header, which makes each TU look like it uses the whole project.
+    # Walking the whole tree visits every cursor of every included header --
+    # hundreds of thousands per translation unit, and the same headers again for
+    # each one. Only declarations written in this source can hold its
+    # references, so descend from those alone.
+    pending = [
+        cursor
+        for cursor in unit.cursor.get_children()
+        if cursor.location.file is not None
+        and pathlib.Path(cursor.location.file.name) == source
+    ]
+    while pending:
+        cursor = pending.pop()
+        pending.extend(cursor.get_children())
         target = cursor.referenced
         if target is None or not target.spelling:
-            continue
-        if cursor.location.file is None:
-            continue
-        # A declaration is only "used" here if the reference itself is in this
-        # TU's own source, not in another header it happens to include.
-        if pathlib.Path(cursor.location.file.name).resolve() != source:
             continue
         # A call to an overloaded name resolves to the overload set, which
         # points at the call site rather than any declaration; its candidates
@@ -252,8 +255,8 @@ def main() -> int:
 
     users: dict[str, set[str]] = collections.defaultdict(set)
     with multiprocessing.Pool(options.jobs) as pool:
-        for name, seen in pool.starmap(
-            references, [(e, root) for e in entries]
+        for name, seen in pool.imap_unordered(
+            functools.partial(references, root=root), entries, chunksize=1
         ):
             for usr in seen:
                 users[usr].add(name)

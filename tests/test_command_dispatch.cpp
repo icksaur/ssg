@@ -72,8 +72,6 @@ TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
     auto result = runtime->dispatch({"oracle.view_action", {}});
     ASSERT_TRUE(result.accepted());
     ASSERT_FALSE(result.completed());
-    ASSERT_EQ(result.outcome(),
-              ssg::CommandResult::Outcome::ViewActionRequired);
     ASSERT_TRUE(result.viewAction.has_value());
     if (result.viewAction) {
         ASSERT_EQ(*result.viewAction,
@@ -87,8 +85,8 @@ TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
     ASSERT_EQ(input.outcome, ssg::ClientInputOutcome::ViewOwned);
     ASSERT_TRUE(input.command.has_value());
     if (input.command) {
-        ASSERT_EQ(input.command->outcome(),
-                  ssg::CommandResult::Outcome::ViewActionRequired);
+        ASSERT_TRUE(input.command->accepted());
+        ASSERT_TRUE(input.command->viewAction.has_value());
         ASSERT_EQ(input.command->viewAction, result.viewAction);
     }
 }

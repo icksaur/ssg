@@ -1,4 +1,3 @@
-0	CommandCatalog.h	enum	ssg::CommandResult::Outcome	
 0	CompiledKeymap.h	alias	ssg::CompiledSequence	
 0	InputRouting.h	alias	ssg::InputRouteAction	
 0	KeyCode.h	struct	ssg::KeyCodeEntry	

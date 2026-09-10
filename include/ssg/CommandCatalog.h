@@ -112,21 +112,11 @@ struct CommandResult {
     std::string message;
     std::optional<ViewAction> viewAction;
 
-    enum class Outcome : std::uint8_t {
-        Completed,
-        ViewActionRequired,
-        Rejected,
-    };
-
     [[nodiscard]] bool accepted() const noexcept {
         return error == CommandError::None;
     }
     [[nodiscard]] bool completed() const noexcept {
-        return outcome() == Outcome::Completed;
-    }
-    [[nodiscard]] Outcome outcome() const noexcept {
-        if (error != CommandError::None) return Outcome::Rejected;
-        return viewAction ? Outcome::ViewActionRequired : Outcome::Completed;
+        return accepted() && !viewAction.has_value();
     }
 };
 

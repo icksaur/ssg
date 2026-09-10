@@ -639,8 +639,7 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
 
     auto command = runtime.dispatch({"view.scroll_lines",
                  ssg::ScrollLinesArguments{5}});
-    ASSERT_EQ(command.outcome(),
-              ssg::CommandResult::Outcome::ViewActionRequired);
+    ASSERT_TRUE(command.accepted());
     ASSERT_TRUE(command.viewAction.has_value());
     if (!command.viewAction) return;
 
@@ -656,8 +655,8 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
 
     const auto selectionBefore = ssg::test::projectGridFrame(runtime)->selections;
     auto visual = runtime.dispatch({"cursor.page_down",  {}});
-    ASSERT_EQ(visual.outcome(),
-              ssg::CommandResult::Outcome::ViewActionRequired);
+    ASSERT_TRUE(visual.accepted());
+    ASSERT_TRUE(visual.viewAction.has_value());
     auto selectionAfter = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(selectionAfter.has_value());
     if (selectionAfter) {
@@ -809,8 +808,7 @@ TEST(visualLineMovementRequiresPresenterResolution) {
                     .accepted());
 
     auto moved = runtime.dispatch({"cursor.line_down", {}});
-    ASSERT_EQ(moved.outcome(),
-              ssg::CommandResult::Outcome::ViewActionRequired);
+    ASSERT_TRUE(moved.accepted());
     ASSERT_TRUE(moved.viewAction.has_value());
     if (!moved.viewAction) return;
     const auto expectedMove = ssg::ViewAction{
@@ -852,8 +850,7 @@ TEST(visualLineMovementRequiresPresenterResolution) {
     for (const auto& movement : movements) {
         const auto before = confirmed->selections;
         auto command = runtime.dispatch({movement.command,  {}});
-        ASSERT_EQ(command.outcome(),
-                  ssg::CommandResult::Outcome::ViewActionRequired);
+        ASSERT_TRUE(command.accepted());
         ASSERT_TRUE(command.viewAction.has_value());
         if (!command.viewAction) return;
         const auto expected = ssg::ViewAction{
