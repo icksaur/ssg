@@ -1,0 +1,186 @@
+text.tab	Insert Tab	keep
+text.newline	Newline	keep
+text.delete_backward	Delete Backward	keep
+text.delete_forward	Delete Forward	keep
+text.delete_word_backward	Delete Word Backward	keep
+text.delete_word_forward	Delete Word Forward	keep
+cursor.left	Cursor Left	keep
+cursor.right	Cursor Right	keep
+cursor.word_left	Cursor Word Left	keep
+cursor.word_right	Cursor Word Right	keep
+cursor.line_up	Cursor Line Up	keep
+cursor.line_down	Cursor Line Down	keep
+cursor.line_start	Cursor Line Start	keep
+cursor.line_end	Cursor Line End	keep
+cursor.page_up	Cursor Page Up	keep
+cursor.page_down	Cursor Page Down	keep
+cursor.document_start	Cursor Document Start	keep
+cursor.document_end	Cursor Document End	keep
+select.left	Select Left	keep
+select.right	Select Right	keep
+select.word_left	Select Word Left	keep
+select.word_right	Select Word Right	keep
+select.line_up	Select Line Up	keep
+select.line_down	Select Line Down	keep
+select.line_start	Select Line Start	keep
+select.line_end	Select Line End	keep
+select.page_up	Select Page Up	keep
+select.page_down	Select Page Down	keep
+select.document_start	Select Document Start	keep
+select.document_end	Select Document End	keep
+select.all	Select All	keep
+select.add_next_occurrence	Select Add Next Occurrence	keep
+select.add_cursor_up	Select Add Cursor Up	keep
+select.add_cursor_down	Select Add Cursor Down	keep
+select.split_into_lines	Select Split Into Lines	keep
+select.to_matching_bracket	Select To Matching Bracket	keep
+goto.matching_bracket	Goto Matching Bracket	keep
+view.reveal_caret	View Reveal Caret	keep
+view.center_caret	View Center Caret	keep
+edit.indent	Indent	keep
+edit.outdent	Outdent	keep
+edit.duplicate_line	Edit Duplicate Line	keep
+edit.move_line_up	Edit Move Line Up	keep
+edit.move_line_down	Edit Move Line Down	keep
+edit.delete_line	Edit Delete Line	keep
+edit.join_lines	Edit Join Lines	keep
+edit.uppercase	Edit Uppercase	keep
+edit.lowercase	Edit Lowercase	keep
+edit.swap_case	Edit Swap Case	keep
+edit.sort_lines	Edit Sort Lines	keep
+edit.transpose	Edit Transpose	keep
+edit.toggle_comment	Toggle Comment	keep
+find.open	Find	keep
+find.word_under_cursor	Find Word Under Cursor	keep
+find.close	Find Close	keep
+find.next	Find Next	keep
+find.previous	Find Previous	keep
+find.toggle_case	Find Toggle Case	keep
+find.toggle_whole_word	Find Toggle Whole Word	keep
+find.toggle_regex	Find Toggle Regex	keep
+find.toggle_selection	Find Toggle Selection	keep
+replace.open	Replace	keep
+replace.current	Replace Current	keep
+replace.all	Replace All	keep
+find.update_query	Find Update Query	split
+replace.update_replacement	Replace Update Replacement	split
+replace.workspace_preview	Replace Workspace Preview	split
+replace.workspace_apply	Replace Workspace Apply	split
+edit.undo	Undo	keep
+edit.redo	Redo	keep
+clipboard.copy	Copy	keep
+clipboard.cut	Cut	keep
+clipboard.paste	Paste	keep
+external.reload	External Reload	keep
+external.keep_buffer	External Keep Buffer	keep
+external.open_diff	External Open Diff	keep
+external.select_next	External Select Next	keep
+external.select_previous	External Select Previous	keep
+external.focus	External Focus	keep
+external.focus_return	External Focus Return	keep
+workspace.open_directory	Workspace Open Directory	split
+file.new	New File	split
+file.open	Open File	split
+file.open_recent	File Open Recent	remove
+file.save	Save File	keep
+file.save_all	Save All Files	keep
+file.save_as	Save File As	split
+file.reload	Reload File	keep
+file.rename	Rename File	split
+file.delete	Delete File	keep
+file.new_directory	File New Directory	split
+file.open_dropped_content	File Open Dropped Content	remove
+tab.close	Close Tab	split
+tab.close_others	Close Other Tabs	split
+tab.close_all	Close All Tabs	keep
+tab.reopen_closed	Tab Reopen Closed	keep
+tab.next	Next Tab	keep
+tab.previous	Previous Tab	keep
+tab.move_left	Tab Move Left	split
+tab.move_right	Tab Move Right	split
+file.reopen_with_encoding	File Reopen With Encoding	remove
+file.set_encoding	File Set Encoding	remove
+file.set_line_ending	File Set Line Ending	remove
+file.set_final_newline	File Set Final Newline	remove
+draft.diff	Diff Draft Against Disk	keep
+draft.discard	Discard Draft (Use Disk)	keep
+draft.dismiss	Dismiss Draft Notice	keep
+view.toggle_word_wrap	Toggle Word Wrap	keep
+view.toggle_line_numbers	Toggle Line Numbers	keep
+pane.split_horizontal	Pane Split Horizontal	keep
+pane.split_vertical	Pane Split Vertical	keep
+pane.close	Pane Close	keep
+pane.next	Pane Next	keep
+pane.previous	Pane Previous	keep
+pane.focus_left	Pane Focus Left	keep
+pane.focus_right	Pane Focus Right	keep
+pane.focus_up	Pane Focus Up	keep
+pane.focus_down	Pane Focus Down	keep
+panel.toggle	Toggle Sidebar	keep
+panel.focus	Focus Sidebar	keep
+panel.toggle_focus	Toggle Sidebar Focus	keep
+panel.shrink	Shrink Sidebar	keep
+panel.grow	Grow Sidebar	keep
+panel.show_files	Show Files Sidebar	keep
+panel.show_git_status	Show Git Sidebar	keep
+panel.show_search	Show Search Sidebar	keep
+panel.next_provider	Panel Next Provider	keep
+panel.previous_provider	Panel Previous Provider	keep
+view.toggle_distraction_free	View Toggle Distraction Free	keep
+prompt.submit	Submit Prompt	keep
+prompt.cancel	Prompt Cancel	keep
+prompt.next	Prompt Next	keep
+prompt.previous	Prompt Previous	keep
+prompt.focus_next_control	Prompt Focus Next Control	keep
+status.next	Status Next	keep
+status.previous	Status Previous	keep
+status.dismiss	Status Dismiss	keep
+prompt.update_value	Prompt Update Value	remove
+settings.open	Open Settings	keep
+settings.export_workspace	Settings Export Workspace	keep
+settings.import_workspace	Settings Import Workspace	remove
+settings.set	Settings Set	remove
+settings.reset	Settings Reset	remove
+settings.reset_scope	Settings Reset Scope	remove
+theme.set	Theme Set	config
+style.define	Style Define	config
+keymap.bind	Keymap Bind	config
+keymap.unbind	Keymap Unbind	config
+diff.next_hunk	Diff Next Hunk	remove
+diff.previous_hunk	Diff Previous Hunk	remove
+diff.open_file	Diff Open File	remove
+follow_edits.resume	Follow Edits Resume	keep
+follow_edits.pause	Follow Edits Pause	keep
+follow_edits.toggle	Follow Edits Toggle	keep
+palette.open	Command Palette	keep
+file_finder.open	File Finder Open	keep
+file_finder.toggle_gitignore	File Finder Toggle Gitignore	keep
+palette.next	Palette Next	keep
+palette.previous	Palette Previous	keep
+goto.back	Goto Back	keep
+goto.forward	Goto Forward	keep
+search.results_next	Search Results Next	keep
+search.results_previous	Search Results Previous	keep
+palette.close	Palette Close	split
+palette.execute	Palette Execute	remove
+picker.submit	Picker Submit	remove
+search.workspace	Search Workspace	split
+goto.file	Go to File	remove
+goto.symbol	Go to Symbol	remove
+goto.line	Go to Line	split
+tree.toggle_expanded	Tree Toggle Expanded	keep
+tree.select_next	Tree Select Next	keep
+tree.select_previous	Tree Select Previous	keep
+tree.activate	Open Selected	keep
+tree.invoke_node_command	Tree Invoke Node Command	remove
+tree.select	Tree Select	remove
+goto.definition	Go to Definition	keep
+goto.reference	Goto Reference	keep
+completion.open	Completion Open	keep
+completion.next	Completion Next	keep
+completion.previous	Completion Previous	keep
+completion.accept	Completion Accept	keep
+completion.dismiss	Completion Dismiss	keep
+hover.show	Hover Show	keep
+hover.dismiss	Hover Dismiss	keep
+help.open	Open Help	keep

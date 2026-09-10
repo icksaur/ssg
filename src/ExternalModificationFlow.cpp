@@ -114,6 +114,47 @@ ExternalActionAffordance externalActionAffordance(ExternalAction action) {
     throw std::invalid_argument("unknown external action");
 }
 
+CommandHandlerResult invokeExternalAction(
+    Editor& editor, ExternalActionInvocation const& invocation) {
+    if (!editor.external.hasFile(invocation.fileId)) {
+        return failure("external change is unavailable");
+    }
+    (void)editor.external.selectFile(invocation.fileId);
+    const auto view = editor.external.viewState();
+    if (!view.selected) return failure("no external modification is selected");
+    const DiffFileId file = *view.selected;
+    const auto selected = std::find_if(
+        view.files.begin(), view.files.end(),
+        [&](const ExternalDocumentView& candidate) {
+            return candidate.id == file;
+        });
+    if (selected == view.files.end() ||
+        std::none_of(selected->actions.begin(), selected->actions.end(),
+                     [&](const ExternalActionAffordance& offered) {
+                         return offered.action == invocation.action;
+                     })) {
+        return success();
+    }
+    if (invocation.action == ExternalAction::Reload) {
+        const auto result = editor.external.resolveReload(file);
+        return result.accepted() ? success()
+                                 : failure("external modification reload failed");
+    }
+    if (invocation.action == ExternalAction::KeepBuffer) {
+        const auto result = editor.external.keepBuffer(file);
+        return result.accepted() ? success()
+                                 : failure("external modification command failed");
+    }
+    auto opened = editor.external.openDiff(file);
+    if (!opened.accepted() || !opened.target) {
+        return failure("external diff target is unavailable");
+    }
+    const auto diffFile = editor.diff.file(opened.target->id);
+    if (!diffFile) return failure("external diff is unavailable");
+    return editor.openOrFocusLiveDiffTab(diffFile->get(),
+                                          NavigationClass::Programmatic);
+}
+
 void bindExternalModificationCommands(CommandCatalog& catalog,
                                       Editor& editor) {
     auto applyAction = [&editor](
@@ -180,20 +221,6 @@ void bindExternalModificationCommands(CommandCatalog& catalog,
 
     {
         auto built =
-            spec("external.invoke_action", "Invoke External Change Action");
-        built.binding = bindWireHandler<ExternalActionInvocation>(
-            [&editor, applyAction](
-                CommandContext&, const ExternalActionInvocation& invocation) {
-                if (!editor.external.hasFile(invocation.fileId)) {
-                    return failure("external change is unavailable");
-                }
-                (void)editor.external.selectFile(invocation.fileId);
-                return applyAction(invocation.action);
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built =
             spec("external.select_next", "Select Next External Change");
         built.binding = bindNoArgumentHandler([&editor](CommandContext&) {
             (void)editor.external.selectNext();
@@ -208,18 +235,6 @@ void bindExternalModificationCommands(CommandCatalog& catalog,
             (void)editor.external.selectPrevious();
             return success();
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("external.select", "Select External Change");
-        built.binding = bindInProcessHandler<DiffFileId>(
-            [&editor](CommandContext&, const DiffFileId& file) {
-                if (!editor.external.hasFile(file)) {
-                    return failure("external change is unavailable");
-                }
-                (void)editor.external.selectFile(file);
-                return success();
-            });
         catalog.add(std::move(built));
     }
     {

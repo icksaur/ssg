@@ -20,14 +20,10 @@ PromptRoutingState atPrompt(ActivePrompt prompt, std::string value = {},
     return {FocusTarget::Prompt, prompt, std::move(value), activeInput};
 }
 
-TEST(editorFocusRoutesPrintableTextToInsert) {
+TEST(editorFocusLeavesPrintableTextToInputRouting) {
     auto const route = routePromptTextEdit(
         atEditor(), {PromptTextEdit::Kind::Append, "x"});
-    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
-    ASSERT_TRUE(route.command == CommandName{"text.insert"});
-    auto const* args = std::any_cast<TextInputArguments>(&route.payload);
-    ASSERT_TRUE(args != nullptr);
-    ASSERT_EQ(args->text, std::string{"x"});
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Ignore);
 }
 
 TEST(paletteFocusAppendsToTheClientOwnedQueryOnly) {
@@ -145,7 +141,7 @@ TEST(panelFocusIgnoresPrintableText) {
 }  // namespace
 
 SSG_TEST_SUITE(test_prompt_routing) {
-    RUN(editorFocusRoutesPrintableTextToInsert);
+    RUN(editorFocusLeavesPrintableTextToInputRouting);
     RUN(paletteFocusAppendsToTheClientOwnedQueryOnly);
     RUN(findPromptRoutesTheWholeNewQueryValue);
     RUN(replacePromptRoutesTheWholeNewReplacementValue);

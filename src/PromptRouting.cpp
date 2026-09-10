@@ -76,12 +76,9 @@ PromptTextRoute routePromptTextEdit(const PromptRoutingState& state,
                                     const PromptTextEdit& change) {
     switch (textRoutingForContext(focusTargetName(state.focus))) {
     case TextRouting::Insert:
-        // A DeleteGraphemeBack/DeleteWordBack in the editor is not this seam's
-        // job; only an append inserts text. The editor's own delete commands
-        // handle backspace when the editor holds focus.
-        if (change.kind != PromptTextEdit::Kind::Append) return {};
-        return {PromptTextRoute::Kind::Dispatch, CommandName{"text.insert"},
-                TextInputArguments{change.text}, {}};
+        // Editor text input is routed directly in InputRouting; prompt routing owns
+        // only prompt/query edits.
+        return {};
     case TextRouting::PromptQuery:
         if (state.prompt == ActivePrompt::Palette) {
             // The palette query is the one client-owned derived view; the client

@@ -26,11 +26,13 @@ public:
 
     [[nodiscard]] CommandResult submit(std::string command_id,
                                        std::any payload = {});
+    [[nodiscard]] ClientInputResult input(ClientInput input);
     [[nodiscard]] GridPresentation const& snapshot() const noexcept {
         return *snapshot_;
     }
 
 private:
+    void applyViewAction(CommandResult const& result);
     void refresh();
 
     Editor* runtime_;

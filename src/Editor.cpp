@@ -341,11 +341,25 @@ void applyGesture(Editor& editor,
 std::optional<std::string> applyInputMutation(
     Editor& editor, std::optional<EditorMutation> mutation) {
     if (!mutation) return std::nullopt;
+    auto messageIfRejected = [](CommandHandlerResult result)
+        -> std::optional<std::string> {
+        if (result.accepted) return std::nullopt;
+        return std::move(result.message);
+    };
+    if (auto* text = std::get_if<ApplyTextInput>(&*mutation)) {
+        return messageIfRejected(
+            applyEditorTextInput(editor, text->command,
+                                 std::move(text->arguments)));
+    }
     if (auto* selections = std::get_if<ApplySelections>(&*mutation)) {
-        editor.selection.selections = std::move(selections->selections);
-        editor.historyFor(selections->document).breakCoalescing();
-        editor.recordNavigation(NavigationClass::User);
-        return std::nullopt;
+        return messageIfRejected(
+            applyEditorSelections(editor, std::move(*selections)));
+    }
+    if (auto* tab = std::get_if<ActivateTab>(&*mutation)) {
+        return messageIfRejected(activateTab(editor, tab->tabId));
+    }
+    if (auto* tab = std::get_if<CloseTab>(&*mutation)) {
+        return messageIfRejected(closeTabById(editor, tab->tabId));
     }
     if (auto* pane = std::get_if<FocusPane>(&*mutation)) {
         if (!editor.focusPane(pane->pane)) {
@@ -444,8 +458,19 @@ ClientInputResult executeInputRoute(Editor& editor, RouteRejected route,
 
 ClientInputResult executeInputRoute(Editor& editor, RouteAccepted route,
                                     RoutedInput routed) {
-    if (auto error =
-            applyInputMutation(editor, std::move(route.mutation))) {
+    const auto revisionsBefore = documentRevisions(editor.workspace);
+    editor.screen.refreshExternalModificationPresence(
+        editor.externalModificationPresent());
+    auto error = applyInputMutation(editor, std::move(route.mutation));
+    editor.reconcileFindDocument();
+    editor.screen.refreshNoticePresence(editor.noticePresent());
+    editor.screen.refreshExternalModificationPresence(
+        editor.externalModificationPresent());
+    editor.screen.refreshStatusActions(editor.status.actionNodes());
+    if (!error && existingDocumentMutated(revisionsBefore, editor.workspace)) {
+        (void)editor.follow.notifyLocalEdit();
+    }
+    if (error) {
         if (routed.clearGestureOnRejection) {
             editor.documentPointerGesture.clear();
         }
@@ -490,6 +515,105 @@ ClientInputResult executeInputRoute(Editor& editor, RouteDispatch route,
         : result.viewAction ? ClientInputOutcome::ViewOwned
                             : ClientInputOutcome::Dispatched;
     return {outcome, std::nullopt, std::move(result), activation};
+}
+
+ClientInputResult executeInputRoute(Editor& editor, InvokeExternalAction route,
+                                    RoutedInput routed) {
+    const auto revisionsBefore = documentRevisions(editor.workspace);
+    editor.screen.refreshExternalModificationPresence(
+        editor.externalModificationPresent());
+    auto result = invokeExternalAction(editor, route.invocation);
+    editor.reconcileFindDocument();
+    editor.screen.refreshNoticePresence(editor.noticePresent());
+    editor.screen.refreshExternalModificationPresence(
+        editor.externalModificationPresent());
+    editor.screen.refreshStatusActions(editor.status.actionNodes());
+    if (result.accepted &&
+        existingDocumentMutated(revisionsBefore, editor.workspace)) {
+        (void)editor.follow.notifyLocalEdit();
+    }
+    if (!result.accepted) {
+        if (routed.clearGestureOnRejection) {
+            editor.documentPointerGesture.clear();
+        }
+        return {ClientInputOutcome::Rejected, std::nullopt,
+                CommandResult{CommandError::HandlerFailed,
+                              std::move(result.message), {}},
+                std::nullopt};
+    }
+    applyGesture(editor, std::move(routed.gestureOnAccepted));
+    auto const activation = editor.screen.openPickerActivation();
+    const auto outcome =
+        result.viewAction ? ClientInputOutcome::ViewOwned
+                          : ClientInputOutcome::Dispatched;
+    return {outcome, std::nullopt,
+            CommandResult{CommandError::None, {}, std::move(result.viewAction)},
+            activation};
+}
+
+ClientInputResult executeInputRoute(Editor& editor, ActivateUiNode route,
+                                    RoutedInput routed) {
+    const auto revisionsBefore = documentRevisions(editor.workspace);
+    editor.screen.refreshExternalModificationPresence(
+        editor.externalModificationPresent());
+    auto result = applyUiNodeActivation(editor, route.nodeId);
+    editor.reconcileFindDocument();
+    editor.screen.refreshNoticePresence(editor.noticePresent());
+    editor.screen.refreshExternalModificationPresence(
+        editor.externalModificationPresent());
+    editor.screen.refreshStatusActions(editor.status.actionNodes());
+    if (result.accepted &&
+        existingDocumentMutated(revisionsBefore, editor.workspace)) {
+        (void)editor.follow.notifyLocalEdit();
+    }
+    if (!result.accepted) {
+        return {ClientInputOutcome::Rejected, std::nullopt,
+                CommandResult{CommandError::HandlerFailed,
+                              std::move(result.message), {}},
+                std::nullopt};
+    }
+    applyGesture(editor, std::move(routed.gestureOnAccepted));
+    auto const activation = editor.screen.openPickerActivation();
+    const auto outcome =
+        result.viewAction ? ClientInputOutcome::ViewOwned
+                          : ClientInputOutcome::Dispatched;
+    return {outcome, std::nullopt,
+            CommandResult{CommandError::None, {}, std::move(result.viewAction)},
+            activation};
+}
+
+ClientInputResult executeInputRoute(Editor& editor, ActivateTreeNode route,
+                                    RoutedInput routed) {
+    const auto revisionsBefore = documentRevisions(editor.workspace);
+    editor.screen.refreshExternalModificationPresence(
+        editor.externalModificationPresent());
+    auto result = activateTreeNode(editor, route.nodeId);
+    editor.reconcileFindDocument();
+    editor.screen.refreshNoticePresence(editor.noticePresent());
+    editor.screen.refreshExternalModificationPresence(
+        editor.externalModificationPresent());
+    editor.screen.refreshStatusActions(editor.status.actionNodes());
+    if (result.accepted &&
+        existingDocumentMutated(revisionsBefore, editor.workspace)) {
+        (void)editor.follow.notifyLocalEdit();
+    }
+    if (!result.accepted) {
+        if (routed.clearGestureOnRejection) {
+            editor.documentPointerGesture.clear();
+        }
+        return {ClientInputOutcome::Rejected, std::nullopt,
+                CommandResult{CommandError::HandlerFailed,
+                              std::move(result.message), {}},
+                std::nullopt};
+    }
+    applyGesture(editor, std::move(routed.gestureOnAccepted));
+    auto const activation = editor.screen.openPickerActivation();
+    const auto outcome =
+        result.viewAction ? ClientInputOutcome::ViewOwned
+                          : ClientInputOutcome::Dispatched;
+    return {outcome, std::nullopt,
+            CommandResult{CommandError::None, {}, std::move(result.viewAction)},
+            activation};
 }
 
 } // namespace

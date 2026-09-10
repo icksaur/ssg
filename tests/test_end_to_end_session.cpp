@@ -70,11 +70,6 @@ struct RuntimeFixture {
     std::unique_ptr<ssg::Editor> runtime;
 };
 
-struct Step {
-    std::string command;
-    std::any payload;
-};
-
 TEST(directAndTuiClientsMatchThroughRealRuntimeSnapshots) {
     RuntimeFixture directFixture{"e2e_runtime_direct"};
     RuntimeFixture tuiFixture{"e2e_runtime_tui"};
@@ -87,27 +82,34 @@ TEST(directAndTuiClientsMatchThroughRealRuntimeSnapshots) {
     ASSERT_TRUE(directSnapshot.has_value());
     ASSERT_EQ(canonical(*directSnapshot), canonical(client.snapshot()));
 
-    std::vector<Step> steps;
-    steps.push_back({"file.open", std::string{"doc.txt"}});
-    steps.push_back({"text.insert", ssg::TextInputArguments{"!"}});
-    steps.push_back({"cursor.left", {}});
-    steps.push_back({"text.insert", ssg::TextInputArguments{"?"}});
-    steps.push_back({"edit.undo", {}});
-    steps.push_back({"edit.redo", {}});
-    steps.push_back({"view.toggle_word_wrap", {}});
-    steps.push_back({"tab.close", {}});
-    steps.push_back({"tab.reopen_closed", {}});
-
-    for (auto& step : steps) {
-        auto directResult = direct.dispatch(
-            {step.command,  step.payload});
-        auto tuiResult = client.submit(step.command, step.payload);
+    const auto runCommand = [&](std::string command, std::any payload = {}) {
+        auto directResult = direct.dispatch({command, payload});
+        auto tuiResult = client.submit(std::move(command), std::move(payload));
         ASSERT_TRUE(directResult.accepted());
         ASSERT_TRUE(tuiResult.accepted());
         directSnapshot = ssg::test::projectGridFrame(direct, {80, 24});
         ASSERT_TRUE(directSnapshot.has_value());
         ASSERT_EQ(canonical(*directSnapshot), canonical(client.snapshot()));
-    }
+    };
+    const auto runText = [&](std::string text) {
+        auto directResult = direct.input(ssg::ClientKeyInput{{}, text});
+        auto tuiResult = client.input(ssg::ClientKeyInput{{}, std::move(text)});
+        ASSERT_TRUE(directResult.command && directResult.command->accepted());
+        ASSERT_TRUE(tuiResult.command && tuiResult.command->accepted());
+        directSnapshot = ssg::test::projectGridFrame(direct, {80, 24});
+        ASSERT_TRUE(directSnapshot.has_value());
+        ASSERT_EQ(canonical(*directSnapshot), canonical(client.snapshot()));
+    };
+
+    runCommand("file.open", std::string{"doc.txt"});
+    runText("!");
+    runCommand("cursor.left");
+    runText("?");
+    runCommand("edit.undo");
+    runCommand("edit.redo");
+    runCommand("view.toggle_word_wrap");
+    runCommand("tab.close");
+    runCommand("tab.reopen_closed");
 }
 
 }  // namespace

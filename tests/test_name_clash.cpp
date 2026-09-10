@@ -134,13 +134,9 @@ TEST(saveOverwritesTheDocumentsOwnPathRepeatedly) {
     ASSERT_TRUE(runtime != nullptr);
     ASSERT_TRUE(run(*runtime, "file.open", std::string{"notes.txt"}).accepted());
 
-    ASSERT_TRUE(run(*runtime, "text.insert",
-                    ssg::TextInputArguments{"second\n"})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(*runtime, "second\n").accepted());
     ASSERT_TRUE(run(*runtime, "file.save").accepted());
-    ASSERT_TRUE(run(*runtime, "text.insert",
-                    ssg::TextInputArguments{"third\n"})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(*runtime, "third\n").accepted());
     ASSERT_TRUE(run(*runtime, "file.save").accepted());
 
     const auto contents = readOutOfBand(target);
@@ -156,8 +152,7 @@ TEST(saveAsToAFreeNameSucceedsAndRetitlesTheTab) {
     ASSERT_TRUE(runtime != nullptr);
 
     ASSERT_TRUE(run(*runtime, "file.new").accepted());
-    ASSERT_TRUE(run(*runtime, "text.insert", ssg::TextInputArguments{"hello"})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(*runtime, "hello").accepted());
     ASSERT_TRUE(
         run(*runtime, "file.save_as", std::string{"fresh.txt"}).accepted());
     ASSERT_TRUE(fs::is_regular_file(directory.path() / "fresh.txt"));
@@ -209,8 +204,7 @@ TEST(aRuntimeWithNoDocumentOpensAnEditableNewBuffer) {
     ASSERT_EQ(tabs.front().label, std::string{"[new buffer]"});
 
     // Editable, not merely present.
-    ASSERT_TRUE(run(*runtime, "text.insert", ssg::TextInputArguments{"typed"})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(*runtime, "typed").accepted());
     ASSERT_TRUE(ssg::test::activeDocumentText(*runtime).find("typed") !=
                 std::string::npos);
 }

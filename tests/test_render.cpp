@@ -396,8 +396,9 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
     auto atBeta = ssg::resolveSelectionPosition("alpha\nbeta\ngamma\n",
                                                            ssg::ByteOffset{6});
     ASSERT_TRUE(atBeta.has_value());
-    (void)runtime->dispatch({"cursor.set_position",
-         ssg::SelectionCommandArguments{atBeta, std::nullopt}});
+    (void)ssg::test::setSelections(
+        *runtime,
+        {{atBeta->byteOffset.value(), atBeta->byteOffset.value()}});
 
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -898,7 +899,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
 
     // Editing the document advances its revision without re-evaluating find, so
     // the controller is stale: reconcile closes it and no matches are painted.
-    (void)runtime->dispatch({"text.insert",  ssg::TextInputArguments{"z"}});
+    (void)ssg::test::typeText(*runtime, "z");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;

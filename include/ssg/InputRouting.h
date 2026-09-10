@@ -9,6 +9,7 @@
 #include <ssg/PromptSurface.h>
 #include <ssg/Selection.h>
 #include <ssg/TabManager.h>
+#include <ssg/TextInputCommands.h>
 #include <ssg/TreeModel.h>
 
 #include <functional>
@@ -44,9 +45,15 @@ struct InputRoutingSnapshot {
     bool searchEditing = false;
 };
 
+struct ApplyTextInput {
+    TextInputCommand command = TextInputCommand::Insert;
+    TextInputArguments arguments;
+};
+
 struct ApplySelections {
     FileDocumentId document;
     SelectionSet selections;
+    bool focusEditor = false;
 };
 
 struct FocusPane {
@@ -65,8 +72,21 @@ struct SearchQueryChange {
     std::string text;
 };
 
+struct ActivateTab {
+    TabId tabId;
+};
+
+struct CloseTab {
+    TabId tabId;
+};
+
+struct ActivateTreeNode {
+    TreeNodeId nodeId;
+};
+
 using EditorMutation =
-    std::variant<ApplySelections, FocusPane, SearchQueryChange>;
+    std::variant<ApplyTextInput, ApplySelections, FocusPane, SearchQueryChange,
+                 ActivateTab, CloseTab>;
 
 struct RouteUnhandled {};
 
@@ -90,9 +110,18 @@ struct RouteDispatch {
     ClientCommand command;
 };
 
+struct InvokeExternalAction {
+    ExternalActionInvocation invocation;
+};
+
+struct ActivateUiNode {
+    UiNodeId nodeId;
+};
+
 using InputRouteAction =
     std::variant<RouteUnhandled, RouteRejected, RouteAccepted,
-                 RouteClientOwned, RouteViewAction, RouteDispatch>;
+                 RouteClientOwned, RouteViewAction, RouteDispatch,
+                 InvokeExternalAction, ActivateUiNode, ActivateTreeNode>;
 
 struct RoutedInput {
     InputRouteAction action;

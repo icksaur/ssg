@@ -164,9 +164,8 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             if ((hit.region == ssg::HitRegion::HeaderField ||
                  hit.region == ssg::HitRegion::FooterField) &&
                 targets.ui_node_id) {
-                dispatch.command = ssg::ClientCommand{
-                   "ui.activate",
-                   ssg::UiNodeActivationArguments{*targets.ui_node_id}};
+                dispatch.semantic_input = ssg::UiNodePointerInput{
+                    *targets.ui_node_id};
                 return dispatch;
             }
             if (hit.region == ssg::HitRegion::NoticeAction &&

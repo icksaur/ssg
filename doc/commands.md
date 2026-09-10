@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 203 commands.
+There are 186 commands.
 
 ## clipboard-register
 
@@ -67,10 +67,8 @@ There are 203 commands.
 | `external.reload` | Reload | none | lua |
 | `external.keep_buffer` | Keep Buffer | none | lua |
 | `external.open_diff` | Open Diff | none | lua |
-| `external.invoke_action` | Invoke External Change Action | external action | lua |
 | `external.select_next` | Select Next External Change | none | lua |
 | `external.select_previous` | Select Previous External Change | none | lua |
-| `external.select` | Select External Change | none | lua |
 | `external.focus` | Focus External Change Bar | none | lua |
 | `external.focus_return` | Leave External Change Bar | none | lua |
 
@@ -160,7 +158,6 @@ There are 203 commands.
 | `status.previous` | Previous | none | lua |
 | `status.dismiss` | Dismiss | none | lua |
 | `prompt.update_value` | Update Value | prompt value | lua |
-| `prompt.focus_control` | Focus Field | prompt focus | lua |
 
 ## search-palette
 
@@ -187,44 +184,39 @@ There are 203 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `cursor.set_position` | Set Position | selection | lua |
-| `cursor.left` | Left | selection | lua |
-| `cursor.right` | Right | selection | lua |
-| `cursor.word_left` | Word Left | selection | lua |
-| `cursor.word_right` | Word Right | selection | lua |
-| `cursor.line_up` | Line Up | selection | lua |
-| `cursor.line_down` | Line Down | selection | lua |
-| `cursor.line_start` | Line Start | selection | lua |
-| `cursor.line_end` | Line End | selection | lua |
-| `cursor.page_up` | Page Up | selection | lua |
-| `cursor.page_down` | Page Down | selection | lua |
-| `cursor.document_start` | Document Start | selection | lua |
-| `cursor.document_end` | Document End | selection | lua |
-| `select.set_range` | Set Range | selection | lua |
-| `select.set_ranges` | Set Ranges | selection | lua |
-| `select.add_range` | Add Range | selection | lua |
-| `select.left` | Left | selection | lua |
-| `select.right` | Right | selection | lua |
-| `select.word_left` | Word Left | selection | lua |
-| `select.word_right` | Word Right | selection | lua |
-| `select.line_up` | Line Up | selection | lua |
-| `select.line_down` | Line Down | selection | lua |
-| `select.line_start` | Line Start | selection | lua |
-| `select.line_end` | Line End | selection | lua |
-| `select.page_up` | Page Up | selection | lua |
-| `select.page_down` | Page Down | selection | lua |
-| `select.document_start` | Document Start | selection | lua |
-| `select.document_end` | Document End | selection | lua |
-| `select.all` | All | selection | lua |
-| `select.add_next_occurrence` | Add Next Occurrence | selection | lua |
-| `select.add_cursor_up` | Add Cursor Up | selection | lua |
-| `select.add_cursor_down` | Add Cursor Down | selection | lua |
-| `select.split_into_lines` | Split Into Lines | selection | lua |
-| `select.to_matching_bracket` | To Matching Bracket | selection | lua |
-| `goto.matching_bracket` | Matching Bracket | selection | lua |
-| `select.word_at_position` | Word At Position | selection | lua |
-| `view.reveal_caret` | Reveal Caret | selection | lua |
-| `view.center_caret` | Center Caret | selection | lua |
+| `cursor.left` | Left | none | lua |
+| `cursor.right` | Right | none | lua |
+| `cursor.word_left` | Word Left | none | lua |
+| `cursor.word_right` | Word Right | none | lua |
+| `cursor.line_up` | Line Up | none | lua |
+| `cursor.line_down` | Line Down | none | lua |
+| `cursor.line_start` | Line Start | none | lua |
+| `cursor.line_end` | Line End | none | lua |
+| `cursor.page_up` | Page Up | none | lua |
+| `cursor.page_down` | Page Down | none | lua |
+| `cursor.document_start` | Document Start | none | lua |
+| `cursor.document_end` | Document End | none | lua |
+| `select.left` | Left | none | lua |
+| `select.right` | Right | none | lua |
+| `select.word_left` | Word Left | none | lua |
+| `select.word_right` | Word Right | none | lua |
+| `select.line_up` | Line Up | none | lua |
+| `select.line_down` | Line Down | none | lua |
+| `select.line_start` | Line Start | none | lua |
+| `select.line_end` | Line End | none | lua |
+| `select.page_up` | Page Up | none | lua |
+| `select.page_down` | Page Down | none | lua |
+| `select.document_start` | Document Start | none | lua |
+| `select.document_end` | Document End | none | lua |
+| `select.all` | All | none | lua |
+| `select.add_next_occurrence` | Add Next Occurrence | none | lua |
+| `select.add_cursor_up` | Add Cursor Up | none | lua |
+| `select.add_cursor_down` | Add Cursor Down | none | lua |
+| `select.split_into_lines` | Split Into Lines | none | lua |
+| `select.to_matching_bracket` | To Matching Bracket | none | lua |
+| `goto.matching_bracket` | Matching Bracket | none | lua |
+| `view.reveal_caret` | Reveal Caret | none | lua |
+| `view.center_caret` | Center Caret | none | lua |
 
 ## settings-model
 
@@ -278,7 +270,6 @@ There are 203 commands.
 | `tab.reopen_closed` | Reopen Closed | tab | lua |
 | `tab.next` | Next Tab | tab | lua |
 | `tab.previous` | Previous Tab | tab | lua |
-| `tab.activate` | Activate | tab | lua |
 | `tab.move_left` | Move Left | tab | lua |
 | `tab.move_right` | Move Right | tab | lua |
 
@@ -286,7 +277,6 @@ There are 203 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `text.insert` | Insert | text | lua |
 | `text.tab` | Insert Tab | none | lua |
 | `text.newline` | Newline | none | lua |
 | `text.delete_backward` | Delete Backward | none | lua |
@@ -308,17 +298,8 @@ There are 203 commands.
 | `tree.select_next` | Select Next | none | lua |
 | `tree.select_previous` | Select Previous | none | lua |
 | `tree.activate` | Open Selected | none | lua |
-| `tree.activate_node` | Open Node | tree node | lua |
 | `tree.invoke_node_command` | Invoke Node Command | none | lua |
 | `tree.select` | Select | tree node | lua |
-| `tree.scroll` | Scroll | scroll lines | lua |
-| `tree.scroll_to_fraction` | Scroll To Fraction | scroll fraction | lua |
-
-## ui-frame
-
-| Command | Summary | Arguments | Surfaces |
-|---|---|---|---|
-| `ui.activate` | Activate Published UI Node | UI node activation | — |
 
 ## undo-redo-history
 
@@ -333,6 +314,3 @@ There are 203 commands.
 |---|---|---|---|
 | `view.toggle_word_wrap` | Toggle Word Wrap | none | lua |
 | `view.toggle_line_numbers` | Toggle Line Numbers | none | lua |
-| `view.scroll_lines` | Scroll Lines | scroll lines | lua |
-| `view.scroll_pages` | Scroll Pages | scroll pages | lua |
-| `view.scroll_to_fraction` | Scroll To Fraction | scroll fraction | lua |

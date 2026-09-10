@@ -10,45 +10,6 @@
 namespace ssg {
 namespace {
 
-CommandHandlerResult activateUiNode(
-    Editor& runtime,
-    const UiNodeActivationArguments& arguments) {
-    const UiSchema tree = runtime.projectedUiTree();
-    const UiNode* node = findUiNode(tree, arguments.nodeId);
-    if (!node || !isUiNodeVisible(tree, arguments.nodeId)) {
-        return failure("UI activation target is not present");
-    }
-    const auto* leaf = std::get_if<UiLeaf>(&node->content);
-    if (!node->resolved || !leaf) {
-        return failure("UI activation target is not actionable");
-    }
-
-    ClientCommand target;
-    if (leaf->widget.kind == WidgetKind::TextInput &&
-        node->resolved->active.has_value()) {
-        target.id = "prompt.focus_control";
-        target.payload = PromptFocusArguments{leaf->widget.id};
-    } else {
-        if ((leaf->widget.kind != WidgetKind::Field &&
-             leaf->widget.kind != WidgetKind::Checkbox) ||
-            !node->resolved->command || node->resolved->command->empty()) {
-            return failure("UI activation target is not actionable");
-        }
-        const CommandEntry* command =
-            runtime.catalog.find(*node->resolved->command);
-        if (!command || command->argument.type ||
-            command->effect == CommandEffect::Routing) {
-            return failure(
-                "UI activation target is not a payloadless command");
-        }
-        target.id = *node->resolved->command;
-    }
-    if (!runtime.deferDispatch(std::move(target))) {
-        return failure("UI activation target could not be queued");
-    }
-    return success();
-}
-
 CommandHandlerResult setWordWrap(Editor& runtime) {
     bool next = !boolSetting(runtime.settings, SettingKey::WordWrap, runtime.wordWrap);
     auto mutation = runtime.settings.set(SettingScope::Workspace, SettingKey::WordWrap, next);
@@ -202,15 +163,6 @@ CommandHandlerResult promptStatusCommand(Editor& runtime,
         }
         return success();
     }
-    if (id == "prompt.focus_control") {
-        auto const* arguments = payloadAs<PromptFocusArguments>(payload);
-        if (arguments == nullptr) {
-            return failure("prompt.focus_control requires a focus payload");
-        }
-        auto result =
-            runtime.screen.prompt().focusInput(arguments->controlId);
-        return result.accepted() ? success() : failure(result.error->message);
-    }
     if (id == "prompt.focus_next_control") {
         auto result = runtime.screen.prompt().focusNextInput();
         return result.accepted() ? success() : failure(result.error->message);
@@ -297,7 +249,41 @@ CommandHandlerResult settingsCommand(Editor& runtime, std::string_view id, std::
 
 } // namespace
 
-// Theme, style and keymap: the commands `init.lua` uses to configure the
+CommandHandlerResult applyUiNodeActivation(Editor& runtime,
+                                           UiNodeId const& nodeId) {
+    const UiSchema tree = runtime.projectedUiTree();
+    const UiNode* node = findUiNode(tree, nodeId);
+    if (!node || !isUiNodeVisible(tree, nodeId)) {
+        return failure("UI activation target is not present");
+    }
+    const auto* leaf = std::get_if<UiLeaf>(&node->content);
+    if (!node->resolved || !leaf) {
+        return failure("UI activation target is not actionable");
+    }
+
+    if (leaf->widget.kind == WidgetKind::TextInput &&
+        node->resolved->active.has_value()) {
+        auto result = runtime.screen.prompt().focusInput(leaf->widget.id);
+        return result.accepted() ? success() : failure(result.error->message);
+    }
+    if ((leaf->widget.kind != WidgetKind::Field &&
+         leaf->widget.kind != WidgetKind::Checkbox) ||
+        !node->resolved->command || node->resolved->command->empty()) {
+        return failure("UI activation target is not actionable");
+    }
+    const CommandEntry* command =
+        runtime.catalog.find(*node->resolved->command);
+    if (!command || command->argument.type ||
+        command->effect == CommandEffect::Routing) {
+        return failure("UI activation target is not a payloadless command");
+    }
+    auto result = runtime.dispatchLocked(ClientCommand{*node->resolved->command});
+    if (!result.accepted()) return failure(result.message);
+    if (result.viewAction) return CommandHandlerResult::requireView(std::move(*result.viewAction));
+    return success();
+}
+
+
 // editor at startup.
 //
 // Each carries a whole table -- colours, a style value, a key sequence -- as an
@@ -383,10 +369,6 @@ void registerAppearanceCommands(CommandCatalog& catalog,
     }
 }
 
-// Word wrap and the three ways to scroll.
-//
-// The scroll commands all record a user navigation when they move the view, so
-// follow-edits knows the user drove rather than the editor.
 void registerViewportCommands(CommandCatalog& catalog,
                               Editor& runtime) {
     catalog.add(CommandSpec{
@@ -413,43 +395,6 @@ void registerViewportCommands(CommandCatalog& catalog,
         }),
     });
 
-    auto scroll = [](std::string id, std::string summary) {
-        return CommandSpec{
-            .id = std::move(id),
-            .owner = "viewport-wrap-scrollbar",
-            .summary = std::move(summary),
-            .effect = CommandEffect::ViewAction,
-            .luaApi = true,
-        };
-    };
-    {
-        auto built = scroll("view.scroll_lines", "Scroll Lines");
-        built.binding = bindWireHandler<ScrollLinesArguments>(
-            [](CommandContext&, ScrollLinesArguments const& arguments) {
-                return CommandHandlerResult::requireView(
-                    ScrollLines{ScrollTarget::Document, arguments.rows});
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = scroll("view.scroll_pages", "Scroll Pages");
-        built.binding = bindWireHandler<ScrollPagesArguments>(
-            [](CommandContext&, ScrollPagesArguments const& arguments) {
-                return CommandHandlerResult::requireView(
-                    ScrollPages{arguments.pages});
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = scroll("view.scroll_to_fraction", "Scroll To Fraction");
-        built.binding = bindWireHandler<ScrollFractionArguments>(
-            [](CommandContext&, ScrollFractionArguments const& arguments) {
-                return CommandHandlerResult::requireView(ScrollFraction{
-                    ScrollTarget::Document, arguments.numerator,
-                    arguments.denominator});
-            });
-        catalog.add(std::move(built));
-    }
 }
 
 // Reading and writing settings.
@@ -554,18 +499,6 @@ void registerPromptStatusCommands(CommandCatalog& catalog,
     bare("status.previous", "Previous", "");
     bare("status.dismiss", "Dismiss", "");
 
-    catalog.add(CommandSpec{
-        .id = "ui.activate",
-        .owner = "ui-frame",
-        .summary = "Activate Published UI Node",
-        .effect = CommandEffect::Routing,
-        .binding = bindWireHandler<UiNodeActivationArguments>(
-            [&runtime](CommandContext&,
-                       const UiNodeActivationArguments& arguments) {
-                return activateUiNode(runtime, arguments);
-            }),
-    });
-
     {
         auto built = spec("prompt.update_value", "Update Value");
         built.binding = bindWireHandler<PromptValueArguments>(
@@ -573,16 +506,6 @@ void registerPromptStatusCommands(CommandCatalog& catalog,
                        PromptValueArguments const& arguments) {
                 return promptStatusCommand(
                     runtime, "prompt.update_value", std::any{arguments});
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("prompt.focus_control", "Focus Field");
-        built.binding = bindWireHandler<PromptFocusArguments>(
-            [&runtime](CommandContext&,
-                       PromptFocusArguments const& arguments) {
-                return promptStatusCommand(
-                    runtime, "prompt.focus_control", std::any{arguments});
             });
         catalog.add(std::move(built));
     }

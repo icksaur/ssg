@@ -157,9 +157,22 @@ void bindRuntimeNavigation(CommandCatalog& catalog, Editor& runtime);
 void bindRuntimeLanguageServices(CommandCatalog& catalog, Editor& runtime);
 void bindRuntimeHelp(CommandCatalog& catalog, Editor& runtime);
 void registerAllCommands(CommandCatalog& catalog, Editor& runtime);
+[[nodiscard]] CommandHandlerResult applyEditorSelections(
+    Editor& runtime, ApplySelections mutation);
+[[nodiscard]] CommandHandlerResult applyEditorTextInput(
+    Editor& runtime, TextInputCommand command,
+    TextInputArguments arguments = {});
 [[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
     Editor& runtime, FindReplaceCommand command,
     std::any const& payload);
+[[nodiscard]] CommandHandlerResult activateTab(Editor& runtime, TabId tabId);
+[[nodiscard]] CommandHandlerResult closeTabById(Editor& runtime, TabId tabId);
+[[nodiscard]] CommandHandlerResult activateTreeNode(Editor& runtime,
+                                                    TreeNodeId nodeId);
+[[nodiscard]] CommandHandlerResult invokeExternalAction(
+    Editor& runtime, ExternalActionInvocation const& invocation);
+[[nodiscard]] CommandHandlerResult applyUiNodeActivation(Editor& runtime,
+                                                         UiNodeId const& nodeId);
 
 struct Editor final {
 private:

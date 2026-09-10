@@ -113,11 +113,10 @@ TEST(clickingFooterHelpHintOpensHelp) {
     if (!hit.fieldId) return;
 
     ASSERT_TRUE(
-        runtime
-            .dispatch({"ui.activate",
-                 ssg::UiNodeActivationArguments{
-                     ssg::UiNodeId{*hit.fieldId}}})
-            .accepted());
+        ssg::test::dispatchInput(
+            runtime,
+            ssg::UiNodePointerInput{ssg::UiNodeId{*hit.fieldId}})
+        .accepted());
     const auto tab = activeTab(runtime);
     ASSERT_TRUE(tab.has_value());
     if (tab) ASSERT_EQ(tab->label, std::string{"help"});
@@ -245,9 +244,7 @@ TEST(helpTabRejectsEditsAndLeavesTheBufferUnchanged) {
                     .accepted());
     const auto before = ssg::test::activeDocumentText(runtime);
     // Any mutating command is rejected at the read-only chokepoint.
-    ASSERT_FALSE(runtime.dispatch({"text.insert",
-                                   ssg::TextInputArguments{"X"}})
-                     .accepted());
+    ASSERT_FALSE(ssg::test::typeText(runtime, "X").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), before);
 }
 

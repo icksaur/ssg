@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <unistd.h>
 
@@ -124,12 +126,76 @@ TEST(commandPalettePublishesOnlyInvocableCommands) {
     std::filesystem::remove_all(root);
 }
 
+TEST(commandSurfaceMatchesReviewedFixture) {
+    // Independently recomputes id/label/classification for each runtime command
+    // and compares against the reviewed fixture captured before migration.
+    // A mismatch means either a command was added/removed/relabelled, or the
+    // reviewed classification table in all_command_ids.h was changed; both
+    // require deliberate review.
+    std::ifstream fixture{SSG_COMMAND_SURFACE_FIXTURE};
+    ASSERT_TRUE(fixture.is_open());
+
+    auto const& commands = ssg::testing::allCommandFacts();
+
+    std::size_t lineNumber = 0;
+    std::string line;
+    std::vector<std::string> fixtureIds;
+    while (std::getline(fixture, line)) {
+        ++lineNumber;
+        std::istringstream row{line};
+        std::string id, label, classification;
+        ASSERT_TRUE(std::getline(row, id, '\t'));
+        ASSERT_TRUE(std::getline(row, label, '\t'));
+        ASSERT_TRUE(std::getline(row, classification));
+        fixtureIds.push_back(id);
+
+        auto it = std::find_if(commands.begin(), commands.end(),
+                               [&](auto const& f) { return f.id == id; });
+        if (it == commands.end()) {
+            std::cerr << "fixture line " << lineNumber
+                      << ": command not found in runtime: " << id << '\n';
+            ++failed;
+            continue;
+        }
+        auto const& f = *it;
+        auto const actualLabel = f.label;
+        auto const actualClass = std::string{ssg::testing::classifyCommand(f)};
+        if (actualLabel != label) {
+            std::cerr << "fixture line " << lineNumber << " [" << id
+                      << "]: label expected=" << label
+                      << " actual=" << actualLabel << '\n';
+            ++failed;
+        } else {
+            ++passed;
+        }
+        if (actualClass != classification) {
+            std::cerr << "fixture line " << lineNumber << " [" << id
+                      << "]: classification expected=" << classification
+                      << " actual=" << actualClass << '\n';
+            ++failed;
+        } else {
+            ++passed;
+        }
+    }
+
+    // Check no runtime commands are absent from the fixture.
+    for (auto const& f : commands) {
+        auto it = std::find(fixtureIds.begin(), fixtureIds.end(), f.id);
+        if (it == fixtureIds.end()) {
+            std::cerr << "runtime command missing from fixture: " << f.id
+                      << '\n';
+            ++failed;
+        }
+    }
+}
+
 SSG_TEST_SUITE(test_command_metadata) {
     RUN(commandLabelUsesAuthoredLabelsAndHumanizesTheRest);
     RUN(formatKeySequenceIsCompactAndHuman);
     RUN(preferredBindingIsDeterministic);
     RUN(inputRoutingCommandNamesExistInTheRuntimeCatalog);
     RUN(commandPalettePublishesOnlyInvocableCommands);
+    RUN(commandSurfaceMatchesReviewedFixture);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }

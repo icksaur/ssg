@@ -215,14 +215,14 @@ TEST(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert) {
     ASSERT_EQ(input.fieldId,
               std::optional<std::string>{
                   ssg::footerPromptControlNodeId("find.query").value()});
-    ASSERT_EQ(input.commandId, std::optional<std::string>{"ui.activate"});
+    ASSERT_FALSE(input.commandId.has_value());
     auto toggle =
         ssg::HitTester{*frame}.at(toggleNode->rect.x, toggleNode->rect.y);
     ASSERT_EQ(toggle.region, ssg::HitRegion::FooterField);
     ASSERT_EQ(toggle.fieldId,
               std::optional<std::string>{
                   ssg::footerPromptControlNodeId("find.toggle_case").value()});
-    ASSERT_EQ(toggle.commandId, std::optional<std::string>{"ui.activate"});
+    ASSERT_FALSE(toggle.commandId.has_value());
     ASSERT_EQ(ssg::HitTester{*frame}.at(countNode->rect.x,
                                        countNode->rect.y).region,
               ssg::HitRegion::None);
@@ -337,7 +337,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
 TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
     // CE-2 (reproducible headless integration): a click past a line's content, on
     // a blank line, and below the document flows hit_test -> resolve_document_
-    // position -> cursor.set_position and lands the caret at the row's end.
+    // position -> document pointer input and lands the caret at the row's end.
     auto root = uniqueRoot();
     std::string const text = "ab\n\ncde\n";  // ends: line0=2, blank=3, line2=7, tail=8
     std::ofstream{root / "doc.txt"} << text;
@@ -355,8 +355,7 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
         if (hit.region != ssg::HitRegion::Editor) return 9999;
         auto pos = ssg::resolveSelectionPosition(text, ssg::ByteOffset{hit.byteOffset});
         if (!pos) return 9999;
-        (void)runtime->dispatch({"cursor.set_position",
-             ssg::SelectionCommandArguments{pos, std::nullopt}});
+        (void)ssg::test::clickDocument(*runtime, pos->byteOffset.value());
         auto after = ssg::test::projectGridFrame(*runtime);
         if (!after) return 9999;
         return after->selections.primary()
@@ -763,7 +762,7 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
 
     // Switching to the FIRST tab scrolls the bar back: the window follows the
     // active tab in both directions, so tab.previous cannot strand it either.
-    (void)runtime->dispatch({"tab.activate",  tabs.front().id});
+    (void)ssg::test::dispatchInput(*runtime, ssg::TabPointerInput{tabs.front().id});
     auto scrolledBackFrame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(scrolledBackFrame.has_value());
     if (!scrolledBackFrame) return;
@@ -980,10 +979,9 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
         auto hit = ssg::HitTester{*frame}.at(item->rect.x, item->rect.y);
         ASSERT_TRUE(hit.fieldId.has_value());
         if (!hit.fieldId) return false;
-        return runtime
-            ->dispatch({"ui.activate",
-                        ssg::UiNodeActivationArguments{
-                            ssg::UiNodeId{*hit.fieldId}}})
+        return ssg::test::dispatchInput(
+                   *runtime,
+                   ssg::UiNodePointerInput{ssg::UiNodeId{*hit.fieldId}})
             .accepted();
     };
     const auto providerLabel = [&]() -> std::optional<std::string> {

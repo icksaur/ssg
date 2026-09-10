@@ -345,9 +345,8 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
 
     // Scrolling to the maximum offset shows the final line, so no row is
     // stranded past the end of the scroll range.
-    ASSERT_TRUE(grid.dispatch(runtime,
-                              {"view.scroll_lines", 
-                               ssg::ScrollLinesArguments{500}}).accepted());
+    ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
+                                       {ssg::ScrollTarget::Document, 500}}).accepted());
     auto bottom = grid.present(runtime);
     ASSERT_TRUE(bottom.has_value());
     if (!bottom) return;
@@ -405,8 +404,7 @@ TEST(anEmptyScratchBufferIsNotUnsavedUntilItHasContent) {
         return !tabs.empty() && tabs.front().dirty;
     };
     ASSERT_FALSE(dirty());
-    ASSERT_TRUE(runtime.dispatch({"text.insert", 
-                                  ssg::TextInputArguments{"x"}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "x").accepted());
     ASSERT_TRUE(dirty());
     std::filesystem::remove_all(root);
 }
@@ -491,8 +489,7 @@ TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.dispatch({"file.new",  {}}).accepted());
     runtime.focusEditor();
-    ASSERT_TRUE(runtime.dispatch({"text.insert", 
-                                  ssg::TextInputArguments{"unsaved work"}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "unsaved work").accepted());
     ASSERT_TRUE(runtime.dispatch({"file.open", 
                                   std::string{"alpha.txt"}}).accepted());
     auto snapshot = ssg::test::projectGridFrame(runtime);
@@ -625,27 +622,20 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     auto frame = presenter.project(runtime, {{80, 12}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto noOpCommand = runtime.dispatch({"view.scroll_lines",
-                 ssg::ScrollLinesArguments{-1}});
-    ASSERT_TRUE(noOpCommand.viewAction.has_value());
-    if (!noOpCommand.viewAction) return;
-    auto noOp = presenter.apply(*noOpCommand.viewAction, *frame);
+    const ssg::ViewAction noOpAction =
+        ssg::ScrollLines{ssg::ScrollTarget::Document, -1};
+    auto noOp = presenter.apply(noOpAction, *frame);
     ASSERT_TRUE(noOp.accepted());
-    ASSERT_FALSE(
-        presenter.apply(*noOpCommand.viewAction, *frame).accepted());
+    ASSERT_FALSE(presenter.apply(noOpAction, *frame).accepted());
     frame = presenter.project(runtime, {{80, 12}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
-    auto command = runtime.dispatch({"view.scroll_lines",
-                 ssg::ScrollLinesArguments{5}});
-    ASSERT_TRUE(command.accepted());
-    ASSERT_TRUE(command.viewAction.has_value());
-    if (!command.viewAction) return;
-
-    auto applied = presenter.apply(*command.viewAction, *frame);
+    const ssg::ViewAction scrollAction =
+        ssg::ScrollLines{ssg::ScrollTarget::Document, 5};
+    auto applied = presenter.apply(scrollAction, *frame);
     ASSERT_TRUE(applied.accepted());
-    auto stale = presenter.apply(*command.viewAction, *frame);
+    auto stale = presenter.apply(scrollAction, *frame);
     ASSERT_FALSE(stale.accepted());
 
     auto scrolled = presenter.project(runtime, {{80, 12}, {}});

@@ -97,6 +97,16 @@ std::optional<std::size_t> navigationByteOffset(std::string_view text,
     return lineStart + graphemeBoundaryAtOrBefore(lineText, columnOffset);
 }
 
+CommandHandlerResult placePrimaryCaret(Editor& runtime, FileDocumentId document,
+                                       DocumentPosition position) {
+    return applyEditorSelections(
+        runtime,
+        ApplySelections{
+            document,
+            SelectionSet{std::vector<Selection>{Selection{position, position}}},
+            true});
+}
+
 // Validates the whole transition before it mutates anything: a target that does
 // not resolve leaves the active document, the cursor, the open-document set and
 // the navigation history exactly as they were. Recording history is the
@@ -127,14 +137,9 @@ CommandHandlerResult applyNavigationTransition(
         runtime.follow.viewState().mode == FollowMode::Following) {
         (void)runtime.follow.pause();
     }
-    SelectionCommandArguments arguments;
-    arguments.position = *position;
-    // Placing and revealing the caret is owned by cursor.set_position and
-    // view.reveal_caret; route through them (deferred, since the session lock is
-    // non-reentrant) rather than duplicating their contracts here.
-    if (!runtime.deferDispatch(
-            ClientCommand{"cursor.set_position", std::any{arguments}})) {
-        return failure("could not queue cursor.set_position");
+    auto placed = placePrimaryCaret(runtime, *opened.document, *position);
+    if (!placed.accepted) {
+        return placed;
     }
     if (transition.revealPrimaryCaret &&
         !runtime.deferDispatch(ClientCommand{"view.reveal_caret", {}})) {
@@ -265,15 +270,11 @@ CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::an
         }
         auto position = resolveSelectionPosition(text, ByteOffset{start}, 4);
         if (!position) return failure("goto.line could not resolve the target position");
-        SelectionCommandArguments arguments;
-        arguments.position = *position;
-        // Placing and revealing the caret is owned by cursor.set_position; route
-        // through it (deferred, since the session lock is non-reentrant) rather
-        // than duplicating the reveal/focus/history contract here.
-        if (!runtime.deferDispatch(
-                           ClientCommand{"cursor.set_position",
-                                         std::any{arguments}})) {
-            return failure("could not queue cursor.set_position");
+        auto const active = runtime.activeDocumentId();
+        if (!active) return failure("goto.line requires an active document");
+        auto placed = placePrimaryCaret(runtime, *active, *position);
+        if (!placed.accepted) {
+            return placed;
         }
     } else {
         return failure("unknown search command");
@@ -282,23 +283,10 @@ CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::an
 }
 
 CommandHandlerResult treeCommand(Editor& runtime,
-                                 CommandContext& context,
                                  std::string_view id,
                                  std::any const& payload) {
     if (id == "tree.select_next") { (void)runtime.tree.selectNext(); return success(); }
     if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); return success(); }
-    if (id == "tree.activate_node") {
-        auto const* arguments = payloadAs<TreeSelectArguments>(payload);
-        if (arguments == nullptr) {
-            return failure("tree.activate_node requires a node id payload");
-        }
-        if (!runtime.tree.select(arguments->nodeId)) {
-            return failure("tree node is not selectable");
-        }
-
-        (void)runtime.screen.focusPanel();
-        return treeCommand(runtime, context, "tree.activate", {});
-    }
     if (id == "tree.activate") {
         const auto binding = runtime.tree.activeProviderBinding();
         const auto providerKind =
@@ -432,7 +420,67 @@ CommandHandlerResult followCommand(Editor& runtime, std::string_view id) {
 
 } // namespace
 
-// Moving through a diff, and the follow-edits toggle.
+CommandHandlerResult activateTreeNode(Editor& runtime, TreeNodeId nodeId) {
+    if (!runtime.tree.select(nodeId)) {
+        return failure("tree node is not selectable");
+    }
+    (void)runtime.screen.focusPanel();
+
+    auto selected = runtime.tree.selectedNode();
+    if (!selected) return failure("no tree node is selected");
+
+    const auto binding = runtime.tree.activeProviderBinding();
+    const auto providerKind =
+        binding ? std::optional<TreeProviderKind>{binding->kind} : std::nullopt;
+
+    if (selected->expandable) {
+        if (!binding) return failure("tree node is not expandable");
+        return runtime.toggleTreeExpanded(binding->id, selected->id);
+    }
+    if (providerKind == TreeProviderKind::Git && selected->workspacePath) {
+        const auto diffView = runtime.diff.viewState();
+        auto file = std::find_if(
+            diffView.files.begin(), diffView.files.end(),
+            [&](const DiffFileView& candidate) {
+                return candidate.path.generic_string() == *selected->workspacePath;
+            });
+        if (file != diffView.files.end()) {
+            return runtime.openOrFocusLiveDiffTab(*file, NavigationClass::User);
+        }
+        if (selected->gitStatus &&
+            selected->gitStatus->status == DiffFileStatus::Deleted) {
+            return failure("detailed view is unavailable for deleted file");
+        }
+    }
+    if (providerKind == TreeProviderKind::Search) {
+        if (!selected->workspacePath || !selected->sourceLine ||
+            !selected->sourceColumn) {
+            return failure("search result has no navigation target");
+        }
+        NavigationTarget target{
+            .path = *selected->workspacePath,
+            .line = LineIndex{*selected->sourceLine},
+            .column = static_cast<std::size_t>(*selected->sourceColumn)};
+        // Navigate directly via dispatchLocked (no deferred dispatch context).
+        auto result =
+            runtime.dispatchLocked(ClientCommand{"goto.file", std::move(target)});
+        if (!result.accepted()) return failure(result.message);
+        if (result.viewAction) return CommandHandlerResult::requireView(std::move(*result.viewAction));
+        return success();
+    }
+    if (selected->workspacePath) {
+        auto result = runtime.workspace.openFile(*selected->workspacePath);
+        if (!result.accepted() || !result.document) {
+            return failure("failed to open tree file");
+        }
+        auto opened = runtime.activateDocument(*result.document);
+        if (opened.accepted) runtime.screen.focusEditor();
+        return opened;
+    }
+    return success();
+}
+
+
 //
 // The diff commands take a live document id, which is meaningless to a remote
 // client, so they are in-process only: typed for the handler, absent from the
@@ -476,9 +524,6 @@ void registerDiffAndFollowCommands(CommandCatalog& catalog,
 }
 
 // Moving around and acting on whichever tree the panel shows.
-//
-// Semantic tree actions share one handler. Scroll actions resolve to the
-// attached view owner instead of mutating session presentation state.
 void registerTreeCommands(CommandCatalog& catalog,
                           Editor& runtime) {
     auto spec = [](std::string id, std::string summary) {
@@ -496,8 +541,8 @@ void registerTreeCommands(CommandCatalog& catalog,
         auto name = id;
         auto built = spec(std::move(id), std::move(summary));
         built.binding = bindNoArgumentHandler(
-            [&runtime, name](CommandContext& context) {
-                return treeCommand(runtime, context, name, {});
+            [&runtime, name](CommandContext&) {
+                return treeCommand(runtime, name, {});
             });
         catalog.add(std::move(built));
     };
@@ -510,29 +555,19 @@ void registerTreeCommands(CommandCatalog& catalog,
         auto built = spec("tree.activate", "Open Selected");
         built.label = "Open Selected";
         built.binding = bindNoArgumentHandler(
-            [&runtime](CommandContext& context) {
-                return treeCommand(runtime, context, "tree.activate", {});
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("tree.activate_node", "Open Node");
-        built.binding = bindWireHandler<TreeSelectArguments>(
-            [&runtime](CommandContext& context,
-                       TreeSelectArguments const& arguments) {
-                return treeCommand(runtime, context, "tree.activate_node",
-                                   std::any{arguments});
+            [&runtime](CommandContext&) {
+                return treeCommand(runtime, "tree.activate", {});
             });
         catalog.add(std::move(built));
     }
     {
         auto built = spec("tree.invoke_node_command", "Invoke Node Command");
         built.binding = bindOptionalInProcessHandler<TreeCommandInvocation>(
-            [&runtime](CommandContext& context,
+            [&runtime](CommandContext&,
                        std::optional<TreeCommandInvocation> const&
                            invocation) {
                 return treeCommand(
-                    runtime, context, "tree.invoke_node_command",
+                    runtime, "tree.invoke_node_command",
                     invocation ? std::any{*invocation} : std::any{});
             });
         catalog.add(std::move(built));
@@ -540,38 +575,13 @@ void registerTreeCommands(CommandCatalog& catalog,
     {
         auto built = spec("tree.select", "Select");
         built.binding = bindWireHandler<TreeSelectArguments>(
-            [&runtime](CommandContext& context,
+            [&runtime](CommandContext&,
                        TreeSelectArguments const& arguments) {
-                return treeCommand(runtime, context, "tree.select",
+                return treeCommand(runtime, "tree.select",
                                    std::any{arguments});
             });
         catalog.add(std::move(built));
     }
-    catalog.add(CommandSpec{
-        .id = "tree.scroll",
-        .owner = "tree-providers",
-        .summary = "Scroll",
-        .effect = CommandEffect::ViewAction,
-        .luaApi = true,
-        .binding = bindWireHandler<ScrollLinesArguments>(
-            [](CommandContext&, ScrollLinesArguments const& arguments) {
-                return CommandHandlerResult::requireView(
-                    ScrollLines{ScrollTarget::Tree, arguments.rows});
-            }),
-    });
-    catalog.add(CommandSpec{
-        .id = "tree.scroll_to_fraction",
-        .owner = "tree-providers",
-        .summary = "Scroll To Fraction",
-        .effect = CommandEffect::ViewAction,
-        .luaApi = true,
-        .binding = bindWireHandler<ScrollFractionArguments>(
-            [](CommandContext&, ScrollFractionArguments const& arguments) {
-                return CommandHandlerResult::requireView(ScrollFraction{
-                    ScrollTarget::Tree, arguments.numerator,
-                    arguments.denominator});
-            }),
-    });
 }
 
 // The pickers, workspace search, and the go-to jumps.

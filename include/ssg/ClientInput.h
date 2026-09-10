@@ -82,6 +82,13 @@ struct ExternalActionPointerInput {
                            const ExternalActionPointerInput&) = default;
 };
 
+struct UiNodePointerInput {
+    UiNodeId nodeId;
+
+    friend bool operator==(const UiNodePointerInput&,
+                           const UiNodePointerInput&) = default;
+};
+
 struct NoticeActionPointerInput {
     std::string actionId;
     InputPointerButton button = InputPointerButton::Primary;
@@ -168,7 +175,7 @@ using ClientInput =
     std::variant<ClientKeyInput, TabPointerInput, TreePointerInput,
                  SearchQueryPointerInput, PickerPointerInput,
                  ExternalActionPointerInput, NoticeActionPointerInput,
-                 DocumentPointerInput, ScrollLinesInput,
+                 UiNodePointerInput, DocumentPointerInput, ScrollLinesInput,
                  ScrollFractionInput, ViewTransitionInput>;
 
 enum class ClientOwnedInputKind : std::uint8_t {

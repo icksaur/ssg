@@ -33,13 +33,19 @@ RoutedInput accepted(EditorMutation mutation) {
     return {RouteAccepted{std::move(mutation)}, std::nullopt, false};
 }
 
+RoutedInput accepted(EditorMutation mutation,
+                     std::optional<DocumentPointerGesture> gesture,
+                     bool clearGestureOnRejection) {
+    return {RouteAccepted{std::move(mutation)}, std::move(gesture),
+            clearGestureOnRejection};
+}
+
 RoutedInput dispatch(CommandName command, std::any payload = {},
                      std::optional<DocumentPointerGesture> gesture = std::nullopt,
                      bool clearGestureOnRejection = false) {
     return {RouteDispatch{ClientCommand{std::move(command), std::move(payload)}},
             std::move(gesture), clearGestureOnRejection};
 }
-
 RoutedInput clientOwned(ClientOwnedInputKind kind, std::string text = {}) {
     return {RouteClientOwned{ClientOwnedInput{kind, std::move(text)}},
             std::nullopt, false};
@@ -47,6 +53,44 @@ RoutedInput clientOwned(ClientOwnedInputKind kind, std::string text = {}) {
 
 RoutedInput viewAction(ViewAction action) {
     return {RouteViewAction{std::move(action)}, std::nullopt, false};
+}
+
+std::optional<SelectionSet> navigateSelections(
+    InputRoutingSnapshot const& snapshot, SelectionCommand command,
+    SelectionCommandArguments arguments, std::string& message) {
+    auto const before = SelectionViewState{
+        snapshot.selections.get(), 0, 0, std::nullopt};
+    auto result =
+        navigateSelection(snapshot.activeText, before, command, {1, 1},
+                          std::move(arguments));
+    if (!result.accepted()) {
+        message = std::move(result.message);
+        return std::nullopt;
+    }
+    return result.delta.replacement
+               ? std::optional<SelectionSet>{
+                     result.delta.replacement->selections}
+               : std::optional<SelectionSet>{before.selections};
+}
+
+RoutedInput selectionMutation(
+    InputRoutingSnapshot const& snapshot, SelectionCommand command,
+    SelectionCommandArguments arguments,
+    std::optional<DocumentPointerGesture> gesture = std::nullopt,
+    bool clearGestureOnRejection = false, bool focusEditor = false) {
+    if (!snapshot.activeDocument) {
+        return rejected("document pointer target is not actionable",
+                        clearGestureOnRejection);
+    }
+    std::string message;
+    auto selections =
+        navigateSelections(snapshot, command, std::move(arguments), message);
+    if (!selections) {
+        return rejected(std::move(message), clearGestureOnRejection);
+    }
+    return accepted(ApplySelections{*snapshot.activeDocument,
+                                    std::move(*selections), focusEditor},
+                    std::move(gesture), clearGestureOnRejection);
 }
 
 bool isPrimaryPress(InputPointerPhase phase, InputPointerButton button) {
@@ -152,8 +196,15 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
         }
     }
     if (!input.committedText.empty()) {
-        return routeTextEdit(
-            {PromptTextEdit::Kind::Append, input.committedText});
+        if (routing.prompt != ActivePrompt::None) {
+            return routeTextEdit(
+                {PromptTextEdit::Kind::Append, input.committedText});
+        }
+        if (routing.focus == FocusTarget::Editor) {
+            return accepted(ApplyTextInput{
+                TextInputCommand::Insert,
+                TextInputArguments{input.committedText}});
+        }
     }
     return unhandled();
 }
@@ -165,11 +216,8 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
     }
     switch (input.action.target) {
     case ScrollTarget::Document:
-        return dispatch(kViewScrollLines,
-                        ScrollLinesArguments{input.action.rows});
     case ScrollTarget::Tree:
-        return dispatch(kTreeScroll,
-                        ScrollLinesArguments{input.action.rows});
+        return viewAction(input.action);
     }
     return rejected("line-scroll target is invalid");
 }
@@ -180,13 +228,10 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
         input.action.numerator > input.action.denominator) {
         return rejected("fraction-scroll input is invalid");
     }
-    const auto fraction = ScrollFractionArguments{
-        input.action.numerator, input.action.denominator};
     switch (input.action.target) {
     case ScrollTarget::Document:
-        return dispatch(kViewScrollToFraction, fraction);
     case ScrollTarget::Tree:
-        return dispatch(kTreeScrollToFraction, fraction);
+        return viewAction(input.action);
     }
     return rejected("fraction-scroll target is invalid");
 }
@@ -210,10 +255,10 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
             return rejected("document pointer target is not actionable", true);
         }
         if (input.selectWord) {
-            return dispatch(
-                kSelectWordAtPosition,
+            return selectionMutation(
+                snapshot, SelectionCommand::SelectWordAtPosition,
                 SelectionCommandArguments{*position, std::nullopt},
-                clearGesture(), true);
+                clearGesture(), true, true);
         }
         auto const& items = snapshot.selections.get().items();
         std::vector<Selection> baseline{items.begin(), items.end()};
@@ -229,24 +274,25 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
                 });
             if (hit != baseline.end()) {
                 baseline.erase(hit);
-                return dispatch(
-                    kSelectSetRanges,
+                return selectionMutation(
+                    snapshot, SelectionCommand::SelectSetRanges,
                     SelectionCommandArguments{
                         std::nullopt, std::nullopt, std::move(baseline)},
-                    clearGesture(), true);
+                    clearGesture(), true, true);
             }
         }
         DocumentPointerGesture gesture;
         gesture.begin(*snapshot.activeDocument, snapshot.documentRevision,
                       *position, input.additive, std::move(baseline));
-        return dispatch(
-            input.additive ? kSelectAddRange : kCursorSetPosition,
+        return selectionMutation(
+            snapshot,
+            input.additive ? SelectionCommand::SelectAddRange
+                           : SelectionCommand::CursorSetPosition,
             input.additive
-                ? std::any{SelectionCommandArguments{
-                      std::nullopt, Selection{*position, *position}}}
-                : std::any{
-                      SelectionCommandArguments{*position, std::nullopt}},
-            std::move(gesture), true);
+                ? SelectionCommandArguments{
+                      std::nullopt, Selection{*position, *position}}
+                : SelectionCommandArguments{*position, std::nullopt},
+            std::move(gesture), true, true);
     }
     if (!snapshot.gesture.has_value()) {
         return unhandled();
@@ -275,15 +321,15 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
     }
 
     auto const arguments = gesture.selectionThrough(*position);
-    auto const command =
-        gesture.additive() ? kSelectSetRanges : kSelectSetRange;
+    auto const command = gesture.additive() ? SelectionCommand::SelectSetRanges
+                                            : SelectionCommand::SelectSetRange;
     gesture.moveTo(*position);
-    return dispatch(command, arguments,
-                    input.phase == InputPointerPhase::Release
-                        ? clearGesture()
-                        : std::optional<DocumentPointerGesture>{
-                              std::move(gesture)},
-                    true);
+    return selectionMutation(
+        snapshot, command, arguments,
+        input.phase == InputPointerPhase::Release
+            ? clearGesture()
+            : std::optional<DocumentPointerGesture>{std::move(gesture)},
+        true, true);
 }
 
 RoutedInput routeTransition(InputRoutingSnapshot const& snapshot,
@@ -362,9 +408,9 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
     }
     switch (input.button) {
     case InputPointerButton::Primary:
-        return dispatch(kTabActivate, input.tabId);
+        return accepted(ActivateTab{input.tabId});
     case InputPointerButton::Auxiliary:
-        return dispatch(kTabClose, input.tabId);
+        return accepted(CloseTab{input.tabId});
     case InputPointerButton::Secondary:
         return unhandled();
     }
@@ -376,7 +422,7 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
     if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
-    return dispatch(kTreeActivateNode, TreeSelectArguments{input.nodeId});
+    return {ActivateTreeNode{input.nodeId}};
 }
 
 RoutedInput routeInput(InputRoutingSnapshot const&,
@@ -403,7 +449,12 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
     if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
-    return dispatch(kExternalInvokeAction, input.invocation);
+    return {InvokeExternalAction{input.invocation}, std::nullopt, false};
+}
+
+RoutedInput routeInput(InputRoutingSnapshot const&,
+                       UiNodePointerInput const& input) {
+    return {ActivateUiNode{input.nodeId}, std::nullopt, false};
 }
 
 RoutedInput routeInput(InputRoutingSnapshot const& snapshot,

@@ -141,6 +141,9 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
     ssg_test_link_libraries(test_command_metadata PRIVATE ssg_core)
+    ssg_test_compile_definitions(test_command_metadata PRIVATE
+        SSG_COMMAND_SURFACE_FIXTURE="${SSG_SOURCE_DIR}/tests/fixtures/commands/user-surface.tsv"
+    )
 
 endif()
 

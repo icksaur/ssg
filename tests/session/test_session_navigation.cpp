@@ -269,9 +269,8 @@ TEST(followPauseQueuesMultipleChangesAndResumeAdoptsTheNewest) {
     ssg::test::GridTestView grid{{80, 20}};
 
     ASSERT_TRUE(grid
-                    .dispatch(*runtime,
-                              {"view.scroll_lines",
-                               ssg::ScrollLinesArguments{3}})
+                    .input(*runtime, ssg::ScrollLinesInput{
+                                         {ssg::ScrollTarget::Document, 3}})
                     .accepted());
 
     auto paused = ssg::test::projectGridFrame(*runtime);
@@ -382,10 +381,7 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
                                     .workingContent =
                                         std::string{"alpha NEEDLE omega"}}}})
                     .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"text.insert",
-                               ssg::TextInputArguments{"!"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
 
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -510,10 +506,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     ASSERT_TRUE(liveDiffTab.has_value());
     if (!documentTab || !liveDiffTab) return;
 
-    ASSERT_TRUE(runtime
-                    .dispatch({"tab.activate",
-                               *documentTab})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::dispatchInput(runtime, ssg::TabPointerInput{*documentTab}).accepted());
     ASSERT_TRUE(runtime
                     .dispatch({"tab.close",
                                *documentTab})
@@ -544,10 +537,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     ASSERT_EQ(countTabsOfKind(reopened->tabs, ssg::TabKind::LiveDiff),
               std::size_t{1});
 
-    ASSERT_TRUE(runtime
-                    .dispatch({"tab.activate",
-                               *liveDiffTab})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::dispatchInput(runtime, ssg::TabPointerInput{*liveDiffTab}).accepted());
     ASSERT_TRUE(runtime
                     .dispatch({"tab.close",
                                *liveDiffTab})
@@ -782,10 +772,7 @@ TEST(followPauseOnEditTransitionTable) {
         auto runtime = followPauseRuntime("alpha needle omega\n");
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
-        ASSERT_TRUE(runtime
-                        ->dispatch({"text.insert",
-                                    ssg::TextInputArguments{"x"}})
-                        .accepted());
+        ASSERT_TRUE(ssg::test::typeText(*runtime, "x").accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
     {
@@ -811,10 +798,7 @@ TEST(followPauseOnEditTransitionTable) {
         auto runtime = followPauseRuntime("alpha needle omega\n");
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
-        ASSERT_TRUE(runtime
-                        ->dispatch({"text.insert",
-                                    ssg::TextInputArguments{"x"}})
-                        .accepted());
+        ASSERT_TRUE(ssg::test::typeText(*runtime, "x").accepted());
         ASSERT_TRUE(runtime
                         ->dispatch({"follow_edits.resume",  {}})
                         .accepted());
@@ -828,10 +812,7 @@ TEST(followPauseOnEditTransitionTable) {
         auto runtime = followPauseRuntime("alpha needle omega\n");
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
-        ASSERT_TRUE(runtime
-                        ->dispatch({"text.insert",
-                                    ssg::TextInputArguments{"x"}})
-                        .accepted());
+        ASSERT_TRUE(ssg::test::typeText(*runtime, "x").accepted());
         ASSERT_TRUE(runtime
                         ->dispatch({"follow_edits.resume",  {}})
                         .accepted());
@@ -875,10 +856,7 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime
                         ->dispatch({"select.add_cursor_down",  {}})
                         .accepted());
-        ASSERT_TRUE(runtime
-                        ->dispatch({"text.insert",
-                                    ssg::TextInputArguments{"x"}})
-                        .accepted());
+        ASSERT_TRUE(ssg::test::typeText(*runtime, "x").accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
     {
@@ -898,9 +876,8 @@ TEST(followPauseOnEditTransitionTable) {
         if (!runtime) return;
         ssg::test::GridTestView grid{{80, 20}};
         ASSERT_TRUE(grid
-                        .dispatch(*runtime,
-                                  {"view.scroll_lines",
-                                   ssg::ScrollLinesArguments{1}})
+                        .input(*runtime, ssg::ScrollLinesInput{
+                                             {ssg::ScrollTarget::Document, 1}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1392,13 +1369,13 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
                     afterSubmit->uiTree.root);
     ASSERT_TRUE(actionNode != nullptr);
     if (!actionNode) return;
-    auto invalidUiAction = runtime.dispatch({"ui.activate",
-         ssg::UiNodeActivationArguments{
-             ssg::UiNodeId{"missing.action"}}});
+    auto invalidUiAction = ssg::test::dispatchInput(
+        runtime,
+        ssg::UiNodePointerInput{ssg::UiNodeId{"missing.action"}});
     ASSERT_FALSE(invalidUiAction.accepted());
 
-    auto publishedAction = runtime.dispatch({"ui.activate",
-         ssg::UiNodeActivationArguments{actionNode->id}});
+    auto publishedAction = ssg::test::dispatchInput(
+        runtime, ssg::UiNodePointerInput{actionNode->id});
     ASSERT_TRUE(publishedAction.accepted());
 
     for (auto target : {ssg::ScrollTarget::Document,
@@ -1424,8 +1401,8 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     if (!replace) return;
     const auto replacementNode =
         ssg::footerPromptControlNodeId("replace.replacement");
-    auto focusReplacement = runtime.dispatch({"ui.activate",
-         ssg::UiNodeActivationArguments{replacementNode}});
+    auto focusReplacement = ssg::test::dispatchInput(
+        runtime, ssg::UiNodePointerInput{replacementNode});
     ASSERT_TRUE(focusReplacement.accepted());
     auto focused = projectFrame(runtime, viewport);
     ASSERT_TRUE(focused.has_value());
@@ -1437,15 +1414,15 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
             ASSERT_TRUE(replacement->resolved.has_value());
             ASSERT_EQ(replacement->resolved->active, std::optional<bool>{true});
         }
-        const auto missing = runtime.dispatch({"ui.activate",
-             ssg::UiNodeActivationArguments{
-                 ssg::UiNodeId{"missing.mod"}}});
+        const auto missing = ssg::test::dispatchInput(
+            runtime,
+            ssg::UiNodePointerInput{ssg::UiNodeId{"missing.mod"}});
         ASSERT_FALSE(missing.accepted());
         ASSERT_TRUE(runtime
                         .dispatch({"prompt.cancel",  {}})
                         .accepted());
-        const auto hidden = runtime.dispatch({"ui.activate",
-             ssg::UiNodeActivationArguments{replacementNode}});
+        const auto hidden = ssg::test::dispatchInput(
+            runtime, ssg::UiNodePointerInput{replacementNode});
         ASSERT_FALSE(hidden.accepted());
     }
 }
@@ -1514,13 +1491,13 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
     ASSERT_EQ(frame->selections.primary().active.byteOffset,
               ssg::ByteOffset{9});
 
-    ASSERT_TRUE(runtime.dispatch(
-        {"text.insert", ssg::TextInputArguments{"X"}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "X").accepted());
     auto changedDocumentMove = runtime.input(ssg::DocumentPointerInput{
         ssg::ByteOffset{1}, false, false, ssg::InputPointerButton::Primary,
         ssg::InputPointerPhase::Move});
     ASSERT_EQ(changedDocumentMove.outcome,
               ssg::ClientInputOutcome::Rejected);
+    ASSERT_FALSE(runtime.documentPointerGesture.has_value());
 }
 
 TEST(keyInputRoutingBranchesByPromptMode) {
@@ -1671,77 +1648,6 @@ TEST(viewTransitionsExecuteTypedEditorMutations) {
     ASSERT_EQ(missingPane.outcome, ssg::ClientInputOutcome::Rejected);
 }
 
-TEST(documentPointerGestureEndsWhenSelectionCommandIsRejected) {
-    auto root = uniqueRoot();
-    std::filesystem::create_directories(root / "workspace");
-    std::ofstream{root / "workspace" / "words.txt"} << "alpha beta gamma\n";
-
-    const auto makeRuntime = [&](std::string_view name) {
-        auto instanceRoot = root / name;
-        auto created = ssg::createEditor(
-            {root / "workspace", instanceRoot / "scratch",
-             instanceRoot / "recovery"});
-        if (created.accepted()) {
-            (void)created.session->dispatch(
-                {"file.open", std::string{"words.txt"}});
-        }
-        return created;
-    };
-    const auto rejectSelectionCommand = [](ssg::Editor& runtime,
-                                           std::string id) {
-        const auto replaced = runtime.commandCatalog().handleFor(id);
-        ASSERT_TRUE(replaced.valid());
-        if (!replaced.valid()) return;
-        std::array retire{replaced};
-        (void)runtime.replaceCommandGeneration(
-            retire,
-            {ssg::CommandSpec{
-                .id = std::move(id),
-                .owner = "test-oracle",
-                .summary = "rejects pointer selection",
-                .effect = ssg::CommandEffect::Mutation,
-                .binding =
-                    ssg::bindWireHandler<ssg::SelectionCommandArguments>(
-                        [](ssg::CommandContext&,
-                           ssg::SelectionCommandArguments const&) {
-                            return ssg::CommandHandlerResult::failure(
-                                "selection refused");
-                        }),
-            }});
-    };
-
-    auto pressCreated = makeRuntime("press");
-    ASSERT_TRUE(pressCreated.accepted());
-    if (!pressCreated.accepted()) return;
-    rejectSelectionCommand(*pressCreated.session, "cursor.set_position");
-    auto refusedPress = pressCreated.session->input(
-        ssg::DocumentPointerInput{ssg::ByteOffset{1}});
-    ASSERT_EQ(refusedPress.outcome, ssg::ClientInputOutcome::Rejected);
-    ASSERT_FALSE(pressCreated.session->documentPointerGesture.has_value());
-    auto moveAfterPress = pressCreated.session->input(ssg::DocumentPointerInput{
-        ssg::ByteOffset{2}, false, false, ssg::InputPointerButton::Primary,
-        ssg::InputPointerPhase::Move});
-    ASSERT_EQ(moveAfterPress.outcome, ssg::ClientInputOutcome::Unhandled);
-
-    auto moveCreated = makeRuntime("move");
-    ASSERT_TRUE(moveCreated.accepted());
-    if (!moveCreated.accepted()) return;
-    auto acceptedPress = moveCreated.session->input(
-        ssg::DocumentPointerInput{ssg::ByteOffset{1}});
-    ASSERT_TRUE(acceptedPress.command && acceptedPress.command->accepted());
-    rejectSelectionCommand(*moveCreated.session, "select.set_range");
-    auto refusedMove = moveCreated.session->input(ssg::DocumentPointerInput{
-        ssg::ByteOffset{9}, false, false, ssg::InputPointerButton::Primary,
-        ssg::InputPointerPhase::Move});
-    ASSERT_EQ(refusedMove.outcome, ssg::ClientInputOutcome::Rejected);
-    ASSERT_FALSE(moveCreated.session->documentPointerGesture.has_value());
-    auto moveAfterRejection =
-        moveCreated.session->input(ssg::DocumentPointerInput{
-            ssg::ByteOffset{3}, false, false,
-            ssg::InputPointerButton::Primary, ssg::InputPointerPhase::Move});
-    ASSERT_EQ(moveAfterRejection.outcome, ssg::ClientInputOutcome::Unhandled);
-}
-
 TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     auto root = uniqueRoot();
     std::filesystem::create_directories(root / "workspace");
@@ -1865,11 +1771,11 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
         ssg::test::activeDocumentText(runtime), ssg::ByteOffset{7});
     ASSERT_TRUE(second.has_value());
     if (!second) return;
-    ASSERT_TRUE(runtime
-                    .dispatch({"select.add_range",
-                               ssg::SelectionCommandArguments{
-                                   std::nullopt,
-                                   ssg::Selection{*second, *second}}})
+    ASSERT_TRUE(ssg::test::setSelections(
+                    runtime,
+                    {{1, 1},
+                     {second->byteOffset.value(),
+                      second->byteOffset.value()}})
                     .accepted());
     ASSERT_TRUE(runtime
                     .input(ssg::DocumentPointerInput{
@@ -2339,8 +2245,9 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
 
     // The file click pair [tree.select, tree.activate] ends on the editor (the
     // file opens, so tree.activate's focus_editor wins over tree.select's panel).
-    ASSERT_TRUE(runtime.dispatch({"tree.activate_node",
-         ssg::TreeSelectArguments{*fileId}}).accepted());
+    ASSERT_TRUE(ssg::test::dispatchInput(
+        runtime,
+        ssg::TreePointerInput{*fileId}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // From editor focus, tree.select alone moves keyboard focus to the panel.
@@ -2388,9 +2295,10 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(w0.scrollbar.maximumFirstRow > 0);
 
     // Wheel down: the viewport offset advances, but the selection does not move.
-    ASSERT_TRUE(firstGrid.dispatch(runtime,
-                                   {"tree.scroll",
-                                    ssg::ScrollLinesArguments{3}}).accepted());
+    ASSERT_TRUE(firstGrid
+                    .input(runtime, ssg::ScrollLinesInput{
+                                        {ssg::ScrollTarget::Tree, 3}})
+                    .accepted());
     auto scrolled = firstGrid.present(runtime);
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
@@ -2399,9 +2307,10 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_EQ(scrolled->panel->firstVisible, std::uint32_t{3});
 
     // Wheel up past the top clamps at 0.
-    ASSERT_TRUE(firstGrid.dispatch(runtime,
-                                   {"tree.scroll",
-                                    ssg::ScrollLinesArguments{-99}}).accepted());
+    ASSERT_TRUE(firstGrid
+                    .input(runtime, ssg::ScrollLinesInput{
+                                        {ssg::ScrollTarget::Tree, -99}})
+                    .accepted());
     auto topped = firstGrid.present(runtime);
     ASSERT_TRUE(topped.has_value());
     if (!topped) return;
@@ -2410,9 +2319,10 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_EQ(topped->panel->firstVisible, std::uint32_t{0});
 
     // Wheel down past the bottom clamps at maximum_first_row.
-    ASSERT_TRUE(firstGrid.dispatch(runtime,
-                                   {"tree.scroll",
-                                    ssg::ScrollLinesArguments{999}}).accepted());
+    ASSERT_TRUE(firstGrid
+                    .input(runtime, ssg::ScrollLinesInput{
+                                        {ssg::ScrollTarget::Tree, 999}})
+                    .accepted());
     auto bottomed = firstGrid.present(runtime);
     ASSERT_TRUE(bottomed.has_value());
     if (!bottomed) return;
@@ -2438,9 +2348,9 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(hidden.has_value());
     if (!hidden) return;
     ASSERT_FALSE(hidden->panel.has_value());
-    ASSERT_TRUE(firstGrid.dispatch(
-        runtime, {"tree.scroll",
-                  ssg::ScrollLinesArguments{-999}})
+    ASSERT_TRUE(firstGrid
+                    .input(runtime, ssg::ScrollLinesInput{
+                                        {ssg::ScrollTarget::Tree, -999}})
                     .accepted());
 
     firstGrid.resize(dims);
@@ -2452,8 +2362,6 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
         restored->panel->rows,
         [](const ssg::SolvedPanelRow& row) { return row.selected; }));
 
-    // A missing payload is rejected.
-    ASSERT_FALSE(runtime.dispatch({"tree.scroll",  {}}).accepted());
     std::filesystem::remove_all(root);
 }
 
@@ -2921,7 +2829,6 @@ SSG_TEST_SUITE(test_session_interaction) {
     RUN(keyInputRoutingBranchesByPromptMode);
     RUN(viewTransitionsExecuteTypedEditorMutations);
     RUN(documentPointerInputOwnsSelectionGesturePolicy);
-    RUN(documentPointerGestureEndsWhenSelectionCommandIsRejected);
     RUN(documentEdgeMovesResolveThroughPresenterAndReveal);
     RUN(documentEdgeContinuationPreservesAdditiveBaseline);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

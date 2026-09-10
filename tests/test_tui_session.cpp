@@ -56,10 +56,8 @@ TEST(realRuntimeSnapshotRendersDeterministicallyWithinTheme) {
         *fixture.runtime,
         ssg::ViewportDimensions{80, 24}};
     ASSERT_TRUE(client.submit("file.new").accepted());
-    ASSERT_TRUE(client
-                    .submit("text.insert",
-                            ssg::TextInputArguments{"rendered text"})
-                    .accepted());
+    auto typed = client.input(ssg::ClientKeyInput{{}, "rendered text"});
+    ASSERT_TRUE(typed.command && typed.command->accepted());
 
     auto screen = ssg::renderFrame(client.snapshot(), lineCache);
     ASSERT_EQ(screen.colors.size(), ssg::kThemeColorSlotCount);

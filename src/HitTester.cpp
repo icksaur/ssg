@@ -150,7 +150,6 @@ RegionHit promptHit(const GridPresentation& snapshot, const UiNode& node,
     RegionHit hit;
     hit.region = HitRegion::FooterField;
     hit.fieldId = node.id.value();
-    hit.commandId = "ui.activate";
     return hit;
 }
 

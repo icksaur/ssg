@@ -1078,16 +1078,14 @@ TEST(routePointerFieldHitEmitsUiActivationCommand) {
         auto plan = ssg::route_pointer(
             hit, ssg::PointerButton::left, ssg::PointerKind::press, false,
             false, std::nullopt, targets);
-        ASSERT_TRUE(plan.command.has_value());
-        if (plan.command) {
-            ASSERT_EQ(plan.command->id.name(), std::string_view{"ui.activate"});
-            const auto* arguments =
-                std::any_cast<ssg::UiNodeActivationArguments>(
-                    &plan.command->payload);
-            ASSERT_TRUE(arguments != nullptr);
-            if (arguments) {
-                ASSERT_EQ(arguments->nodeId,
-                          ssg::UiNodeId{"header.files"});
+        ASSERT_FALSE(plan.command.has_value());
+        ASSERT_TRUE(plan.semantic_input.has_value());
+        if (plan.semantic_input) {
+            const auto* input =
+                std::get_if<ssg::UiNodePointerInput>(&*plan.semantic_input);
+            ASSERT_TRUE(input != nullptr);
+            if (input) {
+                ASSERT_EQ(input->nodeId, ssg::UiNodeId{"header.files"});
             }
         }
         ASSERT_FALSE(plan.begins_drag);
@@ -1171,7 +1169,7 @@ TEST(routePointerAltPressMarksDocumentInputAdditive) {
     if (input) ASSERT_TRUE(input->additive);
     ASSERT_TRUE(plan.begins_drag);
 
-    // The same press without Alt keeps cursor.set_position.
+    // The same press without Alt stays on the ordinary caret-placement path.
     auto plain = ssg::route_pointer(hit, ssg::PointerButton::left,
                                          ssg::PointerKind::press, false, false,
                                          std::nullopt, targets);
@@ -1223,14 +1221,10 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
     if (!p2 || !p7) return;
 
     // Two carets: one at 2, one at 7.
-    ASSERT_TRUE(runtime
-                    .dispatch({"cursor.set_position",
-                               ssg::SelectionCommandArguments{p2, std::nullopt}})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"select.add_range",
-                               ssg::SelectionCommandArguments{
-                                   std::nullopt, ssg::Selection{*p7, *p7}}})
+    ASSERT_TRUE(ssg::test::setSelections(
+                    runtime,
+                    {{p2->byteOffset.value(), p2->byteOffset.value()},
+                     {p7->byteOffset.value(), p7->byteOffset.value()}})
                     .accepted());
 
     auto result = runtime.input(ssg::DocumentPointerInput{
@@ -1270,7 +1264,7 @@ TEST(routePointerAltDragSetsRangesFromBaseline) {
                   std::optional<ssg::ByteOffset>{active.byteOffset});
     }
 
-    // A no-Alt drag keeps select.set_range (unchanged single-selection path).
+    // A no-Alt drag stays on the ordinary single-selection path.
     auto plain = ssg::route_pointer(hit, ssg::PointerButton::left,
                                          ssg::PointerKind::drag, false, true,
                                          anchor, targets);
@@ -1517,7 +1511,7 @@ TEST(doubleClickDetectorPairsPressesByTimeAndCell) {
 }
 
 // The app loop's decision is a thin gate over the classifier: a single left
-// editor press routes to cursor.set_position (with a drag armed), while a
+// editor press stays a caret-placement input (with a drag armed), while a
 // recognized double-click routes through double_click_dispatch, which selects
 // the word at the position and arms NO drag. Pinned here so a mis-wire at that
 // seam is caught.

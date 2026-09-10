@@ -245,8 +245,11 @@ TEST(unicodeEndToEndGridAndEncoding) {
     ASSERT_TRUE(before.has_value());
     ASSERT_TRUE(after.has_value());
     auto caretColumnAt = [&](std::optional<ssg::DocumentPosition> pos) -> int {
-        (void)runtime.dispatch({"cursor.set_position",
-                                ssg::SelectionCommandArguments{pos, std::nullopt}});
+        ASSERT_TRUE(pos.has_value());
+        if (!pos) return -1;
+        (void)ssg::test::setSelections(
+            runtime,
+            {{pos->byteOffset.value(), pos->byteOffset.value()}});
         auto frame = ssg::test::projectGridFrame(runtime, ssg::ViewportDimensions{80, 24});
         if (!frame) return -1;
         auto g = ssg::renderFrame(*frame, lineCache);

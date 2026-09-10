@@ -87,8 +87,7 @@ struct Session {
         session.runtime = session.created.session.get();
         (void)session.runtime->dispatch({"file.open",  std::string{"note.txt"}});
         if (dirty) {
-            (void)session.runtime->dispatch({"text.insert",
-                                   ssg::TextInputArguments{"!"}});
+            (void)ssg::test::typeText(*session.runtime, "!");
         }
         return session;
     }
@@ -236,8 +235,11 @@ TEST(exmdStaleIdDoesNotActOnThePreviousSelection) {
     // the success signal: it is false for an absent id AND for an already-selected
     // id. The selection stays on the previously selected present file, and because
     // select failed no action runs on it.
-    const auto stale = session.runtime->dispatch({"external.select",
-         ssg::DiffFileId{"external:not-a-real-file.txt"}});
+    const auto stale = ssg::test::dispatchInput(
+        *session.runtime,
+        ssg::ExternalActionPointerInput{
+            {ssg::DiffFileId{"external:not-a-real-file.txt"},
+             ssg::ExternalAction::Reload}});
     ASSERT_FALSE(stale.accepted());
     const auto external = session.runtime->external.viewState();
     ASSERT_TRUE(external.selected.has_value());
@@ -257,7 +259,9 @@ TEST(exmdOnAnAlreadySelectedPresentIdStillActsOnIt) {
     // file, so external.select SUCCEEDS and the host lets the action run on it.
     // (selectFile returns false here because the selection did not move, which is
     // why presence -- not selectFile's bool -- decides command success.)
-    const auto reselect = session.runtime->dispatch({"external.select",  present});
+    const auto reselect = ssg::test::dispatchInput(
+        *session.runtime,
+        ssg::ExternalActionPointerInput{{present, ssg::ExternalAction::Reload}});
     ASSERT_TRUE(reselect.accepted());
 }
 
@@ -296,10 +300,7 @@ TEST(aGenuineExternalEditAfterASelfSaveIsNotSuppressed) {
 
     // A genuine external edit follows. Because the expectation was consumed rather
     // than left to accumulate, it is NOT suppressed and raises actions.
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"text.insert",
-                                ssg::TextInputArguments{"x"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(*session.runtime, "x").accepted());
     writeFile(session.workspacePath("note.txt"), "genuinely-external\n");
     session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 2)});
@@ -697,7 +698,7 @@ TEST(aStatusErrorOnAMissingBaselineRaisesOnTheOverflowPath) {
     auto created = ssg::createEditor(configFor(root));
     auto* runtime = created.session.get();
     (void)runtime->dispatch({"file.open",  std::string{"sub/note.txt"}});
-    (void)runtime->dispatch({"text.insert",  ssg::TextInputArguments{"!"}});
+    (void)ssg::test::typeText(*runtime, "!");
 
     std::filesystem::remove(root / "workspace" / "sub" / "note.txt");
     runtime->external.ingest(

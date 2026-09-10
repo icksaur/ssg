@@ -236,10 +236,7 @@ TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
                     .dispatch({"file.open",
                                std::string{"fileB.cpp"}})
                     .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"text.insert",
-                               TextInputArguments{"z"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "z").accepted());
     ASSERT_TRUE(runtime
                     .dispatch({"file.open",
                                std::string{"fileA.cpp"}})

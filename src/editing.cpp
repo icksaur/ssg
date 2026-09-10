@@ -83,19 +83,19 @@ CommandHandlerResult applyTransaction(Editor& runtime,
 }
 
 CommandHandlerResult bindText(Editor& runtime,
-                               TextInputCommand command,
-                               TextInputArguments arguments) {
+                              TextInputCommand command,
+                              TextInputArguments arguments) {
     if (runtime.activeTabIsLiveDiff()) {
         return failure("text input is unavailable in diff mode");
     }
     auto const* document = runtime.activeDocument();
     if (document == nullptr) return failure("no active document");
-    // The payload arrives already typed: the handler declared what it consumes,
-    // so there is no cast to fail here.
     if (command != TextInputCommand::Insert) arguments = {};
     std::string inserted = arguments.text;
-    auto result = applyTextInput(document->snapshot(), runtime.selection.selections,
-                                   textInputSettings(runtime), command, std::move(arguments));
+    auto result =
+        applyTextInput(document->snapshot(), runtime.selection.selections,
+                       textInputSettings(runtime), command,
+                       std::move(arguments));
     if (!result.accepted() || !result.transaction || !result.selections) {
         return failure(result.message);
     }
@@ -122,20 +122,14 @@ CommandHandlerResult bindText(Editor& runtime,
     return outcome;
 }
 
-CommandHandlerResult bindSelection(Editor& runtime,
-                                    SelectionCommand command,
-                                    std::any const& payload) {
-    SelectionCommandArguments arguments;
-    if (auto const* typed = payloadAs<SelectionCommandArguments>(payload)) {
-        arguments = *typed;
-    }
+CommandHandlerResult bindSelection(Editor& runtime, SelectionCommand command,
+                                   SelectionCommandArguments arguments = {}) {
     auto navigation = runtime.selection;
     const auto diffFile = runtime.activeDiffFile();
     auto result = ssg::navigateSelection(runtime.activeText(), navigation,
-                                             command, {1, 1},
-                                             arguments, {}, 4,
-                                             runtime.wordWrap,
-                                             diffFile ? &*diffFile : nullptr);
+                                         command, {1, 1}, arguments, {}, 4,
+                                         runtime.wordWrap,
+                                         diffFile ? &*diffFile : nullptr);
     if (!result.accepted()) return failure(result.message);
     if (result.delta.replacement) {
         runtime.selection.selections = result.delta.replacement->selections;
@@ -143,18 +137,6 @@ CommandHandlerResult bindSelection(Editor& runtime,
     }
     if (auto active = runtime.activeDocumentId()) {
         runtime.historyFor(*active).breakCoalescing();
-    }
-    // Focus follows the pointer (M8-F): a click-to-caret / drag-select / Alt+click
-    // add-caret / Alt+drag add-range acts on the editor, so it moves the
-    // authoritative keyboard focus there. Gated on the pointer-driven selection
-    // commands; keyboard caret motion is a different SelectionCommand and never
-    // reaches here.
-    if (command == SelectionCommand::CursorSetPosition ||
-        command == SelectionCommand::SelectSetRange ||
-        command == SelectionCommand::SelectSetRanges ||
-        command == SelectionCommand::SelectAddRange ||
-        command == SelectionCommand::SelectWordAtPosition) {
-        runtime.screen.focusEditor();
     }
     runtime.recordNavigation(NavigationClass::User);
     return success();
@@ -487,23 +469,36 @@ CommandHandlerResult bindFindReplace(Editor& runtime,
 
 } // namespace
 
+CommandHandlerResult applyEditorSelections(Editor& runtime,
+                                          ApplySelections mutation) {
+    auto const active = runtime.activeDocumentId();
+    if (!active || *active != mutation.document ||
+        runtime.activeDocument() == nullptr) {
+        return failure("selection target changed before execution");
+    }
+    runtime.selection.selections = std::move(mutation.selections);
+    runtime.historyFor(mutation.document).breakCoalescing();
+    if (mutation.focusEditor) {
+        runtime.screen.focusEditor();
+    }
+    runtime.recordNavigation(NavigationClass::User);
+    return success();
+}
+
+CommandHandlerResult applyEditorTextInput(Editor& runtime,
+                                          TextInputCommand command,
+                                          TextInputArguments arguments) {
+    return bindText(runtime, command, std::move(arguments));
+}
+
 CommandHandlerResult executeFindReplaceCommand(Editor& runtime,
                                                 FindReplaceCommand command,
                                                 std::any const& payload) {
     return bindFindReplace(runtime, command, payload);
 }
 
-// The text-input commands, declared where they are implemented.
-// Aggregate command registrations: each command's facts and handler comprise a
-// single expression. The argument type, codec, unwrap, and column reference are
-// all derived from the handler type, written once in `handler<...>`.
 void registerTextInputCommands(CommandCatalog& catalog,
                                Editor& runtime) {
-    // Only insertion carries text.  The other five never read a payload -- the
-    // old handler default-constructed one and ignored it -- yet the static table
-    // declared all six as taking text.  Deducing the type from the handler makes
-    // that fiction impossible to write: a command that does not consume an
-    // argument cannot declare one.
     auto declareTextless = [&](std::string id, std::string label,
                                std::string summary, TextInputCommand command) {
         catalog.add(CommandSpec{
@@ -515,25 +510,11 @@ void registerTextInputCommands(CommandCatalog& catalog,
             .luaApi = true,
             .binding = bindNoArgumentHandler(
                 [&runtime, command](CommandContext&) {
-                    return bindText(runtime, command, {});
+                    return applyEditorTextInput(runtime, command, {});
                 }),
         });
     };
 
-    catalog.add(CommandSpec{
-        .id = "text.insert",
-        .owner = "text-input-commands",
-        .label = "Insert",
-        .summary = "Insert",
-        .effect = CommandEffect::Mutation,
-        .luaApi = true,
-        .binding = bindWireHandler<TextInputArguments>(
-            [&runtime](CommandContext&,
-                       TextInputArguments const& arguments) {
-                return bindText(runtime,
-                                TextInputCommand::Insert, arguments);
-            }),
-    });
     catalog.add(CommandSpec{
             .id = "text.tab",
             .owner = "text-input-commands",
@@ -543,8 +524,8 @@ void registerTextInputCommands(CommandCatalog& catalog,
             .luaApi = true,
             .binding = bindNoArgumentHandler(
                 [&runtime](CommandContext&) {
-                    return bindText(runtime, TextInputCommand::Insert,
-                                    TextInputArguments{"\t"});
+                    return applyEditorTextInput(runtime, TextInputCommand::Insert,
+                                                TextInputArguments{"\t"});
                 }),
     });
     declareTextless("text.newline", "Newline", "Newline",
@@ -716,14 +697,9 @@ void registerFindReplaceCommands(CommandCatalog& catalog,
              static_cast<WorkspaceReplacePreview const*>(nullptr));
 }
 
-// Moving the caret and changing the selection.
-//
-// All thirty-six take the same optional argument -- where to move to, absent
-// meaning "the usual step from here" -- and differ only in which motion they
-// perform.  They are registered by walking the descriptor table that already
-// pairs each id with its motion, rather than restating that list: the summary
-// is the id's last segment in words, which is the rule every one of them
-// follows.
+// Moving the caret and changing the selection. Explicit placement stays typed in
+// input/application code; only no-argument motion and view commands remain in
+// the command surface.
 void registerSelectionCommands(CommandCatalog& catalog,
                                Editor& runtime) {
     auto summaryOf = [](std::string_view id) {
@@ -745,6 +721,13 @@ void registerSelectionCommands(CommandCatalog& catalog,
 
     for (auto const& descriptor : kSelectionCommands) {
         auto const command = descriptor.command;
+        if (command == SelectionCommand::CursorSetPosition ||
+            command == SelectionCommand::SelectSetRange ||
+            command == SelectionCommand::SelectSetRanges ||
+            command == SelectionCommand::SelectAddRange ||
+            command == SelectionCommand::SelectWordAtPosition) {
+            continue;
+        }
         const auto visualAction = [command]() -> std::optional<MoveVisualSelection> {
             switch (command) {
                 case SelectionCommand::CursorLineUp:
@@ -782,10 +765,8 @@ void registerSelectionCommands(CommandCatalog& catalog,
                 .summary = summaryOf(descriptor.id),
                 .effect = CommandEffect::ViewAction,
                 .luaApi = true,
-                .binding = bindOptionalWireHandler<SelectionCommandArguments>(
-                    [action = *visualAction](
-                        CommandContext&,
-                        std::optional<SelectionCommandArguments> const&) {
+                .binding = bindNoArgumentHandler(
+                    [action = *visualAction](CommandContext&) {
                         return CommandHandlerResult::requireView(action);
                     }),
             });
@@ -799,9 +780,8 @@ void registerSelectionCommands(CommandCatalog& catalog,
                 .summary = summaryOf(descriptor.id),
                 .effect = CommandEffect::ViewAction,
                 .luaApi = true,
-                .binding = bindOptionalWireHandler<SelectionCommandArguments>(
-                    [command](CommandContext&,
-                              std::optional<SelectionCommandArguments> const&) {
+                .binding = bindNoArgumentHandler(
+                    [command](CommandContext&) {
                         return CommandHandlerResult::requireView(
                             command == SelectionCommand::ViewRevealCaret
                                 ? ViewAction{RevealSelection{}}
@@ -816,15 +796,10 @@ void registerSelectionCommands(CommandCatalog& catalog,
             .summary = summaryOf(descriptor.id),
             .effect = CommandEffect::Mutation,
             .luaApi = true,
-            .binding = bindOptionalWireHandler<SelectionCommandArguments>(
-                [&runtime, command](
-                    CommandContext&,
-                    std::optional<SelectionCommandArguments> const&
-                        arguments) {
-                    return bindSelection(
-                        runtime, command,
-                        arguments ? std::any{*arguments} : std::any{});
-                }),
+            .binding = bindNoArgumentHandler(
+            [&runtime, command](CommandContext&) {
+                return bindSelection(runtime, command);
+            }),
         });
     }
 }

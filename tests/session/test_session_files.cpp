@@ -108,8 +108,7 @@ std::string leaveDirtyDraft(const std::filesystem::path& root) {
     if (!created.accepted()) return {};
     auto& runtime = *created.session;
     (void)runtime.dispatch({"file.open",  std::string{"note.txt"}});
-    (void)runtime.dispatch({"text.insert",
-                            ssg::TextInputArguments{"!"}});
+    (void)ssg::test::typeText(runtime, "!");
     const auto draft = ssg::test::activeDocumentText(runtime);
     (void)runtime.flushDueAutosaveDrafts();
     return draft;
@@ -186,9 +185,7 @@ TEST(editingAndSavingARestoredDraftRoundTripsCoherently) {
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime).accepted());
-        ASSERT_TRUE(runtime.dispatch({"text.insert",
-                                      ssg::TextInputArguments{"X"}})
-                        .accepted());
+        ASSERT_TRUE(ssg::test::typeText(runtime, "X").accepted());
         ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
     }
     auto created = ssg::createEditor(configFor(root));
@@ -198,9 +195,7 @@ TEST(editingAndSavingARestoredDraftRoundTripsCoherently) {
 
     const auto restored = ssg::test::activeDocumentText(runtime);
     // A further edit after restore must apply cleanly and stay dirty...
-    ASSERT_TRUE(runtime.dispatch({"text.insert",
-                                  ssg::TextInputArguments{"Y"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "Y").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), "Y" + restored);
     ASSERT_TRUE(activeTabDirty(runtime));
     // ...and a save must write CRLF back to disk, proving decoded's terminator
@@ -229,9 +224,7 @@ TEST(reactivatingAnOpenTabDoesNotReapplyItsDraft) {
     // Edit past the recovered draft, open another file, then re-open note.txt:
     // openFile short-circuits to the already-open document, so reconcile must not
     // run again and must leave the live edited buffer intact.
-    ASSERT_TRUE(runtime.dispatch({"text.insert",
-                                  ssg::TextInputArguments{"Z"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "Z").accepted());
     const auto live = ssg::test::activeDocumentText(runtime);
     ASSERT_TRUE(runtime.dispatch({"file.open",
                                   std::string{"other.txt"}})
@@ -414,9 +407,7 @@ TEST(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits) {
         auto& runtime = *created.session;
         ASSERT_TRUE(runtime.dispatch({"file.open",  relKey})
                         .accepted());
-        ASSERT_TRUE(runtime.dispatch({"text.insert",
-                                      ssg::TextInputArguments{"!"}})
-                        .accepted());
+        ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
         ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
     }
     std::ofstream{root / "workspace" / rel, std::ios::binary} << "changed\n";
@@ -701,9 +692,7 @@ TEST(liveDiffTabDoesNotInflateTheDirtyDocumentFlushCount) {
     ASSERT_TRUE(runtime.dispatch({"file.open",
                                   std::string{"note.txt"}})
                     .accepted());
-    ASSERT_TRUE(runtime.dispatch({"text.insert",
-                                  ssg::TextInputArguments{"!"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
     ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
                     .accepted());
     ASSERT_TRUE(activeTabIsLiveDiff(runtime));
@@ -743,9 +732,7 @@ TEST(oversizedBufferIsNotAutosavedAndIsReportedOnce) {
     ASSERT_TRUE(runtime.dispatch({"file.open",
                                   std::string{"note.txt"}})
                     .accepted());
-    ASSERT_TRUE(runtime.dispatch({"text.insert",
-                                  ssg::TextInputArguments{"ab"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "ab").accepted());
     // Over cap: not persisted (flush count 0) and reported once.
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
     ASSERT_TRUE(statusMentions(runtime, "too large to autosave"));
@@ -770,15 +757,11 @@ TEST(loweringAutosaveDebounceMsEnablesAFlushTheDefaultSuppresses) {
     ASSERT_TRUE(runtime.dispatch({"file.open",
                                   std::string{"note.txt"}})
                     .accepted());
-    ASSERT_TRUE(runtime.dispatch({"text.insert",
-                                  ssg::TextInputArguments{"a"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "a").accepted());
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});  // eager first flush
 
     // A further edit within the default 10s interval is debounced.
-    ASSERT_TRUE(runtime.dispatch({"text.insert",
-                                  ssg::TextInputArguments{"b"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "b").accepted());
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
 
     // Lower the interval to its minimum; after a short wait the pending edit
@@ -845,7 +828,8 @@ TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
 
     // Open A and scroll far down (free scroll leaves the caret off-screen above).
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"a.txt"}}).accepted());
-    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines",  ssg::ScrollLinesArguments{50}}).accepted());
+    ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
+                                       {ssg::ScrollTarget::Document, 50}}).accepted());
     ASSERT_EQ(firstRow(), 50U);
 
     // Opening B resets the view so B's caret (its document start) is visible: the
@@ -870,7 +854,7 @@ TEST(openEditSaveRoundTripsRealDiskBytes) {
     ASSERT_TRUE(open.accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"hello"});
 
-    auto insert = runtime.dispatch({"text.insert",  ssg::TextInputArguments{"!"}});
+    auto insert = ssg::test::typeText(runtime, "!");
     ASSERT_TRUE(insert.accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"!hello"});
 
@@ -1003,7 +987,7 @@ TEST(tabActivateFocusesTheEditor) {
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     auto first = ssg::test::projectGridFrame(runtime)->tabs.tabs.front().id;
-    ASSERT_TRUE(runtime.dispatch({"tab.activate",  first}).accepted());
+    ASSERT_TRUE(ssg::test::dispatchInput(runtime, ssg::TabPointerInput{first}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 }
 
@@ -1028,7 +1012,8 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"a.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"b.txt"}}).accepted());
     // B is active; scroll it far down (free scroll leaves B's caret off-screen).
-    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines",  ssg::ScrollLinesArguments{50}}).accepted());
+    ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
+                                       {ssg::ScrollTarget::Document, 50}}).accepted());
     ASSERT_EQ(firstRow(), 50U);
 
     // Switch to A (previous tab): its caret (top) is revealed, not B's stale 50.
@@ -1038,7 +1023,8 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     // Moving a tab keeps the SAME active document and must NOT snap the scroll:
     // switch back to B, scroll away, move the tab, and the offset stays put.
     ASSERT_TRUE(runtime.dispatch({"tab.next",  {}}).accepted());
-    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines",  ssg::ScrollLinesArguments{50}}).accepted());
+    ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
+                                       {ssg::ScrollTarget::Document, 50}}).accepted());
     ASSERT_EQ(firstRow(), 50U);
     ASSERT_TRUE(runtime.dispatch({"tab.move_left",  {}}).accepted());
     ASSERT_EQ(firstRow(), 50U);  // same document -> no reveal snap
@@ -1058,10 +1044,7 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
                     .dispatch({"file.open",
                                std::string{"a.txt"}})
                     .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"text.insert",
-                               ssg::TextInputArguments{"!"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"!alpha"});
     ASSERT_TRUE(runtime
                     .dispatch({"file.open",
@@ -1122,7 +1105,7 @@ TEST(autosaveFlushesADirtyDocumentEagerlyThenDebounces) {
 
     // Editing makes it dirty; the first tick flushes eagerly (bounds the crash
     // window to one tick).
-    ASSERT_TRUE(runtime.dispatch({"text.insert",  ssg::TextInputArguments{"!"}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
 
     // An immediate second tick with unchanged content is debounced (default
@@ -1139,7 +1122,7 @@ TEST(autosaveFlushesNothingWhenNoDocumentIsDirty) {
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"note.txt"}}).accepted());
     // Edit then save -> clean again -> no autosave.
-    ASSERT_TRUE(runtime.dispatch({"text.insert",  ssg::TextInputArguments{"!"}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
     ASSERT_TRUE(runtime.dispatch({"file.save",  {}}).accepted());
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
 }
@@ -1152,7 +1135,7 @@ TEST(autosaveFlushAllForcesADirtyDocumentAfterAnEagerFlush) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"note.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"text.insert",  ssg::TextInputArguments{"!"}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
     // A clean-exit flush ignores the debounce and writes the dirty draft again,
     // capturing any edits newer than the last tick.

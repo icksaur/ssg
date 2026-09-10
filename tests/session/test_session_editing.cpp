@@ -63,9 +63,9 @@ TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"edit.txt"}}).accepted());
 
-    auto setPosition = runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{3}), std::nullopt}});
+    auto setPosition = ssg::test::setSelections(runtime, {{3, 3}});
     ASSERT_TRUE(setPosition.accepted());
-    auto typed = runtime.dispatch({"text.insert",  ssg::TextInputArguments{"d"}});
+    auto typed = ssg::test::typeText(runtime, "d");
     ASSERT_TRUE(typed.accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcd"});
 
@@ -84,10 +84,10 @@ TEST(typingUndoBreaksOnWordAndLineBoundaries) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"edit.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{3}), std::nullopt}}).accepted());
+    ASSERT_TRUE(ssg::test::setSelections(runtime, {{3, 3}}).accepted());
 
     const auto type = [&](char character) {
-        return runtime.dispatch({"text.insert",  ssg::TextInputArguments{std::string{character}}}).accepted();
+        return ssg::test::typeText(runtime, std::string{character}).accepted();
     };
     for (char character : std::string{"foo bar"}) ASSERT_TRUE(type(character));
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcfoo bar"});
@@ -241,8 +241,7 @@ TEST(workspaceSearchAndReplaceHonorIgnoreWithOpenBufferPrecedence) {
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.dispatch(
         {"file.open", std::string{"ignored-open.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(
-        {"text.insert", ssg::TextInputArguments{"unsaved "}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "unsaved ").accepted());
 
     ASSERT_TRUE(runtime.dispatch(
         {"search.workspace", std::string{"#secret"}}).accepted());
@@ -836,32 +835,28 @@ TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
         ASSERT_TRUE(runtime.dispatch({"panel.focus",  {}}).accepted());
     };
 
-    // A pointer click-to-caret (cursor.set_position) from panel focus moves focus
-    // to the editor.
+    // A pointer click-to-caret from panel focus moves focus to the editor.
     focusPanel();
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
-    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{1}), std::nullopt}}).accepted());
+    ASSERT_TRUE(ssg::test::clickDocument(runtime, 1).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
-    // A pointer drag (select.set_range) likewise focuses the editor.
+    // A pointer drag likewise focuses the editor.
     focusPanel();
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
-    ASSERT_TRUE(runtime.dispatch({"select.set_range",
-        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{0}).value(), ssg::resolveSelectionPosition("abc", ssg::ByteOffset{2}).value()}}}).accepted());
+    ASSERT_TRUE(ssg::test::dragDocument(runtime, 0, 2).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
-    // A pointer Alt+click add-caret (select.add_range) focuses the editor too.
+    // A pointer Alt+click add-caret focuses the editor too.
     focusPanel();
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
-    ASSERT_TRUE(runtime.dispatch({"select.add_range",
-        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{1}).value(), ssg::resolveSelectionPosition("abc", ssg::ByteOffset{1}).value()}}}).accepted());
+    ASSERT_TRUE(ssg::test::clickDocument(runtime, 1, true).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
-    // A pointer Alt+drag add-range (select.set_ranges) focuses the editor too.
+    // A pointer Alt+drag add-range focuses the editor too.
     focusPanel();
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
-    ASSERT_TRUE(runtime.dispatch({"select.set_ranges",
-        ssg::SelectionCommandArguments{std::nullopt, std::nullopt, {ssg::Selection{ssg::resolveSelectionPosition("abc", ssg::ByteOffset{0}).value(), ssg::resolveSelectionPosition("abc", ssg::ByteOffset{2}).value()}}}}).accepted());
+    ASSERT_TRUE(ssg::test::dragDocument(runtime, 0, 2, true).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // A KEYBOARD caret motion (a different SelectionCommand) does NOT change focus:
@@ -977,12 +972,13 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     ASSERT_TRUE(maxFirst > 0);  // the document is scrollable
 
     // Free scroll DOWN with no edit: the offset moves and does NOT snap back.
-    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines",  ssg::ScrollLinesArguments{40}}).accepted());
+    ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
+                                       {ssg::ScrollTarget::Document, 40}}).accepted());
     ASSERT_EQ(firstRow(), 40U);   // caret (line 0) is now off-screen above
     ASSERT_EQ(firstRow(), 40U);   // a second read without an edit stays put
 
     // Typing at the (off-screen) caret reveals it: minimal offset to show line 0.
-    ASSERT_TRUE(runtime.dispatch({"text.insert",  ssg::TextInputArguments{"x"}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "x").accepted());
     ASSERT_EQ(firstRow(), 0U);
 
     // Move the caret to the last line (navigation reveals it to the bottom), then
@@ -990,28 +986,35 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     auto doc = ssg::test::activeDocumentText(runtime);
     auto endPos = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size())});
     ASSERT_TRUE(endPos.has_value());
-    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{endPos, std::nullopt}}).accepted());
-    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines",  ssg::ScrollLinesArguments{-200}}).accepted());
+    ASSERT_TRUE(ssg::test::setSelections(
+        runtime,
+        {{endPos->byteOffset.value(), endPos->byteOffset.value()}}).accepted());
+    ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
+                                       {ssg::ScrollTarget::Document, -200}}).accepted());
     ASSERT_EQ(firstRow(), 0U);
     // An edit at the bottom caret reveals it to the maximum offset (last line shown).
-    ASSERT_TRUE(runtime.dispatch({"text.insert",  ssg::TextInputArguments{"y"}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "y").accepted());
     ASSERT_EQ(firstRow(), maximum());
 
     // Two cursors: secondary near the top (line 0), PRIMARY near the bottom (the
-    // back selection). select.add_range pushes the new range to the back.
+    // back selection).
     doc = ssg::test::activeDocumentText(runtime);
     auto top = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{0});
     auto bottomLineStart = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size()) - 2});
     ASSERT_TRUE(top.has_value());
     ASSERT_TRUE(bottomLineStart.has_value());
-    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{top, std::nullopt}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"select.add_range",  ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{*bottomLineStart, *bottomLineStart}}}).accepted());
+    ASSERT_TRUE(ssg::test::setSelections(
+        runtime,
+        {{top->byteOffset.value(), top->byteOffset.value()},
+         {bottomLineStart->byteOffset.value(),
+          bottomLineStart->byteOffset.value()}}).accepted());
     // Free-scroll to the top so the primary (bottom) caret is off-screen below.
-    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines",  ssg::ScrollLinesArguments{-200}}).accepted());
+    ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
+                                       {ssg::ScrollTarget::Document, -200}}).accepted());
     ASSERT_EQ(firstRow(), 0U);
     // A multi-cursor insert reveals the PRIMARY caret (bottom), not the secondary
     // (top): the offset jumps down far enough to show it, rather than staying at 0.
-    ASSERT_TRUE(runtime.dispatch({"text.insert",  ssg::TextInputArguments{"z"}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "z").accepted());
     // Asserted as "the primary caret is on screen" rather than "the offset equals
     // the maximum".  The primary caret sits on the second-to-last line, so
     // revealing it lands one row short of the maximum.  This read `== maximum()`
@@ -1055,8 +1058,9 @@ TEST(undoAndPasteRevealTheCaret) {
     ASSERT_EQ(firstRow(), 0U);
 
     // Type a character (caret at top), then scroll away and UNDO: undo reveals.
-    ASSERT_TRUE(runtime.dispatch({"text.insert",  ssg::TextInputArguments{"x"}}).accepted());
-    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines",  ssg::ScrollLinesArguments{40}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "x").accepted());
+    ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
+                                       {ssg::ScrollTarget::Document, 40}}).accepted());
     ASSERT_EQ(firstRow(), 40U);
     ASSERT_TRUE(runtime.dispatch({"edit.undo",  {}}).accepted());
     ASSERT_EQ(firstRow(), 0U);
@@ -1067,8 +1071,9 @@ TEST(undoAndPasteRevealTheCaret) {
     // that correctly does not mutate or reveal.)
     ASSERT_TRUE(runtime.dispatch({"select.line_down",  {}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"clipboard.copy",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{ssg::resolveSelectionPosition(text, ssg::ByteOffset{0}), std::nullopt}}).accepted());
-    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines",  ssg::ScrollLinesArguments{40}}).accepted());
+    ASSERT_TRUE(ssg::test::setSelections(runtime, {{0, 0}}).accepted());
+    ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
+                                       {ssg::ScrollTarget::Document, 40}}).accepted());
     ASSERT_EQ(firstRow(), 40U);
     ASSERT_TRUE(runtime.dispatch({"clipboard.paste",  {}}).accepted());
     // The pasted "a\n" pushes the caret to line 1; revealing from row 40 scrolls
@@ -1101,8 +1106,10 @@ TEST(multiCursorPastePreservesAllCursors) {
     auto p0 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{0});
     auto p1 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{4});
     ASSERT_TRUE(p0.has_value() && p1.has_value());
-    ASSERT_TRUE(runtime.dispatch({"cursor.set_position",  ssg::SelectionCommandArguments{p0, std::nullopt}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"select.add_range",  ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{*p1, *p1}}}).accepted());
+    ASSERT_TRUE(ssg::test::setSelections(
+        runtime,
+        {{p0->byteOffset.value(), p0->byteOffset.value()},
+         {p1->byteOffset.value(), p1->byteOffset.value()}}).accepted());
     ASSERT_EQ(selectionCount(), std::size_t{2});
     ASSERT_TRUE(runtime.dispatch({"select.line_end",  {}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"clipboard.copy",  {}}).accepted());
@@ -1141,25 +1148,21 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
     auto p4 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{4});
     auto p7 = ssg::resolveSelectionPosition(doc, ssg::ByteOffset{7});
     ASSERT_TRUE(p0 && p3 && p4 && p7);
-    ASSERT_TRUE(runtime.dispatch({"select.set_range",
-         ssg::SelectionCommandArguments{std::nullopt,
-                                        ssg::Selection{*p0, *p3}}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"select.add_range",
-         ssg::SelectionCommandArguments{std::nullopt,
-                                        ssg::Selection{*p4, *p7}}}).accepted());
+    ASSERT_TRUE(ssg::test::setSelections(
+        runtime,
+        {{p0->byteOffset.value(), p3->byteOffset.value()},
+         {p4->byteOffset.value(), p7->byteOffset.value()}}).accepted());
     ASSERT_EQ(selectionCount(), std::size_t{2});
 
     // Typing replaces EACH selection and leaves a caret at each edit -- the
     // multi-cursor must survive (regression: it used to collapse to one).
-    ASSERT_TRUE(runtime.dispatch({"text.insert",
-                                  ssg::TextInputArguments{"X"}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "X").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"X\nX\nccc\n"});
     ASSERT_EQ(selectionCount(), std::size_t{2});
 
     // Continuing to type inserts at BOTH carets, so multi-cursor editing works
     // across successive keystrokes.
-    ASSERT_TRUE(runtime.dispatch({"text.insert",
-                                  ssg::TextInputArguments{"Y"}}).accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "Y").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"XY\nXY\nccc\n"});
     ASSERT_EQ(selectionCount(), std::size_t{2});
 

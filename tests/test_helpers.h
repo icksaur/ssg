@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/Editor.h>
+
 // Minimal standalone test helpers for SSG test executables.
 //
 // Each test file is an independent executable with its own main(); these
@@ -16,10 +18,13 @@
 //   int main() { RUN(my_test); ... }
 
 #include <filesystem>
+#include <initializer_list>
 #include <iostream>
 #include <source_location>
+#include <string>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 inline std::filesystem::path testRuntimePath(
     std::filesystem::path const& name,
@@ -44,6 +49,112 @@ inline std::filesystem::path testRuntimePath(
 
 inline int passed = 0;
 inline int failed = 0;
+
+namespace ssg::test {
+
+inline CommandResult requireCommand(ClientInputResult result) {
+    if (!result.command) {
+        throw std::runtime_error{"client input produced no command result"};
+    }
+    return std::move(*result.command);
+}
+
+inline CommandResult dispatchInput(Editor& editor, ClientInput input) {
+    return requireCommand(editor.input(std::move(input)));
+}
+
+inline CommandResult typeText(Editor& editor, std::string text) {
+    std::lock_guard operationLock{editor.operationMutex};
+    auto const active = editor.activeDocumentId();
+    auto const revisionBefore =
+        active && editor.activeDocument()
+            ? std::optional<std::uint64_t>{editor.activeDocument()->revision()}
+            : std::nullopt;
+    editor.screen.refreshExternalModificationPresence(
+        editor.externalModificationPresent());
+    auto result = applyEditorTextInput(
+        editor, TextInputCommand::Insert,
+        TextInputArguments{std::move(text)});
+    editor.reconcileFindDocument();
+    editor.screen.refreshNoticePresence(editor.noticePresent());
+    editor.screen.refreshExternalModificationPresence(
+        editor.externalModificationPresent());
+    editor.screen.refreshStatusActions(editor.status.actionNodes());
+    if (result.accepted && active && revisionBefore &&
+        editor.activeDocumentId() == active && editor.activeDocument() != nullptr &&
+        editor.activeDocument()->revision() != *revisionBefore) {
+        (void)editor.follow.notifyLocalEdit();
+    }
+    return {result.accepted ? CommandError::None : CommandError::HandlerFailed,
+            std::move(result.message), std::move(result.viewAction)};
+}
+
+inline CommandResult setSelections(
+    Editor& editor,
+    std::initializer_list<std::pair<std::uint64_t, std::uint64_t>> ranges) {
+    auto const* tab = editor.activeTabState();
+    auto const* document = editor.activeDocument();
+    if (tab == nullptr || document == nullptr) {
+        throw std::runtime_error{
+            "selection transition requires an active document"};
+    }
+    auto revision = document->revision();
+    if (tab->kind == TabKind::LiveDiff) {
+        revision = editor.diff.viewState().revision;
+    }
+    std::vector<SelectionRangeTransition> selections;
+    selections.reserve(ranges.size());
+    for (auto const& [anchor, active] : ranges) {
+        selections.push_back({ByteOffset{anchor}, ByteOffset{active}});
+    }
+    return dispatchInput(editor, ViewTransitionInput{
+                                   SelectionTransition{
+                                       tab->id, revision,
+                                       std::move(selections)}});
+}
+
+inline CommandResult clickDocument(Editor& editor, std::uint64_t byteOffset,
+                                   bool additive = false,
+                                   bool selectWord = false) {
+    auto result = dispatchInput(
+        editor,
+        DocumentPointerInput{
+            ByteOffset{byteOffset}, additive, selectWord});
+    if (editor.documentPointerGesture.has_value()) {
+        auto release = dispatchInput(
+            editor,
+            DocumentPointerInput{
+                ByteOffset{byteOffset}, false, false,
+                InputPointerButton::Primary, InputPointerPhase::Release});
+        if (!release.accepted()) return release;
+    }
+    return result;
+}
+
+inline CommandResult dragDocument(Editor& editor, std::uint64_t anchor,
+                                  std::uint64_t active,
+                                  bool additive = false) {
+    auto press = dispatchInput(
+        editor,
+        DocumentPointerInput{
+            ByteOffset{anchor}, additive});
+    if (!press.accepted()) return press;
+    auto move = dispatchInput(
+        editor,
+        DocumentPointerInput{
+            ByteOffset{active}, false, false,
+            InputPointerButton::Primary, InputPointerPhase::Move});
+    if (!move.accepted()) return move;
+    auto release = dispatchInput(
+        editor,
+        DocumentPointerInput{
+            ByteOffset{active}, false, false,
+            InputPointerButton::Primary, InputPointerPhase::Release});
+    if (!release.accepted()) return release;
+    return move;
+}
+
+}  // namespace ssg::test
 
 #define TEST(name) static void name()
 

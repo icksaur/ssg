@@ -24,7 +24,22 @@ public:
     [[nodiscard]] CommandResult dispatch(Editor& session,
                                          ClientCommand command) {
         auto result = session.dispatch(std::move(command));
-        if (!result.viewAction) return result;
+        applyViewAction(session, result);
+        return result;
+    }
+
+    [[nodiscard]] CommandResult input(Editor& session, ClientInput input) {
+        auto result = session.input(input);
+        if (!result.command) {
+            throw std::runtime_error{"client input produced no command result"};
+        }
+        applyViewAction(session, *result.command);
+        return std::move(*result.command);
+    }
+
+private:
+    void applyViewAction(Editor& session, CommandResult const& result) {
+        if (!result.viewAction) return;
 
         auto frame = present(session);
         if (!frame) {
@@ -44,10 +59,8 @@ public:
                         : "view transition was rejected"};
             }
         }
-        return result;
     }
 
-private:
     ViewportDimensions dimensions_;
     GridPresenter presenter_;
 };

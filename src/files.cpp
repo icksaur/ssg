@@ -413,6 +413,14 @@ CommandHandlerResult bindEncoding(Editor& runtime,
 
 }  // namespace
 
+CommandHandlerResult activateTab(Editor& runtime, TabId tabId) {
+    return bindTab(runtime, TabCommand::Activate, std::any{tabId});
+}
+
+CommandHandlerResult closeTabById(Editor& runtime, TabId tabId) {
+    return bindTab(runtime, TabCommand::Close, std::any{tabId});
+}
+
 CommandHandlerResult Editor::updateTabsFor(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state) return failure("workspace document does not exist");
@@ -631,7 +639,6 @@ void registerTabCommands(CommandCatalog& catalog,
     declare("tab.next", "Next Tab", "Next Tab", TabCommand::Next);
     declare("tab.previous", "Previous Tab", "Previous Tab",
             TabCommand::Previous);
-    declare("tab.activate", "", "Activate", TabCommand::Activate);
     declare("tab.move_left", "", "Move Left", TabCommand::MoveLeft);
     declare("tab.move_right", "", "Move Right", TabCommand::MoveRight);
 }
