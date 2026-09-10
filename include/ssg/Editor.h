@@ -607,5 +607,22 @@ public:
     Editor& runtime, PromptCompletion completion, std::string_view path);
 [[nodiscard]] CommandHandlerResult applyGotoLine(Editor& runtime,
                                                  std::string_view lineText);
+[[nodiscard]] CommandHandlerResult navigateTo(
+    Editor& runtime, NavigationTarget target,
+    NavigationOrigin origin = NavigationOrigin::User);
+[[nodiscard]] CommandHandlerResult selectTreeNode(Editor& runtime,
+                                                  TreeNodeId nodeId);
+[[nodiscard]] CommandHandlerResult invokeTreeNodeCommand(
+    Editor& runtime, TreeCommandInvocation invocation);
+
+enum class DiffNavigation : std::uint8_t {
+    NextHunk,
+    PreviousHunk,
+    OpenFile,
+};
+
+[[nodiscard]] CommandHandlerResult navigateDiff(Editor& runtime,
+                                                DiffFileId fileId,
+                                                DiffNavigation navigation);
 
 } // namespace ssg

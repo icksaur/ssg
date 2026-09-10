@@ -213,14 +213,6 @@ struct TreeCommandInvocation {
     bool operator==(const TreeCommandInvocation&) const = default;
 };
 
-// Argument for `tree.select`: the node to make the active provider's selection.
-// A dedicated payload (rather than the TreeCommandInvocation triple) keeps a
-// click's argument minimal -- a pointer click needs only the node id.
-struct TreeSelectArguments {
-    TreeNodeId nodeId;
-    bool operator==(const TreeSelectArguments&) const = default;
-};
-
 class TreeModel {
 public:
     void replaceProvider(TreeProviderSnapshot snapshot);

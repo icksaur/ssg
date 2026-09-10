@@ -131,9 +131,6 @@ theme.set	Theme Set	config
 style.define	Style Define	config
 keymap.bind	Keymap Bind	config
 keymap.unbind	Keymap Unbind	config
-diff.next_hunk	Diff Next Hunk	remove
-diff.previous_hunk	Diff Previous Hunk	remove
-diff.open_file	Diff Open File	remove
 follow_edits.resume	Follow Edits Resume	keep
 follow_edits.pause	Follow Edits Pause	keep
 follow_edits.toggle	Follow Edits Toggle	keep
@@ -148,15 +145,11 @@ search.results_next	Search Results Next	keep
 search.results_previous	Search Results Previous	keep
 palette.close	Palette Close	split
 search.workspace	Search Workspace	split
-goto.file	Go to File	remove
-goto.symbol	Go to Symbol	remove
 goto.line	Go to Line	split
 tree.toggle_expanded	Tree Toggle Expanded	keep
 tree.select_next	Tree Select Next	keep
 tree.select_previous	Tree Select Previous	keep
 tree.activate	Open Selected	keep
-tree.invoke_node_command	Tree Invoke Node Command	remove
-tree.select	Tree Select	remove
 goto.definition	Go to Definition	keep
 goto.reference	Goto Reference	keep
 completion.open	Completion Open	keep

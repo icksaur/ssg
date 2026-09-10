@@ -111,14 +111,25 @@ CommandHandlerResult applyNavigationTransition(
     if (!placed.accepted) {
         return placed;
     }
-    if (transition.revealPrimaryCaret &&
-        !runtime.deferDispatch(ClientCommand{"view.reveal_caret", {}})) {
+    if (transition.revealPrimaryCaret) {
+        return CommandHandlerResult::requireView(ViewAction{RevealSelection{}});
+    }
+    return success();
+}
+
+CommandHandlerResult deferNavigationViewAction(
+    Editor& runtime, CommandHandlerResult result) {
+    if (!result.accepted || !result.viewAction) return result;
+    if (!std::holds_alternative<RevealSelection>(*result.viewAction)) {
+        return failure("navigation produced an unsupported view action");
+    }
+    if (!runtime.deferDispatch(ClientCommand{"view.reveal_caret", {}})) {
         return failure("could not queue view.reveal_caret");
     }
     return success();
 }
 
-CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::any const& payload) {
+CommandHandlerResult searchCommand(Editor& runtime, std::string_view id) {
     if (id == "palette.open") {
         if (!runtime.openPickerPrompt(PickerKind::Command)) {
             return failure("could not open the command picker");
@@ -154,29 +165,19 @@ CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::an
         if (!transition.target) return success();
         auto applied = applyNavigationTransition(runtime, transition);
         if (!applied.accepted) return applied;
+        auto deferred = deferNavigationViewAction(runtime, std::move(applied));
+        if (!deferred.accepted) return deferred;
         // The history cursor moves only once the destination is really open.
         if (backward) (void)runtime.navigation.back();
         else (void)runtime.navigation.forward();
-    } else if (id == "goto.file" || id == "goto.symbol") {
-        auto const* target = payloadAs<NavigationTarget>(payload);
-        if (target == nullptr) {
-            return failure(std::string{id} + " requires a navigation target payload");
-        }
-        auto applied = applyNavigationTransition(
-            runtime, navigationTransition(*target, NavigationOrigin::User));
-        if (!applied.accepted) return applied;
-        (void)runtime.navigation.visit(*target, NavigationOrigin::User);
+        return deferred;
     } else if (id == "goto.line") {
-        auto const* lineText = payloadAs<std::string>(payload);
-        if (lineText == nullptr) {
-            auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
-                PromptKind::CommandArgument, "go to line",
-                {{"line", "line number", ""}}, {}, std::nullopt,
-                PromptCompletion::GotoLine});
-            if (!opened.accepted()) return failure(opened.error->message);
-            return success();
-        }
-        return applyGotoLine(runtime, *lineText);
+        auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
+            PromptKind::CommandArgument, "go to line",
+            {{"line", "line number", ""}}, {}, std::nullopt,
+            PromptCompletion::GotoLine});
+        if (!opened.accepted()) return failure(opened.error->message);
+        return success();
     } else {
         return failure("unknown search command");
     }
@@ -184,8 +185,7 @@ CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::an
 }
 
 CommandHandlerResult treeCommand(Editor& runtime,
-                                 std::string_view id,
-                                 std::any const& payload) {
+                                 std::string_view id) {
     if (id == "tree.select_next") { (void)runtime.tree.selectNext(); return success(); }
     if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); return success(); }
     if (id == "tree.activate") {
@@ -227,11 +227,8 @@ CommandHandlerResult treeCommand(Editor& runtime,
                 .path = *selected->workspacePath,
                 .line = LineIndex{*selected->sourceLine},
                 .column = static_cast<std::size_t>(*selected->sourceColumn)};
-            if (!runtime.deferDispatch(
-                    ClientCommand{"goto.file", std::move(target)})) {
-                return failure("could not queue search result navigation");
-            }
-            return success();
+            return deferNavigationViewAction(
+                runtime, navigateTo(runtime, std::move(target)));
         }
         if (selected->workspacePath) {
             auto result = runtime.workspace.openFile(*selected->workspacePath);
@@ -242,54 +239,13 @@ CommandHandlerResult treeCommand(Editor& runtime,
         }
         return success();
     }
-    if (id == "tree.select") {
-        auto const* arguments = payloadAs<TreeSelectArguments>(payload);
-        if (arguments == nullptr) return failure("tree.select requires a node id payload");
-        if (!runtime.tree.select(arguments->nodeId)) return failure("tree node is not selectable");
-
-        // Focus follows the pointer (M8-F): clicking a tree row acts on the panel,
-        // so move keyboard focus there. (For a file click the app dispatches
-        // tree.activate next, whose file-open focus_editor() then wins.)
-        (void)runtime.screen.focusPanel();
-        return success();
-    }
-    auto const* invocation = payloadAs<TreeCommandInvocation>(payload);
-    if (invocation == nullptr) return failure(std::string{id} + " requires a tree invocation payload");
     if (id == "tree.toggle_expanded") {
-        return runtime.toggleTreeExpanded(
-            invocation->providerId, invocation->nodeId);
+        const auto binding = runtime.tree.activeProviderBinding();
+        const auto selected = runtime.tree.selectedNode();
+        if (!binding || !selected) return failure("no tree node is selected");
+        return runtime.toggleTreeExpanded(binding->id, selected->id);
     }
-    auto command = runtime.tree.invokeNodeCommand(invocation->providerId, invocation->nodeId, invocation->commandId);
-    return command ? success() : failure("tree node command does not exist");
-}
-
-CommandHandlerResult diffCommand(Editor& runtime, std::string_view id, std::any const& payload) {
-    auto const* fileId = payloadAs<DiffFileId>(payload);
-    if (fileId == nullptr) return failure(std::string{id} + " requires a diff file ID payload");
-    auto file = runtime.diff.file(*fileId);
-    if (!file) return failure("diff file does not exist");
-    std::optional<std::size_t> hunk;
-    const auto currentLine = runtime.activeDocument()
-                                 ? std::optional<std::size_t>{
-                                       runtime.selection.selections.primary()
-                                           .active.line.value()}
-                                 : std::nullopt;
-    if (id == "diff.next_hunk") {
-        hunk = nextDiffHunk(file->get(), currentLine);
-    } else if (id == "diff.previous_hunk") {
-        hunk = previousDiffHunk(file->get(), currentLine);
-    } else if (!file->get().hunks.empty()) {
-        hunk = 0;
-    }
-    if (!hunk) return failure("diff file has no hunks");
-    const auto opened = diffOpenFile(file->get());
-    const FollowTarget target{file->get().id, opened.path, opened.deleted,
-                              file->get().hunks[*hunk].targetStart,
-                              runtime.diff.viewState().revision};
-    if (!runtime.revealDiffTarget(target, NavigationClass::Programmatic)) {
-        return failure("diff target could not be revealed");
-    }
-    return success();
+    return failure("unknown tree command");
 }
 
 CommandHandlerResult followCommand(Editor& runtime, std::string_view id) {
@@ -320,6 +276,58 @@ CommandHandlerResult followCommand(Editor& runtime, std::string_view id) {
 }
 
 } // namespace
+
+CommandHandlerResult navigateTo(Editor& runtime, NavigationTarget target,
+                                NavigationOrigin origin) {
+    auto applied = applyNavigationTransition(
+        runtime, navigationTransition(target, origin));
+    if (!applied.accepted) return applied;
+    (void)runtime.navigation.visit(std::move(target), origin);
+    return applied;
+}
+
+CommandHandlerResult selectTreeNode(Editor& runtime, TreeNodeId nodeId) {
+    if (!runtime.tree.select(nodeId)) {
+        return failure("tree node is not selectable");
+    }
+    (void)runtime.screen.focusPanel();
+    return success();
+}
+
+CommandHandlerResult invokeTreeNodeCommand(
+    Editor& runtime, TreeCommandInvocation invocation) {
+    auto command = runtime.tree.invokeNodeCommand(
+        invocation.providerId, invocation.nodeId, invocation.commandId);
+    return command ? success() : failure("tree node command does not exist");
+}
+
+CommandHandlerResult navigateDiff(Editor& runtime, DiffFileId fileId,
+                                  DiffNavigation navigation) {
+    auto file = runtime.diff.file(fileId);
+    if (!file) return failure("diff file does not exist");
+    std::optional<std::size_t> hunk;
+    const auto currentLine = runtime.activeDocument()
+                                 ? std::optional<std::size_t>{
+                                       runtime.selection.selections.primary()
+                                           .active.line.value()}
+                                 : std::nullopt;
+    if (navigation == DiffNavigation::NextHunk) {
+        hunk = nextDiffHunk(file->get(), currentLine);
+    } else if (navigation == DiffNavigation::PreviousHunk) {
+        hunk = previousDiffHunk(file->get(), currentLine);
+    } else if (!file->get().hunks.empty()) {
+        hunk = 0;
+    }
+    if (!hunk) return failure("diff file has no hunks");
+    const auto opened = diffOpenFile(file->get());
+    const FollowTarget target{file->get().id, opened.path, opened.deleted,
+                              file->get().hunks[*hunk].targetStart,
+                              runtime.diff.viewState().revision};
+    if (!runtime.revealDiffTarget(target, NavigationClass::Programmatic)) {
+        return failure("diff target could not be revealed");
+    }
+    return success();
+}
 
 CommandHandlerResult applyGotoLine(Editor& runtime, std::string_view lineText) {
     if (!runtime.activeDocumentId()) return failure("goto.line requires an active document");
@@ -402,12 +410,7 @@ CommandHandlerResult activateTreeNode(Editor& runtime, TreeNodeId nodeId) {
             .path = *selected->workspacePath,
             .line = LineIndex{*selected->sourceLine},
             .column = static_cast<std::size_t>(*selected->sourceColumn)};
-        // Navigate directly via dispatchLocked (no deferred dispatch context).
-        auto result =
-            runtime.dispatchLocked(ClientCommand{"goto.file", std::move(target)});
-        if (!result.accepted()) return failure(result.message);
-        if (result.viewAction) return CommandHandlerResult::requireView(std::move(*result.viewAction));
-        return success();
+        return navigateTo(runtime, std::move(target));
     }
     if (selected->workspacePath) {
         auto result = runtime.workspace.openFile(*selected->workspacePath);
@@ -428,24 +431,6 @@ CommandHandlerResult activateTreeNode(Editor& runtime, TreeNodeId nodeId) {
 // interface.
 void registerDiffAndFollowCommands(CommandCatalog& catalog,
                                    Editor& runtime) {
-    auto diff = [&](std::string id, std::string summary) {
-        auto const name = id;
-        catalog.add(CommandSpec{
-            .id = std::move(id),
-            .owner = "diff-model",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-            .binding = bindInProcessHandler<DiffFileId>(
-                [&runtime, name](CommandContext&, DiffFileId const& file) {
-                    return diffCommand(runtime, name, std::any{file});
-                }),
-        });
-    };
-    diff("diff.next_hunk", "Next Hunk");
-    diff("diff.previous_hunk", "Previous Hunk");
-    diff("diff.open_file", "Open File");
-
     auto follow = [&](std::string id, std::string summary) {
         auto const name = id;
         catalog.add(CommandSpec{
@@ -483,7 +468,7 @@ void registerTreeCommands(CommandCatalog& catalog,
         auto built = spec(std::move(id), std::move(summary));
         built.binding = bindNoArgumentHandler(
             [&runtime, name](CommandContext&) {
-                return treeCommand(runtime, name, {});
+                return treeCommand(runtime, name);
             });
         catalog.add(std::move(built));
     };
@@ -497,29 +482,7 @@ void registerTreeCommands(CommandCatalog& catalog,
         built.label = "Open Selected";
         built.binding = bindNoArgumentHandler(
             [&runtime](CommandContext&) {
-                return treeCommand(runtime, "tree.activate", {});
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("tree.invoke_node_command", "Invoke Node Command");
-        built.binding = bindOptionalInProcessHandler<TreeCommandInvocation>(
-            [&runtime](CommandContext&,
-                       std::optional<TreeCommandInvocation> const&
-                           invocation) {
-                return treeCommand(
-                    runtime, "tree.invoke_node_command",
-                    invocation ? std::any{*invocation} : std::any{});
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("tree.select", "Select");
-        built.binding = bindWireHandler<TreeSelectArguments>(
-            [&runtime](CommandContext&,
-                       TreeSelectArguments const& arguments) {
-                return treeCommand(runtime, "tree.select",
-                                   std::any{arguments});
+                return treeCommand(runtime, "tree.activate");
             });
         catalog.add(std::move(built));
     }
@@ -542,7 +505,7 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
         auto built = spec(std::move(id), std::move(summary));
         built.binding = bindNoArgumentHandler(
             [&runtime, name](CommandContext&) {
-                return searchCommand(runtime, name, {});
+                return searchCommand(runtime, name);
             });
         if (!label.empty()) built.label = std::move(label);
         catalog.add(std::move(built));
@@ -562,7 +525,7 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
         auto built = spec("palette.close", "Close");
         built.binding = bindNoArgumentHandler(
             [&runtime](CommandContext&) {
-                return searchCommand(runtime, "palette.close", {});
+                return searchCommand(runtime, "palette.close");
             });
         catalog.add(std::move(built));
     }
@@ -571,42 +534,17 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
         auto built = spec("search.workspace", "Workspace");
         built.binding = bindNoArgumentHandler(
             [&runtime](CommandContext&) {
-                return searchCommand(runtime, "search.workspace", {});
+                return searchCommand(runtime, "search.workspace");
             });
         catalog.add(std::move(built));
     }
 
-    // Each jumps to a place the client resolved, which is meaningless to
-    // another process.
-    auto jump = [&](std::string id, std::string label, std::string summary) {
-        auto name = id;
-        auto built = spec(std::move(id), std::move(summary));
-        built.label = std::move(label);
-        built.binding = bindOptionalInProcessHandler<NavigationTarget>(
-            [&runtime, name](
-                CommandContext&,
-                std::optional<NavigationTarget> const& target) {
-                return searchCommand(
-                    runtime, name,
-                    target ? std::any{*target} : std::any{});
-            });
-        catalog.add(std::move(built));
-    };
-    jump("goto.file", "Go to File", "Go to File");
-    jump("goto.symbol", "Go to Symbol", "Go to Symbol");
-
-    // goto.line is not a client-resolved jump: with no argument it opens a
-    // line-number prompt; a string payload goes directly to applyGotoLine.
-    // An absent payload therefore opens the prompt.
     {
         auto built = spec("goto.line", "Go to Line");
         built.label = "Go to Line";
-        built.binding = bindOptionalInProcessHandler<std::string>(
-            [&runtime](CommandContext&,
-                       std::optional<std::string> const& line) {
-                return searchCommand(
-                    runtime, "goto.line",
-                    line ? std::any{*line} : std::any{});
+        built.binding = bindNoArgumentHandler(
+            [&runtime](CommandContext&) {
+                return searchCommand(runtime, "goto.line");
             });
         catalog.add(std::move(built));
     }

@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 169 commands.
+There are 162 commands.
 
 ## clipboard-register
 
@@ -16,14 +16,6 @@ There are 169 commands.
 | `clipboard.copy` | Copy | none | lua |
 | `clipboard.cut` | Cut | none | lua |
 | `clipboard.paste` | Paste | none | lua |
-
-## diff-model
-
-| Command | Summary | Arguments | Surfaces |
-|---|---|---|---|
-| `diff.next_hunk` | Next Hunk | none | lua |
-| `diff.previous_hunk` | Previous Hunk | none | lua |
-| `diff.open_file` | Open File | none | lua |
 
 ## draft-recovery
 
@@ -158,8 +150,6 @@ There are 169 commands.
 | `search.results_previous` | Results Previous | none | lua |
 | `palette.close` | Close | none | lua |
 | `search.workspace` | Workspace | none | lua |
-| `goto.file` | Go to File | none | lua |
-| `goto.symbol` | Go to Symbol | none | lua |
 | `goto.line` | Go to Line | none | lua |
 
 ## selection-navigation
@@ -276,8 +266,6 @@ There are 169 commands.
 | `tree.select_next` | Select Next | none | lua |
 | `tree.select_previous` | Select Previous | none | lua |
 | `tree.activate` | Open Selected | none | lua |
-| `tree.invoke_node_command` | Invoke Node Command | none | lua |
-| `tree.select` | Select | tree node | lua |
 
 ## undo-redo-history
 

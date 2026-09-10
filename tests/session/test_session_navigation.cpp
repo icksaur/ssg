@@ -2077,8 +2077,7 @@ TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
     // Pick a node that is NOT already selected (the third visible node).
     auto const target = nodes[2].nodeId;
 
-    ASSERT_TRUE(runtime.dispatch({"tree.select",
-                                  ssg::TreeSelectArguments{target}}).accepted());
+    ASSERT_TRUE(ssg::selectTreeNode(runtime, target).accepted);
     auto after = projectFrame(runtime, dims);
     ASSERT_TRUE(after.has_value());
     if (!after) return;
@@ -2089,10 +2088,8 @@ TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
             return row.nodeId == target && row.selected;
         }));
 
-    // An id absent from the active provider is rejected; a missing payload too.
-    ASSERT_FALSE(runtime.dispatch({"tree.select",
-                                   ssg::TreeSelectArguments{ssg::TreeNodeId{"nope"}}}).accepted());
-    ASSERT_FALSE(runtime.dispatch({"tree.select",  {}}).accepted());
+    ASSERT_FALSE(
+        ssg::selectTreeNode(runtime, ssg::TreeNodeId{"nope"}).accepted);
     // The selection is unchanged after the rejected attempts.
     auto again = projectFrame(runtime, dims);
     ASSERT_TRUE(again.has_value());
@@ -2153,12 +2150,12 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // From editor focus, tree.select alone moves keyboard focus to the panel.
-    ASSERT_TRUE(runtime.dispatch({"tree.select",  ssg::TreeSelectArguments{*fileId}}).accepted());
+    ASSERT_TRUE(ssg::selectTreeNode(runtime, *fileId).accepted);
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     // The directory click pair ends on the panel (tree.select focuses the panel,
     // tree.activate toggles the directory and leaves focus alone).
-    ASSERT_TRUE(runtime.dispatch({"tree.select",  ssg::TreeSelectArguments{*dirId}}).accepted());
+    ASSERT_TRUE(ssg::selectTreeNode(runtime, *dirId).accepted);
     ASSERT_TRUE(runtime.dispatch({"tree.activate",  {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     std::filesystem::remove_all(root);
@@ -2406,38 +2403,24 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     // "3" is 1-based, so the caret lands on line index 2.
-    ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line",  std::string{"3"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyGotoLine(*runtime, "3").accepted);
     ASSERT_EQ(gotoCaretLine(*runtime), 2U);
     // A number past the end clamps to the last line (index 4).
-    ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line",  std::string{"999"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyGotoLine(*runtime, "999").accepted);
     ASSERT_EQ(gotoCaretLine(*runtime), 4U);
     // "1" is the first line.
-    ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line",  std::string{"1"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyGotoLine(*runtime, "1").accepted);
     ASSERT_EQ(gotoCaretLine(*runtime), 0U);
     // Below the range clamps to the first line rather than failing: "0" and a
     // negative both go to line 1 (index 0). Move off line 0 between each so a
     // no-op could not masquerade as a successful clamp.
-    ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line",  std::string{"4"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyGotoLine(*runtime, "4").accepted);
     ASSERT_EQ(gotoCaretLine(*runtime), 3U);
-    ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line",  std::string{"0"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyGotoLine(*runtime, "0").accepted);
     ASSERT_EQ(gotoCaretLine(*runtime), 0U);
-    ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line",  std::string{"4"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyGotoLine(*runtime, "4").accepted);
     ASSERT_EQ(gotoCaretLine(*runtime), 3U);
-    ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line",  std::string{"-7"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyGotoLine(*runtime, "-7").accepted);
     ASSERT_EQ(gotoCaretLine(*runtime), 0U);
 }
 
@@ -2445,15 +2428,10 @@ TEST(gotoLineRejectsNonNumericInput) {
     auto runtime = gotoLineRuntime();
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line",  std::string{"3"}})
-                    .accepted());
+    ASSERT_TRUE(ssg::applyGotoLine(*runtime, "3").accepted);
     ASSERT_EQ(gotoCaretLine(*runtime), 2U);
     for (const auto* bad : {"abc", "2x", "1.5", ""}) {
-        ASSERT_FALSE(runtime
-                         ->dispatch({"goto.line",
-                                     std::string{bad}})
-                         .accepted());
+        ASSERT_FALSE(ssg::applyGotoLine(*runtime, bad).accepted);
     }
     // The rejected inputs never moved the caret.
     ASSERT_EQ(gotoCaretLine(*runtime), 2U);
@@ -2569,19 +2547,19 @@ TEST(filesTreeLoadsOneLevelBelowVisibleDirectories) {
     std::filesystem::remove_all(root);
 }
 
-ssg::ClientCommand gotoFile(std::string path, std::size_t line,
-                            std::size_t column) {
-    return {"goto.file",
-            std::any{ssg::NavigationTarget{.path = std::move(path),
-                                           .line = ssg::LineIndex{line},
-                                           .column = column}}};
+ssg::CommandHandlerResult gotoFile(ssg::Editor& runtime, std::string path,
+                                   std::size_t line, std::size_t column) {
+    return ssg::navigateTo(
+        runtime, ssg::NavigationTarget{.path = std::move(path),
+                                       .line = ssg::LineIndex{line},
+                                       .column = column});
 }
 
 TEST(gotoFileOpensFileAndPlacesCursorAtLineAndColumn) {
     auto runtime = gotoFileRuntime();
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch(gotoFile("a.txt", 1, 2)).accepted());
+    ASSERT_TRUE(gotoFile(*runtime, "a.txt", 1, 2).accepted);
     ASSERT_EQ(activeSavedPath(*runtime), std::optional<std::string>{"a.txt"});
     // "one\n" is four bytes, so line 1 column 2 is byte 5.
     ASSERT_EQ(caretByteOffset(*runtime), std::uint64_t{5});
@@ -2597,7 +2575,7 @@ TEST(gotoFileWithMissingPathLeavesStateUnchanged) {
     const auto openCount = runtime->workspace.documents().size();
     const auto caret = caretByteOffset(*runtime);
 
-    ASSERT_FALSE(runtime->dispatch(gotoFile("absent.txt", 0, 1)).accepted());
+    ASSERT_FALSE(gotoFile(*runtime, "absent.txt", 0, 1).accepted);
     ASSERT_EQ(runtime->activeDocumentId(), document);
     ASSERT_EQ(runtime->workspace.documents().size(), openCount);
     ASSERT_EQ(caretByteOffset(*runtime), caret);
@@ -2608,14 +2586,14 @@ TEST(gotoFileWithOutOfRangeLineLeavesStateUnchanged) {
     auto runtime = gotoFileRuntime();
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch(gotoFile("a.txt", 1, 1)).accepted());
+    ASSERT_TRUE(gotoFile(*runtime, "a.txt", 1, 1).accepted);
     const auto document = runtime->activeDocumentId();
     const auto openCount = runtime->workspace.documents().size();
     const auto caret = caretByteOffset(*runtime);
 
     // "beta\n" has two lines, so index 9 is past the end. The failure must not
     // open b.txt, move the caret, or extend the history.
-    ASSERT_FALSE(runtime->dispatch(gotoFile("b.txt", 9, 1)).accepted());
+    ASSERT_FALSE(gotoFile(*runtime, "b.txt", 9, 1).accepted);
     ASSERT_EQ(runtime->activeDocumentId(), document);
     ASSERT_EQ(runtime->workspace.documents().size(), openCount);
     ASSERT_EQ(caretByteOffset(*runtime), caret);
@@ -2626,13 +2604,13 @@ TEST(gotoFileWithOutOfRangeColumnLeavesStateUnchanged) {
     auto runtime = gotoFileRuntime();
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch(gotoFile("a.txt", 1, 1)).accepted());
+    ASSERT_TRUE(gotoFile(*runtime, "a.txt", 1, 1).accepted);
     const auto document = runtime->activeDocumentId();
     const auto openCount = runtime->workspace.documents().size();
     const auto caret = caretByteOffset(*runtime);
 
     // "beta" is four bytes, so column 6 is past its end.
-    ASSERT_FALSE(runtime->dispatch(gotoFile("b.txt", 0, 6)).accepted());
+    ASSERT_FALSE(gotoFile(*runtime, "b.txt", 0, 6).accepted);
     ASSERT_EQ(runtime->activeDocumentId(), document);
     ASSERT_EQ(runtime->workspace.documents().size(), openCount);
     ASSERT_EQ(caretByteOffset(*runtime), caret);
@@ -2644,12 +2622,12 @@ TEST(gotoFileSnapsColumnToGraphemeBoundary) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     // Column 2 is byte 1, inside the two-byte alpha at bytes 0-1.
-    ASSERT_TRUE(runtime->dispatch(gotoFile("wide.txt", 0, 2)).accepted());
+    ASSERT_TRUE(gotoFile(*runtime, "wide.txt", 0, 2).accepted);
     ASSERT_EQ(activeSavedPath(*runtime),
               std::optional<std::string>{"wide.txt"});
     ASSERT_EQ(caretByteOffset(*runtime), std::uint64_t{0});
     // Column 3 is byte 2, the start of beta, and is already a boundary.
-    ASSERT_TRUE(runtime->dispatch(gotoFile("wide.txt", 0, 3)).accepted());
+    ASSERT_TRUE(gotoFile(*runtime, "wide.txt", 0, 3).accepted);
     ASSERT_EQ(caretByteOffset(*runtime), std::uint64_t{2});
 }
 
@@ -2657,9 +2635,9 @@ TEST(gotoBackAndForwardApplyTransitions) {
     auto runtime = gotoFileRuntime();
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch(gotoFile("a.txt", 0, 1)).accepted());
-    ASSERT_TRUE(runtime->dispatch(gotoFile("b.txt", 0, 1)).accepted());
-    ASSERT_TRUE(runtime->dispatch(gotoFile("c.txt", 0, 1)).accepted());
+    ASSERT_TRUE(gotoFile(*runtime, "a.txt", 0, 1).accepted);
+    ASSERT_TRUE(gotoFile(*runtime, "b.txt", 0, 1).accepted);
+    ASSERT_TRUE(gotoFile(*runtime, "c.txt", 0, 1).accepted);
     ASSERT_EQ(activeSavedPath(*runtime), std::optional<std::string>{"c.txt"});
 
     ASSERT_TRUE(runtime->dispatch({"goto.back", {}}).accepted());
