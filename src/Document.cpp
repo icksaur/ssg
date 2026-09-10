@@ -21,7 +21,6 @@ bool isContinuation(unsigned char byte) {
 }
 
 bool validUtf8WithoutNul(std::string_view text) {
-    noteUtf8Validation();
     std::size_t offset = 0;
     while (offset < text.size()) {
         const auto first = static_cast<unsigned char>(text[offset]);

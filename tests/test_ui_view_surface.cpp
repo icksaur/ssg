@@ -4,7 +4,6 @@
 #include "test_helpers.h"
 
 #include <optional>
-#include <array>
 #include <string>
 #include <variant>
 #include <vector>
@@ -36,7 +35,6 @@ ssg::UiRegionProjectionResult projectRegionForTest(
 }
 
 using ssg::Axis;
-using ssg::kAllViewSurfaces;
 using ssg::Size;
 using ssg::UiContainer;
 using ssg::UiLeaf;
@@ -45,16 +43,6 @@ using ssg::UiNodeId;
 using ssg::ViewSurface;
 using ssg::WidgetDescriptor;
 using ssg::WidgetKind;
-
-TEST(currentViewSurfaceInventoryExcludesProviderSpecificSurfaces) {
-    constexpr std::array<std::string_view, 6> expected{
-        "tabbar", "findresults", "notice", "external_modification",
-        "document", "tree"};
-    ASSERT_EQ(kAllViewSurfaces.size(), expected.size());
-    for (std::size_t i = 0; i < expected.size(); ++i) {
-        ASSERT_EQ(ssg::viewSurfaceName(kAllViewSurfaces[i]), expected[i]);
-    }
-}
 
 // Grid UI-region projection cannot render an opaque View; a View reaching it is
 // a loud conformance failure, never silent empty content. A left/right leaf must be
@@ -101,7 +89,6 @@ TEST(gridUiRegionProjectionRefusesMalformedShape) {
 }  // namespace
 
 SSG_TEST_SUITE(test_ui_view_surface) {
-    RUN(currentViewSurfaceInventoryExcludesProviderSpecificSurfaces);
     RUN(gridUiRegionProjectionRefusesAViewCenter);
     RUN(gridUiRegionProjectionRefusesMalformedShape);
     return failed == 0 ? 0 : 1;

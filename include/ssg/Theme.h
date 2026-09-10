@@ -183,7 +183,6 @@ struct ThemeSetResult {
 // Theme.cpp -- see that file's header comment.
 [[nodiscard]] ThemeSnapshot defaultTheme() noexcept;
 
-[[nodiscard]] std::string_view semanticRoleName(SemanticRole role);
 [[nodiscard]] std::optional<SemanticRole> semanticRoleFromName(std::string_view name);
 [[nodiscard]] std::optional<SyntaxScope> syntaxScopeFromName(std::string_view name);
 

@@ -2052,9 +2052,8 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
         auto const present =
             emitted.count(encode(theme.color(role))) != 0;
         if (!present) {
-            std::printf("  role never painted: %.*s\n",
-                        static_cast<int>(ssg::semanticRoleName(role).size()),
-                        ssg::semanticRoleName(role).data());
+            std::printf("  role never painted: %u\n",
+                        static_cast<unsigned>(role));
         }
         ASSERT_TRUE(present);
     }

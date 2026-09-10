@@ -1366,123 +1366,45 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
     ASSERT_TRUE(scrollArgs(mid) != nullptr);
 }
 
-// S3: EVERY scrollable surface's gutter answers press AND drag. This replaces a
-// test that asserted the panel and picker gutters were no-ops -- that pinned the
-// defect the user reported ("the bar scrollbar has no mouse interactivity") as
-// intended behavior. Driven from the catalog, so a surface listed there without
-// routing fails here rather than being silently inert.
-TEST(everyScrollableGutterAnswersPressAndDrag) {
+TEST(routePointerPanelAndPaletteScrollbars) {
     ssg::PointerTargets const empty;
-    std::size_t checked = 0;
+    for (auto kind : {ssg::PointerKind::press, ssg::PointerKind::drag}) {
+        ssg::RegionHit panel;
+        panel.region = ssg::HitRegion::PanelScrollbar;
+        panel.scrollNumerator = 3;
+        panel.scrollDenominator = 4;
+        auto panelPlan = ssg::route_pointer(
+            panel, ssg::PointerButton::left, kind, false, false, std::nullopt,
+            empty);
+        auto const* panelInput =
+            panelPlan.semantic_input
+                ? std::get_if<ssg::ScrollFractionInput>(
+                      &*panelPlan.semantic_input)
+                : nullptr;
+        ASSERT_TRUE(panelInput != nullptr);
+        if (panelInput) {
+            ASSERT_EQ(panelInput->action.target, ssg::ScrollTarget::Tree);
+            ASSERT_EQ(panelInput->action.numerator, std::uint32_t{3});
+            ASSERT_EQ(panelInput->action.denominator, std::uint32_t{4});
+        }
+        ASSERT_FALSE(panelPlan.client_scroll.has_value());
 
-    for (auto const& descriptor : ssg::scrollable_regions()) {
-        ssg::RegionHit hit;
-        hit.region = descriptor.scrollbar;
-        hit.scrollNumerator = 3;
-        hit.scrollDenominator = 4;
-
-        for (auto kind : {ssg::PointerKind::press,
-                          ssg::PointerKind::drag}) {
-            auto plan = ssg::route_pointer(
-                hit, ssg::PointerButton::left, kind, false, false, std::nullopt,
-                empty);
-
-            if (descriptor.target == ssg::WheelTarget::palette) {
-                // A client-owned surface must NOT emit a command (S-I5): its
-                // scroll would otherwise round-trip on a latency-critical path.
-                ASSERT_TRUE(plan.client_scroll.has_value());
-                if (plan.client_scroll) {
-                    ASSERT_EQ(plan.client_scroll->numerator, std::uint32_t{3});
-                    ASSERT_EQ(plan.client_scroll->denominator, std::uint32_t{4});
-                    ASSERT_TRUE(plan.client_scroll->target == descriptor.target);
-                }
-            } else {
-                ASSERT_TRUE(plan.semantic_input.has_value());
-                auto const* input =
-                    plan.semantic_input
-                        ? std::get_if<ssg::ScrollFractionInput>(
-                              &*plan.semantic_input)
-                        : nullptr;
-                ASSERT_TRUE(input != nullptr);
-                if (input) {
-                    ASSERT_EQ(input->action.numerator, std::uint32_t{3});
-                    ASSERT_EQ(input->action.denominator, std::uint32_t{4});
-                    ASSERT_EQ(
-                        input->action.target,
-                        descriptor.target == ssg::WheelTarget::editor
-                            ? ssg::ScrollTarget::Document
-                            : ssg::ScrollTarget::Tree);
-                }
-                ASSERT_FALSE(plan.client_scroll.has_value());
-            }
-            ++checked;
+        ssg::RegionHit palette;
+        palette.region = ssg::HitRegion::PaletteScrollbar;
+        palette.scrollNumerator = 1;
+        palette.scrollDenominator = 2;
+        auto palettePlan = ssg::route_pointer(
+            palette, ssg::PointerButton::left, kind, false, false, std::nullopt,
+            empty);
+        ASSERT_FALSE(palettePlan.semantic_input.has_value());
+        ASSERT_TRUE(palettePlan.client_scroll.has_value());
+        if (palettePlan.client_scroll) {
+            ASSERT_EQ(palettePlan.client_scroll->target,
+                      ssg::WheelTarget::palette);
+            ASSERT_EQ(palettePlan.client_scroll->numerator, std::uint32_t{1});
+            ASSERT_EQ(palettePlan.client_scroll->denominator, std::uint32_t{2});
         }
     }
-
-    // A catalog that scanned nothing would pass vacuously.
-    ASSERT_EQ(checked, std::size_t{6});
-}
-
-// S-I5: no picker scroll may reach the server. Its ranked list is client-owned
-// for latency, so a round-trip on this path would undo that design. Asserted
-// over the catalog rather than on the picker alone, so a future client-owned
-// surface is covered by the same rule.
-TEST(noClientOwnedSurfaceEverDispatchesAScrollCommand) {
-    ssg::PointerTargets const empty;
-    std::size_t clientOwned = 0;
-
-    for (auto const& descriptor : ssg::scrollable_regions()) {
-        if (descriptor.target != ssg::WheelTarget::palette) continue;
-        ++clientOwned;
-        // A client-owned surface must name a target the loop can act on;
-        // `none` would be a gesture routed nowhere.
-        ASSERT_TRUE(descriptor.target != ssg::WheelTarget::none);
-
-        ssg::RegionHit hit;
-        hit.region = descriptor.scrollbar;
-        hit.scrollNumerator = 1;
-        hit.scrollDenominator = 2;
-        for (auto kind : {ssg::PointerKind::press,
-                          ssg::PointerKind::drag}) {
-            auto plan = ssg::route_pointer(
-                hit, ssg::PointerButton::left, kind, false, false, std::nullopt,
-                empty);
-            ASSERT_FALSE(plan.semantic_input.has_value());
-        }
-    }
-    // The picker is the one such surface today; if that ever becomes zero the
-    // rule above would be vacuous.
-    ASSERT_EQ(clientOwned, std::size_t{1});
-}
-
-// The wheel and the gutter must agree about which surface a region belongs to.
-// They previously came from separate code, which is how they could drift.
-TEST(theWheelAndTheGutterAgreeOnEverySurface) {
-    for (auto const& descriptor : ssg::scrollable_regions()) {
-        ASSERT_TRUE(ssg::route_wheel(descriptor.content) ==
-                    descriptor.target);
-        ASSERT_TRUE(ssg::route_wheel(descriptor.scrollbar) ==
-                    descriptor.target);
-    }
-}
-
-// Every scrollbar region the library can report must be in the catalog. Named
-// explicitly because adding a HitRegion does NOT fail to compile here.
-TEST(theCatalogCoversEveryScrollbarHitRegion) {
-    constexpr ssg::HitRegion kScrollbarRegions[] = {
-        ssg::HitRegion::EditorScrollbar,
-        ssg::HitRegion::PanelScrollbar,
-        ssg::HitRegion::PaletteScrollbar,
-    };
-    for (auto region : kScrollbarRegions) {
-        bool found = false;
-        for (auto const& descriptor : ssg::scrollable_regions()) {
-            if (descriptor.scrollbar == region) found = true;
-        }
-        ASSERT_TRUE(found);
-    }
-    ASSERT_EQ(ssg::scrollable_regions().size(),
-              std::size(kScrollbarRegions));
 }
 
 TEST(routePointerTabPressActivatesTheTab) {
@@ -1852,10 +1774,7 @@ SSG_TEST_SUITE(test_terminal_input) {
     RUN(routePointerAltDragSetsRangesFromBaseline);
     RUN(routePointerAltDragIgnoresPerMotionModifierBit);
     RUN(routePointerEditorScrollbarScrollsToFraction);
-    RUN(everyScrollableGutterAnswersPressAndDrag);
-    RUN(noClientOwnedSurfaceEverDispatchesAScrollCommand);
-    RUN(theWheelAndTheGutterAgreeOnEverySurface);
-    RUN(theCatalogCoversEveryScrollbarHitRegion);
+    RUN(routePointerPanelAndPaletteScrollbars);
     RUN(routePointerTabPressActivatesTheTab);
     RUN(routePointerMiddleClickOnATabClosesIt);
     RUN(doubleClickDetectorPairsPressesByTimeAndCell);

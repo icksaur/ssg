@@ -94,11 +94,6 @@ ThemeSetResult ThemeSnapshot::withOverrides(
     return {std::nullopt, next};
 }
 
-std::string_view semanticRoleName(SemanticRole role) {
-    if (!valid(role)) throw std::invalid_argument("semantic role is not recognized");
-    return kSemanticNames[position(role)];
-}
-
 std::optional<SemanticRole> semanticRoleFromName(std::string_view name) {
     for (std::size_t index = 0; index < kSemanticNames.size(); ++index) {
         if (kSemanticNames[index] == name) return kAllSemanticRoles[index];

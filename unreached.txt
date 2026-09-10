@@ -1,7 +1,0 @@
-ssg::resetUtf8ValidationCalls()	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o
-ssg::scrollable_regions()	CMakeFiles/ssg_terminal_objects.dir/src/pointer_routing.cpp.o
-ssg::semanticRoleName(ssg::SemanticRole)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
-ssg::textEncodingViewState(ssg::DecodedText const&)	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o
-ssg::utf8ValidationCalls()	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o
-ssg::viewSurfaceName(ssg::ViewSurface)	CMakeFiles/ssg_core.dir/src/Widget.cpp.o
-ssg::widgetKindName(ssg::WidgetKind)	CMakeFiles/ssg_core.dir/src/Widget.cpp.o

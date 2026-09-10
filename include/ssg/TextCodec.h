@@ -14,10 +14,6 @@
 
 namespace ssg {
 
-void noteUtf8Validation();
-[[nodiscard]] std::uint64_t utf8ValidationCalls();
-void resetUtf8ValidationCalls();
-
 enum class LineTerminator : std::uint8_t {
     None,
     Lf,
@@ -123,22 +119,12 @@ struct EncodeTextResult {
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
 };
 
-struct TextEncodingViewState {
-    TextEncodingStatus status;
-
-    friend bool operator==(const TextEncodingViewState&,
-                           const TextEncodingViewState&) = default;
-};
-
 [[nodiscard]] DecodeTextResult decodeText(std::span<const std::uint8_t> bytes);
 [[nodiscard]] DecodeTextResult decodeText(
     std::span<const std::uint8_t> bytes, TextEncoding encoding);
 [[nodiscard]] EncodeTextResult encodeText(const DecodedText& text);
 [[nodiscard]] EncodeTextResult encodeText(
     const DecodedText& text, EncodeTextOptions options);
-[[nodiscard]] TextEncodingViewState textEncodingViewState(
-    const DecodedText& text) noexcept;
-
 struct ReopenWithEncodingArguments {
     TextEncoding encoding = TextEncoding::Utf8;
     bool operator==(const ReopenWithEncodingArguments&) const = default;

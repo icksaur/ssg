@@ -18,7 +18,6 @@
 #include <chrono>
 #include <optional>
 #include <string>
-#include <span>
 #include <string_view>
 #include <vector>
 
@@ -32,24 +31,6 @@ enum class WheelTarget : std::uint8_t {
     tree,     // dispatch tree.scroll (the side panel)
     palette,  // scroll the client-owned palette window (no command)
 };
-
-// A scrollable surface, for the routing that must treat all of them alike.
-//
-// A table rather than a `switch`, because a switch over `HitRegion` does NOT
-// fail to compile when a region is added -- verified by perturbation, this
-// build does not enable -Wswitch. Two of the three gutters were already
-// forgotten once; the exhaustiveness test over this table is what stops it
-// happening again.
-struct ScrollableRegionDescriptor {
-    ssg::HitRegion content;
-    ssg::HitRegion scrollbar;
-    WheelTarget target;
-};
-
-// Every scrollable surface. Routing drives from this, so listing a surface here
-// is what wires it, and the exhaustiveness test fails if one is not routed.
-[[nodiscard]] std::span<const ScrollableRegionDescriptor>
-scrollable_regions() noexcept;
 
 // Whether `region` is a scrollbar gutter, from that same list -- so a caller
 // deciding "did this press start a thumb drag" cannot fall out of step with the
@@ -94,7 +75,7 @@ struct ClickTracker {
     std::chrono::milliseconds window) noexcept;
 
 // A gutter gesture the CALLER must apply to a client-owned offset, because no
-// server command may be dispatched for it (see ScrollableRegionDescriptor).
+// server command may be dispatched for it.
 struct ClientScroll {
     WheelTarget target = WheelTarget::none;
     std::uint32_t numerator = 0;

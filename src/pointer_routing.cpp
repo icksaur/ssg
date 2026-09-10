@@ -9,6 +9,12 @@
 namespace ssg {
 namespace {
 
+struct ScrollableRegionDescriptor {
+    ssg::HitRegion content;
+    ssg::HitRegion scrollbar;
+    WheelTarget target;
+};
+
 // The one list of scrollable surfaces. `route_pointer` and `route_wheel` both
 // drive from it, so a surface cannot be wired for one gesture and forgotten for
 // the other -- which is exactly how the panel and picker gutters ended up
@@ -52,10 +58,6 @@ PointerDispatch gutterScroll(ScrollableRegionDescriptor const& descriptor,
 }
 
 }  // namespace
-
-std::span<const ScrollableRegionDescriptor> scrollable_regions() noexcept {
-    return kScrollableRegions;
-}
 
 bool is_scrollbar_region(ssg::HitRegion region) noexcept {
     return gutterRegion(region) != nullptr;

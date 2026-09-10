@@ -6,16 +6,6 @@
 namespace ssg {
 namespace {
 
-thread_local std::uint64_t utf8ValidationCount = 0;
-
-}
-
-void noteUtf8Validation() { ++utf8ValidationCount; }
-std::uint64_t utf8ValidationCalls() { return utf8ValidationCount; }
-void resetUtf8ValidationCalls() { utf8ValidationCount = 0; }
-
-namespace {
-
 struct Scalar {
     char32_t value;
     std::size_t utf8Offset;
@@ -50,7 +40,6 @@ void appendUtf8(std::string& output, char32_t value) {
 
 ScalarResult decodeUtf8(std::span<const std::uint8_t> input,
                          std::size_t baseOffset = 0) {
-    noteUtf8Validation();
     ScalarResult result;
     for (std::size_t index = 0; index < input.size();) {
         const auto start = index;
@@ -251,7 +240,6 @@ std::span<const std::uint8_t> skip(
 DecodeTextResult decodeUtf8Fused(std::span<const std::uint8_t> input,
                                    std::size_t baseOffset,
                                    TextEncoding encoding, bool hadBom) {
-    noteUtf8Validation();
     DecodedText text;
     text.status.encoding = encoding;
     text.status.hadBom = hadBom;
@@ -562,11 +550,6 @@ EncodeTextResult encodeText(const DecodedText& text,
         }
     }
     return result;
-}
-
-TextEncodingViewState textEncodingViewState(
-    const DecodedText& text) noexcept {
-    return {text.status};
 }
 
 } // namespace ssg

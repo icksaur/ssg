@@ -28,6 +28,15 @@ constexpr std::array<std::string_view, ssg::kSyntaxScopeCount> kSyntaxNames{
     "plain_text", "comment", "keyword", "string", "number", "type",
     "function", "variable", "operator", "punctuation", "invalid",
 };
+constexpr std::array<std::string_view, ssg::kSemanticRoleCount> kSemanticNames{
+    "text", "canvas", "caret", "selection", "tree_background", "tree_focus",
+    "tab_active", "tab_inactive", "panel_active", "panel_inactive", "header",
+    "footer", "status_info", "status_warning", "line_number", "search_match",
+    "prompt", "scrollbar_track", "scrollbar_thumb", "diff_added", "diff_removed",
+    "diff_modified", "tab_inactive_background", "header_background",
+    "footer_background", "current_line_number", "current_line_number_background",
+    "line_number_background",
+};
 
 std::string_view syntaxName(SyntaxScope scope) {
     return kSyntaxNames[static_cast<std::size_t>(scope)];
@@ -49,8 +58,9 @@ std::string hexOf(SrgbColor color) {
 ssg::ThemeSetArguments fullIdentityTable(ssg::ThemeSnapshot const& theme) {
     ssg::ThemeSetArguments arguments;
     for (const auto role : ssg::kAllSemanticRoles) {
-        arguments.colors.emplace(std::string{ssg::semanticRoleName(role)},
-                                 hexOf(theme.color(role)));
+        arguments.colors.emplace(
+            std::string{kSemanticNames[static_cast<std::size_t>(role)]},
+            hexOf(theme.color(role)));
     }
     for (const auto scope : ssg::kAllSyntaxScopes) {
         arguments.colors.emplace(std::string{syntaxName(scope)},
