@@ -104,7 +104,7 @@ ssg::PaletteReport projectReport(
 // The published candidate list for an open palette, straight from the runtime.
 std::vector<ssg::PaletteCandidate> publishedCandidates(
     ssg::Editor& runtime) {
-    ASSERT_TRUE(runtime.dispatch({"palette.open",  {}})
+    ASSERT_TRUE(runtime.dispatch("palette.open")
                     .accepted());
     auto snapshot = ssg::test::projectGridFrame(runtime);
     if (!snapshot) return {};
@@ -244,7 +244,7 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     if (!runtime) return;
     ASSERT_TRUE(ssg::test::openFile(*runtime, std::string{"alpha.txt"})
                     .accepted());
-    ASSERT_TRUE(runtime->dispatch({"palette.open",  {}})
+    ASSERT_TRUE(runtime->dispatch("palette.open")
                     .accepted());
     // The client derived view (query/ghost/rows/selection) is reported as input;
     // the library builds the rendered projection.
@@ -293,18 +293,13 @@ TEST(inMemorySnapshotsPublishTheUiVm) {
     if (!runtime) return;
     ssg::ViewportDimensions const dims{80, 24};
 
-    struct Step {
-        std::string command;
-        std::any payload;
-    };
-    std::vector<Step> const script{
-        {"cursor.right", {}},
-        {"cursor.line_down", {}},
-        {"select.line_down", {}},
-        {"panel.toggle", {}},
-        {"view.scroll_lines", ssg::ScrollLinesArguments{1}},
-        {"goto.line", {}},
-        {"prompt.cancel", {}},
+    std::vector<std::string> const script{
+        "cursor.right",
+        "cursor.line_down",
+        "select.line_down",
+        "panel.toggle",
+        "goto.line",
+        "prompt.cancel",
     };
 
     ASSERT_TRUE(ssg::test::openFile(*runtime, "alpha.txt").accepted());
@@ -313,7 +308,7 @@ TEST(inMemorySnapshotsPublishTheUiVm) {
     if (!previous) return;
 
     for (auto const& step : script) {
-        (void)runtime->dispatch({step.command,  step.payload});
+        (void)runtime->dispatch(step);
         auto fresh = ssg::test::projectGridFrame(*runtime, dims);
         ASSERT_TRUE(fresh.has_value());
         if (!fresh) break;

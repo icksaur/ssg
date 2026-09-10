@@ -202,7 +202,7 @@ TEST(editingAndSavingARestoredDraftRoundTripsCoherently) {
     ASSERT_TRUE(activeTabDirty(runtime));
     // ...and a save must write CRLF back to disk, proving decoded's terminator
     // convention survived the restore.
-    ASSERT_TRUE(runtime.dispatch({"file.save",  {}})
+    ASSERT_TRUE(runtime.dispatch("file.save")
                     .accepted());
     ASSERT_FALSE(activeTabDirty(runtime));
     ASSERT_NE(readText(root / "workspace" / "note.txt").find("\r\n"),
@@ -247,7 +247,7 @@ TEST(draftDiffOnAConflictShowsDraftAgainstDiskHunks) {
     ASSERT_TRUE(reopenNote(runtime));
 
 
-    ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
+    ASSERT_TRUE(runtime.dispatch("draft.diff")
                     .accepted());
     // The diff is its own derived tab, distinct from the still-dirty draft.
     ASSERT_TRUE(activeTabIsLiveDiff(runtime));
@@ -272,7 +272,7 @@ TEST(draftDiffWithDiskMissingDiffsDraftAgainstEmpty) {
     // The file vanishes after the draft is open: draft.diff must still succeed,
     // diffing the draft against empty rather than failing.
     std::filesystem::remove(root / "workspace" / "note.txt");
-    ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
+    ASSERT_TRUE(runtime.dispatch("draft.diff")
                     .accepted());
     ASSERT_TRUE(activeTabIsLiveDiff(runtime));
     ASSERT_NE(ssg::test::activeDocumentText(runtime).find("!hi"), std::string::npos);
@@ -291,12 +291,12 @@ TEST(draftDiffSurvivesAGitScanThatDoesNotMentionTheFile) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime));
-    ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
+    ASSERT_TRUE(runtime.dispatch("draft.diff")
                     .accepted());
     ASSERT_TRUE(activeTabIsLiveDiff(runtime));
     // Pause follow-edits so the scan does not auto-navigate to the git-changed
     // file; this test is about the draft entry surviving, not follow behavior.
-    ASSERT_TRUE(runtime.dispatch({"follow_edits.pause",  {}})
+    ASSERT_TRUE(runtime.dispatch("follow_edits.pause")
                     .accepted());
 
     // A git scan that finds unrelated changes (not note.txt) arrives.
@@ -327,7 +327,7 @@ TEST(draftDiscardArchivesTheDraftAndLoadsDiskContent) {
     ASSERT_TRUE(reopenNote(runtime));
 
 
-    ASSERT_TRUE(runtime.dispatch({"draft.discard",  {}})
+    ASSERT_TRUE(runtime.dispatch("draft.discard")
                     .accepted());
 
     // (a)+(b): the buffer now holds disk content, is clean, notice cleared.
@@ -356,7 +356,7 @@ TEST(discardedDraftIsRemovedFromScratchSoReopenIsClean) {
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime));
-        ASSERT_TRUE(runtime.dispatch({"draft.discard",  {}})
+        ASSERT_TRUE(runtime.dispatch("draft.discard")
                         .accepted());
     }
     // A fresh session over the same store must find no draft to recover.
@@ -377,7 +377,7 @@ TEST(draftDiscardRefusesACleanSavedDocument) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     // Nothing unsaved: discard must refuse rather than archive an empty change.
-    ASSERT_FALSE(runtime.dispatch({"draft.discard",  {}})
+    ASSERT_FALSE(runtime.dispatch("draft.discard")
                      .accepted());
     ASSERT_TRUE(archivedDrafts(root).empty());
 }
@@ -412,7 +412,7 @@ TEST(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, relKey).accepted);
     // Discard must succeed and produce exactly one bounded-name archive entry.
-    ASSERT_TRUE(runtime.dispatch({"draft.discard",  {}})
+    ASSERT_TRUE(runtime.dispatch("draft.discard")
                     .accepted());
     const auto archived = archivedDrafts(root);
     ASSERT_EQ(archived.size(), std::size_t{1});
@@ -526,7 +526,7 @@ TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
     ASSERT_TRUE(gridActions == semanticActions);
 
     // Dismiss clears BOTH projections together.
-    ASSERT_TRUE(runtime.dispatch({"draft.dismiss",  {}})
+    ASSERT_TRUE(runtime.dispatch("draft.dismiss")
                     .accepted());
     auto cleared = ssg::test::projectGridFrame(runtime, dims);
     ASSERT_TRUE(cleared.has_value());
@@ -648,7 +648,7 @@ TEST(dismissRefusesWhenThereIsNoConflictNotice) {
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime));
 
-    ASSERT_FALSE(runtime.dispatch({"draft.dismiss",  {}})
+    ASSERT_FALSE(runtime.dispatch("draft.dismiss")
                      .accepted());
     // The restored state is untouched.
 
@@ -666,7 +666,7 @@ TEST(liveDiffVirtualDocumentIsNotAutosavedAsADraft) {
     ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     // A clean file with a live-diff tab open: nothing dirty to draft. The diff
     // virtual doc must NOT be flushed.
-    ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
+    ASSERT_TRUE(runtime.dispatch("draft.diff")
                     .accepted());
     ASSERT_TRUE(activeTabIsLiveDiff(runtime));
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
@@ -683,7 +683,7 @@ TEST(liveDiffTabDoesNotInflateTheDirtyDocumentFlushCount) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
-    ASSERT_TRUE(runtime.dispatch({"draft.diff",  {}})
+    ASSERT_TRUE(runtime.dispatch("draft.diff")
                     .accepted());
     ASSERT_TRUE(activeTabIsLiveDiff(runtime));
     // Exactly the real document, not the diff virtual doc too.
@@ -788,7 +788,7 @@ TEST(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     // The session starts on an empty untitled buffer; draft.diff must refuse it.
-    ASSERT_FALSE(runtime.dispatch({"draft.diff",  {}})
+    ASSERT_FALSE(runtime.dispatch("draft.diff")
                      .accepted());
 }
 
@@ -843,7 +843,7 @@ TEST(openEditSaveRoundTripsRealDiskBytes) {
     ASSERT_TRUE(insert.accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"!hello"});
 
-    auto save = runtime.dispatch({"file.save",  {}});
+    auto save = runtime.dispatch("file.save");
     ASSERT_TRUE(save.accepted());
     ASSERT_EQ(readText(root / "workspace" / "note.txt"), std::string{"!hello"});
 }
@@ -891,7 +891,7 @@ TEST(encodingDispatchMatchesEncodeOracleAndSavedBytes) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
 
-    ASSERT_TRUE(runtime.dispatch({"file.save",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("file.save").accepted());
     ASSERT_EQ(readBytes(root / "workspace" / "note.txt"), expected.bytes);
 }
 
@@ -933,13 +933,13 @@ TEST(closingTheLastTabClearsTheEditorDocument) {
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"beta"});
 
     // Closing one tab switches to the remaining tab's document (still shown).
-    ASSERT_TRUE(runtime.dispatch({"tab.close",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("tab.close").accepted());
     ASSERT_EQ(tabCount(), std::size_t{1});
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"alpha"});
 
     // Closing the last tab must clear the editor document (empty state), not
     // leave a phantom document with no tab.
-    ASSERT_TRUE(runtime.dispatch({"tab.close",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("tab.close").accepted());
     ASSERT_EQ(tabCount(), std::size_t{0});
     ASSERT_TRUE(ssg::test::activeDocumentText(runtime).empty());
     auto snapshot = ssg::test::projectGridFrame(runtime);
@@ -967,8 +967,8 @@ TEST(tabActivateFocusesTheEditor) {
 
     // Move focus to the panel, then activating a tab (a tab click) returns focus
     // to the editor.
-    ASSERT_TRUE(runtime.dispatch({"panel.toggle",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"panel.focus",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.toggle").accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.focus").accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     auto first = ssg::test::projectGridFrame(runtime)->tabs.tabs.front().id;
@@ -1002,16 +1002,16 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     ASSERT_EQ(firstRow(), 50U);
 
     // Switch to A (previous tab): its caret (top) is revealed, not B's stale 50.
-    ASSERT_TRUE(runtime.dispatch({"tab.previous",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("tab.previous").accepted());
     ASSERT_EQ(firstRow(), 0U);
 
     // Moving a tab keeps the SAME active document and must NOT snap the scroll:
     // switch back to B, scroll away, move the tab, and the offset stays put.
-    ASSERT_TRUE(runtime.dispatch({"tab.next",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("tab.next").accepted());
     ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
                                        {ssg::ScrollTarget::Document, 50}}).accepted());
     ASSERT_EQ(firstRow(), 50U);
-    ASSERT_TRUE(runtime.dispatch({"tab.move_left",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("tab.move_left").accepted());
     ASSERT_EQ(firstRow(), 50U);  // same document -> no reveal snap
 }
 
@@ -1050,7 +1050,7 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
     ASSERT_TRUE(ssg::closeTabById(runtime, *tabA).accepted);
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"beta"});
     ASSERT_TRUE(runtime
-                    .dispatch({"tab.reopen_closed",  {}})
+                    .dispatch("tab.reopen_closed")
                     .accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"!alpha"});
 
@@ -1100,7 +1100,7 @@ TEST(autosaveFlushesNothingWhenNoDocumentIsDirty) {
     ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
     // Edit then save -> clean again -> no autosave.
     ASSERT_TRUE(ssg::test::typeText(runtime, "!").accepted());
-    ASSERT_TRUE(runtime.dispatch({"file.save",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("file.save").accepted());
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
 }
 
@@ -1118,7 +1118,7 @@ TEST(autosaveFlushAllForcesADirtyDocumentAfterAnEagerFlush) {
     // capturing any edits newer than the last tick.
     ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{1});
     // A clean document is still skipped by the exit flush.
-    ASSERT_TRUE(runtime.dispatch({"file.save",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("file.save").accepted());
     ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{0});
 }
 

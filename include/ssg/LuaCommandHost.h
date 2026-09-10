@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/CommandCatalog.h>
-
 #include <chrono>
 #include <compare>
 #include <cstddef>
@@ -53,7 +51,7 @@ struct LuaInvocation {
     std::optional<std::unordered_map<std::string, std::string>> arguments;
 };
 
-using LuaDispatcher = std::function<CommandHandlerResult(LuaInvocation const&)>;
+using LuaDispatcher = std::function<LuaResult(LuaInvocation const&)>;
 
 // Asked to accept an evaluation's registrations BEFORE they replace the
 // previous ones.  Returning a failure abandons the evaluation: the new
@@ -69,6 +67,7 @@ using LuaGenerationGate =
 
 struct LuaCommandHostOptions {
     std::vector<LuaCommand> commands;
+    std::function<bool(std::string_view)> commandAvailable;
     std::uint64_t instructionBudget{100'000};
     std::chrono::milliseconds timeBudget{50};
     LuaGenerationGate publishGate;

@@ -13,7 +13,7 @@
 
 namespace ssg {
 
-class CommandCatalog;
+class Commands;
 struct Editor;
 
 enum class ExternalAction : std::uint8_t {
@@ -46,7 +46,7 @@ struct ExternalActionAffordance {
 
 [[nodiscard]] ExternalActionAffordance
 externalActionAffordance(ExternalAction action);
-void bindExternalModificationCommands(CommandCatalog& catalog, Editor& editor);
+void bindExternalModificationCommands(Commands& commands, Editor& editor);
 
 struct ExternalDocumentView {
     DiffFileId id;

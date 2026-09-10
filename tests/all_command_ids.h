@@ -14,12 +14,8 @@
 // runtime is built once, in a temporary workspace, and only its command
 // declarations are used; fixtures supply their own stub handlers.
 
-#include <ssg/CommandCatalog.h>
 #include <ssg/Editor.h>
-#include <optional>
 #include <string_view>
-#include <typeindex>
-#include <unordered_map>
 
 #include <unistd.h>
 
@@ -29,57 +25,10 @@
 
 namespace ssg::testing {
 
-// A command's declaration, without its implementation: enough for a fixture to
-// register a faithful stand-in.
 struct CommandFacts {
     std::string id;
     std::string label;
-    std::string owner;
-    bool luaApi = false;
-    bool initScript = false;
-    bool mutates = true;
-    // The real argument type, so a stand-in's wire codec matches the real one.
-    std::optional<std::type_index> argument;
-    // Whether that argument crosses the wire.  An in-process-only payload has
-    // no codec, so a stand-in that claimed one would make the command
-    // unencodable.
-    bool wire = false;
-    bool required = false;
 };
-
-// Reviewed migration classification for user-surface commands.
-// Mechanical default: initScript→config, required→remove, else→keep.
-// This table records deliberate overrides per spec-command-system.md §Migration.
-inline std::string_view classifyCommand(CommandFacts const& f) {
-    static std::unordered_map<std::string, std::string_view> const kOverrides = {
-        // remove: explicit file operations (path/id always required for meaning)
-        {"file.open_recent",      "remove"},
-        // remove: tab activation by id
-        {"tab.activate",          "remove"},
-        {"goto.file",               "remove"},
-        {"goto.symbol",             "remove"},
-        {"tree.invoke_node_command", "remove"},
-        // split: optional target with useful no-arg behavior retained as command
-        {"workspace.open_directory",     "split"},
-        {"file.new",                     "split"},
-        {"file.open",                    "split"},
-        {"file.save_as",                 "split"},
-        {"file.rename",                  "split"},
-        {"file.new_directory",           "split"},
-        {"tab.close",                    "split"},
-        {"tab.close_others",             "split"},
-        {"tab.move_left",                "split"},
-        {"tab.move_right",               "split"},
-        {"palette.close",                "split"},
-        {"search.workspace",             "split"},
-        {"goto.line",                    "split"},
-    };
-    if (f.initScript) return "config";
-    auto it = kOverrides.find(f.id);
-    if (it != kOverrides.end()) return it->second;
-    if (f.required) return "remove";
-    return "keep";
-}
 
 inline std::vector<CommandFacts> const& allCommandFacts() {
     static std::vector<CommandFacts> const facts = [] {
@@ -90,15 +39,9 @@ inline std::vector<CommandFacts> const& allCommandFacts() {
         std::vector<CommandFacts> collected;
         auto created = ssg::createEditor({root});
         if (created.session) {
-            for (auto const* command :
-                 created.session->commandCatalog().commands()) {
-                collected.push_back(
-                    {command->id, command->displayLabel(), command->owner,
-                     command->luaApi,
-                     command->initScript,
-                     command->effect == ssg::CommandEffect::Mutation,
-                     command->argument.type, command->argument.wire,
-                     command->argument.required});
+            for (auto const& [id, command] :
+                 created.session->commandRegistry().all()) {
+                collected.push_back({id, command.label});
             }
         }
         created.session.reset();

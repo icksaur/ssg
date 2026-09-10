@@ -5,7 +5,6 @@
 #include <ssg/GridPresenter.h>
 
 #include <array>
-#include <any>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -24,8 +23,7 @@ public:
     TuiClient(TuiClient&&) = delete;
     TuiClient& operator=(TuiClient&&) = delete;
 
-    [[nodiscard]] CommandResult submit(std::string command_id,
-                                       std::any payload = {});
+    [[nodiscard]] CommandResult submit(std::string commandId);
     [[nodiscard]] ClientInputResult input(ClientInput input);
     [[nodiscard]] GridPresentation const& snapshot() const noexcept {
         return *snapshot_;

@@ -194,7 +194,7 @@ TEST(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"doc.txt"});
-    (void)runtime->dispatch({"find.open",  {}});
+    (void)runtime->dispatch("find.open");
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
@@ -452,9 +452,9 @@ TEST(panelRowMapsToItsTreeNodeId) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"panel.toggle",  {}});
-    (void)runtime->dispatch({"tree.select_next",  {}});
-    (void)runtime->dispatch({"tree.activate",  {}});
+    (void)runtime->dispatch("panel.toggle");
+    (void)runtime->dispatch("tree.select_next");
+    (void)runtime->dispatch("tree.activate");
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
@@ -505,7 +505,7 @@ TEST(searchPanelQueryMapsToItsInputRegion) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch({"panel.show_search", {}}).accepted());
+    ASSERT_TRUE(runtime->dispatch("panel.show_search").accepted());
     auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame || !frame->panel) return;

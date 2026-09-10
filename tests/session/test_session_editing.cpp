@@ -69,10 +69,10 @@ TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
     ASSERT_TRUE(typed.accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcd"});
 
-    auto undo = runtime.dispatch({"edit.undo",  {}});
+    auto undo = runtime.dispatch("edit.undo");
     ASSERT_TRUE(undo.accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abc"});
-    auto redo = runtime.dispatch({"edit.redo",  {}});
+    auto redo = runtime.dispatch("edit.redo");
     ASSERT_TRUE(redo.accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcd"});
 }
@@ -93,18 +93,18 @@ TEST(typingUndoBreaksOnWordAndLineBoundaries) {
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcfoo bar"});
 
     // The space sealed the "foo " unit, so the first undo removes only "bar".
-    ASSERT_TRUE(runtime.dispatch({"edit.undo",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("edit.undo").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcfoo "});
     // The second undo removes the "foo " word unit.
-    ASSERT_TRUE(runtime.dispatch({"edit.undo",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("edit.undo").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abc"});
 
     // Newlines seal a unit per line.
     ASSERT_TRUE(type('x'));
-    ASSERT_TRUE(runtime.dispatch({"text.newline",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("text.newline").accepted());
     ASSERT_TRUE(type('y'));
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcx\ny"});
-    ASSERT_TRUE(runtime.dispatch({"edit.undo",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("edit.undo").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcx\n"});
 }
 
@@ -348,13 +348,13 @@ TEST(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork) {
               ssg::ClientInputOutcome::Dispatched);
     ASSERT_TRUE(runtime.workspaceSearchPending());
     ASSERT_TRUE(ssg::activeTreeProvider(runtime.tree.viewState())->nodes.empty());
-    ASSERT_TRUE(runtime.dispatch({"panel.show_files", {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.show_files").accepted());
     ASSERT_FALSE(runtime.workspaceSearchPending());
     state = runtime.tree.searchState(ssg::TreeProviderId{"search"});
     ASSERT_FALSE(state->submittedQuery.has_value());
     ASSERT_FALSE(state->searching);
 
-    ASSERT_TRUE(runtime.dispatch({"panel.show_search", {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.show_search").accepted());
     state->query.clear();
     state->editing = true;
     ASSERT_TRUE(runtime.tree.setSearchState(
@@ -376,7 +376,7 @@ TEST(searchPanelActivatesTheSelectedResultAtItsMatchColumn) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"panel.show_search", {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.show_search").accepted());
     ASSERT_EQ(runtime.input(ssg::ClientKeyInput{{}, "pha"}).outcome,
               ssg::ClientInputOutcome::Dispatched);
     const auto activation = runtime.input(ssg::ClientKeyInput{
@@ -410,7 +410,7 @@ TEST(searchPanelPointerActivationRevealsTheMatch) {
     auto& runtime = *created.session;
     ssg::GridPresenter presenter;
     ASSERT_TRUE(presenter.project(runtime, {{40, 8}, {}}).has_value());
-    ASSERT_TRUE(runtime.dispatch({"panel.show_search", {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.show_search").accepted());
     ASSERT_EQ(runtime.input(ssg::ClientKeyInput{{}, "needle"}).outcome,
               ssg::ClientInputOutcome::Dispatched);
     ASSERT_EQ(runtime.input(ssg::ClientKeyInput{
@@ -455,7 +455,7 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"hits.txt"}).accepted());
 
-    ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.open").accepted());
     ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
 
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
@@ -477,7 +477,7 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
 
     const auto activeAfter = [&](int advances) -> std::size_t {
         for (int i = 0; i < advances; ++i) {
-            (void)runtime.dispatch({"find.next",  {}});
+            (void)runtime.dispatch("find.next");
         }
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
         return snap->findReplace.activeMatch.value_or(999);
@@ -500,9 +500,9 @@ TEST(findCloseSucceedsWithoutAnActiveDocument) {
     // No document is open: find.close (and next/previous) must not be rejected by
     // the active-document guard, so a find opened before the last tab closed can
     // still be dismissed.
-    ASSERT_TRUE(runtime.dispatch({"find.close",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.next",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.previous",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.close").accepted());
+    ASSERT_TRUE(runtime.dispatch("find.next").accepted());
+    ASSERT_TRUE(runtime.dispatch("find.previous").accepted());
 }
 
 TEST(findCloseDoesNotCancelAnUnrelatedPrompt) {
@@ -517,7 +517,7 @@ TEST(findCloseDoesNotCancelAnUnrelatedPrompt) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"doc.txt"}).accepted());
 
-    ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("palette.open").accepted());
     auto before = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(before.has_value());
     if (before) {
@@ -528,7 +528,7 @@ TEST(findCloseDoesNotCancelAnUnrelatedPrompt) {
 
     // A find.close while the palette prompt is active must leave the palette
     // prompt intact (it only owns the find prompt).
-    ASSERT_TRUE(runtime.dispatch({"find.close",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.close").accepted());
     auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
@@ -550,7 +550,7 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"a.txt"}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.open").accepted());
     ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
     {
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -593,7 +593,7 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
         if (snap) ASSERT_EQ(snap->viewport.firstVisualRow, std::uint32_t{0});
     }
 
-    ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.open").accepted());
     ASSERT_TRUE(runtime.updateFindQuery("target").accepted());
 
     // The match on line 40 lies below the initial 24-row viewport, so revealing
@@ -621,7 +621,7 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"r.txt"}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("replace.open").accepted());
     ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
     ASSERT_TRUE(runtime.updateReplacement("dog").accepted());
 
@@ -636,7 +636,7 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
         }
     }
 
-    ASSERT_TRUE(runtime.dispatch({"replace.current",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("replace.current").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"dog cat cat"});
     auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
@@ -664,10 +664,10 @@ TEST(replaceAllReplacesEveryMatch) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"r.txt"}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("replace.open").accepted());
     ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
     ASSERT_TRUE(runtime.updateReplacement("dog").accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.all",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("replace.all").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"dog dog dog"});
     auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
@@ -691,11 +691,11 @@ TEST(replaceCommandsAreBenignNoOpsWithoutAReplacePrompt) {
 
     // A find prompt (not replace) is open: replace commands must be benign
     // success no-ops that do not mutate the document or controller state.
-    ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.open").accepted());
     ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
     ASSERT_TRUE(runtime.updateReplacement("dog").accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.current",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.all",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("replace.current").accepted());
+    ASSERT_TRUE(runtime.dispatch("replace.all").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"cat cat cat"});
     auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
@@ -716,14 +716,14 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
 
     // No find/replace prompt yet: find.toggle_case must be a benign no-op that
     // leaves the (default) options untouched.
-    ASSERT_TRUE(runtime.dispatch({"find.toggle_case",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.toggle_case").accepted());
     {
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
         if (snap) ASSERT_FALSE(snap->findReplace.options.caseSensitive);
     }
 
-    ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.open").accepted());
     ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
     {
         // Case-insensitive (default): all three "cat"s match.
@@ -733,7 +733,7 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
     }
 
     // Toggle case sensitivity: now only the lowercase "cat" matches.
-    ASSERT_TRUE(runtime.dispatch({"find.toggle_case",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.toggle_case").accepted());
     auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (snap) {
@@ -753,9 +753,9 @@ TEST(replaceOpenPreservesFindOptions) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"m.txt"}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.open").accepted());
     ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.toggle_case",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.toggle_case").accepted());
     // Case-sensitive find matched only the lowercase "cat".
     {
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -764,7 +764,7 @@ TEST(replaceOpenPreservesFindOptions) {
     }
     // Opening replace must NOT widen the match population: options carry over so
     // replace.all acts on exactly what the user reviewed.
-    ASSERT_TRUE(runtime.dispatch({"replace.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("replace.open").accepted());
     auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (snap) {
@@ -784,7 +784,7 @@ TEST(findCloseDismissesTheReplacePrompt) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"m.txt"}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("replace.open").accepted());
     {
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
@@ -795,7 +795,7 @@ TEST(findCloseDismissesTheReplacePrompt) {
     }
     // A single find.close must close the controller AND dismiss the replace
     // prompt (no stale prompt requiring a second cancel).
-    ASSERT_TRUE(runtime.dispatch({"find.close",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.close").accepted());
     auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (snap) {
@@ -821,9 +821,9 @@ TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
         auto snap = projectFrame(runtime, dims);
         bool const shown = snap && snap->panel.has_value();
         if (!shown) {
-            ASSERT_TRUE(runtime.dispatch({"panel.toggle",  {}}).accepted());
+            ASSERT_TRUE(runtime.dispatch("panel.toggle").accepted());
         }
-        ASSERT_TRUE(runtime.dispatch({"panel.focus",  {}}).accepted());
+        ASSERT_TRUE(runtime.dispatch("panel.focus").accepted());
     };
 
     // A pointer click-to-caret from panel focus moves focus to the editor.
@@ -854,9 +854,9 @@ TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
     // dispatched from panel focus, the caret moves but the keyboard stays on the panel.
     focusPanel();
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
-    ASSERT_TRUE(runtime.dispatch({"cursor.left",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("cursor.left").accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
-    ASSERT_TRUE(runtime.dispatch({"select.line_down",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("select.line_down").accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 }
 
@@ -867,9 +867,9 @@ TEST(panelFocusShortcutTogglesBetweenPanelAndEditor) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"panel.toggle_focus", {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.toggle_focus").accepted());
     ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Panel);
-    ASSERT_TRUE(runtime.dispatch({"panel.toggle_focus", {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.toggle_focus").accepted());
     ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Editor);
     std::filesystem::remove_all(root);
 }
@@ -882,12 +882,12 @@ TEST(panelWidthCommandsResizeAndClampTheSidebar) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_FALSE(projectFrame(runtime, {80, 24})->panel.has_value());
-    ASSERT_TRUE(runtime.dispatch({"panel.grow", {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.grow").accepted());
     const auto initial = projectFrame(runtime, {80, 24});
     ASSERT_TRUE(initial && initial->panel);
     if (!initial || !initial->panel) return;
     const auto initialWidth = initial->panel->rect.width;
-    ASSERT_TRUE(runtime.dispatch({"panel.grow", {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.grow").accepted());
     const auto grown = projectFrame(runtime, {80, 24});
     ASSERT_TRUE(grown && grown->panel);
     if (!grown || !grown->panel) return;
@@ -895,16 +895,16 @@ TEST(panelWidthCommandsResizeAndClampTheSidebar) {
 
     runtime.focusEditor();
     ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Editor);
-    ASSERT_TRUE(runtime.dispatch({"panel.shrink", {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.shrink").accepted());
     ASSERT_EQ(runtime.screen.effectiveFocus(), ssg::FocusTarget::Editor);
 
     runtime.screen.toggleDistractionFree();
     ASSERT_FALSE(projectFrame(runtime, {80, 24})->panel.has_value());
-    ASSERT_TRUE(runtime.dispatch({"panel.grow", {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.grow").accepted());
     ASSERT_TRUE(projectFrame(runtime, {80, 24})->panel.has_value());
 
     for (int width = 0; width < initialWidth + 10; ++width) {
-        ASSERT_TRUE(runtime.dispatch({"panel.shrink", {}}).accepted());
+        ASSERT_TRUE(runtime.dispatch("panel.shrink").accepted());
     }
     const auto clamped = projectFrame(runtime, {80, 24});
     ASSERT_TRUE(clamped && clamped->panel);
@@ -1053,20 +1053,20 @@ TEST(undoAndPasteRevealTheCaret) {
     ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
                                        {ssg::ScrollTarget::Document, 40}}).accepted());
     ASSERT_EQ(firstRow(), 40U);
-    ASSERT_TRUE(runtime.dispatch({"edit.undo",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("edit.undo").accepted());
     ASSERT_EQ(firstRow(), 0U);
 
     // Copy a line, collapse the caret to the top, scroll away, and PASTE: the
     // paste inserts a duplicate (a real document mutation) and reveals the caret.
     // (Pasting over the same selection would reproduce identical bytes — a no-op
     // that correctly does not mutate or reveal.)
-    ASSERT_TRUE(runtime.dispatch({"select.line_down",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"clipboard.copy",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("select.line_down").accepted());
+    ASSERT_TRUE(runtime.dispatch("clipboard.copy").accepted());
     ASSERT_TRUE(ssg::test::setSelections(runtime, {{0, 0}}).accepted());
     ASSERT_TRUE(grid.input(runtime, ssg::ScrollLinesInput{
                                        {ssg::ScrollTarget::Document, 40}}).accepted());
     ASSERT_EQ(firstRow(), 40U);
-    ASSERT_TRUE(runtime.dispatch({"clipboard.paste",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("clipboard.paste").accepted());
     // The pasted "a\n" pushes the caret to line 1; revealing from row 40 scrolls
     // up so the caret's row sits at the viewport top (first_row == its row).
     ASSERT_EQ(firstRow(), 1U);
@@ -1102,9 +1102,9 @@ TEST(multiCursorPastePreservesAllCursors) {
         {{p0->byteOffset.value(), p0->byteOffset.value()},
          {p1->byteOffset.value(), p1->byteOffset.value()}}).accepted());
     ASSERT_EQ(selectionCount(), std::size_t{2});
-    ASSERT_TRUE(runtime.dispatch({"select.line_end",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"clipboard.copy",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"clipboard.paste",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("select.line_end").accepted());
+    ASSERT_TRUE(runtime.dispatch("clipboard.copy").accepted());
+    ASSERT_TRUE(runtime.dispatch("clipboard.paste").accepted());
     ASSERT_EQ(selectionCount(), std::size_t{2});
     std::filesystem::remove_all(root);
 }
@@ -1158,9 +1158,9 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
 
     // Undo and redo across the multi-cursor edits keep all cursors too (the
     // bindHistory clamp must preserve the set, not collapse it).
-    ASSERT_TRUE(runtime.dispatch({"edit.undo",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("edit.undo").accepted());
     ASSERT_EQ(selectionCount(), std::size_t{2});
-    ASSERT_TRUE(runtime.dispatch({"edit.redo",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("edit.redo").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"XY\nXY\nccc\n"});
     ASSERT_EQ(selectionCount(), std::size_t{2});
     std::filesystem::remove_all(root);
@@ -1190,10 +1190,10 @@ TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
     };
     ASSERT_EQ(firstRow(), 0U);  // caret at top; the match is off-screen far below
 
-    ASSERT_TRUE(runtime.dispatch({"replace.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("replace.open").accepted());
     ASSERT_TRUE(runtime.updateFindQuery("needle").accepted());
     ASSERT_TRUE(runtime.updateReplacement("pin").accepted());
-    ASSERT_TRUE(runtime.dispatch({"replace.all",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("replace.all").accepted());
     // No match remains, but the caret (now at the replaced text near the bottom)
     // is revealed rather than left off-screen.
     ASSERT_TRUE(firstRow() > 0U);
@@ -1215,11 +1215,11 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"f.txt"})
                     .accepted());
 
-    ASSERT_TRUE(runtime.dispatch({"find.open",  {}})
+    ASSERT_TRUE(runtime.dispatch("find.open")
                     .accepted());
     ASSERT_TRUE(runtime.updateFindQuery("cat")
                     .accepted());
-    ASSERT_TRUE(runtime.dispatch({"prompt.submit",  {}})
+    ASSERT_TRUE(runtime.dispatch("prompt.submit")
                     .accepted());
     auto findAfterSubmit =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -1233,7 +1233,7 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
                   ssg::PromptKind::Find);
     }
 
-    ASSERT_TRUE(runtime.dispatch({"prompt.previous",  {}})
+    ASSERT_TRUE(runtime.dispatch("prompt.previous")
                     .accepted());
     auto findAfterPrevious =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -1243,11 +1243,11 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
                   std::optional<std::size_t>{0});
     }
 
-    ASSERT_TRUE(runtime.dispatch({"replace.open",  {}})
+    ASSERT_TRUE(runtime.dispatch("replace.open")
                     .accepted());
     ASSERT_TRUE(runtime.updateReplacement("dog")
                     .accepted());
-    ASSERT_TRUE(runtime.dispatch({"prompt.submit",  {}})
+    ASSERT_TRUE(runtime.dispatch("prompt.submit")
                     .accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"dog cat cat"});
     auto replaceAfterSubmit =
@@ -1261,7 +1261,7 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
                   ssg::PromptKind::Replace);
     }
 
-    ASSERT_TRUE(runtime.dispatch({"prompt.cancel",  {}})
+    ASSERT_TRUE(runtime.dispatch("prompt.cancel")
                     .accepted());
     auto afterCancel =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -1300,7 +1300,7 @@ TEST(findWordUnderCursorSeedsTheCaretWordAndFindsEveryOccurrence) {
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"w.txt"}).accepted());
 
     // The caret starts at offset 0, inside "alpha".
-    ASSERT_TRUE(runtime.dispatch({"find.word_under_cursor",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.word_under_cursor").accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1312,7 +1312,7 @@ TEST(findWordUnderCursorSeedsTheCaretWordAndFindsEveryOccurrence) {
     ASSERT_EQ(snapshot->promptStatus.activeKind,
               std::optional{ssg::PromptKind::Find});
     // The query is live, not just prompt text: next moves to the second "alpha".
-    ASSERT_TRUE(runtime.dispatch({"find.next",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.next").accepted());
     auto advanced = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(advanced.has_value());
     if (advanced) ASSERT_EQ(advanced->findReplace.activeMatch.value_or(999), std::size_t{1});
@@ -1327,9 +1327,9 @@ TEST(findWordUnderCursorTakesTheWordWhenTheCaretSitsJustPastIt) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"w.txt"}).accepted());
     // Move the caret to offset 5 -- the space, immediately past "alpha".
-    ASSERT_TRUE(runtime.dispatch({"cursor.word_right",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("cursor.word_right").accepted());
 
-    ASSERT_TRUE(runtime.dispatch({"find.word_under_cursor",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.word_under_cursor").accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) ASSERT_EQ(snapshot->findReplace.query, std::string{"alpha"});
@@ -1350,15 +1350,15 @@ TEST(findWordUnderCursorPrefersTheSelectionAndSearchesItLiterally) {
     // Select the first three bytes, "a.b", spanning a word boundary the caret
     // word would never include.
     for (int i = 0; i < 3; ++i) {
-        ASSERT_TRUE(runtime.dispatch({"select.right",  {}}).accepted());
+        ASSERT_TRUE(runtime.dispatch("select.right").accepted());
     }
     // Turn regex AND selection-only ON first; the command must force both off so
     // the seeded word is searched literally across the whole document.
-    ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.toggle_regex",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"find.toggle_selection",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.open").accepted());
+    ASSERT_TRUE(runtime.dispatch("find.toggle_regex").accepted());
+    ASSERT_TRUE(runtime.dispatch("find.toggle_selection").accepted());
 
-    ASSERT_TRUE(runtime.dispatch({"find.word_under_cursor",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.word_under_cursor").accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1378,11 +1378,11 @@ TEST(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"w.txt"}).accepted());
     // Move the caret to offset 2, between the two spaces: no word on either side.
-    ASSERT_TRUE(runtime.dispatch({"cursor.right",  {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"cursor.right",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("cursor.right").accepted());
+    ASSERT_TRUE(runtime.dispatch("cursor.right").accepted());
 
     // Reported success, but no find controller and no prompt were opened.
-    ASSERT_TRUE(runtime.dispatch({"find.word_under_cursor",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.word_under_cursor").accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1426,7 +1426,7 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
 
     // Palette (a picker) is HEADER-anchored: focus is Prompt, the header input
     // line is populated, and NO footer prompt reservation exists.
-    ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("palette.open").accepted());
     {
         auto snap = projectFrame(runtime, dims);
         ASSERT_TRUE(snap.has_value());
@@ -1438,7 +1438,7 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
         ASSERT_TRUE(snap->layout.find(ssg::UiNodeId{
             std::string{ssg::kFooterPromptNodeId}}) == nullptr);
     }
-    ASSERT_TRUE(runtime.dispatch({"palette.close",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("palette.close").accepted());
     {
         auto snap = projectFrame(runtime, dims);
         ASSERT_TRUE(snap.has_value());
@@ -1451,7 +1451,7 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
 
     // Find is FOOTER-anchored: focus is Prompt, a footer reservation exists, and
     // NO header input line.
-    ASSERT_TRUE(runtime.dispatch({"find.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("find.open").accepted());
     {
         auto snap = projectFrame(runtime, dims);
         ASSERT_TRUE(snap.has_value());

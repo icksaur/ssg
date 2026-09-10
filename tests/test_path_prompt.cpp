@@ -48,9 +48,8 @@ std::unique_ptr<ssg::Editor> makeRuntime(const fs::path& root) {
     return runtime;
 }
 
-ssg::CommandResult run(ssg::Editor& runtime, std::string id,
-                       std::any payload = {}) {
-    return runtime.dispatch({std::move(id),  std::move(payload)});
+ssg::CommandResult run(ssg::Editor& runtime, std::string id) {
+    return runtime.dispatch(std::move(id));
 }
 
 bool updatePromptValue(ssg::Editor& runtime, std::size_t index, std::string value) {

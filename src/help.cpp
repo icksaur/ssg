@@ -1,6 +1,5 @@
 #include <ssg/Editor.h>
 
-#include <ssg/CommandCatalog.h>
 #include <ssg/Keymap.h>
 #include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
@@ -114,10 +113,10 @@ std::string renderGlyphList(Style const& style) {
     return out;
 }
 
-std::string humanBindingLabel(CommandCatalog const& catalog,
+std::string humanBindingLabel(Commands const& commands,
                               std::string const& commandId) {
-    if (auto const* entry = catalog.find(commandId)) {
-        return entry->displayLabel();
+    if (auto const* command = commands.find(commandId)) {
+        return command->label;
     }
     return commandId;
 }
@@ -126,12 +125,12 @@ std::string humanBindingLabel(CommandCatalog const& catalog,
 // "<keys>\t<command label>". Reads the runtime's current keymap, so a user's
 // keymap.bind customizations appear here.
 std::string renderKeybindings(KeymapViewState const& keymap,
-                              CommandCatalog const& catalog) {
+                              Commands const& commands) {
     std::vector<std::pair<std::string, std::string>> rows;
     rows.reserve(keymap.bindings.size());
     for (auto const& binding : keymap.bindings) {
         rows.emplace_back(formatKeySequence(binding.sequence),
-                          humanBindingLabel(catalog, binding.commandId));
+                          humanBindingLabel(commands, binding.commandId));
     }
     std::sort(rows.begin(), rows.end());
     std::string out;
@@ -145,29 +144,16 @@ std::string renderKeybindings(KeymapViewState const& keymap,
     return out;
 }
 
-// The full command list as plain Markdown list items grouped by owner -- NOT a
-// table, because SSG shows text and a pipe table would render as raw pipes. Each
-// row is "- `command.id` -- summary".
-std::string renderCommandList(CommandCatalog const& catalog) {
-    std::map<std::string_view, std::vector<CommandEntry const*>> byOwner;
-    for (auto const* command : catalog.commands()) {
-        byOwner[command->owner].push_back(command);
-    }
+// The full command list as plain Markdown list items. The ordered registry is
+// the user-command source of truth.
+std::string renderCommandList(Commands const& commands) {
     std::string out;
-    for (auto const& [owner, owned] : byOwner) {
-        out += "\n### ";
-        out += owner;
-        out += "\n\n";
-        for (auto const* command : owned) {
-            out += "- `";
-            out += command->id;
-            out += '`';
-            if (!command->summary.empty()) {
-                out += " -- ";
-                out += command->summary;
-            }
-            out += '\n';
-        }
+    for (auto const& [id, command] : commands.all()) {
+        out += "- `";
+        out += id;
+        out += "` -- ";
+        out += command.label;
+        out += '\n';
     }
     return out;
 }
@@ -180,28 +166,19 @@ std::string renderCommandList(CommandCatalog const& catalog) {
 // current keymap and catalog.
 std::string buildHelpDocument(Editor const& runtime) {
     std::string document{kHelpPreamble};
-    document += renderKeybindings(runtime.keymap, runtime.catalog);
+    document += renderKeybindings(runtime.keymap, runtime.commands);
     document += kHelpConfigSection;
     document += renderGlyphList(runtime.style);
     document += "\n## All commands\n";
-    document += renderCommandList(runtime.catalog);
+    document += renderCommandList(runtime.commands);
     return document;
 }
 
-void bindRuntimeHelp(CommandCatalog& catalog,
-                     Editor& runtime) {
-    catalog.add(CommandSpec{
-        .id = "help.open",
-        .owner = "help-system",
-        .label = "Open Help",
-        .summary = "Open Help",
-        .effect = CommandEffect::Mutation,
-        .luaApi = true,
-        .binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+void bindRuntimeHelp(Commands& commands, Editor& runtime) {
+    commands.add("help.open", "Open Help", [&runtime] {
             return runtime.openReadOnlyTab(
                 TabKind::ReadOnlyOutput, "help:main", "help",
                 buildHelpDocument(runtime), ssg::LanguageId{"markdown"});
-        }),
     });
 }
 

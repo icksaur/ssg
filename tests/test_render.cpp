@@ -291,7 +291,7 @@ TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"alpha.txt"});
     (void)ssg::test::openFile(*runtime, std::string{"beta.txt"});
-    (void)runtime->dispatch({"panel.toggle",  {}});
+    (void)runtime->dispatch("panel.toggle");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {60, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -389,7 +389,7 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"n.txt"});
-    (void)runtime->dispatch({"view.toggle_line_numbers",  {}});
+    (void)runtime->dispatch("view.toggle_line_numbers");
     // Put the caret on line 2 (0-indexed 1) so its number highlights.
     auto atBeta = ssg::resolveSelectionPosition("alpha\nbeta\ngamma\n",
                                                            ssg::ByteOffset{6});
@@ -453,9 +453,9 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"m.txt"});
-    (void)runtime->dispatch({"view.toggle_line_numbers",  {}});
+    (void)runtime->dispatch("view.toggle_line_numbers");
     // Add a second cursor on the line below: carets now on lines 1 and 2.
-    (void)runtime->dispatch({"select.add_cursor_down",  {}});
+    (void)runtime->dispatch("select.add_cursor_down");
 
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -495,7 +495,7 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
     ssg::ViewportDimensions const dims{40, 8};
     ssg::test::GridTestView gridView{dims};
     (void)gridView.present(*runtime);  // prime the pane cache
-    (void)runtime->dispatch({"cursor.line_end",  {}});
+    (void)runtime->dispatch("cursor.line_end");
     auto snapshot = gridView.present(*runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -609,7 +609,7 @@ TEST(renderShowsPaletteQueryAndGhostInHeader) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"hello.txt"});
-    (void)runtime->dispatch({"palette.open",  {}});
+    (void)runtime->dispatch("palette.open");
 
     ssg::PaletteReport report;
     report.query = "sa";
@@ -667,7 +667,7 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
     }
 
     // Select to end of the first line: "alpha" cells carry the selection role.
-    (void)runtime->dispatch({"select.line_end",  {}});
+    (void)runtime->dispatch("select.line_end");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -716,8 +716,7 @@ TEST(renderFillsEndOfLineForMultilineSelection) {
     // Anchor at line 0 col 0, extend down into line 1: the selection spans the
     // newline after "alpha", so alpha's end-of-line fills to the pane edge.
     ssg::test::GridTestView presenter{{80, 24}};
-    (void)presenter.dispatch(
-        *runtime, {"select.line_down",  {}});
+    (void)presenter.dispatch(*runtime, "select.line_down");
     auto snapshot = presenter.present(*runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -749,7 +748,7 @@ TEST(renderHighlightsWideGlyphCells) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"w.txt"});
-    (void)runtime->dispatch({"select.all",  {}});
+    (void)runtime->dispatch("select.all");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -780,8 +779,8 @@ TEST(renderPaintsSecondaryRangedSelectionCaret) {
     // Select the first word, then add the next occurrence: two RANGED selections,
     // each with an active caret. The secondary (non-primary) ranged selection's
     // caret must render as a caret cell even though it is not a bare caret.
-    (void)runtime->dispatch({"select.word_right",  {}});
-    (void)runtime->dispatch({"select.add_next_occurrence",  {}});
+    (void)runtime->dispatch("select.word_right");
+    (void)runtime->dispatch("select.add_next_occurrence");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -816,7 +815,7 @@ TEST(renderPaintsSecondaryCaretAsACell) {
 
     // Two carets (primary + one below): the primary uses the hardware cursor,
     // the other renders as a caret-role cell.
-    (void)runtime->dispatch({"select.add_cursor_down",  {}});
+    (void)runtime->dispatch("select.add_cursor_down");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -847,7 +846,7 @@ TEST(renderPaintsFindMatchesAndActiveMatch) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"find.txt"});
-    (void)runtime->dispatch({"find.open",  {}});
+    (void)runtime->dispatch("find.open");
     (void)runtime->updateFindQuery("cat");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -892,7 +891,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"stale.txt"});
-    (void)runtime->dispatch({"find.open",  {}});
+    (void)runtime->dispatch("find.open");
     (void)runtime->updateFindQuery("cat");
 
     // Editing the document advances its revision without re-evaluating find, so
@@ -922,7 +921,7 @@ TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"rep.txt"});
-    (void)runtime->dispatch({"replace.open",  {}});
+    (void)runtime->dispatch("replace.open");
     (void)runtime->updateFindQuery("cat");
     (void)runtime->updateReplacement("dog");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
@@ -948,7 +947,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"opt.txt"});
-    (void)runtime->dispatch({"find.open",  {}});
+    (void)runtime->dispatch("find.open");
     (void)runtime->updateFindQuery("cat");
 
     // Default options: all three indicators render unchecked.
@@ -978,7 +977,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
     }
 
     // Toggling case flips its indicator to checked.
-    (void)runtime->dispatch({"find.toggle_case",  {}});
+    (void)runtime->dispatch("find.toggle_case");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1006,14 +1005,14 @@ TEST(renderPromptControlLabelsAreLowercaseChrome) {
     for (auto const& c : {Case{"settings.open", "settings query", "Settings query"},
                           Case{"goto.line", "line number", "Line number"},
                           Case{"file.open", "open file", "Open file"}}) {
-        (void)runtime->dispatch({c.command,  {}});
+        (void)runtime->dispatch(c.command);
         auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) continue;
         auto grid = ssg::renderFrame(*snapshot, lineCache);
         ASSERT_TRUE(gridContains(grid, c.lower));
         ASSERT_FALSE(gridContains(grid, c.title));
-        (void)runtime->dispatch({"prompt.cancel",  {}});
+        (void)runtime->dispatch("prompt.cancel");
     }
 }
 
@@ -1028,15 +1027,15 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"panel.toggle",  {}});
+    (void)runtime->dispatch("panel.toggle");
     // Expand the workspace root, then drive the selection to the bottom.
-    (void)runtime->dispatch({"tree.select_next",  {}});
-    (void)runtime->dispatch({"tree.activate",  {}});
+    (void)runtime->dispatch("tree.select_next");
+    (void)runtime->dispatch("tree.activate");
     ssg::test::GridTestView gridView{{80, 12}};
     // Prime the cached panel height (the command-path keep-visible reads it).
     (void)gridView.present(*runtime);
     for (int i = 0; i < 60; ++i) {
-        (void)runtime->dispatch({"tree.select_next",  {}});
+        (void)runtime->dispatch("tree.select_next");
     }
     auto snapshot = gridView.present(*runtime);
     ASSERT_TRUE(snapshot.has_value());
@@ -1072,10 +1071,10 @@ TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"panel.toggle",  {}});
+    (void)runtime->dispatch("panel.toggle");
     // Expand the root so its two files are visible; the tree still fits.
-    (void)runtime->dispatch({"tree.select_next",  {}});
-    (void)runtime->dispatch({"tree.activate",  {}});
+    (void)runtime->dispatch("tree.select_next");
+    (void)runtime->dispatch("tree.activate");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1100,9 +1099,9 @@ TEST(renderPanelUsesSolvedPanelGeometryAndWindow) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"panel.toggle",  {}});
-    (void)runtime->dispatch({"tree.select_next",  {}});
-    (void)runtime->dispatch({"tree.activate",  {}});
+    (void)runtime->dispatch("panel.toggle");
+    (void)runtime->dispatch("tree.select_next");
+    (void)runtime->dispatch("tree.activate");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1269,7 +1268,7 @@ TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch({"palette.open",  {}})
+    ASSERT_TRUE(runtime->dispatch("palette.open")
                     .accepted());
 
     // The client owns the query text and reports it through the palette report,
@@ -1306,7 +1305,7 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch({"palette.open",  {}})
+    ASSERT_TRUE(runtime->dispatch("palette.open")
                     .accepted());
 
     ssg::PaletteReport report;
@@ -1337,7 +1336,7 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch({"palette.open",  {}})
+    ASSERT_TRUE(runtime->dispatch("palette.open")
                     .accepted());
 
     ssg::PaletteReport report;
@@ -1430,9 +1429,9 @@ TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"panel.toggle",  {}});
-    (void)runtime->dispatch({"tree.select_next",  {}});
-    (void)runtime->dispatch({"tree.activate",  {}});
+    (void)runtime->dispatch("panel.toggle");
+    (void)runtime->dispatch("tree.select_next");
+    (void)runtime->dispatch("tree.activate");
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1509,8 +1508,8 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    (void)runtime->dispatch({"panel.toggle",  {}});
-    (void)runtime->dispatch({"tree.activate",  {}});
+    (void)runtime->dispatch("panel.toggle");
+    (void)runtime->dispatch("tree.activate");
 
     ssg::StyleDefineArguments args;
     args.values = {{"scrollbar_track", ":"},
@@ -1521,9 +1520,8 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
                    {"tree_collapsed", "+ "},
                    {"tree_expanded", "- "},
                    {"input_line_sigil", "! "}};
-    auto const applied =
-        runtime->dispatch({"style.define",  args});
-    ASSERT_TRUE(applied.accepted());
+    auto const applied = ssg::applyStyleDefine(*runtime, args);
+    ASSERT_TRUE(applied.accepted);
 
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -1582,9 +1580,8 @@ TEST(styleDefineRejectionLeavesTheLiveStyleUnchanged) {
 
     ssg::StyleDefineArguments args;
     args.values = {{"tree_expanded", "- "}, {"bogus_key", "z"}};
-    auto const rejected =
-        runtime->dispatch({"style.define",  args});
-    ASSERT_FALSE(rejected.accepted());
+    auto const rejected = ssg::applyStyleDefine(*runtime, args);
+    ASSERT_FALSE(rejected.accepted);
 
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());

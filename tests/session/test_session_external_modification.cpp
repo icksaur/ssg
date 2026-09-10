@@ -115,6 +115,14 @@ bool activeTabIsLiveDiff(ssg::Editor& runtime) {
     return false;
 }
 
+ssg::CommandResult externalAction(
+    ssg::Editor& runtime, ssg::ExternalActionInvocation invocation) {
+    auto result = runtime.input(ssg::ExternalActionPointerInput{invocation});
+    if (result.command) return std::move(*result.command);
+    return {ssg::CommandError::HandlerFailed,
+            "external action did not produce a result", {}};
+}
+
 TEST(anOpenDocumentChangedOnDiskPopulatesTheExternalSection) {
     auto session = Session::open("changed_populates", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
@@ -172,9 +180,9 @@ TEST(externalReloadCommitsDiskIntoTheWorkspaceAndClearsTheSection) {
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
 
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"external.reload",
-                                files[0].id})
+    ASSERT_TRUE(externalAction(
+                    *session.runtime,
+                    {files[0].id, ssg::ExternalAction::Reload})
                     .accepted());
 
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
@@ -190,8 +198,9 @@ TEST(externalKeepBufferClearsTheSectionWithoutTouchingTheBuffer) {
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
 
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"external.keep_buffer",  files[0].id})
+    ASSERT_TRUE(externalAction(
+                    *session.runtime,
+                    {files[0].id, ssg::ExternalAction::KeepBuffer})
                     .accepted());
 
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
@@ -206,8 +215,9 @@ TEST(externalOpenDiffOpensALiveDiffTabForThatFile) {
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
 
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"external.open_diff",  files[0].id})
+    ASSERT_TRUE(externalAction(
+                    *session.runtime,
+                    {files[0].id, ssg::ExternalAction::OpenDiff})
                     .accepted());
 
     ASSERT_TRUE(activeTabIsLiveDiff(*session.runtime));
@@ -216,8 +226,10 @@ TEST(externalOpenDiffOpensALiveDiffTabForThatFile) {
 TEST(externalActionOnAnUnknownIdIsARejectedNoOp) {
     auto session = Session::open("unknown_id", "hi\n", true);
 
-    const auto result = session.runtime->dispatch({"external.keep_buffer",
-                           ssg::DiffFileId{"external:missing.txt"}});
+    const auto result = externalAction(
+        *session.runtime,
+        {ssg::DiffFileId{"external:missing.txt"},
+         ssg::ExternalAction::KeepBuffer});
 
     ASSERT_FALSE(result.accepted());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
@@ -276,7 +288,7 @@ TEST(anSsgSaveIsCorrelatedAndRaisesNoExternalNotice) {
     ASSERT_EQ(externalFiles(*session.runtime).size(), 1U);
     // SSG writes the file itself; the save primitive records the expectation.
     ASSERT_TRUE(session.runtime
-                    ->dispatch({"file.save",  {}})
+                    ->dispatch("file.save")
                     .accepted());
     // The watcher reports the write with no state supplied; the reconcile stats the
     // (unchanged-since-save) file, matches the expectation, consumes it, AND clears
@@ -291,7 +303,7 @@ TEST(aGenuineExternalEditAfterASelfSaveIsNotSuppressed) {
     auto session = Session::open("edit_after_save", "hi\n", true);
     // A self-save consumes its expectation (and clears any pending conflict).
     ASSERT_TRUE(session.runtime
-                    ->dispatch({"file.save",  {}})
+                    ->dispatch("file.save")
                     .accepted());
     session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
@@ -485,8 +497,9 @@ TEST(anOverflowDoesNotResurrectAConflictDismissedByKeepBuffer) {
     const auto raised = externalFiles(*session.runtime);
     ASSERT_EQ(raised.size(), 1U);
 
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"external.keep_buffer",  raised[0].id})
+    ASSERT_TRUE(externalAction(
+                    *session.runtime,
+                    {raised[0].id, ssg::ExternalAction::KeepBuffer})
                     .accepted());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 
@@ -515,8 +528,9 @@ TEST(keepBufferAdvancesTheExternalBaselineToTheDismissedDiskState) {
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
 
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"external.keep_buffer",  files[0].id})
+    ASSERT_TRUE(externalAction(
+                    *session.runtime,
+                    {files[0].id, ssg::ExternalAction::KeepBuffer})
                     .accepted());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 
@@ -538,8 +552,9 @@ TEST(keepBufferOnARemovedFileSetsTheExternalBaselineMissing) {
     ASSERT_EQ(files.size(), 1U);
     ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
 
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"external.keep_buffer",  files[0].id})
+    ASSERT_TRUE(externalAction(
+                    *session.runtime,
+                    {files[0].id, ssg::ExternalAction::KeepBuffer})
                     .accepted());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 
@@ -605,8 +620,9 @@ TEST(anUnknownObservationRaisesEvenAfterAMissingBaselineOnBothPaths) {
         auto files = externalFiles(*session.runtime);
         ASSERT_EQ(files.size(), 1U);
         ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
-        ASSERT_TRUE(session.runtime
-                        ->dispatch({"external.keep_buffer",  files[0].id})
+        ASSERT_TRUE(externalAction(
+                        *session.runtime,
+                        {files[0].id, ssg::ExternalAction::KeepBuffer})
                         .accepted());
         ASSERT_TRUE(externalFiles(*session.runtime).empty());
     };
@@ -642,8 +658,9 @@ TEST(aStaleOrdinaryRemoveWhosePathReappearedNonRegularRaises) {
         {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
     auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"external.keep_buffer",  files[0].id})
+    ASSERT_TRUE(externalAction(
+                    *session.runtime,
+                    {files[0].id, ssg::ExternalAction::KeepBuffer})
                     .accepted());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 
@@ -665,8 +682,9 @@ TEST(aStaleOrdinaryRemoveWhosePathReappearedRegularRaisesAsModified) {
         {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
     auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"external.keep_buffer",  files[0].id})
+    ASSERT_TRUE(externalAction(
+                    *session.runtime,
+                    {files[0].id, ssg::ExternalAction::KeepBuffer})
                     .accepted());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 
@@ -697,11 +715,11 @@ TEST(aStatusErrorOnAMissingBaselineRaisesOnTheOverflowPath) {
         {watchEvent(ssg::WatchEventKind::Remove, "sub/note.txt", 1)});
     const auto snapshot0 = runtime->external.viewState();
     ASSERT_EQ(snapshot0.files.size(), 1U);
-    ASSERT_TRUE(
-        runtime
-            ->dispatch({"external.keep_buffer",
-                        snapshot0.files[0].id})
-            .accepted());
+    ASSERT_TRUE(externalAction(
+                    *runtime,
+                    {snapshot0.files[0].id,
+                     ssg::ExternalAction::KeepBuffer})
+                    .accepted());
 
     // Deny search permission on the parent: symlink_status of the child now errors.
     std::filesystem::permissions(root / "workspace" / "sub",
@@ -723,8 +741,9 @@ TEST(anOrdinaryDuplicateEventMatchingTheBaselineDoesNotResurrectTheConflict) {
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"external.keep_buffer",  files[0].id})
+    ASSERT_TRUE(externalAction(
+                    *session.runtime,
+                    {files[0].id, ssg::ExternalAction::KeepBuffer})
                     .accepted());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 
@@ -743,8 +762,9 @@ TEST(aRealChangeAfterKeepBufferStillRaises) {
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
     auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"external.keep_buffer",  files[0].id})
+    ASSERT_TRUE(externalAction(
+                    *session.runtime,
+                    {files[0].id, ssg::ExternalAction::KeepBuffer})
                     .accepted());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 
@@ -767,8 +787,9 @@ TEST(keepBufferLeavesTheBufferAndEncodingUntouched) {
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
 
-    ASSERT_TRUE(session.runtime
-                    ->dispatch({"external.keep_buffer",  files[0].id})
+    ASSERT_TRUE(externalAction(
+                    *session.runtime,
+                    {files[0].id, ssg::ExternalAction::KeepBuffer})
                     .accepted());
     // The dismissal moves only the branched-from baseline: the visible buffer (and
     // hence the document's live text and encoding) is untouched.
@@ -831,7 +852,7 @@ TEST(aHostRoutesExternalKeysInTheExternalContextWhenExternalFocusHeld) {
     writeFile(session.workspacePath("note.txt"), "external\n");
     session.runtime->external.ingest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
-    ASSERT_TRUE(session.runtime->dispatch({"external.focus", {}}).accepted());
+    ASSERT_TRUE(session.runtime->dispatch("external.focus").accepted());
     ssg::KeyStroke down;
     down.code = ssg::KeyCode::ArrowDown;
     const auto input = session.runtime->input(ssg::ClientKeyInput{down, {}});

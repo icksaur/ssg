@@ -35,7 +35,7 @@ struct RuntimeFixture {
 
 TEST(terminalEventsResolveThroughRuntimeInput) {
     RuntimeFixture fixture;
-    ASSERT_TRUE(fixture.runtime->dispatch({"file.new", {}}).accepted());
+    ASSERT_TRUE(fixture.runtime->dispatch("file.new").accepted());
 
     auto text = fixture.runtime->input(
         ssg::ClientKeyInput{{}, "hello"});

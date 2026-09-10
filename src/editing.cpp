@@ -62,10 +62,10 @@ EditCommandSettings editSettings(Editor const&) {
     return {IndentStyle::Spaces, 4, 4, LineEnding::Lf, "//"};
 }
 
-CommandHandlerResult applyTransaction(Editor& runtime,
-                                       EditTransaction const& transaction,
-                                       SelectionSet const& selectionsAfter,
-                                       HistoryEditKind kind) {
+OperationResult applyTransaction(Editor& runtime,
+                                 EditTransaction const& transaction,
+                                 SelectionSet const& selectionsAfter,
+                                 HistoryEditKind kind) {
     auto id = runtime.activeDocumentId();
     auto* document = runtime.activeDocument();
     if (!id || document == nullptr) return failure("no active document");
@@ -82,9 +82,8 @@ CommandHandlerResult applyTransaction(Editor& runtime,
     return success();
 }
 
-CommandHandlerResult bindText(Editor& runtime,
-                              TextInputCommand command,
-                              TextInputArguments arguments) {
+OperationResult bindText(Editor& runtime, TextInputCommand command,
+                         TextInputArguments arguments) {
     if (runtime.activeTabIsLiveDiff()) {
         return failure("text input is unavailable in diff mode");
     }
@@ -122,8 +121,8 @@ CommandHandlerResult bindText(Editor& runtime,
     return outcome;
 }
 
-CommandHandlerResult bindSelection(Editor& runtime, SelectionCommand command,
-                                   SelectionCommandArguments arguments = {}) {
+OperationResult bindSelection(Editor& runtime, SelectionCommand command,
+                              SelectionCommandArguments arguments = {}) {
     auto navigation = runtime.selection;
     const auto diffFile = runtime.activeDiffFile();
     auto result = ssg::navigateSelection(runtime.activeText(), navigation,
@@ -142,8 +141,7 @@ CommandHandlerResult bindSelection(Editor& runtime, SelectionCommand command,
     return success();
 }
 
-CommandHandlerResult bindEdit(Editor& runtime,
-                              EditCommand command) {
+OperationResult bindEdit(Editor& runtime, EditCommand command) {
     if (runtime.activeTabIsLiveDiff()) {
         return failure("edit command cannot mutate a diff document");
     }
@@ -158,8 +156,7 @@ CommandHandlerResult bindEdit(Editor& runtime,
                             *result.selections, HistoryEditKind::Other);
 }
 
-CommandHandlerResult bindHistory(Editor& runtime,
-                                 HistoryCommand command) {
+OperationResult bindHistory(Editor& runtime, HistoryCommand command) {
     if (runtime.activeTabIsLiveDiff()) {
         return failure("history command cannot mutate a diff document");
     }
@@ -176,8 +173,7 @@ CommandHandlerResult bindHistory(Editor& runtime,
     return success();
 }
 
-CommandHandlerResult bindClipboard(Editor& runtime,
-                                   ClipboardCommand command) {
+OperationResult bindClipboard(Editor& runtime, ClipboardCommand command) {
     if (runtime.activeTabIsLiveDiff() && command != ClipboardCommand::Copy) {
         return failure("clipboard mutation is unavailable in diff mode");
     }
@@ -263,8 +259,7 @@ std::vector<PromptToggle> findOptionToggles(Editor& runtime) {
             {"find.toggle_regex", "regex", options.regex, 10}};
 }
 
-CommandHandlerResult bindFindReplace(Editor& runtime,
-                                     FindReplaceCommand command) {
+OperationResult bindFindReplace(Editor& runtime, FindReplaceCommand command) {
     if (runtime.activeTabIsLiveDiff() &&
         (command == FindReplaceCommand::ReplaceOpen ||
          command == FindReplaceCommand::ReplaceCurrent ||
@@ -443,8 +438,7 @@ FindReplaceOperationResult applyReplacement(Editor& runtime,
     return {};
 }
 
-CommandHandlerResult applyEditorSelections(Editor& runtime,
-                                          ApplySelections mutation) {
+OperationResult applyEditorSelections(Editor& runtime, ApplySelections mutation) {
     auto const active = runtime.activeDocumentId();
     if (!active || *active != mutation.document ||
         runtime.activeDocument() == nullptr) {
@@ -459,100 +453,48 @@ CommandHandlerResult applyEditorSelections(Editor& runtime,
     return success();
 }
 
-CommandHandlerResult applyEditorTextInput(Editor& runtime,
-                                          TextInputCommand command,
-                                          TextInputArguments arguments) {
+OperationResult applyEditorTextInput(Editor& runtime, TextInputCommand command,
+                                     TextInputArguments arguments) {
     return bindText(runtime, command, std::move(arguments));
 }
 
-CommandHandlerResult executeFindReplaceCommand(Editor& runtime,
-                                                FindReplaceCommand command) {
+OperationResult executeFindReplaceCommand(Editor& runtime,
+                                          FindReplaceCommand command) {
     return bindFindReplace(runtime, command);
 }
 
-void registerTextInputCommands(CommandCatalog& catalog,
-                               Editor& runtime) {
-    auto declareTextless = [&](std::string id, std::string label,
-                               std::string summary, TextInputCommand command) {
-        catalog.add(CommandSpec{
-            .id = std::move(id),
-            .owner = "text-input-commands",
-            .label = std::move(label),
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-            .binding = bindNoArgumentHandler(
-                [&runtime, command](CommandContext&) {
-                    return applyEditorTextInput(runtime, command, {});
-                }),
+void registerTextInputCommands(Commands& commands, Editor& runtime) {
+    auto declare = [&](std::string id, std::string label, TextInputCommand command) {
+        commands.add(std::move(id), std::move(label), [&runtime, command] {
+            return applyEditorTextInput(runtime, command, {});
         });
     };
-
-    catalog.add(CommandSpec{
-            .id = "text.tab",
-            .owner = "text-input-commands",
-            .label = "Insert Tab",
-            .summary = "Insert Tab",
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-            .binding = bindNoArgumentHandler(
-                [&runtime](CommandContext&) {
-                    return applyEditorTextInput(runtime, TextInputCommand::Insert,
-                                                TextInputArguments{"\t"});
-                }),
+    commands.add("text.tab", "Insert Tab", [&runtime] {
+        return applyEditorTextInput(runtime, TextInputCommand::Insert, {"\t"});
     });
-    declareTextless("text.newline", "Newline", "Newline",
-                    TextInputCommand::Newline);
-    declareTextless("text.delete_backward", "Delete Backward",
-                    "Delete Backward", TextInputCommand::DeleteBackward);
-    declareTextless("text.delete_forward", "Delete Forward", "Delete Forward",
-                    TextInputCommand::DeleteForward);
-    declareTextless("text.delete_word_backward", "Delete Word Backward",
-                    "Delete Word Backward",
-                    TextInputCommand::DeleteWordBackward);
-    declareTextless("text.delete_word_forward", "Delete Word Forward",
-                    "Delete Word Forward",
-                    TextInputCommand::DeleteWordForward);
+    declare("text.newline", "Newline", TextInputCommand::Newline);
+    declare("text.delete_backward", "Delete Backward", TextInputCommand::DeleteBackward);
+    declare("text.delete_forward", "Delete Forward", TextInputCommand::DeleteForward);
+    declare("text.delete_word_backward", "Delete Word Backward",
+            TextInputCommand::DeleteWordBackward);
+    declare("text.delete_word_forward", "Delete Word Forward",
+            TextInputCommand::DeleteWordForward);
 }
 
-// Undo and redo.
-void registerHistoryCommands(CommandCatalog& catalog,
-                             Editor& runtime) {
-    auto declare = [&](std::string id, std::string summary,
-                       HistoryCommand command) {
-        catalog.add(CommandSpec{
-            .id = std::move(id),
-            .owner = "undo-redo-history",
-            .label = summary,
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-            .binding = bindNoArgumentHandler(
-                [&runtime, command](CommandContext&) {
-                    return bindHistory(runtime, command);
-                }),
+void registerHistoryCommands(Commands& commands, Editor& runtime) {
+    auto declare = [&](std::string id, std::string label, HistoryCommand command) {
+        commands.add(std::move(id), std::move(label), [&runtime, command] {
+            return bindHistory(runtime, command);
         });
     };
     declare("edit.undo", "Undo", HistoryCommand::Undo);
     declare("edit.redo", "Redo", HistoryCommand::Redo);
 }
 
-// The clipboard register: copy, cut and paste over the current selections.
-void registerClipboardCommands(CommandCatalog& catalog,
-                               Editor& runtime) {
-    auto declare = [&](std::string id, std::string summary,
-                       ClipboardCommand command) {
-        catalog.add(CommandSpec{
-            .id = std::move(id),
-            .owner = "clipboard-register",
-            .label = summary,
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-            .binding = bindNoArgumentHandler(
-                [&runtime, command](CommandContext&) {
-                    return bindClipboard(runtime, command);
-                }),
+void registerClipboardCommands(Commands& commands, Editor& runtime) {
+    auto declare = [&](std::string id, std::string label, ClipboardCommand command) {
+        commands.add(std::move(id), std::move(label), [&runtime, command] {
+            return bindClipboard(runtime, command);
         });
     };
     declare("clipboard.copy", "Copy", ClipboardCommand::Copy);
@@ -560,110 +502,69 @@ void registerClipboardCommands(CommandCatalog& catalog,
     declare("clipboard.paste", "Paste", ClipboardCommand::Paste);
 }
 
-// Whole-line and whole-selection edits.  None takes an argument: each acts on
-// wherever the selections already are.
-void registerEditSuiteCommands(CommandCatalog& catalog,
-                               Editor& runtime) {
-    auto declare = [&](std::string id, std::string label, std::string summary,
-                       EditCommand command) {
-        CommandSpec built{
-            .id = std::move(id),
-            .owner = "edit-command-suite",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-            .binding = bindNoArgumentHandler(
-                [&runtime, command](CommandContext&) {
-                    return bindEdit(runtime, command);
-                }),
-        };
-        if (!label.empty()) built.label = std::move(label);
-        catalog.add(std::move(built));
+void registerEditSuiteCommands(Commands& commands, Editor& runtime) {
+    auto declare = [&](std::string id, std::string label, EditCommand command) {
+        commands.add(std::move(id), std::move(label), [&runtime, command] {
+            return bindEdit(runtime, command);
+        });
     };
-    declare("edit.indent", "Indent", "Indent", EditCommand::Indent);
-    declare("edit.outdent", "Outdent", "Outdent", EditCommand::Outdent);
-    declare("edit.duplicate_line", "", "Duplicate Line",
-            EditCommand::DuplicateLine);
-    declare("edit.move_line_up", "", "Move Line Up", EditCommand::MoveLineUp);
-    declare("edit.move_line_down", "", "Move Line Down",
-            EditCommand::MoveLineDown);
-    declare("edit.delete_line", "", "Delete Line", EditCommand::DeleteLine);
-    declare("edit.join_lines", "", "Join Lines", EditCommand::JoinLines);
-    declare("edit.uppercase", "", "Uppercase", EditCommand::Uppercase);
-    declare("edit.lowercase", "", "Lowercase", EditCommand::Lowercase);
-    declare("edit.swap_case", "", "Swap Case", EditCommand::SwapCase);
-    declare("edit.sort_lines", "", "Sort Lines", EditCommand::SortLines);
-    declare("edit.transpose", "", "Transpose", EditCommand::Transpose);
-    declare("edit.toggle_comment", "Toggle Comment", "Toggle Comment",
-            EditCommand::ToggleComment);
+    declare("edit.indent", "Indent", EditCommand::Indent);
+    declare("edit.outdent", "Outdent", EditCommand::Outdent);
+    declare("edit.duplicate_line", "Edit Duplicate Line", EditCommand::DuplicateLine);
+    declare("edit.move_line_up", "Edit Move Line Up", EditCommand::MoveLineUp);
+    declare("edit.move_line_down", "Edit Move Line Down", EditCommand::MoveLineDown);
+    declare("edit.delete_line", "Edit Delete Line", EditCommand::DeleteLine);
+    declare("edit.join_lines", "Edit Join Lines", EditCommand::JoinLines);
+    declare("edit.uppercase", "Edit Uppercase", EditCommand::Uppercase);
+    declare("edit.lowercase", "Edit Lowercase", EditCommand::Lowercase);
+    declare("edit.swap_case", "Edit Swap Case", EditCommand::SwapCase);
+    declare("edit.sort_lines", "Edit Sort Lines", EditCommand::SortLines);
+    declare("edit.transpose", "Edit Transpose", EditCommand::Transpose);
+    declare("edit.toggle_comment", "Toggle Comment", EditCommand::ToggleComment);
 }
 
-// Find and replace, in the open document and across the workspace.
-void registerFindReplaceCommands(CommandCatalog& catalog,
-                                 Editor& runtime) {
-    auto spec = [](std::string id, std::string summary) {
-        return CommandSpec{
-            .id = std::move(id),
-            .owner = "find-replace",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-        };
+void registerFindReplaceCommands(Commands& commands, Editor& runtime) {
+    auto declare = [&](std::string id, std::string label, FindReplaceCommand command) {
+        commands.add(std::move(id), std::move(label), [&runtime, command] {
+            return executeFindReplaceCommand(runtime, command);
+        });
     };
-    auto bare = [&](std::string id, std::string label, std::string summary,
-                    FindReplaceCommand command) {
-        auto built = spec(std::move(id), std::move(summary));
-        built.binding = bindNoArgumentHandler(
-            [&runtime, command](CommandContext&) {
-                return executeFindReplaceCommand(runtime, command);
-            });
-        if (!label.empty()) built.label = std::move(label);
-        catalog.add(std::move(built));
-    };
-
-    bare("find.open", "Find", "Find", FindReplaceCommand::FindOpen);
-    bare("find.word_under_cursor", "Find Word Under Cursor",
-         "Find Word Under Cursor", FindReplaceCommand::FindWordUnderCursor);
-    bare("find.close", "", "Close", FindReplaceCommand::FindClose);
-    bare("find.next", "", "Next", FindReplaceCommand::FindNext);
-    bare("find.previous", "", "Previous", FindReplaceCommand::FindPrevious);
-    bare("find.toggle_case", "", "Toggle Case",
-         FindReplaceCommand::FindToggleCase);
-    bare("find.toggle_whole_word", "", "Toggle Whole Word",
-         FindReplaceCommand::FindToggleWholeWord);
-    bare("find.toggle_regex", "", "Toggle Regex",
-         FindReplaceCommand::FindToggleRegex);
-    bare("find.toggle_selection", "", "Toggle Selection",
-         FindReplaceCommand::FindToggleSelection);
-    bare("replace.open", "Replace", "Replace", FindReplaceCommand::ReplaceOpen);
-    bare("replace.current", "", "Current", FindReplaceCommand::ReplaceCurrent);
-    bare("replace.all", "", "All", FindReplaceCommand::ReplaceAll);
+    declare("find.open", "Find", FindReplaceCommand::FindOpen);
+    declare("find.word_under_cursor", "Find Word Under Cursor",
+            FindReplaceCommand::FindWordUnderCursor);
+    declare("find.close", "Find Close", FindReplaceCommand::FindClose);
+    declare("find.next", "Find Next", FindReplaceCommand::FindNext);
+    declare("find.previous", "Find Previous", FindReplaceCommand::FindPrevious);
+    declare("find.toggle_case", "Find Toggle Case", FindReplaceCommand::FindToggleCase);
+    declare("find.toggle_whole_word", "Find Toggle Whole Word",
+            FindReplaceCommand::FindToggleWholeWord);
+    declare("find.toggle_regex", "Find Toggle Regex", FindReplaceCommand::FindToggleRegex);
+    declare("find.toggle_selection", "Find Toggle Selection",
+            FindReplaceCommand::FindToggleSelection);
+    declare("replace.open", "Replace", FindReplaceCommand::ReplaceOpen);
+    declare("replace.current", "Replace Current", FindReplaceCommand::ReplaceCurrent);
+    declare("replace.all", "Replace All", FindReplaceCommand::ReplaceAll);
 }
 
-// Moving the caret and changing the selection. Explicit placement stays typed in
-// input/application code; only no-argument motion and view commands remain in
-// the command surface.
-void registerSelectionCommands(CommandCatalog& catalog,
-                               Editor& runtime) {
-    auto summaryOf = [](std::string_view id) {
-        auto const segment = id.substr(id.find('.') + 1);
-        std::string words;
-        bool wordStart = true;
-        for (char raw : segment) {
-            if (raw == '_') {
-                words += ' ';
-                wordStart = true;
-                continue;
-            }
-            auto const ch = static_cast<unsigned char>(raw);
-            words += wordStart ? static_cast<char>(std::toupper(ch)) : raw;
-            wordStart = false;
+std::string selectionLabel(std::string_view id) {
+    std::string result;
+    bool wordStart = true;
+    for (const char raw : id) {
+        if (raw == '.' || raw == '_') {
+            result += ' ';
+            wordStart = true;
+            continue;
         }
-        return words;
-    };
+        const auto ch = static_cast<unsigned char>(raw);
+        result += wordStart ? static_cast<char>(std::toupper(ch)) : raw;
+        wordStart = false;
+    }
+    return result;
+}
 
-    for (auto const& descriptor : kSelectionCommands) {
-        auto const command = descriptor.command;
+void registerSelectionCommands(Commands& commands, Editor& runtime) {
+    for (const auto& descriptor : kSelectionCommands) {
+        const auto command = descriptor.command;
         if (command == SelectionCommand::CursorSetPosition ||
             command == SelectionCommand::SelectSetRange ||
             command == SelectionCommand::SelectSetRanges ||
@@ -673,87 +574,58 @@ void registerSelectionCommands(CommandCatalog& catalog,
         }
         const auto visualAction = [command]() -> std::optional<MoveVisualSelection> {
             switch (command) {
-                case SelectionCommand::CursorLineUp:
-                    return MoveVisualSelection{
-                        VisualSelectionDirection::LineUp, false};
-                case SelectionCommand::CursorLineDown:
-                    return MoveVisualSelection{
-                        VisualSelectionDirection::LineDown, false};
-                case SelectionCommand::CursorPageUp:
-                    return MoveVisualSelection{
-                        VisualSelectionDirection::PageUp, false};
-                case SelectionCommand::CursorPageDown:
-                    return MoveVisualSelection{
-                        VisualSelectionDirection::PageDown, false};
-                case SelectionCommand::SelectLineUp:
-                    return MoveVisualSelection{
-                        VisualSelectionDirection::LineUp, true};
-                case SelectionCommand::SelectLineDown:
-                    return MoveVisualSelection{
-                        VisualSelectionDirection::LineDown, true};
-                case SelectionCommand::SelectPageUp:
-                    return MoveVisualSelection{
-                        VisualSelectionDirection::PageUp, true};
-                case SelectionCommand::SelectPageDown:
-                    return MoveVisualSelection{
-                        VisualSelectionDirection::PageDown, true};
-                default:
-                    return std::nullopt;
+            case SelectionCommand::CursorLineUp:
+                return MoveVisualSelection{VisualSelectionDirection::LineUp, false};
+            case SelectionCommand::CursorLineDown:
+                return MoveVisualSelection{VisualSelectionDirection::LineDown, false};
+            case SelectionCommand::CursorPageUp:
+                return MoveVisualSelection{VisualSelectionDirection::PageUp, false};
+            case SelectionCommand::CursorPageDown:
+                return MoveVisualSelection{VisualSelectionDirection::PageDown, false};
+            case SelectionCommand::SelectLineUp:
+                return MoveVisualSelection{VisualSelectionDirection::LineUp, true};
+            case SelectionCommand::SelectLineDown:
+                return MoveVisualSelection{VisualSelectionDirection::LineDown, true};
+            case SelectionCommand::SelectPageUp:
+                return MoveVisualSelection{VisualSelectionDirection::PageUp, true};
+            case SelectionCommand::SelectPageDown:
+                return MoveVisualSelection{VisualSelectionDirection::PageDown, true};
+            default:
+                return std::nullopt;
             }
         }();
+        const auto id = std::string{descriptor.id};
+        const auto label = selectionLabel(id);
         if (visualAction) {
-            catalog.add(CommandSpec{
-                .id = std::string{descriptor.id},
-                .owner = "selection-navigation",
-                .summary = summaryOf(descriptor.id),
-                .effect = CommandEffect::ViewAction,
-                .luaApi = true,
-                .binding = bindNoArgumentHandler(
-                    [action = *visualAction](CommandContext&) {
-                        return CommandHandlerResult::requireView(action);
-                    }),
+            commands.add(id, label, [action = *visualAction] {
+                return OperationResult{true, {}, ViewAction{action}};
             });
             continue;
         }
         if (command == SelectionCommand::ViewRevealCaret ||
             command == SelectionCommand::ViewCenterCaret) {
-            catalog.add(CommandSpec{
-                .id = std::string{descriptor.id},
-                .owner = "selection-navigation",
-                .summary = summaryOf(descriptor.id),
-                .effect = CommandEffect::ViewAction,
-                .luaApi = true,
-                .binding = bindNoArgumentHandler(
-                    [command](CommandContext&) {
-                        return CommandHandlerResult::requireView(
-                            command == SelectionCommand::ViewRevealCaret
-                                ? ViewAction{RevealSelection{}}
-                                : ViewAction{CenterSelection{}});
-                    }),
+            commands.add(id, label, [command] {
+                return OperationResult{
+                    true, {},
+                    command == SelectionCommand::ViewRevealCaret
+                        ? ViewAction{RevealSelection{}}
+                        : ViewAction{CenterSelection{}}};
             });
             continue;
         }
-        catalog.add(CommandSpec{
-            .id = std::string{descriptor.id},
-            .owner = "selection-navigation",
-            .summary = summaryOf(descriptor.id),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-            .binding = bindNoArgumentHandler(
-            [&runtime, command](CommandContext&) {
-                return bindSelection(runtime, command);
-            }),
+        commands.add(id, label, [&runtime, command] {
+            return bindSelection(runtime, command);
         });
     }
 }
 
-void bindRuntimeEditing(CommandCatalog& catalog, Editor& runtime) {
-    registerTextInputCommands(catalog, runtime);
-    registerSelectionCommands(catalog, runtime);
-    registerEditSuiteCommands(catalog, runtime);
-    registerFindReplaceCommands(catalog, runtime);
-    registerHistoryCommands(catalog, runtime);
-    registerClipboardCommands(catalog, runtime);
+void bindRuntimeEditing(Commands& commands, Editor& runtime) {
+    registerTextInputCommands(commands, runtime);
+    registerSelectionCommands(commands, runtime);
+    registerEditSuiteCommands(commands, runtime);
+    registerFindReplaceCommands(commands, runtime);
+    registerHistoryCommands(commands, runtime);
+    registerClipboardCommands(commands, runtime);
 }
 
 } // namespace ssg

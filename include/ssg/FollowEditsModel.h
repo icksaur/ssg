@@ -1,6 +1,5 @@
 #pragma once
 
-#include <ssg/CommandCatalog.h>
 #include <ssg/DiffModel.h>
 #include <ssg/PaneNavigation.h>
 

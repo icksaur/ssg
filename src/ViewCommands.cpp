@@ -10,7 +10,7 @@
 namespace ssg {
 namespace {
 
-CommandHandlerResult setWordWrap(Editor& runtime) {
+OperationResult setWordWrap(Editor& runtime) {
     bool next = !boolSetting(runtime.settings, SettingKey::WordWrap, runtime.wordWrap);
     auto mutation = runtime.settings.set(SettingScope::Workspace, SettingKey::WordWrap, next);
     if (!mutation.accepted()) return failure(mutation.error->message);
@@ -18,7 +18,7 @@ CommandHandlerResult setWordWrap(Editor& runtime) {
     return success();
 }
 
-CommandHandlerResult setLineNumbers(Editor& runtime) {
+OperationResult setLineNumbers(Editor& runtime) {
     bool next = !boolSetting(runtime.settings, SettingKey::LineNumbers,
                              runtime.lineNumbers);
     auto mutation = runtime.settings.set(SettingScope::Workspace,
@@ -28,7 +28,7 @@ CommandHandlerResult setLineNumbers(Editor& runtime) {
     return success();
 }
 
-CommandHandlerResult resizePanel(Editor& runtime, bool grow) {
+OperationResult resizePanel(Editor& runtime, bool grow) {
     if (!runtime.screen.showPanel()) {
         return failure("sidebar is unavailable");
     }
@@ -47,8 +47,7 @@ CommandHandlerResult resizePanel(Editor& runtime, bool grow) {
     return success();
 }
 
-CommandHandlerResult shellCommand(Editor& runtime,
-                                  std::string_view id) {
+OperationResult shellCommand(Editor& runtime, std::string_view id) {
     if (id == "panel.toggle") (void)runtime.screen.togglePanel();
     else if (id == "panel.focus") (void)runtime.screen.focusPanel();
     else if (id == "panel.toggle_focus") {
@@ -91,8 +90,7 @@ CommandHandlerResult shellCommand(Editor& runtime,
     return success();
 }
 
-CommandHandlerResult promptStatusCommand(Editor& runtime,
-                                         std::string_view id) {
+OperationResult promptStatusCommand(Editor& runtime, std::string_view id) {
     if (id == "prompt.submit" || id == "prompt.cancel" ||
         id == "prompt.next" || id == "prompt.previous") {
         auto const& request = runtime.screen.prompt().request();
@@ -171,7 +169,7 @@ CommandHandlerResult promptStatusCommand(Editor& runtime,
     return success();
 }
 
-CommandHandlerResult settingsCommand(Editor& runtime, std::string_view id) {
+OperationResult settingsCommand(Editor& runtime, std::string_view id) {
     if (id == "settings.open") {
         auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
             PromptKind::Settings, "settings",
@@ -191,8 +189,7 @@ CommandHandlerResult settingsCommand(Editor& runtime, std::string_view id) {
 
 } // namespace
 
-CommandHandlerResult applyUiNodeActivation(Editor& runtime,
-                                           UiNodeId const& nodeId) {
+OperationResult applyUiNodeActivation(Editor& runtime, UiNodeId const& nodeId) {
     const UiSchema tree = runtime.projectedUiTree();
     const UiNode* node = findUiNode(tree, nodeId);
     if (!node || !isUiNodeVisible(tree, nodeId)) {
@@ -213,206 +210,94 @@ CommandHandlerResult applyUiNodeActivation(Editor& runtime,
         !node->resolved->command || node->resolved->command->empty()) {
         return failure("UI activation target is not actionable");
     }
-    const CommandEntry* command =
-        runtime.catalog.find(*node->resolved->command);
-    if (!command || command->argument.type ||
-        command->effect == CommandEffect::Routing) {
-        return failure("UI activation target is not a payloadless command");
+    if (!runtime.commands.find(*node->resolved->command)) {
+        return failure("UI activation target command is not registered");
     }
-    auto result = runtime.dispatchLocked(ClientCommand{*node->resolved->command});
+    auto result = runtime.dispatchLocked(*node->resolved->command);
     if (!result.accepted()) return failure(result.message);
-    if (result.viewAction) return CommandHandlerResult::requireView(std::move(*result.viewAction));
+    return {true, {}, std::move(result.viewAction)};
+}
+
+
+OperationResult applyThemeSet(Editor& runtime, ThemeSetArguments arguments) {
+    auto result = runtime.theme.withOverrides(arguments);
+    if (!result.accepted()) return failure(result.error->message);
+    runtime.theme = result.snapshot;
     return success();
 }
 
-
-// editor at startup.
-//
-// Each carries a whole table -- colours, a style value, a key sequence -- as an
-// typed payload, so each is declared with `inProcessHandler`.
-//
-// Declaring each command with the type it actually consumes also removes the
-// id-branching these handlers used to do.  A single `themeCommand(id, payload)`
-// had to re-derive from the id which of two payload types it held; here the
-// type is stated once, at the command, and the compiler carries it.
-void registerAppearanceCommands(CommandCatalog& catalog,
-                                Editor& runtime) {
-    auto declare = [](std::string_view owner, std::string id,
-                      std::string summary) {
-        return CommandSpec{
-            .id = std::move(id),
-            .owner = std::string{owner},
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .initScript = true,
-        };
-    };
-
-    {
-        auto built = declare("theme-model", "theme.set", "Set Colors");
-        built.binding = bindInProcessHandler<ThemeSetArguments>(
-            [&runtime](CommandContext&, ThemeSetArguments const& arguments) {
-                auto result = runtime.theme.withOverrides(arguments);
-                if (!result.accepted()) {
-                    return failure(result.error->message);
-                }
-                runtime.theme = result.snapshot;
-                return success();
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = declare("style-model", "style.define", "Define");
-        built.binding = bindInProcessHandler<StyleDefineArguments>(
-            [&runtime](CommandContext&, StyleDefineArguments const& arguments) {
-                auto result = runtime.style.withDefine(arguments);
-                if (!result.accepted()) {
-                    return failure(result.error->message);
-                }
-                // Migrate the schema over the new dimensions FIRST, then
-                // adopt the style, so a failure cannot leave layout and the
-                // interaction schema inconsistent.
-                runtime.rebuildInteractionSchema(
-                    result.style.dimensions,
-                    result.style.inputLineSigil);
-                runtime.style = std::move(result.style);
-                return success();
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = declare("keymap-model", "keymap.bind", "Bind");
-        built.binding = bindInProcessHandler<KeymapBindArguments>(
-            [&runtime](CommandContext&, KeymapBindArguments const& arguments) {
-                auto result = applyKeymapBind(runtime.keymap, arguments);
-                if (!result.accepted()) {
-                    return failure(result.error->message);
-                }
-                runtime.keymap = std::move(result.keymap);
-                ++runtime.keymapGeneration;
-                return success();
-            });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = declare("keymap-model", "keymap.unbind", "Unbind");
-        built.binding = bindInProcessHandler<KeymapUnbindArguments>(
-            [&runtime](CommandContext&,
-                       KeymapUnbindArguments const& arguments) {
-                auto result = applyKeymapUnbind(runtime.keymap, arguments);
-                if (!result.accepted()) {
-                    return failure(result.error->message);
-                }
-                runtime.keymap = std::move(result.keymap);
-                ++runtime.keymapGeneration;
-                return success();
-            });
-        catalog.add(std::move(built));
-    }
+OperationResult applyStyleDefine(Editor& runtime, StyleDefineArguments arguments) {
+    auto result = runtime.style.withDefine(arguments);
+    if (!result.accepted()) return failure(result.error->message);
+    runtime.rebuildInteractionSchema(result.style.dimensions,
+                                    result.style.inputLineSigil);
+    runtime.style = std::move(result.style);
+    return success();
 }
 
-void registerViewportCommands(CommandCatalog& catalog,
-                              Editor& runtime) {
-    catalog.add(CommandSpec{
-        .id = "view.toggle_word_wrap",
-        .owner = "viewport-wrap-scrollbar",
-        .label = "Toggle Word Wrap",
-        .summary = "Toggle Word Wrap",
-        .effect = CommandEffect::Mutation,
-        .luaApi = true,
-        .binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+OperationResult applyKeymapBind(Editor& runtime, KeymapBindArguments arguments) {
+    auto result = applyKeymapBind(runtime.keymap, arguments);
+    if (!result.accepted()) return failure(result.error->message);
+    runtime.keymap = std::move(result.keymap);
+    ++runtime.keymapGeneration;
+    return success();
+}
+
+OperationResult applyKeymapUnbind(Editor& runtime,
+                                 KeymapUnbindArguments arguments) {
+    auto result = applyKeymapUnbind(runtime.keymap, arguments);
+    if (!result.accepted()) return failure(result.error->message);
+    runtime.keymap = std::move(result.keymap);
+    ++runtime.keymapGeneration;
+    return success();
+}
+
+void registerViewportCommands(Commands& commands, Editor& runtime) {
+    commands.add("view.toggle_word_wrap", "Toggle Word Wrap", [&runtime] {
             return setWordWrap(runtime);
-        }),
     });
-
-    catalog.add(CommandSpec{
-        .id = "view.toggle_line_numbers",
-        .owner = "viewport-wrap-scrollbar",
-        .label = "Toggle Line Numbers",
-        .summary = "Toggle Line Numbers",
-        .effect = CommandEffect::Mutation,
-        .luaApi = true,
-        .binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("view.toggle_line_numbers", "Toggle Line Numbers", [&runtime] {
             return setLineNumbers(runtime);
-        }),
     });
-
 }
 
 // Reading and writing settings. The no-argument commands open the settings
 // prompt and export the workspace scope; typed mutations are applied directly
 // through Editor members and do not go through the command catalog.
-void registerSettingsCommands(CommandCatalog& catalog,
-                              Editor& runtime) {
-    auto declare = [](std::string id, std::string summary) {
-        return CommandSpec{
-            .id = std::move(id),
-            .owner = "settings-model",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-        };
-    };
+void registerSettingsCommands(Commands& commands, Editor& runtime) {
     auto run = [&runtime](std::string_view id) {
         return settingsCommand(runtime, id);
     };
-
-    {
-        auto built = declare("settings.open", "Open Settings");
-        built.label = "Open Settings";
-        built.binding = bindNoArgumentHandler(
-            [run](CommandContext&) { return run("settings.open"); });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = declare("settings.export_workspace", "Export Workspace");
-        built.binding = bindNoArgumentHandler([run](CommandContext&) {
-            return run("settings.export_workspace");
-        });
-        catalog.add(std::move(built));
-    }
+    commands.add("settings.open", "Open Settings",
+                 [run] { return run("settings.open"); });
+    commands.add("settings.export_workspace", "Settings Export Workspace",
+                 [run] { return run("settings.export_workspace"); });
 }
 
 // The prompt line and the status bar. All commands here take no argument;
 // prompt text edits are routed through typed UpdatePromptValueInput.
-void registerPromptStatusCommands(CommandCatalog& catalog,
-                                  Editor& runtime) {
-    auto spec = [](std::string id, std::string summary) {
-        return CommandSpec{
-            .id = std::move(id),
-            .owner = "prompt-status-surface",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-        };
-    };
-    auto bare = [&](std::string id, std::string summary, std::string label) {
+void registerPromptStatusCommands(Commands& commands, Editor& runtime) {
+    auto declare = [&](std::string id, std::string label) {
         auto name = id;
-        auto built = spec(std::move(id), std::move(summary));
-        built.binding = bindNoArgumentHandler(
-            [&runtime, name](CommandContext&) {
-                return promptStatusCommand(runtime, name);
-            });
-        if (!label.empty()) built.label = std::move(label);
-        catalog.add(std::move(built));
+        commands.add(std::move(id), std::move(label), [&runtime, name] {
+            return promptStatusCommand(runtime, name);
+        });
     };
-
-    bare("prompt.submit", "Submit Prompt", "Submit Prompt");
-    bare("prompt.cancel", "Cancel", "");
-    bare("prompt.next", "Next", "");
-    bare("prompt.previous", "Previous", "");
-    bare("prompt.focus_next_control", "Focus Next Field", "");
-    bare("status.next", "Next", "");
-    bare("status.previous", "Previous", "");
-    bare("status.dismiss", "Dismiss", "");
+    declare("prompt.submit", "Submit Prompt");
+    declare("prompt.cancel", "Prompt Cancel");
+    declare("prompt.next", "Prompt Next");
+    declare("prompt.previous", "Prompt Previous");
+    declare("prompt.focus_next_control", "Prompt Focus Next Control");
+    declare("status.next", "Status Next");
+    declare("status.previous", "Status Previous");
+    declare("status.dismiss", "Status Dismiss");
 }
 
 // Panes, the sidebar, and distraction-free mode. None takes an argument.
-void registerShellLayoutCommands(CommandCatalog& catalog,
-                                 Editor& runtime) {
+void registerShellLayoutCommands(Commands& commands, Editor& runtime) {
     struct PaneMutationCommand {
         std::string_view id;
-        std::string_view summary;
+        std::string_view label;
         enum class Kind {
             SplitHorizontal,
             SplitVertical,
@@ -422,26 +307,20 @@ void registerShellLayoutCommands(CommandCatalog& catalog,
         } kind;
     };
     const std::array paneMutations{
-        PaneMutationCommand{"pane.split_horizontal", "Split Editor Horizontally",
+        PaneMutationCommand{"pane.split_horizontal", "Split Horizontal",
                            PaneMutationCommand::Kind::SplitHorizontal},
-        PaneMutationCommand{"pane.split_vertical", "Split Editor Vertically",
+        PaneMutationCommand{"pane.split_vertical", "Split Vertical",
                            PaneMutationCommand::Kind::SplitVertical},
-        PaneMutationCommand{"pane.close", "Close Editor Pane",
+        PaneMutationCommand{"pane.close", "Close",
                            PaneMutationCommand::Kind::Close},
-        PaneMutationCommand{"pane.next", "Next Editor Pane",
+        PaneMutationCommand{"pane.next", "Next",
                            PaneMutationCommand::Kind::Next},
-        PaneMutationCommand{"pane.previous", "Previous Editor Pane",
+        PaneMutationCommand{"pane.previous", "Previous",
                            PaneMutationCommand::Kind::Previous},
     };
     for (const auto& command : paneMutations) {
-        catalog.add(CommandSpec{
-            .id = std::string{command.id},
-            .owner = "shell-layout",
-            .summary = std::string{command.summary},
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-            .binding = bindNoArgumentHandler(
-                [&runtime, kind = command.kind](CommandContext&) {
+        commands.add(std::string{command.id}, "Pane " + std::string{command.label},
+                     [&runtime, kind = command.kind] {
                     switch (kind) {
                         case PaneMutationCommand::Kind::SplitHorizontal:
                             return runtime.splitPane(SplitAxis::Horizontal);
@@ -456,85 +335,66 @@ void registerShellLayoutCommands(CommandCatalog& catalog,
                                 CycleDirection::Previous);
                     }
                     return failure("unknown editor pane mutation");
-                }),
         });
     }
 
     struct PaneFocusCommand {
         std::string_view id;
-        std::string_view summary;
+        std::string_view label;
         PaneDirection direction;
     };
     const std::array paneFocusCommands{
-        PaneFocusCommand{"pane.focus_left", "Focus Editor Pane Left",
+        PaneFocusCommand{"pane.focus_left", "Focus Left",
                         PaneDirection::Left},
-        PaneFocusCommand{"pane.focus_right", "Focus Editor Pane Right",
+        PaneFocusCommand{"pane.focus_right", "Focus Right",
                         PaneDirection::Right},
-        PaneFocusCommand{"pane.focus_up", "Focus Editor Pane Up",
+        PaneFocusCommand{"pane.focus_up", "Focus Up",
                         PaneDirection::Up},
-        PaneFocusCommand{"pane.focus_down", "Focus Editor Pane Down",
+        PaneFocusCommand{"pane.focus_down", "Focus Down",
                         PaneDirection::Down},
     };
     for (const auto& command : paneFocusCommands) {
-        catalog.add(CommandSpec{
-            .id = std::string{command.id},
-            .owner = "shell-layout",
-            .summary = std::string{command.summary},
-            .effect = CommandEffect::ViewAction,
-            .binding = bindNoArgumentHandler(
-                [direction = command.direction](CommandContext&) {
-                    return CommandHandlerResult::requireView(
-                        ResolvePaneFocus{direction});
-                }),
+        commands.add(std::string{command.id}, "Pane " + std::string{command.label},
+                     [direction = command.direction] {
+                    return OperationResult{
+                        true, {}, ViewAction{ResolvePaneFocus{direction}}};
         });
     }
 
-    auto declare = [&](std::string id, std::string label, std::string summary) {
+    auto declare = [&](std::string id, std::string label) {
         auto name = id;
-        CommandSpec built{
-            .id = std::move(id),
-            .owner = "shell-layout",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-            .binding = bindNoArgumentHandler(
-                [&runtime, name](CommandContext&) {
-                    return shellCommand(runtime, name);
-                }),
-        };
-        if (!label.empty()) built.label = std::move(label);
-        catalog.add(std::move(built));
+        commands.add(std::move(id), std::move(label), [&runtime, name] {
+            return shellCommand(runtime, name);
+        });
     };
 
-    declare("panel.toggle", "Toggle Sidebar", "Toggle Sidebar");
-    declare("panel.focus", "Focus Sidebar", "Focus Sidebar");
-    declare("panel.toggle_focus", "Toggle Sidebar Focus",
-            "Toggle Sidebar Focus");
-    declare("panel.shrink", "Shrink Sidebar", "Shrink Sidebar");
-    declare("panel.grow", "Grow Sidebar", "Grow Sidebar");
-    declare("panel.show_files", "Show Files Sidebar", "Show Files Sidebar");
-    declare("panel.show_git_status", "Show Git Sidebar", "Show Git Sidebar");
-    declare("panel.show_search", "Show Search Sidebar", "Show Search Sidebar");
-    declare("panel.next_provider", "", "Next Sidebar View");
-    declare("panel.previous_provider", "", "Previous Sidebar View");
-    declare("view.toggle_distraction_free", "", "Toggle Distraction Free");
+    declare("panel.toggle", "Toggle Sidebar");
+    declare("panel.focus", "Focus Sidebar");
+    declare("panel.toggle_focus", "Toggle Sidebar Focus");
+    declare("panel.shrink", "Shrink Sidebar");
+    declare("panel.grow", "Grow Sidebar");
+    declare("panel.show_files", "Show Files Sidebar");
+    declare("panel.show_git_status", "Show Git Sidebar");
+    declare("panel.show_search", "Show Search Sidebar");
+    declare("panel.next_provider", "Panel Next Provider");
+    declare("panel.previous_provider", "Panel Previous Provider");
+    declare("view.toggle_distraction_free", "View Toggle Distraction Free");
 }
 
-void bindRuntimePresentation(CommandCatalog& catalog, Editor& runtime) {
-    registerViewportCommands(catalog, runtime);
-    registerShellLayoutCommands(catalog, runtime);
-    registerPromptStatusCommands(catalog, runtime);
-    registerSettingsCommands(catalog, runtime);
-    registerAppearanceCommands(catalog, runtime);
+void bindRuntimePresentation(Commands& commands, Editor& runtime) {
+    registerViewportCommands(commands, runtime);
+    registerShellLayoutCommands(commands, runtime);
+    registerPromptStatusCommands(commands, runtime);
+    registerSettingsCommands(commands, runtime);
 }
 
-void registerAllCommands(CommandCatalog& catalog, Editor& runtime) {
-    bindRuntimeEditing(catalog, runtime);
-    bindRuntimeFiles(catalog, runtime);
-    bindRuntimePresentation(catalog, runtime);
-    bindRuntimeNavigation(catalog, runtime);
-    bindRuntimeLanguageServices(catalog, runtime);
-    bindRuntimeHelp(catalog, runtime);
+void registerAllCommands(Commands& commands, Editor& runtime) {
+    bindRuntimeEditing(commands, runtime);
+    bindRuntimeFiles(commands, runtime);
+    bindRuntimePresentation(commands, runtime);
+    bindRuntimeNavigation(commands, runtime);
+    bindRuntimeLanguageServices(commands, runtime);
+    bindRuntimeHelp(commands, runtime);
 }
 
 }  // namespace ssg

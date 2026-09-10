@@ -3,7 +3,7 @@
 namespace ssg {
 namespace {
 
-CommandHandlerResult lspFeatureCommand(Editor& runtime, std::string_view id) {
+OperationResult lspFeatureCommand(Editor& runtime, std::string_view id) {
     if (id == "completion.dismiss") {
         runtime.lspFeatures.completion.visible = false;
         return success();
@@ -20,36 +20,26 @@ CommandHandlerResult lspFeatureCommand(Editor& runtime, std::string_view id) {
 
 // Go-to, completion and hover.  None takes an argument: each acts on wherever
 // the cursor already is.
-void registerLspFeatureCommands(CommandCatalog& catalog,
-                                Editor& runtime) {
-    auto declare = [&](std::string id, std::string label, std::string summary) {
+void registerLspFeatureCommands(Commands& commands, Editor& runtime) {
+    auto declare = [&](std::string id, std::string label) {
         auto const name = id;
-        CommandSpec spec{
-            .id = std::move(id),
-            .owner = "lsp-language-features",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-            .binding = bindNoArgumentHandler([&runtime, name](CommandContext&) {
-                return lspFeatureCommand(runtime, name);
-            }),
-        };
-        if (!label.empty()) spec.label = std::move(label);
-        catalog.add(std::move(spec));
+        commands.add(std::move(id), std::move(label), [&runtime, name] {
+            return lspFeatureCommand(runtime, name);
+        });
     };
-    declare("goto.definition", "Go to Definition", "Go to Definition");
-    declare("goto.reference", "", "Reference");
-    declare("completion.open", "", "Open");
-    declare("completion.next", "", "Next");
-    declare("completion.previous", "", "Previous");
-    declare("completion.accept", "", "Accept");
-    declare("completion.dismiss", "", "Dismiss");
-    declare("hover.show", "", "Show");
-    declare("hover.dismiss", "", "Dismiss");
+    declare("goto.definition", "Go to Definition");
+    declare("goto.reference", "Goto Reference");
+    declare("completion.open", "Completion Open");
+    declare("completion.next", "Completion Next");
+    declare("completion.previous", "Completion Previous");
+    declare("completion.accept", "Completion Accept");
+    declare("completion.dismiss", "Completion Dismiss");
+    declare("hover.show", "Hover Show");
+    declare("hover.dismiss", "Hover Dismiss");
 }
 
-void bindRuntimeLanguageServices(CommandCatalog& catalog, Editor& runtime) {
-    registerLspFeatureCommands(catalog, runtime);
+void bindRuntimeLanguageServices(Commands& commands, Editor& runtime) {
+    registerLspFeatureCommands(commands, runtime);
 }
 
 } // namespace ssg

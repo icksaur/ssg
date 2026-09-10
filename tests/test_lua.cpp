@@ -19,11 +19,10 @@ namespace {
 
 using namespace ssg;
 
-// Every catalog command with its Lua-API eligibility.
-std::vector<std::pair<std::string, bool>> catalogWithLuaEligibility() {
-    std::vector<std::pair<std::string, bool>> entries;
+std::vector<std::string> commandIds() {
+    std::vector<std::string> entries;
     for (auto const& facts : ssg::testing::allCommandFacts()) {
-        entries.emplace_back(facts.id, facts.luaApi);
+        entries.push_back(facts.id);
     }
     return entries;
 }
@@ -34,30 +33,27 @@ LuaCommandHostOptions options(std::vector<LuaCommand> commands = {}) {
     return result;
 }
 
-TEST(requiredCatalogMinusExclusionsIsCallable) {
-    auto const catalog = catalogWithLuaEligibility();
+TEST(registeredCommandsAreCallable) {
+    auto const catalog = commandIds();
     std::vector<LuaCommand> commands;
     std::unordered_set<std::string> called;
     std::size_t callableCount = 0;
-    for (auto const& [id, lua] : catalog) {
-        if (lua) {
-            commands.push_back({id});
-            ++callableCount;
-        }
+    for (auto const& id : catalog) {
+        commands.push_back({id});
+        ++callableCount;
     }
     LuaCommandHost host{options(std::move(commands)),
         [&](LuaInvocation const& invocation) {
             called.emplace(invocation.commandId);
-            return CommandHandlerResult::success();
+            return LuaResult{};
         }};
 
-    for (auto const& [id, lua] : catalog) {
+    for (auto const& id : catalog) {
         auto const result = host.evaluate("ssg.command(\"" + id + "\")");
-        ASSERT_EQ(result.accepted(), lua);
-        ASSERT_EQ(result.error, lua ? LuaError::None : LuaError::UnknownCommand);
+        ASSERT_TRUE(result.accepted());
     }
     ASSERT_EQ(called.size(), callableCount);
-    ASSERT_TRUE(callableCount < catalog.size());
+    ASSERT_EQ(callableCount, catalog.size());
 }
 
 
@@ -66,7 +62,7 @@ TEST(instructionAndWallClockBudgetsIsolateCallbacks) {
     configured.instructionBudget = 2'000;
     configured.timeBudget = std::chrono::milliseconds{5};
     LuaCommandHost host{std::move(configured), [](LuaInvocation const&) {
-        return CommandHandlerResult::success();
+        return LuaResult{};
     }};
     ASSERT_EQ(host.evaluate("while true do end").error,
               LuaError::BudgetExhausted);
@@ -81,7 +77,7 @@ TEST(reentrantCallsRestoreTheEnclosingBudget) {
     LuaCommandHost host{std::move(configured),
         [&](LuaInvocation const&) {
             ASSERT_TRUE(reentrant->evaluate("return 1").accepted());
-            return CommandHandlerResult::success();
+            return LuaResult{};
         }};
     reentrant = &host;
     ASSERT_EQ(host.evaluate(
@@ -92,7 +88,7 @@ TEST(reentrantCallsRestoreTheEnclosingBudget) {
 
 TEST(registrationIsAtomicAndDuplicateSafe) {
     LuaCommandHost host{options(), [](LuaInvocation const&) {
-        return CommandHandlerResult::success();
+        return LuaResult{};
     }};
     auto evaluation = host.evaluate(
         "ssg.register_command('half', function() end); error('rollback')");
@@ -125,14 +121,14 @@ TEST(registrationIsAtomicAndDuplicateSafe) {
 
 TEST(dispatchAndPluginFaultsAreIsolated) {
     LuaCommandHost denied{options({{"edit"}}), [](LuaInvocation const&) {
-        return CommandHandlerResult::failure("atomic edit rejected");
+        return LuaResult{LuaError::DispatchFailed, "atomic edit rejected"};
     }};
     ASSERT_EQ(denied.evaluate("ssg.command('edit')").error,
               LuaError::DispatchFailed);
     ASSERT_TRUE(denied.evaluate("return 1").accepted());
 
     LuaCommandHost callbacks{options(), [](LuaInvocation const&) {
-        return CommandHandlerResult::success();
+        return LuaResult{};
     }};
     ASSERT_TRUE(callbacks.evaluate(
         "ssg.register_command('broken', function() error('bad') end)")
@@ -146,7 +142,7 @@ TEST(commandTableArgumentReachesTheDispatcherDecodedAsAStringMap) {
     LuaCommandHost host{options({{"configure"}}),
         [&](LuaInvocation const& invocation) {
             received = invocation.arguments;
-            return CommandHandlerResult::success();
+            return LuaResult{};
         }};
 
     ASSERT_TRUE(host.evaluate(
@@ -164,7 +160,7 @@ TEST(commandWithoutSecondArgumentLeavesArgumentsEmpty) {
     LuaCommandHost host{options({{"noop"}}),
         [&](LuaInvocation const& invocation) {
             received = invocation.arguments;
-            return CommandHandlerResult::success();
+            return LuaResult{};
         }};
     ASSERT_TRUE(host.evaluate("ssg.command('noop')").accepted());
     ASSERT_FALSE(received.has_value());
@@ -175,7 +171,7 @@ TEST(malformedCommandArgumentIsRejectedBeforeTheDispatcherIsCalled) {
     LuaCommandHost host{options({{"configure"}}),
         [&](LuaInvocation const&) {
             dispatched = true;
-            return CommandHandlerResult::success();
+            return LuaResult{};
         }};
 
     // A non-table second argument.
@@ -204,7 +200,7 @@ TEST(malformedCommandArgumentIsRejectedBeforeTheDispatcherIsCalled) {
 
 TEST(unsafeStandardLibrariesAndNativeLoaderAreAbsent) {
     LuaCommandHost host{options(), [](LuaInvocation const&) {
-        return CommandHandlerResult::success();
+        return LuaResult{};
     }};
     ASSERT_TRUE(host.evaluate(
         "assert(package == nil and io == nil and os == nil and debug == nil "
@@ -227,7 +223,7 @@ TEST(aGateThatThrowsRollsTheEvaluationBackLikeAnyOtherRefusal) {
         return {};
     };
     LuaCommandHost host{std::move(configured), [](LuaInvocation const&) {
-        return CommandHandlerResult::success();
+        return LuaResult{};
     }};
 
     auto const thrown =
@@ -248,7 +244,7 @@ TEST(aGateThatRefusesLeavesThePreviousGenerationRegistered) {
                       : LuaResult{};
     };
     LuaCommandHost host{std::move(configured), [](LuaInvocation const&) {
-        return CommandHandlerResult::success();
+        return LuaResult{};
     }};
 
     ASSERT_TRUE(
@@ -276,7 +272,7 @@ TEST(aGateMayNotReEnterTheHostItIsGating) {
         return {};
     };
     LuaCommandHost host{std::move(configured), [](LuaInvocation const&) {
-        return CommandHandlerResult::success();
+        return LuaResult{};
     }};
     self = &host;
 
@@ -289,7 +285,7 @@ TEST(aGateMayNotReEnterTheHostItIsGating) {
 }
 
 SSG_TEST_SUITE(test_lua) {
-    RUN(requiredCatalogMinusExclusionsIsCallable);
+    RUN(registeredCommandsAreCallable);
     RUN(instructionAndWallClockBudgetsIsolateCallbacks);
     RUN(reentrantCallsRestoreTheEnclosingBudget);
     RUN(registrationIsAtomicAndDuplicateSafe);

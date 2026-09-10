@@ -1,6 +1,5 @@
 #pragma once
 
-#include <ssg/CommandCatalog.h>
 #include <ssg/Document.h>
 #include <ssg/platform_files.h>
 #include <ssg/FileArchive.h>

@@ -1,6 +1,5 @@
 #include <ssg/ExternalModificationFlow.h>
 
-#include <ssg/CommandCatalog.h>
 #include <ssg/Editor.h>
 
 #include <algorithm>
@@ -114,7 +113,7 @@ ExternalActionAffordance externalActionAffordance(ExternalAction action) {
     throw std::invalid_argument("unknown external action");
 }
 
-CommandHandlerResult invokeExternalAction(
+OperationResult invokeExternalAction(
     Editor& editor, ExternalActionInvocation const& invocation) {
     if (!editor.external.hasFile(invocation.fileId)) {
         return failure("external change is unavailable");
@@ -155,10 +154,9 @@ CommandHandlerResult invokeExternalAction(
                                           NavigationClass::Programmatic);
 }
 
-void bindExternalModificationCommands(CommandCatalog& catalog,
-                                      Editor& editor) {
+void bindExternalModificationCommands(Commands& commands, Editor& editor) {
     auto applyAction = [&editor](
-                           ExternalAction action) -> CommandHandlerResult {
+                           ExternalAction action) -> OperationResult {
         const auto view = editor.external.viewState();
         if (!view.selected) {
             return failure("no external modification is selected");
@@ -197,63 +195,33 @@ void bindExternalModificationCommands(CommandCatalog& catalog,
         return editor.openOrFocusLiveDiffTab(
             diffFile->get(), NavigationClass::Programmatic);
     };
-    auto spec = [](std::string id, std::string summary) {
-        return CommandSpec{
-            .id = std::move(id),
-            .owner = "external-modification-flow",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-        };
-    };
-    auto action = [&](std::string id, std::string summary,
+    auto action = [&](std::string id, std::string label,
                       ExternalAction which) {
-        auto built = spec(std::move(id), std::move(summary));
-        built.binding = bindNoArgumentHandler(
-            [applyAction, which](CommandContext&) {
-                return applyAction(which);
-            });
-        catalog.add(std::move(built));
+        commands.add(std::move(id), std::move(label), [applyAction, which] {
+            return applyAction(which);
+        });
     };
-    action("external.reload", "Reload", ExternalAction::Reload);
-    action("external.keep_buffer", "Keep Buffer", ExternalAction::KeepBuffer);
-    action("external.open_diff", "Open Diff", ExternalAction::OpenDiff);
-
-    {
-        auto built =
-            spec("external.select_next", "Select Next External Change");
-        built.binding = bindNoArgumentHandler([&editor](CommandContext&) {
+    action("external.reload", "External Reload", ExternalAction::Reload);
+    action("external.keep_buffer", "External Keep Buffer",
+           ExternalAction::KeepBuffer);
+    action("external.open_diff", "External Open Diff", ExternalAction::OpenDiff);
+    commands.add("external.select_next", "External Select Next", [&editor] {
             (void)editor.external.selectNext();
             return success();
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built =
-            spec("external.select_previous", "Select Previous External Change");
-        built.binding = bindNoArgumentHandler([&editor](CommandContext&) {
+    commands.add("external.select_previous", "External Select Previous",
+        [&editor] {
             (void)editor.external.selectPrevious();
             return success();
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("external.focus", "Focus External Change Bar");
-        built.binding = bindNoArgumentHandler([&editor](CommandContext&) {
+    commands.add("external.focus", "External Focus", [&editor] {
             (void)editor.screen.captureExternalFocus();
             return success();
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built =
-            spec("external.focus_return", "Leave External Change Bar");
-        built.binding = bindNoArgumentHandler([&editor](CommandContext&) {
+    commands.add("external.focus_return", "External Focus Return", [&editor] {
             (void)editor.screen.releaseExternalFocus();
             return success();
         });
-        catalog.add(std::move(built));
-    }
 }
 
 ExternalModificationFlow::ExternalModificationFlow(Workspace& workspace,

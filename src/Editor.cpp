@@ -1,4 +1,3 @@
-#include <ssg/CommandCatalog.h>
 #include <ssg/DraftReopenClassifier.h>
 #include <ssg/Editor.h>
 #include <ssg/FilesystemWatcher.h>
@@ -356,7 +355,7 @@ void applyGesture(Editor& editor,
 std::optional<std::string> applyInputMutation(
     Editor& editor, std::optional<EditorMutation> mutation) {
     if (!mutation) return std::nullopt;
-    auto messageIfRejected = [](CommandHandlerResult result)
+    auto messageIfRejected = [](OperationResult result)
         -> std::optional<std::string> {
         if (result.accepted) return std::nullopt;
         return std::move(result.message);
@@ -532,7 +531,7 @@ ClientInputResult executeInputRoute(Editor& editor, RouteViewAction route,
 
 ClientInputResult executeInputRoute(Editor& editor, RouteDispatch route,
                                     RoutedInput routed) {
-    auto result = editor.dispatchLocked(route.command);
+    auto result = editor.dispatchLocked(route.commandId);
     if (result.accepted()) {
         applyGesture(editor, std::move(routed.gestureOnAccepted));
     } else if (routed.clearGestureOnRejection) {
@@ -674,7 +673,7 @@ ClientInputResult executeInputRoute(Editor& editor, SubmitPicker route,
     }
 
     if (route.activation.mode == SearchMode::Command) {
-        auto result = editor.dispatchLocked(ClientCommand{route.candidateId, {}});
+        auto result = editor.dispatchLocked(route.candidateId);
         if (!result.accepted()) {
             return {ClientInputOutcome::Rejected, std::nullopt,
                     CommandResult{result.error, std::move(result.message), {}},
@@ -727,13 +726,9 @@ ClientInputResult executeInputRoute(Editor& editor, SubmitPicker route,
 
 } // namespace
 
-CommandHandlerResult success() { return CommandHandlerResult::success(); }
-CommandHandlerResult failure(std::string message) {
-    return CommandHandlerResult::failure(std::move(message));
-}
-
-std::string wrongPayload(std::string_view commandId) {
-    return std::string{commandId} + " payload has the wrong type";
+OperationResult success() { return {}; }
+OperationResult failure(std::string message) {
+    return {false, std::move(message), std::nullopt};
 }
 
 std::string workspaceMessage(WorkspaceResult const& result) {
@@ -1178,7 +1173,7 @@ const TabState* Editor::activeTabState() const {
     return &*found;
 }
 
-CommandHandlerResult Editor::openOrFocusLiveDiffTab(
+OperationResult Editor::openOrFocusLiveDiffTab(
     const DiffFileView& file, NavigationClass classification) {
     const auto target = diffOpenFile(file);
     const auto diffText = liveDiffTextWithoutRemovedRows(file);
@@ -1223,7 +1218,7 @@ CommandHandlerResult Editor::openOrFocusLiveDiffTab(
     return success();
 }
 
-CommandHandlerResult Editor::openReadOnlyTab(
+OperationResult Editor::openReadOnlyTab(
     TabKind kind, std::string contentIdentity, std::string label,
     std::string text, LanguageId language) {
     auto replacement =
@@ -1252,7 +1247,7 @@ CommandHandlerResult Editor::openReadOnlyTab(
     return success();
 }
 
-CommandHandlerResult Editor::openDraftDiff() {
+OperationResult Editor::openDraftDiff() {
     const auto id = activeDocumentId();
     if (!id) return failure("no active document");
     const auto state = workspace.state(*id);
@@ -1300,7 +1295,7 @@ bool Editor::archiveDiscardedDraft(std::string_view savedPath,
     return createFileExclusively(target, bytes).ok();
 }
 
-CommandHandlerResult Editor::discardDraft() {
+OperationResult Editor::discardDraft() {
     const auto id = activeDocumentId();
     if (!id) return failure("no active document");
     const auto state = workspace.state(*id);
@@ -1330,7 +1325,7 @@ CommandHandlerResult Editor::discardDraft() {
     return updateTabsFor(*id);
 }
 
-CommandHandlerResult Editor::dismissDraftNotice() {
+OperationResult Editor::dismissDraftNotice() {
     const auto id = activeDocumentId();
     if (!id) return failure("no active document");
     const auto found = documentRuntimeStates.find(id->value());
@@ -1507,7 +1502,7 @@ void Editor::refreshTreeForPublication() {
     (void)refreshTree();
 }
 
-CommandHandlerResult Editor::toggleTreeExpanded(
+OperationResult Editor::toggleTreeExpanded(
     const TreeProviderId& providerId, const TreeNodeId& nodeId) {
     const bool expanding = !tree.isExpanded(providerId, nodeId);
     if (!tree.toggleExpanded(providerId, nodeId)) {
@@ -1765,19 +1760,19 @@ void Editor::recordNavigation(NavigationClass classification) {
     (void)follow.applyNavigation({.classification = classification});
 }
 
-CommandHandlerResult Editor::splitPane(SplitAxis axis) {
+OperationResult Editor::splitPane(SplitAxis axis) {
     (void)paneTopology.splitActive(axis);
     return success();
 }
 
-CommandHandlerResult Editor::closePane() {
+OperationResult Editor::closePane() {
     if (!paneTopology.closeActive()) {
         return failure("the only editor pane cannot be closed");
     }
     return success();
 }
 
-CommandHandlerResult Editor::cyclePane(
+OperationResult Editor::cyclePane(
     CycleDirection direction) {
     paneTopology.cycle(direction);
     if (follow.viewState().mode == FollowMode::Following) {
@@ -1798,12 +1793,9 @@ void Editor::resetKeymapToDefault() {
 }
 
 CompiledKeymap const& Editor::resolveInputKeymap() {
-    auto const catalogRevision = catalog.revision();
-    if (!inputKeymap || inputKeymapGeneration != keymapGeneration ||
-        inputCatalogRevision != catalogRevision) {
-        inputKeymap = std::make_unique<CompiledKeymap>(keymap, catalog);
+    if (!inputKeymap || inputKeymapGeneration != keymapGeneration) {
+        inputKeymap = std::make_unique<CompiledKeymap>(keymap);
         inputKeymapGeneration = keymapGeneration;
-        inputCatalogRevision = catalogRevision;
     }
     return *inputKeymap;
 }
@@ -1912,7 +1904,7 @@ EditorCreateResult createEditor(EditorConfig config) {
             return {nullptr,
                     "default keymap lacks a global settings.open escape hatch"};
         }
-        registerAllCommands(editor->catalog, *editor);
+        registerAllCommands(editor->commands, *editor);
         return {std::move(editor), {}};
     } catch (std::exception const& exception) {
         return {nullptr, exception.what()};
@@ -1920,7 +1912,7 @@ EditorCreateResult createEditor(EditorConfig config) {
 }
 
 PumpResult Editor::pump() {
-    if (catalog.dispatchInProgress()) {
+    if (commands.dispatchInProgress()) {
         throw std::logic_error{"worker results cannot be pumped during dispatch"};
     }
     std::lock_guard operationLock{operationMutex};
@@ -1928,16 +1920,16 @@ PumpResult Editor::pump() {
 }
 
 bool Editor::dispatchInProgress() const noexcept {
-    return catalog.dispatchInProgress();
+    return commands.dispatchInProgress();
 }
 
-bool Editor::deferDispatch(ClientCommand command) {
-    if (!catalog.dispatchInProgress()) return false;
-    return deferredCommands.enqueue({std::move(command)});
+bool Editor::deferDispatch(std::string commandId) {
+    if (!commands.dispatchInProgress()) return false;
+    return deferredCommands.enqueue({std::move(commandId)});
 }
 
-CommandResult Editor::dispatchLocked(ClientCommand const& command) {
-    if (workspaceSearchPending() && command.id != "search.workspace") {
+CommandResult Editor::dispatchLocked(std::string_view commandId) {
+    if (workspaceSearchPending() && commandId != "search.workspace") {
         search.cancelWorkspaceSearch();
         workspaceSearchState.reset();
         workspaceSearchCorpus.reset();
@@ -1951,11 +1943,11 @@ CommandResult Editor::dispatchLocked(ClientCommand const& command) {
             (void)tree.setSearchState(searchProvider, std::move(*state));
         }
     }
-    const auto dispatchAndReconcile = [&](const ClientCommand& dispatched) {
+    const auto dispatchAndReconcile = [&](std::string_view dispatched) {
         const auto revisionsBefore = documentRevisions(workspace);
         screen.refreshExternalModificationPresence(
             externalModificationPresent());
-        auto result = catalog.dispatch(dispatched);
+        auto result = commands.dispatch(dispatched);
         reconcileFindDocument();
         screen.refreshNoticePresence(noticePresent());
         screen.refreshExternalModificationPresence(
@@ -1967,79 +1959,36 @@ CommandResult Editor::dispatchLocked(ClientCommand const& command) {
         }
         return result;
     };
-    const auto dispatchAndDrain = [&](const ClientCommand& dispatched) {
-        const auto* requested = dispatched.id.handle().valid()
-                                    ? catalog.find(dispatched.id.handle())
-                                    : catalog.find(dispatched.id.name());
-        const bool routing =
-            requested && requested->effect == CommandEffect::Routing;
+    const auto dispatchAndDrain = [&](std::string_view dispatched) {
         auto outcome = dispatchAndReconcile(dispatched);
         if (!outcome.accepted()) {
             deferredCommands.clear();
             return outcome;
         }
-        if (routing && deferredCommands.size() != 1) {
-            deferredCommands.clear();
-            return CatalogDispatchResult{
-                CommandError::HandlerFailed,
-                "a routing command must queue exactly one target",
-                std::nullopt};
-        }
-        if (outcome.viewAction && !deferredCommands.empty()) {
-            deferredCommands.clear();
-            return CatalogDispatchResult{
-                CommandError::HandlerFailed,
-                "a view-action command cannot defer another command",
-                std::nullopt};
-        }
-        bool directRoutingTarget = routing;
         while (!deferredCommands.empty()) {
             auto deferred = deferredCommands.takeFront();
-            if (directRoutingTarget) {
-                const auto* target = deferred.command.id.handle().valid()
-                                         ? catalog.find(
-                                               deferred.command.id.handle())
-                                         : catalog.find(
-                                               deferred.command.id.name());
-                if (target && target->effect == CommandEffect::Routing) {
-                    deferredCommands.clear();
-                    return CatalogDispatchResult{
-                        CommandError::HandlerFailed,
-                        "a routing command cannot target another routing "
-                        "command",
-                        std::nullopt};
-                }
-            }
-            directRoutingTarget = false;
-            auto const deferredResult =
-                dispatchAndReconcile(deferred.command);
+            auto deferredResult = dispatchAndReconcile(deferred.id);
             if (!deferredResult.accepted()) {
                 deferredCommands.clear();
-                return CatalogDispatchResult{
+                return CommandResult{
                     deferredResult.error,
-                    std::string{deferred.command.id.name()} + ": " +
+                    deferred.id + ": " +
                         deferredResult.message, std::nullopt};
             }
-            if (deferredResult.viewAction &&
-                !deferredCommands.empty()) {
-                deferredCommands.clear();
-                return CatalogDispatchResult{
-                    CommandError::HandlerFailed,
-                    "a deferred view-action command cannot precede another "
-                    "command",
-                    std::nullopt};
+            if (!deferredResult.viewAction) {
+                deferredResult.viewAction = std::move(outcome.viewAction);
             }
             outcome = deferredResult;
         }
         return outcome;
     };
-    auto result = dispatchAndDrain(command);
+    auto result = dispatchAndDrain(commandId);
     return {result.error, std::move(result.message),
             std::move(result.viewAction)};
 }
 
 ClientInputResult Editor::input(ClientInput const& input) {
-    if (catalog.dispatchInProgress()) {
+    if (commands.dispatchInProgress()) {
         return {ClientInputOutcome::Rejected, std::nullopt,
                 CommandResult{CommandError::HandlerFailed,
                               std::string{kNestedDispatchRefusal},
@@ -2055,29 +2004,42 @@ ClientInputResult Editor::input(ClientInput const& input) {
         std::move(routed.action));
 }
 
-CommandResult Editor::dispatch(ClientCommand const& command) {
+CommandResult Editor::dispatchById(std::string_view commandId) {
     // A handler must be refused before taking the non-recursive aggregate lock.
-    if (catalog.dispatchInProgress()) {
+    if (commands.dispatchInProgress()) {
         return {CommandError::HandlerFailed,
                 std::string{kNestedDispatchRefusal}};
     }
     std::lock_guard operationLock{operationMutex};
-    return dispatchLocked(command);
+    return dispatchLocked(commandId);
 }
 
-CommandCatalog const& Editor::commandCatalog() const {
-    return catalog;
+CommandResult Editor::dispatch(std::string_view commandId) {
+    return dispatchById(commandId);
 }
 
-std::vector<CommandHandle> Editor::replaceCommandGeneration(
-    std::span<CommandHandle const> retire,
-    std::vector<CommandSpec> commands) {
+Commands const& Editor::commandRegistry() const {
+    return commands;
+}
+
+void Editor::addCommand(std::string id, std::string label,
+                        std::function<CommandResult()> handler) {
     if (dispatchInProgress()) {
         throw std::logic_error{
-            "command generations cannot be replaced during dispatch"};
+            "commands cannot be registered during dispatch"};
     }
     std::lock_guard operationLock{operationMutex};
-    return catalog.replaceGeneration(retire, std::move(commands));
+    commands.add(std::move(id), std::move(label), std::move(handler));
+}
+
+void Editor::replaceCommands(std::span<std::string const> oldIds,
+                             Commands::Replacements replacements) {
+    if (dispatchInProgress()) {
+        throw std::logic_error{
+            "commands cannot be replaced during dispatch"};
+    }
+    std::lock_guard operationLock{operationMutex};
+    commands.replace(oldIds, std::move(replacements));
 }
 
 } // namespace ssg

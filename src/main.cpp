@@ -360,7 +360,7 @@ ClientInputOutcome handleInputResult(SsgContext& context, ClientInputResult resu
         if (paste.kind == SystemClipboardPasteKind::CommittedText) {
             (void)routeInput(context, KeyStroke{}, paste.text);
         } else if (paste.kind == SystemClipboardPasteKind::InternalRegister) {
-            (void)context.runtime.dispatch({"clipboard.paste", {}});
+            (void)context.runtime.dispatch("clipboard.paste");
             context.activeSnapshot.reset();
         }
     } else if (result.clientOwned) {
@@ -500,7 +500,6 @@ void handlePointer(SsgContext& context, const Decoded& decoded, PointerState& po
     if (plan.semantic_input) {
         (void)handleInputResult(context, context.runtime.input(*plan.semantic_input));
     }
-    if (plan.command) (void)context.runtime.dispatch(*plan.command);
     if (plan.client_scroll && plan.client_scroll->target == WheelTarget::palette) {
         context.palette->scrollToFraction(plan.client_scroll->numerator, plan.client_scroll->denominator);
     }
@@ -648,7 +647,7 @@ int main(int argc, char** argv) {
         openedNamedFile = openResult.accepted;
     }
     if (!startsWithAnEditableDocument) {
-        startsWithAnEditableDocument = runtime.dispatch({"file.new", {}}).accepted();
+        startsWithAnEditableDocument = runtime.dispatch("file.new").accepted();
     }
     recordStartupMark("post_open");
 
@@ -709,7 +708,7 @@ int main(int argc, char** argv) {
                     // The file provider does not exist until deferred enrichment.
                     // A named file should not start obscured by the sidebar.
                     if (!openedNamedFile) {
-                        if (auto const panelResult = runtime.dispatch({"panel.show_files", {}}); !panelResult.accepted()) {
+                        if (auto const panelResult = runtime.dispatch("panel.show_files"); !panelResult.accepted()) {
                             std::fprintf(stderr, "ssg: could not open Files sidebar: %s\n", panelResult.message.c_str());
                         }
                     }

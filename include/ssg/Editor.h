@@ -2,7 +2,7 @@
 
 #include <ssg/ClientInput.h>
 #include <ssg/ClipboardRegister.h>
-#include <ssg/CommandCatalog.h>
+#include <ssg/Command.h>
 #include <ssg/CompiledKeymap.h>
 #include <ssg/DiffModel.h>
 #include <ssg/DocumentHistory.h>
@@ -37,7 +37,6 @@
 #include <ssg/Workspace.h>
 #include <ssg/WorkspaceFileIndex.h>
 
-#include <any>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -105,13 +104,16 @@ struct PumpResult {
     bool advanced;
 };
 
-// Casts a command payload to the expected type, or null when it holds something
-// else. The one definition shared by every runtime handler file, which each
-// used to re-declare in its own anonymous namespace.
-template <typename T>
-[[nodiscard]] T const* payloadAs(std::any const& payload) {
-    return std::any_cast<T>(&payload);
-}
+struct OperationResult {
+    bool accepted = true;
+    std::string message;
+    std::optional<ViewAction> viewAction;
+
+    operator CommandResult() const {
+        return {accepted ? CommandError::None : CommandError::HandlerFailed,
+                message, viewAction};
+    }
+};
 
 // Resolves a boolean setting, falling back when the stored value is not a bool.
 // Shared by the presentation commands and the runtime's own reads.
@@ -150,32 +152,40 @@ struct DocumentRuntimeState {
     DraftReopenOutcome reopen = DraftReopenOutcome::None;
 };
 
-void bindRuntimeEditing(CommandCatalog& catalog, Editor& runtime);
-void bindRuntimeFiles(CommandCatalog& catalog, Editor& runtime);
-void bindRuntimePresentation(CommandCatalog& catalog, Editor& runtime);
-void bindRuntimeNavigation(CommandCatalog& catalog, Editor& runtime);
-void bindRuntimeLanguageServices(CommandCatalog& catalog, Editor& runtime);
-void bindRuntimeHelp(CommandCatalog& catalog, Editor& runtime);
-void registerAllCommands(CommandCatalog& catalog, Editor& runtime);
-[[nodiscard]] CommandHandlerResult applyEditorSelections(
+void bindRuntimeEditing(Commands& commands, Editor& runtime);
+void bindRuntimeFiles(Commands& commands, Editor& runtime);
+void bindRuntimePresentation(Commands& commands, Editor& runtime);
+void bindRuntimeNavigation(Commands& commands, Editor& runtime);
+void bindRuntimeLanguageServices(Commands& commands, Editor& runtime);
+void bindRuntimeHelp(Commands& commands, Editor& runtime);
+void registerAllCommands(Commands& commands, Editor& runtime);
+[[nodiscard]] OperationResult applyEditorSelections(
     Editor& runtime, ApplySelections mutation);
-[[nodiscard]] CommandHandlerResult applyEditorTextInput(
+[[nodiscard]] OperationResult applyEditorTextInput(
     Editor& runtime, TextInputCommand command,
     TextInputArguments arguments = {});
-[[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
+[[nodiscard]] OperationResult executeFindReplaceCommand(
     Editor& runtime, FindReplaceCommand command);
 [[nodiscard]] FindReplaceOperationResult applyFindQuery(
     Editor& runtime, std::string query);
 [[nodiscard]] FindReplaceOperationResult applyReplacement(
     Editor& runtime, std::string replacement);
-[[nodiscard]] CommandHandlerResult activateTab(Editor& runtime, TabId tabId);
-[[nodiscard]] CommandHandlerResult closeTabById(Editor& runtime, TabId tabId);
-[[nodiscard]] CommandHandlerResult activateTreeNode(Editor& runtime,
-                                                    TreeNodeId nodeId);
-[[nodiscard]] CommandHandlerResult invokeExternalAction(
+[[nodiscard]] OperationResult activateTab(Editor& runtime, TabId tabId);
+[[nodiscard]] OperationResult closeTabById(Editor& runtime, TabId tabId);
+[[nodiscard]] OperationResult activateTreeNode(Editor& runtime,
+                                                TreeNodeId nodeId);
+[[nodiscard]] OperationResult invokeExternalAction(
     Editor& runtime, ExternalActionInvocation const& invocation);
-[[nodiscard]] CommandHandlerResult applyUiNodeActivation(Editor& runtime,
-                                                         UiNodeId const& nodeId);
+[[nodiscard]] OperationResult applyUiNodeActivation(Editor& runtime,
+                                                    UiNodeId const& nodeId);
+[[nodiscard]] OperationResult applyThemeSet(Editor& runtime,
+                                            ThemeSetArguments arguments);
+[[nodiscard]] OperationResult applyStyleDefine(Editor& runtime,
+                                               StyleDefineArguments arguments);
+[[nodiscard]] OperationResult applyKeymapBind(Editor& runtime,
+                                              KeymapBindArguments arguments);
+[[nodiscard]] OperationResult applyKeymapUnbind(Editor& runtime,
+                                                KeymapUnbindArguments arguments);
 
 struct Editor final {
 private:
@@ -198,14 +208,15 @@ public:
     Editor& operator=(Editor&&) = delete;
 
     [[nodiscard]] PumpResult pump();
-    [[nodiscard]] CommandResult dispatch(ClientCommand const& command);
+    [[nodiscard]] CommandResult dispatch(std::string_view commandId);
     [[nodiscard]] ClientInputResult input(ClientInput const& input);
-    [[nodiscard]] bool deferDispatch(ClientCommand command);
+    [[nodiscard]] bool deferDispatch(std::string commandId);
     [[nodiscard]] bool dispatchInProgress() const noexcept;
-    [[nodiscard]] CommandCatalog const& commandCatalog() const;
-    [[nodiscard]] std::vector<CommandHandle> replaceCommandGeneration(
-        std::span<CommandHandle const> retire,
-        std::vector<CommandSpec> commands);
+    [[nodiscard]] Commands const& commandRegistry() const;
+    void addCommand(std::string id, std::string label,
+                    std::function<CommandResult()> handler);
+    void replaceCommands(std::span<std::string const> oldIds,
+                         Commands::Replacements replacements);
     void startWorkspaceSearch(std::string query, std::uint64_t sourceRevision);
     void startWorkspaceSearch(ParsedSearchQuery query,
                               std::uint64_t sourceRevision);
@@ -297,7 +308,6 @@ public:
 private:
     std::unique_ptr<CompiledKeymap> inputKeymap;
     std::optional<std::uint64_t> inputKeymapGeneration;
-    std::optional<CatalogRevision> inputCatalogRevision;
 
 public:
     ThemeSnapshot theme{};
@@ -309,7 +319,7 @@ public:
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
     std::uint64_t workspaceReplaceGeneration = 0;
     mutable std::mutex operationMutex;
-    CommandCatalog catalog;
+    Commands commands;
     // Commands a running handler asked to dispatch, run in order once the
     // operation lock releases. The operation mutex is not reentrant, so a
     // handler cannot dispatch; this is how it asks for one.
@@ -323,7 +333,7 @@ public:
     // Deferring rather than nesting keeps each command complete before the next
     // command starts.
     struct DeferredCommand {
-        ClientCommand command;
+        std::string id;
     };
 
     // The queue, shaped so `Editor::deferDispatch` is the only way to ADD to it
@@ -348,7 +358,7 @@ public:
         }
         [[nodiscard]] bool contains(std::string_view commandId) const noexcept {
             for (const auto& deferred : commands_) {
-                if (deferred.command.id == commandId) return true;
+                if (deferred.id == commandId) return true;
             }
             return false;
         }
@@ -375,19 +385,12 @@ public:
 
     DeferredCommandQueue deferredCommands;
 
-    CommandResult dispatchLocked(ClientCommand const& command);
+    CommandResult dispatchById(std::string_view commandId);
+    CommandResult dispatchLocked(std::string_view commandId);
     // The open file picker's candidate set, built when the picker opens and
     // rebuilt on filesystem refresh only while that picker remains open.
     std::vector<PaletteCandidate> fileCandidates;
     std::vector<std::string> loadedFilesystemDirectories;
-    // Command-mode palette candidates are the whole catalog with each command's
-    // key hint resolved -- O(bindings x commands) -- so they are cached and
-    // rebuilt only when the catalog or keymap changes, keeping the palette off
-    // the per-frame O(BxC) path (like fileCandidates caches the file walk).
-    mutable std::vector<PaletteCandidate> commandCandidateCache;
-    mutable CatalogRevision commandCandidateCatalogRevision = 0;
-    mutable KeymapViewState commandCandidateKeymap;
-    mutable bool commandCandidateCacheValid = false;
     std::optional<WorkspaceCorpus> workspaceSearchCorpus;
     std::optional<WorkspaceSearchState> workspaceSearchState;
     std::optional<std::uint64_t> panelWorkspaceSearchGeneration;
@@ -484,15 +487,15 @@ public:
     [[nodiscard]] PaletteViewState paletteView() const;
     // The geometry-free tree state; GridPresenter resolves its visible window.
     [[nodiscard]] TreeViewState treeView() const;
-    [[nodiscard]] CommandHandlerResult updateTabsFor(FileDocumentId document);
-    [[nodiscard]] CommandHandlerResult activateDocument(FileDocumentId document);
+    [[nodiscard]] OperationResult updateTabsFor(FileDocumentId document);
+    [[nodiscard]] OperationResult activateDocument(FileDocumentId document);
     [[nodiscard]] DiffIngressResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
     // Records that SSG itself wrote `relativePath`, so the matching watcher
     // event is correlated as a self-save and never raises a false external
     // conflict. Ordered by the save primitive before the write is observable;
     // the library owns this, a client never participates.
-    [[nodiscard]] CommandHandlerResult
+    [[nodiscard]] OperationResult
     openOrFocusLiveDiffTab(const DiffFileView& file,
                            NavigationClass classification);
     // Open (or re-focus) a read-only, in-memory tab of generated text content.
@@ -503,7 +506,7 @@ public:
     // identity REFRESHES the content by remove+recreate -- it constructs a
     // fresh read-only document rather than editing the existing one, so the
     // read-only edit chokepoint (Document::apply) is never bypassed.
-    [[nodiscard]] CommandHandlerResult
+    [[nodiscard]] OperationResult
     openReadOnlyTab(TabKind kind, std::string contentIdentity,
                     std::string label, std::string text,
                     LanguageId language = LanguageId::plainText());
@@ -511,16 +514,16 @@ public:
     // the target) against its CURRENT disk content (the baseline), via the
     // source-agnostic non-git diff engine. A missing/unreadable disk file diffs
     // the draft against empty. The tab is a derived view, not persisted.
-    [[nodiscard]] CommandHandlerResult openDraftDiff();
+    [[nodiscard]] OperationResult openDraftDiff();
     // Discard the active saved document's unsaved edits in favour of the disk
     // content (the notice's "Use disk"). The discarded edits are archived first
     // (reversible), then the buffer is reloaded from disk, the scratch draft
     // removed, and the reopen notice cleared. Non-destructive: no user file is
     // written, and the draft survives in the archive.
-    [[nodiscard]] CommandHandlerResult discardDraft();
+    [[nodiscard]] OperationResult discardDraft();
     // Dismiss the draft-conflict notice for the active document, leaving the
     // draft in place (the "Dismiss" action). Clears only the notice state.
-    [[nodiscard]] CommandHandlerResult dismissDraftNotice();
+    [[nodiscard]] OperationResult dismissDraftNotice();
     // Copy discarded draft content into the draft archive (beside the scratch
     // store) under a unique name, so a mis-clicked discard is recoverable.
     // Returns false only when the archive copy could not be written.
@@ -531,13 +534,13 @@ public:
     [[nodiscard]] bool revealDiffTarget(const FollowTarget& target,
                                         NavigationClass classification);
     void recordNavigation(NavigationClass classification);
-    [[nodiscard]] CommandHandlerResult splitPane(SplitAxis axis);
-    [[nodiscard]] CommandHandlerResult closePane();
-    [[nodiscard]] CommandHandlerResult cyclePane(CycleDirection direction);
+    [[nodiscard]] OperationResult splitPane(SplitAxis axis);
+    [[nodiscard]] OperationResult closePane();
+    [[nodiscard]] OperationResult cyclePane(CycleDirection direction);
     [[nodiscard]] bool focusPane(PaneId pane);
     [[nodiscard]] bool refreshTree();
     void refreshTreeForPublication();
-    [[nodiscard]] CommandHandlerResult toggleTreeExpanded(
+    [[nodiscard]] OperationResult toggleTreeExpanded(
         const TreeProviderId& providerId, const TreeNodeId& nodeId);
     // Re-assemble the authority-owned screen schema from the given UI inputs
     // and migrate the interaction over it. Takes the inputs as parameters (not
@@ -583,36 +586,35 @@ public:
     [[nodiscard]] int gitDiffWakeDescriptor() const;
 };
 
-[[nodiscard]] CommandHandlerResult success();
-[[nodiscard]] CommandHandlerResult failure(std::string message);
+[[nodiscard]] OperationResult success();
+[[nodiscard]] OperationResult failure(std::string message);
 [[nodiscard]] std::string workspaceMessage(WorkspaceResult const& result);
 [[nodiscard]] std::string tabMessage(TabResult const& result);
-[[nodiscard]] std::string wrongPayload(std::string_view commandId);
-[[nodiscard]] CommandHandlerResult createFileByPath(Editor& runtime,
-                                                     std::string_view path);
-[[nodiscard]] CommandHandlerResult openRecentFile(Editor& runtime,
-                                                   std::size_t index);
-[[nodiscard]] CommandHandlerResult openDroppedContent(
+[[nodiscard]] OperationResult createFileByPath(Editor& runtime,
+                                                std::string_view path);
+[[nodiscard]] OperationResult openRecentFile(Editor& runtime,
+                                              std::size_t index);
+[[nodiscard]] OperationResult openDroppedContent(
     Editor& runtime, std::span<const std::uint8_t> bytes,
     std::string_view label);
-[[nodiscard]] CommandHandlerResult reopenWithEncoding(Editor& runtime,
-                                                       TextEncoding encoding);
-[[nodiscard]] CommandHandlerResult setFileEncoding(Editor& runtime,
-                                                    TextEncoding encoding);
-[[nodiscard]] CommandHandlerResult setFileLineEnding(Editor& runtime,
-                                                      LineEnding lineEnding);
-[[nodiscard]] CommandHandlerResult setFileFinalNewline(Editor& runtime,
-                                                        bool finalNewline);
-[[nodiscard]] CommandHandlerResult applyFilePathCompletion(
+[[nodiscard]] OperationResult reopenWithEncoding(Editor& runtime,
+                                                  TextEncoding encoding);
+[[nodiscard]] OperationResult setFileEncoding(Editor& runtime,
+                                               TextEncoding encoding);
+[[nodiscard]] OperationResult setFileLineEnding(Editor& runtime,
+                                                 LineEnding lineEnding);
+[[nodiscard]] OperationResult setFileFinalNewline(Editor& runtime,
+                                                   bool finalNewline);
+[[nodiscard]] OperationResult applyFilePathCompletion(
     Editor& runtime, PromptCompletion completion, std::string_view path);
-[[nodiscard]] CommandHandlerResult applyGotoLine(Editor& runtime,
-                                                 std::string_view lineText);
-[[nodiscard]] CommandHandlerResult navigateTo(
+[[nodiscard]] OperationResult applyGotoLine(Editor& runtime,
+                                            std::string_view lineText);
+[[nodiscard]] OperationResult navigateTo(
     Editor& runtime, NavigationTarget target,
     NavigationOrigin origin = NavigationOrigin::User);
-[[nodiscard]] CommandHandlerResult selectTreeNode(Editor& runtime,
-                                                  TreeNodeId nodeId);
-[[nodiscard]] CommandHandlerResult invokeTreeNodeCommand(
+[[nodiscard]] OperationResult selectTreeNode(Editor& runtime,
+                                              TreeNodeId nodeId);
+[[nodiscard]] OperationResult invokeTreeNodeCommand(
     Editor& runtime, TreeCommandInvocation invocation);
 
 enum class DiffNavigation : std::uint8_t {
@@ -621,8 +623,8 @@ enum class DiffNavigation : std::uint8_t {
     OpenFile,
 };
 
-[[nodiscard]] CommandHandlerResult navigateDiff(Editor& runtime,
-                                                DiffFileId fileId,
-                                                DiffNavigation navigation);
+[[nodiscard]] OperationResult navigateDiff(Editor& runtime,
+                                           DiffFileId fileId,
+                                           DiffNavigation navigation);
 
 } // namespace ssg

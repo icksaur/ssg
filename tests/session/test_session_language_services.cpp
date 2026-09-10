@@ -29,7 +29,7 @@ TEST(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport) {
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"code.txt"}).accepted());
     ASSERT_TRUE(ssg::test::typeText(runtime, "x").accepted());
 
-    auto completion = runtime.dispatch({"completion.open",  {}});
+    auto completion = runtime.dispatch("completion.open");
     ASSERT_FALSE(completion.accepted());
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());

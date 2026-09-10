@@ -71,7 +71,7 @@ TEST(paneCommandsMutatePresentedTopology) {
     if (!fixture.session) return;
     auto& session = *fixture.session;
 
-    auto split = session.dispatch({"pane.split_horizontal", {}});
+    auto split = session.dispatch("pane.split_horizontal");
     ASSERT_TRUE(split.completed());
     ASSERT_FALSE(split.viewAction.has_value());
 
@@ -82,7 +82,7 @@ TEST(paneCommandsMutatePresentedTopology) {
               (std::vector<ssg::PaneId>{ssg::PaneId{1}, ssg::PaneId{2}}));
     ASSERT_EQ(activePane(*snapshot), std::optional{ssg::PaneId{2}});
 
-    auto next = session.dispatch({"pane.next", {}});
+    auto next = session.dispatch("pane.next");
     ASSERT_TRUE(next.completed());
     snapshot = ssg::test::projectGridFrame(session);
     ASSERT_TRUE(snapshot.has_value());
@@ -91,7 +91,7 @@ TEST(paneCommandsMutatePresentedTopology) {
     ASSERT_EQ(snapshot->followMode, ssg::FollowMode::Paused);
 
     auto previous =
-        session.dispatch({"pane.previous",  {}});
+        session.dispatch("pane.previous");
     ASSERT_TRUE(previous.completed());
     snapshot = ssg::test::projectGridFrame(session);
     ASSERT_TRUE(snapshot.has_value());
@@ -105,14 +105,14 @@ TEST(closeUsesStableOrderAndRejectsTheOnlyPane) {
     if (!fixture.session) return;
     auto& session = *fixture.session;
     ASSERT_TRUE(session
-                    .dispatch({"pane.split_vertical",  {}})
+                    .dispatch("pane.split_vertical")
                     .completed());
 
     auto focus = session.input(ssg::ViewTransitionInput{
                     ssg::PaneFocusTransition{ssg::PaneId{1}}});
     ASSERT_EQ(focus.outcome, ssg::ClientInputOutcome::Dispatched);
     auto closed =
-        session.dispatch({"pane.close",  {}});
+        session.dispatch("pane.close");
     ASSERT_TRUE(closed.completed());
     auto snapshot = ssg::test::projectGridFrame(session);
     ASSERT_TRUE(snapshot.has_value());
@@ -121,7 +121,7 @@ TEST(closeUsesStableOrderAndRejectsTheOnlyPane) {
               std::vector<ssg::PaneId>{ssg::PaneId{2}});
     ASSERT_EQ(activePane(*snapshot), std::optional{ssg::PaneId{2}});
 
-    auto rejected = session.dispatch({"pane.close", {}});
+    auto rejected = session.dispatch("pane.close");
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(rejected.error, ssg::CommandError::HandlerFailed);
     snapshot = ssg::test::projectGridFrame(session);
@@ -138,7 +138,7 @@ TEST(focusRejectsAnUnknownPaneIdentity) {
     if (!fixture.session) return;
     auto& session = *fixture.session;
     ASSERT_TRUE(session
-                    .dispatch({"pane.split_horizontal",  {}})
+                    .dispatch("pane.split_horizontal")
                     .completed());
 
     auto focused = session.input(ssg::ViewTransitionInput{

@@ -78,7 +78,7 @@ void runState(const UiState& state) {
         (void)ssg::test::openFile(runtime, std::string{"doc.txt"});
     }
     for (auto const& command : state.commands) {
-        (void)runtime.dispatch({command,  {}});
+        (void)runtime.dispatch(command);
     }
 
     for (auto const dims : sweep()) {

@@ -1078,7 +1078,6 @@ TEST(routePointerFieldHitEmitsUiActivationCommand) {
         auto plan = ssg::route_pointer(
             hit, ssg::PointerButton::left, ssg::PointerKind::press, false,
             false, std::nullopt, targets);
-        ASSERT_FALSE(plan.command.has_value());
         ASSERT_TRUE(plan.semantic_input.has_value());
         if (plan.semantic_input) {
             const auto* input =

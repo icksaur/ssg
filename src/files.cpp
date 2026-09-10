@@ -32,8 +32,8 @@ void pruneArchiveReportingFailures(Editor& runtime) {
         "could not fully prune the deleted-file archive: " + report.message);
 }
 
-CommandHandlerResult openDocumentResult(Editor& runtime,
-                                          WorkspaceResult const& result) {
+OperationResult openDocumentResult(Editor& runtime,
+                                   WorkspaceResult const& result) {
     if (!result.accepted() || !result.document) return failure(workspaceMessage(result));
     return runtime.activateDocument(*result.document);
 }
@@ -64,11 +64,10 @@ std::optional<std::string> pathCommandPrecondition(
 }
 
 // Shared post-operation cleanup for tab operations.
-CommandHandlerResult finishTabOperation(Editor& runtime,
-                                         TabResult const& result,
-                                         std::optional<TabId> prevActive,
-                                         bool focusEditorOnSuccess,
-                                         bool trackNavigation) {
+OperationResult finishTabOperation(Editor& runtime, TabResult const& result,
+                                  std::optional<TabId> prevActive,
+                                  bool focusEditorOnSuccess,
+                                  bool trackNavigation) {
     if (!result.accepted()) return failure(tabMessage(result));
     runtime.clampSelectionToActiveDocument();
     runtime.refreshSyntax();
@@ -86,25 +85,25 @@ bool closesTab(const TabState& state, const TabLifecycleResult& result) {
 
 }  // namespace
 
-CommandHandlerResult createFileByPath(Editor& runtime, std::string_view path) {
+OperationResult createFileByPath(Editor& runtime, std::string_view path) {
     if (path.empty()) return failure("file path must not be empty");
     auto result = runtime.workspace.newFile(std::string{path});
     return openDocumentResult(runtime, result);
 }
 
-CommandHandlerResult openRecentFile(Editor& runtime, std::size_t index) {
+OperationResult openRecentFile(Editor& runtime, std::size_t index) {
     auto result = runtime.workspace.openRecent(index);
     return openDocumentResult(runtime, result);
 }
 
-CommandHandlerResult openDroppedContent(Editor& runtime,
-                                         std::span<const std::uint8_t> bytes,
-                                         std::string_view label) {
+OperationResult openDroppedContent(Editor& runtime,
+                                   std::span<const std::uint8_t> bytes,
+                                   std::string_view label) {
     auto result = runtime.workspace.openDroppedContent(bytes, label);
     return openDocumentResult(runtime, result);
 }
 
-CommandHandlerResult reopenWithEncoding(Editor& runtime, TextEncoding encoding) {
+OperationResult reopenWithEncoding(Editor& runtime, TextEncoding encoding) {
     if (runtime.activeTabIsLiveDiff())
         return failure(
             "file.reopen_with_encoding is unavailable in live diff tabs");
@@ -116,7 +115,7 @@ CommandHandlerResult reopenWithEncoding(Editor& runtime, TextEncoding encoding) 
     return runtime.updateTabsFor(*document);
 }
 
-CommandHandlerResult setFileEncoding(Editor& runtime, TextEncoding encoding) {
+OperationResult setFileEncoding(Editor& runtime, TextEncoding encoding) {
     if (runtime.activeTabIsLiveDiff())
         return failure("file.set_encoding is unavailable in live diff tabs");
     auto document = runtime.activeDocumentId();
@@ -127,7 +126,7 @@ CommandHandlerResult setFileEncoding(Editor& runtime, TextEncoding encoding) {
     return runtime.updateTabsFor(*document);
 }
 
-CommandHandlerResult setFileLineEnding(Editor& runtime, LineEnding lineEnding) {
+OperationResult setFileLineEnding(Editor& runtime, LineEnding lineEnding) {
     if (runtime.activeTabIsLiveDiff())
         return failure("file.set_line_ending is unavailable in live diff tabs");
     auto document = runtime.activeDocumentId();
@@ -138,7 +137,7 @@ CommandHandlerResult setFileLineEnding(Editor& runtime, LineEnding lineEnding) {
     return runtime.updateTabsFor(*document);
 }
 
-CommandHandlerResult setFileFinalNewline(Editor& runtime, bool finalNewline) {
+OperationResult setFileFinalNewline(Editor& runtime, bool finalNewline) {
     if (runtime.activeTabIsLiveDiff())
         return failure(
             "file.set_final_newline is unavailable in live diff tabs");
@@ -150,13 +149,13 @@ CommandHandlerResult setFileFinalNewline(Editor& runtime, bool finalNewline) {
     return runtime.updateTabsFor(*document);
 }
 
-CommandHandlerResult activateTab(Editor& runtime, TabId tabId) {
+OperationResult activateTab(Editor& runtime, TabId tabId) {
     const auto prevActive = runtime.tabs.viewState().active;
     auto result = runtime.tabs.activate(tabId);
     return finishTabOperation(runtime, result, prevActive, true, true);
 }
 
-CommandHandlerResult closeTabById(Editor& runtime, TabId tabId) {
+OperationResult closeTabById(Editor& runtime, TabId tabId) {
     const auto& tabs = runtime.tabs.viewState().tabs;
     const auto found = std::find_if(
         tabs.begin(), tabs.end(),
@@ -167,9 +166,9 @@ CommandHandlerResult closeTabById(Editor& runtime, TabId tabId) {
     return finishTabOperation(runtime, result, std::nullopt, false, false);
 }
 
-CommandHandlerResult applyFilePathCompletion(Editor& runtime,
-                                             PromptCompletion completion,
-                                             std::string_view path) {
+OperationResult applyFilePathCompletion(Editor& runtime,
+                                        PromptCompletion completion,
+                                        std::string_view path) {
     const auto command = [&]() -> std::optional<FileCommand> {
         switch (completion) {
         case PromptCompletion::WorkspaceOpenDirectory:
@@ -230,7 +229,7 @@ CommandHandlerResult applyFilePathCompletion(Editor& runtime,
     return failure("unsupported path completion");
 }
 
-CommandHandlerResult Editor::updateTabsFor(FileDocumentId document) {
+OperationResult Editor::updateTabsFor(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state) return failure("workspace document does not exist");
     auto const* opened = workspace.tryDocument(document);
@@ -241,7 +240,7 @@ CommandHandlerResult Editor::updateTabsFor(FileDocumentId document) {
     return result.accepted() ? success() : failure(tabMessage(result));
 }
 
-CommandHandlerResult Editor::activateDocument(FileDocumentId document) {
+OperationResult Editor::activateDocument(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state) return failure("workspace document does not exist");
     auto const* opened = workspace.tryDocument(document);
@@ -295,51 +294,25 @@ CommandHandlerResult Editor::activateDocument(FileDocumentId document) {
 // Opening, saving, renaming and deleting files. All registered commands are
 // no-argument; callers with explicit paths use applyFilePathCompletion or the
 // typed file functions directly.
-void registerFileCommands(CommandCatalog& catalog, Editor& runtime) {
-    auto spec = [](std::string id, std::string summary) {
-        return CommandSpec{
-            .id = std::move(id),
-            .owner = "file-commands",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-        };
-    };
-
-    {
-        auto built = spec("workspace.open_directory", "Open Directory");
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+void registerFileCommands(Commands& commands, Editor& runtime) {
+    commands.add("workspace.open_directory", "Workspace Open Directory",
+        [&runtime] {
             auto opened = openGenericPrompt(runtime.screen.prompt(),
                 fileCommandPathPrompt(FileCommand::OpenDirectory));
             if (!opened.accepted()) return failure(opened.error->message);
             return success();
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("file.new", "New File");
-        built.label = "New File";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("file.new", "New File", [&runtime] {
             auto result = runtime.workspace.newDocument();
             return openDocumentResult(runtime, result);
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("file.open", "Open File");
-        built.label = "Open File";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("file.open", "Open File", [&runtime] {
             auto opened = openGenericPrompt(runtime.screen.prompt(),
                 fileCommandPathPrompt(FileCommand::Open));
             if (!opened.accepted()) return failure(opened.error->message);
             return success();
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("file.save", "Save File");
-        built.label = "Save File";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("file.save", "Save File", [&runtime] {
             if (runtime.activeTabIsLiveDiff())
                 return failure("command is unavailable in live diff tabs");
             auto id = runtime.activeDocumentId();
@@ -361,23 +334,13 @@ void registerFileCommands(CommandCatalog& catalog, Editor& runtime) {
             if (!result.accepted()) return failure(workspaceMessage(result));
             return runtime.updateTabsFor(*id);
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("file.save_all", "Save All Files");
-        built.label = "Save All Files";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("file.save_all", "Save All Files", [&runtime] {
             auto result = runtime.workspace.saveAll();
             if (!result.accepted()) return failure(workspaceMessage(result));
             for (auto id : runtime.workspace.documents()) (void)runtime.updateTabsFor(id);
             return success();
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("file.save_as", "Save File As");
-        built.label = "Save File As";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("file.save_as", "Save File As", [&runtime] {
             if (auto refusal = pathCommandPrecondition(runtime, FileCommand::SaveAs))
                 return failure(*refusal);
             auto opened = openGenericPrompt(runtime.screen.prompt(),
@@ -385,12 +348,7 @@ void registerFileCommands(CommandCatalog& catalog, Editor& runtime) {
             if (!opened.accepted()) return failure(opened.error->message);
             return success();
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("file.reload", "Reload File");
-        built.label = "Reload File";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("file.reload", "Reload File", [&runtime] {
             if (runtime.activeTabIsLiveDiff())
                 return failure("command is unavailable in live diff tabs");
             auto id = runtime.activeDocumentId();
@@ -401,12 +359,7 @@ void registerFileCommands(CommandCatalog& catalog, Editor& runtime) {
             runtime.refreshSyntax();
             return runtime.updateTabsFor(*id);
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("file.rename", "Rename File");
-        built.label = "Rename File";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("file.rename", "Rename File", [&runtime] {
             if (auto refusal = pathCommandPrecondition(runtime, FileCommand::Rename))
                 return failure(*refusal);
             auto opened = openGenericPrompt(runtime.screen.prompt(),
@@ -414,12 +367,7 @@ void registerFileCommands(CommandCatalog& catalog, Editor& runtime) {
             if (!opened.accepted()) return failure(opened.error->message);
             return success();
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("file.delete", "Delete File");
-        built.label = "Delete File";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("file.delete", "Delete File", [&runtime] {
             if (runtime.activeTabIsLiveDiff())
                 return failure("command is unavailable in live diff tabs");
             auto id = runtime.activeDocumentId();
@@ -439,47 +387,23 @@ void registerFileCommands(CommandCatalog& catalog, Editor& runtime) {
             (void)runtime.refreshTree();
             return success();
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = spec("file.new_directory", "New Directory");
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("file.new_directory", "File New Directory", [&runtime] {
             auto opened = openGenericPrompt(runtime.screen.prompt(),
                 fileCommandPathPrompt(FileCommand::NewDirectory));
             if (!opened.accepted()) return failure(opened.error->message);
             return success();
         });
-        catalog.add(std::move(built));
-    }
 }
 
 // Tabs. All registered commands operate on the active tab (no-argument);
 // callers with an explicit TabId use activateTab or closeTabById directly.
-void registerTabCommands(CommandCatalog& catalog, Editor& runtime) {
-    auto tabSpec = [](std::string id, std::string summary) {
-        return CommandSpec{
-            .id = std::move(id),
-            .owner = "tab-management",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-        };
-    };
-
-    {
-        auto built = tabSpec("tab.close", "Close Tab");
-        built.label = "Close Tab";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+void registerTabCommands(Commands& commands, Editor& runtime) {
+    commands.add("tab.close", "Close Tab", [&runtime] {
             auto active = runtime.tabs.viewState().active;
             if (!active) return failure("no active tab");
             return closeTabById(runtime, *active);
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = tabSpec("tab.close_others", "Close Other Tabs");
-        built.label = "Close Other Tabs";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("tab.close_others", "Close Other Tabs", [&runtime] {
             auto active = runtime.tabs.viewState().active;
             auto tab = active.value_or(TabId{0});
             const auto kept = std::find_if(
@@ -507,12 +431,7 @@ void registerTabCommands(CommandCatalog& catalog, Editor& runtime) {
             auto result = runtime.tabs.closeOthers(tab, std::move(outcomes));
             return finishTabOperation(runtime, result, std::nullopt, false, false);
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = tabSpec("tab.close_all", "Close All Tabs");
-        built.label = "Close All Tabs";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("tab.close_all", "Close All Tabs", [&runtime] {
             std::vector<TabId> alreadyClosed;
             std::vector<TabState> targets = runtime.tabs.viewState().tabs;
             std::vector<TabCloseOutcome> outcomes;
@@ -529,11 +448,7 @@ void registerTabCommands(CommandCatalog& catalog, Editor& runtime) {
             auto result = runtime.tabs.closeAll(std::move(outcomes));
             return finishTabOperation(runtime, result, std::nullopt, false, false);
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = tabSpec("tab.reopen_closed", "Reopen Closed");
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("tab.reopen_closed", "Tab Reopen Closed", [&runtime] {
             const auto prevActive = runtime.tabs.viewState().active;
             auto reopened = runtime.tabs.beginReopenClosed();
             TabResult result;
@@ -547,94 +462,49 @@ void registerTabCommands(CommandCatalog& catalog, Editor& runtime) {
             }
             return finishTabOperation(runtime, result, prevActive, false, false);
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = tabSpec("tab.next", "Next Tab");
-        built.label = "Next Tab";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("tab.next", "Next Tab", [&runtime] {
             const auto prevActive = runtime.tabs.viewState().active;
             auto result = runtime.tabs.next();
             return finishTabOperation(runtime, result, prevActive, false, true);
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = tabSpec("tab.previous", "Previous Tab");
-        built.label = "Previous Tab";
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("tab.previous", "Previous Tab", [&runtime] {
             const auto prevActive = runtime.tabs.viewState().active;
             auto result = runtime.tabs.previous();
             return finishTabOperation(runtime, result, prevActive, false, true);
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = tabSpec("tab.move_left", "Move Left");
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("tab.move_left", "Tab Move Left", [&runtime] {
             auto tab = runtime.tabs.viewState().active.value_or(TabId{0});
             auto result = runtime.tabs.moveLeft(tab);
             return finishTabOperation(runtime, result, std::nullopt, false, false);
         });
-        catalog.add(std::move(built));
-    }
-    {
-        auto built = tabSpec("tab.move_right", "Move Right");
-        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("tab.move_right", "Tab Move Right", [&runtime] {
             auto tab = runtime.tabs.viewState().active.value_or(TabId{0});
             auto result = runtime.tabs.moveRight(tab);
             return finishTabOperation(runtime, result, std::nullopt, false, false);
         });
-        catalog.add(std::move(built));
-    }
 }
 
 // Draft recovery commands (single-file draft recovery, M15). draft.diff opens a
 // live diff of the current buffer (the draft) against its current disk content,
 // so a conflict can be inspected before it is resolved. In-process only: it
 // opens a live diff tab, a concept with no remote representation.
-void registerDraftCommands(CommandCatalog& catalog,
-                           Editor& runtime) {
-    catalog.add(CommandSpec{
-        .id = "draft.diff",
-        .owner = "draft-recovery",
-        .label = "Diff Draft Against Disk",
-        .summary = "Diff Draft Against Disk",
-        .effect = CommandEffect::Mutation,
-        .luaApi = true,
-        .binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+void registerDraftCommands(Commands& commands, Editor& runtime) {
+    commands.add("draft.diff", "Diff Draft Against Disk", [&runtime] {
             return runtime.openDraftDiff();
-        }),
     });
-    catalog.add(CommandSpec{
-        .id = "draft.discard",
-        .owner = "draft-recovery",
-        .label = "Discard Draft (Use Disk)",
-        .summary = "Discard Draft (Use Disk)",
-        .effect = CommandEffect::Mutation,
-        .luaApi = true,
-        .binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("draft.discard", "Discard Draft (Use Disk)", [&runtime] {
             return runtime.discardDraft();
-        }),
     });
-    catalog.add(CommandSpec{
-        .id = "draft.dismiss",
-        .owner = "draft-recovery",
-        .label = "Dismiss Draft Notice",
-        .summary = "Dismiss Draft Notice",
-        .effect = CommandEffect::Mutation,
-        .luaApi = true,
-        .binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+    commands.add("draft.dismiss", "Dismiss Draft Notice", [&runtime] {
             return runtime.dismissDraftNotice();
-        }),
     });
 }
 
-void bindRuntimeFiles(CommandCatalog& catalog, Editor& runtime) {
-    bindExternalModificationCommands(catalog, runtime);
-    registerFileCommands(catalog, runtime);
-    registerTabCommands(catalog, runtime);
-    registerDraftCommands(catalog, runtime);
+void bindRuntimeFiles(Commands& commands, Editor& runtime) {
+    bindExternalModificationCommands(commands, runtime);
+    registerFileCommands(commands, runtime);
+    registerTabCommands(commands, runtime);
+    registerDraftCommands(commands, runtime);
 }
 
 } // namespace ssg

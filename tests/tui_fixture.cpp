@@ -1,6 +1,5 @@
 #include "tui_fixture.h"
 
-#include <any>
 #include <stdexcept>
 #include <utility>
 
@@ -16,9 +15,8 @@ TuiClient::TuiClient(Editor& runtime,
 
 TuiClient::~TuiClient() = default;
 
-CommandResult TuiClient::submit(std::string commandId, std::any payload) {
-    auto result =
-        runtime_->dispatch({std::move(commandId), std::move(payload)});
+CommandResult TuiClient::submit(std::string commandId) {
+    auto result = runtime_->dispatch(commandId);
     if (result.accepted()) {
         applyViewAction(result);
         refresh();

@@ -81,7 +81,7 @@ TEST(sessionProjectionResolvesStatusFieldsAndHint) {
     ASSERT_TRUE(frame.has_value());
     if (frame) assertProjection(*frame);
 
-    ASSERT_TRUE(runtime.dispatch({"settings.export_workspace", {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("settings.export_workspace").accepted());
     frame = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(frame.has_value());
     if (frame) {
@@ -150,7 +150,7 @@ TEST(curatedKeymapBindingsAreArgumentFree) {
         commands.insert(binding.commandId);
     }
     for (const auto& command : commands) {
-        auto result = runtime.dispatch({command, {}});
+        auto result = runtime.dispatch(command);
         const bool argumentError =
             result.message.find("requires") != std::string::npos ||
             result.message.find("wrong type") != std::string::npos ||
@@ -333,8 +333,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
         ASSERT_TRUE(caretLine >= view.firstVisualRow);
         ASSERT_TRUE(caretLine < view.firstVisualRow + view.visibleRows.size());
         lastVisibleLine = std::max<std::uint32_t>(lastVisibleLine, caretLine);
-        (void)grid.dispatch(
-            runtime, {"cursor.line_down",  {}});
+        (void)grid.dispatch(runtime, "cursor.line_down");
     }
     // The last line of the document was reached, not merely approached.
     auto final = grid.present(runtime);
@@ -393,7 +392,7 @@ TEST(anEmptyScratchBufferIsNotUnsavedUntilItHasContent) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.new",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("file.new").accepted());
     runtime.focusEditor();
 
     auto const dirty = [&] {
@@ -435,7 +434,7 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
         return std::find(labels.begin(), labels.end(), label) != labels.end();
     };
 
-    ASSERT_TRUE(runtime.dispatch({"file.new",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("file.new").accepted());
     ASSERT_TRUE(hasTab("[new buffer]"));
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"alpha.txt"}).accepted());
     // The scratch tab went with it rather than lingering blank, and the file --
@@ -464,7 +463,7 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
     // rather than being handed it at startup -- so it stays.  The untitled and
     // empty checks alone would not preserve it; this is what makes the rule "the
     // startup buffer" rather than "any blank buffer".
-    ASSERT_TRUE(runtime.dispatch({"file.new",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("file.new").accepted());
     ASSERT_TRUE(hasTab("[new buffer]"));
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"alpha.txt"}).accepted());
     ASSERT_TRUE(hasTab("[new buffer]"));
@@ -481,7 +480,7 @@ TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.new",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("file.new").accepted());
     runtime.focusEditor();
     ASSERT_TRUE(ssg::test::typeText(runtime, "unsaved work").accepted());
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"alpha.txt"}).accepted());
@@ -543,9 +542,9 @@ TEST(wrapBreaksAgainstThePaneWidthNotTheClientSurface) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"wide.txt"}).accepted());
     runtime.focusEditor();
-    ASSERT_TRUE(runtime.dispatch({"view.toggle_word_wrap",  {}})
+    ASSERT_TRUE(runtime.dispatch("view.toggle_word_wrap")
                     .accepted());
-    ASSERT_TRUE(runtime.dispatch({"panel.show_files",  {}})
+    ASSERT_TRUE(runtime.dispatch("panel.show_files")
                     .accepted());
     ssg::test::GridTestView grid{dims};
     (void)grid.present(runtime);
@@ -583,7 +582,7 @@ TEST(settingsOpenFocusesASettingsPrompt) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"settings.open",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch("settings.open").accepted());
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -632,7 +631,7 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     ASSERT_EQ(scrolled->viewport.firstVisualRow, 5U);
 
     const auto selectionBefore = ssg::test::projectGridFrame(runtime)->selections;
-    auto visual = runtime.dispatch({"cursor.page_down",  {}});
+    auto visual = runtime.dispatch("cursor.page_down");
     ASSERT_TRUE(visual.accepted());
     ASSERT_TRUE(visual.viewAction.has_value());
     auto selectionAfter = ssg::test::projectGridFrame(runtime);
@@ -657,7 +656,7 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     if (!frame->document) return;
     ASSERT_EQ(frame->document->panes.size(), std::size_t{1});
 
-    auto split = runtime.dispatch({"pane.split_horizontal", {}});
+    auto split = runtime.dispatch("pane.split_horizontal");
     ASSERT_TRUE(split.completed());
     ASSERT_FALSE(split.viewAction.has_value());
 
@@ -667,7 +666,7 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     ASSERT_TRUE(frame->document.has_value());
     if (!frame->document) return;
     ASSERT_EQ(frame->document->panes.size(), std::size_t{2});
-    auto blockedFocus = runtime.dispatch({"pane.focus_down",  {}});
+    auto blockedFocus = runtime.dispatch("pane.focus_down");
     ASSERT_TRUE(blockedFocus.viewAction.has_value());
     if (!blockedFocus.viewAction) return;
     auto blockedApplied = presenter.apply(*blockedFocus.viewAction, *frame);
@@ -675,12 +674,12 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     ASSERT_FALSE(blockedApplied.transition.has_value());
 
     ASSERT_TRUE(runtime
-                    .dispatch({"panel.show_files",  {}})
+                    .dispatch("panel.show_files")
                     .accepted());
     frame = presenter.project(runtime, {{80, 24}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto focused = runtime.dispatch({"pane.focus_up",  {}});
+    auto focused = runtime.dispatch("pane.focus_up");
     ASSERT_TRUE(focused.viewAction.has_value());
     if (!focused.viewAction) return;
     auto focusedApplied = presenter.apply(*focused.viewAction, *frame);
@@ -710,7 +709,7 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     frame = presenter.project(runtime, {{80, 24}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto focusedAgain = runtime.dispatch({"pane.focus_down",  {}});
+    auto focusedAgain = runtime.dispatch("pane.focus_down");
     ASSERT_TRUE(focusedAgain.viewAction.has_value());
     if (!focusedAgain.viewAction) return;
     auto focusedAgainApplied =
@@ -739,7 +738,7 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto cycled =
-        runtime.dispatch({"pane.next",  {}});
+        runtime.dispatch("pane.next");
     ASSERT_TRUE(cycled.completed());
     ASSERT_FALSE(cycled.viewAction.has_value());
     auto cycledFrame = presenter.project(runtime, {{80, 24}, {}});
@@ -754,7 +753,7 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto closed =
-        runtime.dispatch({"pane.close",  {}});
+        runtime.dispatch("pane.close");
     ASSERT_TRUE(closed.completed());
     ASSERT_FALSE(closed.viewAction.has_value());
 
@@ -783,7 +782,7 @@ TEST(visualLineMovementRequiresPresenterResolution) {
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"lines.txt"})
                     .accepted());
 
-    auto moved = runtime.dispatch({"cursor.line_down", {}});
+    auto moved = runtime.dispatch("cursor.line_down");
     ASSERT_TRUE(moved.accepted());
     ASSERT_TRUE(moved.viewAction.has_value());
     if (!moved.viewAction) return;
@@ -825,7 +824,7 @@ TEST(visualLineMovementRequiresPresenterResolution) {
     };
     for (const auto& movement : movements) {
         const auto before = confirmed->selections;
-        auto command = runtime.dispatch({movement.command,  {}});
+        auto command = runtime.dispatch(movement.command);
         ASSERT_TRUE(command.accepted());
         ASSERT_TRUE(command.viewAction.has_value());
         if (!command.viewAction) return;
@@ -864,7 +863,7 @@ TEST(visualMovementUsesActivePaneAcrossSerializedInput) {
     auto frame = presenter.project(runtime, {{41, 15}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto split = runtime.dispatch({"pane.split_horizontal",  {}});
+    auto split = runtime.dispatch("pane.split_horizontal");
     ASSERT_TRUE(split.completed());
     frame = presenter.project(runtime, {{41, 15}, {}});
     ASSERT_TRUE(frame.has_value());
@@ -875,7 +874,7 @@ TEST(visualMovementUsesActivePaneAcrossSerializedInput) {
     const auto activeRows = static_cast<std::uint32_t>(
         frame->document->panes.back().content.height);
 
-    auto page = runtime.dispatch({"cursor.page_down",  {}});
+    auto page = runtime.dispatch("cursor.page_down");
     ASSERT_TRUE(page.viewAction.has_value());
     if (!page.viewAction) return;
     auto proposed = presenter.apply(*page.viewAction, *frame);
@@ -889,7 +888,7 @@ TEST(visualMovementUsesActivePaneAcrossSerializedInput) {
     ASSERT_EQ(frame->selections.primary().active.line.value(),
               activeRows);
 
-    auto next = runtime.dispatch({"cursor.line_down",  {}});
+    auto next = runtime.dispatch("cursor.line_down");
     ASSERT_TRUE(next.viewAction.has_value());
     if (!next.viewAction) return;
     auto proposal = presenter.apply(*next.viewAction, *frame);

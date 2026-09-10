@@ -9,28 +9,26 @@
 // string lookup to dispatch -- for a keypress, which is identity, not text.
 //
 // CompiledKeymap pays those string costs ONCE, when the keymap is published,
-// and then answers keystrokes with integer comparisons only:
+// and then matches keystrokes with integer comparisons:
 //
 //   * every distinct key code in the keymap is interned to a `StrokeCode`,
 //   * every context is interned to a `ContextId`,
-//   * every command id is resolved to a `CommandHandle`.
+//   * command ids stay authored strings and dispatch is looked up live.
 //
 // The authored keymap remains the source of truth; this is a derived index of
 // it, rebuilt whenever it changes.  Nothing here decides policy: the precedence
 // and prefix rules are the same ones `KeymapMatcher` applies, expressed over
 // integers.
 
-#include <ssg/CommandHandle.h>
 #include <ssg/Keymap.h>
 
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace ssg {
-
-class CommandCatalog;
 
 // A binding's context, compiled.  A keymap context is already a closed set --
 // `"*"` plus the FocusTarget names (focus.h) -- so a compiled binding stores the
@@ -92,21 +90,14 @@ using CompiledSequence = std::vector<CompiledStroke>;
 
 struct CompiledResolution {
     KeymapMatchKind kind = KeymapMatchKind::None;
-    // Valid only when `kind` is Resolved.  A CommandName rather than a bare
-    // handle because `keymap.bind` accepts any non-empty command id: a binding
-    // may name a command the catalog does not have, and that NAME is what a
-    // rejected dispatch must report.
-    CommandName command;
+    // Valid only when `kind` is Resolved. A binding may name a command that is
+    // not yet registered, and this ID is what a rejected dispatch must report.
+    std::string commandId;
 };
 
 class CompiledKeymap {
 public:
-    // Takes the catalog because a binding names a command and a handle is a
-    // position in a particular catalog.  Rebuild when the keymap OR the
-    // catalog's revision changes: a binding
-    // for a command registered after this was built resolves only once the
-    // client sees the new revision.
-    CompiledKeymap(KeymapViewState const& keymap, CommandCatalog const& catalog);
+    explicit CompiledKeymap(KeymapViewState const& keymap);
 
     CompiledKeymap(CompiledKeymap const&) = delete;
     CompiledKeymap& operator=(CompiledKeymap const&) = delete;
@@ -125,7 +116,7 @@ public:
 private:
     struct Entry {
         CompiledSequence sequence;
-        CommandName command;
+        std::string commandId;
         CompiledContext context = CompiledContext::never();
     };
 

@@ -24,7 +24,7 @@ namespace ssg {
 
 struct InputRoutingNoticeAction {
     std::string id;
-    CommandName command;
+    std::string commandId;
 };
 
 struct InputRoutingSnapshot {
@@ -122,7 +122,7 @@ struct RouteViewAction {
 };
 
 struct RouteDispatch {
-    ClientCommand command;
+    std::string commandId;
 };
 
 struct InvokeExternalAction {

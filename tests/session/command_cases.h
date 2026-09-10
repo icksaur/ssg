@@ -15,13 +15,12 @@ namespace ssg::test {
 
 struct RuntimeCommandCase {
     std::string id;
-    std::string owner;
 };
 
 [[nodiscard]] inline std::vector<RuntimeCommandCase> runtimeCommandCases() {
     std::vector<RuntimeCommandCase> cases;
     for (auto const& facts : ssg::testing::allCommandFacts()) {
-        cases.push_back({facts.id, facts.owner});
+        cases.push_back({facts.id});
     }
     return cases;
 }

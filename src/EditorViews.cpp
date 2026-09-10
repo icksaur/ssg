@@ -1,5 +1,4 @@
 #include <ssg/Editor.h>
-#include <ssg/CommandCatalog.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Theme.h>
 #include <ssg/UiTree.h>
@@ -351,28 +350,15 @@ PaletteViewState Editor::paletteView() const {
             view.activePicker = screen.openPickerActivation();
         }
     }
-    // Every registered command is published continuously. Resolving each key hint
-    // is O(bindings x commands), so cache until the catalog or keymap changes.
-    auto const catalogRevision = catalog.revision();
-    if (!commandCandidateCacheValid ||
-        catalogRevision != commandCandidateCatalogRevision ||
-        keymap != commandCandidateKeymap) {
-        commandCandidateCache.clear();
-        for (auto const* command : catalog.commands()) {
-            if (command->argument.required) continue;
-            std::string detail;
-            if (auto sequence =
-                    KeymapMatcher{keymap}.preferredBinding(command->id)) {
-                detail = formatKeySequence(*sequence);
-                }
-            commandCandidateCache.push_back(
-                {command->id, command->displayLabel(), std::move(detail)});
+    // The registry is live so script replacements appear without a separate
+    // revision coupling this projection to key routing.
+    for (auto const& [id, command] : commands.all()) {
+        std::string detail;
+        if (auto sequence = KeymapMatcher{keymap}.preferredBinding(id)) {
+            detail = formatKeySequence(*sequence);
         }
-        commandCandidateCatalogRevision = catalogRevision;
-        commandCandidateKeymap = keymap;
-        commandCandidateCacheValid = true;
+        view.commandCandidates.push_back({id, command.label, std::move(detail)});
     }
-    view.commandCandidates = commandCandidateCache;
     view.fileCandidates = fileCandidates;
     return view;
 }

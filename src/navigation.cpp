@@ -1,6 +1,5 @@
 #include <ssg/Editor.h>
 
-#include <ssg/CommandCatalog.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Selection.h>
 #include <ssg/platform_files.h>
@@ -14,7 +13,7 @@
 
 namespace ssg {
 
-[[nodiscard]] CommandHandlerResult applyGotoLine(Editor& runtime, std::string_view lineText);
+[[nodiscard]] OperationResult applyGotoLine(Editor& runtime, std::string_view lineText);
 
 namespace {
 
@@ -67,8 +66,8 @@ std::optional<std::size_t> navigationByteOffset(std::string_view text,
     return lineStart + graphemeBoundaryAtOrBefore(lineText, columnOffset);
 }
 
-CommandHandlerResult placePrimaryCaret(Editor& runtime, FileDocumentId document,
-                                       DocumentPosition position) {
+OperationResult placePrimaryCaret(Editor& runtime, FileDocumentId document,
+                                  DocumentPosition position) {
     return applyEditorSelections(
         runtime,
         ApplySelections{
@@ -81,7 +80,7 @@ CommandHandlerResult placePrimaryCaret(Editor& runtime, FileDocumentId document,
 // not resolve leaves the active document, the cursor, the open-document set and
 // the navigation history exactly as they were. Recording history is the
 // caller's job, and must happen only after this succeeds.
-CommandHandlerResult applyNavigationTransition(
+OperationResult applyNavigationTransition(
     Editor& runtime, NavigationTransition const& transition) {
     if (!transition.target) return failure("navigation has no target");
     auto const& target = *transition.target;
@@ -112,24 +111,23 @@ CommandHandlerResult applyNavigationTransition(
         return placed;
     }
     if (transition.revealPrimaryCaret) {
-        return CommandHandlerResult::requireView(ViewAction{RevealSelection{}});
+        return {true, {}, ViewAction{RevealSelection{}}};
     }
     return success();
 }
 
-CommandHandlerResult deferNavigationViewAction(
-    Editor& runtime, CommandHandlerResult result) {
+OperationResult deferNavigationViewAction(Editor& runtime, OperationResult result) {
     if (!result.accepted || !result.viewAction) return result;
     if (!std::holds_alternative<RevealSelection>(*result.viewAction)) {
         return failure("navigation produced an unsupported view action");
     }
-    if (!runtime.deferDispatch(ClientCommand{"view.reveal_caret", {}})) {
+    if (!runtime.deferDispatch("view.reveal_caret")) {
         return failure("could not queue view.reveal_caret");
     }
     return success();
 }
 
-CommandHandlerResult searchCommand(Editor& runtime, std::string_view id) {
+OperationResult searchCommand(Editor& runtime, std::string_view id) {
     if (id == "palette.open") {
         if (!runtime.openPickerPrompt(PickerKind::Command)) {
             return failure("could not open the command picker");
@@ -184,8 +182,7 @@ CommandHandlerResult searchCommand(Editor& runtime, std::string_view id) {
     return success();
 }
 
-CommandHandlerResult treeCommand(Editor& runtime,
-                                 std::string_view id) {
+OperationResult treeCommand(Editor& runtime, std::string_view id) {
     if (id == "tree.select_next") { (void)runtime.tree.selectNext(); return success(); }
     if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); return success(); }
     if (id == "tree.activate") {
@@ -248,7 +245,7 @@ CommandHandlerResult treeCommand(Editor& runtime,
     return failure("unknown tree command");
 }
 
-CommandHandlerResult followCommand(Editor& runtime, std::string_view id) {
+OperationResult followCommand(Editor& runtime, std::string_view id) {
     const auto modeBefore = runtime.follow.viewState().mode;
     FollowEditsResult result;
     if (id == "follow_edits.pause") {
@@ -277,8 +274,8 @@ CommandHandlerResult followCommand(Editor& runtime, std::string_view id) {
 
 } // namespace
 
-CommandHandlerResult navigateTo(Editor& runtime, NavigationTarget target,
-                                NavigationOrigin origin) {
+OperationResult navigateTo(Editor& runtime, NavigationTarget target,
+                           NavigationOrigin origin) {
     auto applied = applyNavigationTransition(
         runtime, navigationTransition(target, origin));
     if (!applied.accepted) return applied;
@@ -286,7 +283,7 @@ CommandHandlerResult navigateTo(Editor& runtime, NavigationTarget target,
     return applied;
 }
 
-CommandHandlerResult selectTreeNode(Editor& runtime, TreeNodeId nodeId) {
+OperationResult selectTreeNode(Editor& runtime, TreeNodeId nodeId) {
     if (!runtime.tree.select(nodeId)) {
         return failure("tree node is not selectable");
     }
@@ -294,15 +291,15 @@ CommandHandlerResult selectTreeNode(Editor& runtime, TreeNodeId nodeId) {
     return success();
 }
 
-CommandHandlerResult invokeTreeNodeCommand(
+OperationResult invokeTreeNodeCommand(
     Editor& runtime, TreeCommandInvocation invocation) {
     auto command = runtime.tree.invokeNodeCommand(
         invocation.providerId, invocation.nodeId, invocation.commandId);
     return command ? success() : failure("tree node command does not exist");
 }
 
-CommandHandlerResult navigateDiff(Editor& runtime, DiffFileId fileId,
-                                  DiffNavigation navigation) {
+OperationResult navigateDiff(Editor& runtime, DiffFileId fileId,
+                             DiffNavigation navigation) {
     auto file = runtime.diff.file(fileId);
     if (!file) return failure("diff file does not exist");
     std::optional<std::size_t> hunk;
@@ -329,7 +326,7 @@ CommandHandlerResult navigateDiff(Editor& runtime, DiffFileId fileId,
     return success();
 }
 
-CommandHandlerResult applyGotoLine(Editor& runtime, std::string_view lineText) {
+OperationResult applyGotoLine(Editor& runtime, std::string_view lineText) {
     if (!runtime.activeDocumentId()) return failure("goto.line requires an active document");
     std::string_view digits{lineText};
     while (!digits.empty() && std::isspace(static_cast<unsigned char>(digits.front())))
@@ -369,7 +366,7 @@ CommandHandlerResult applyGotoLine(Editor& runtime, std::string_view lineText) {
             true});
 }
 
-CommandHandlerResult activateTreeNode(Editor& runtime, TreeNodeId nodeId) {
+OperationResult activateTreeNode(Editor& runtime, TreeNodeId nodeId) {
     if (!runtime.tree.select(nodeId)) {
         return failure("tree node is not selectable");
     }
@@ -425,135 +422,60 @@ CommandHandlerResult activateTreeNode(Editor& runtime, TreeNodeId nodeId) {
 }
 
 
-//
-// The diff commands take a live document id, which is meaningless to a remote
-// client, so they are in-process only: typed for the handler, absent from the
-// interface.
-void registerDiffAndFollowCommands(CommandCatalog& catalog,
-                                   Editor& runtime) {
-    auto follow = [&](std::string id, std::string summary) {
+void registerDiffAndFollowCommands(Commands& commands, Editor& runtime) {
+    auto follow = [&](std::string id, std::string label) {
         auto const name = id;
-        catalog.add(CommandSpec{
-            .id = std::move(id),
-            .owner = "follow-edits",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-            .binding = bindNoArgumentHandler([&runtime, name](CommandContext&) {
-                return followCommand(runtime, name);
-            }),
+        commands.add(std::move(id), std::move(label), [&runtime, name] {
+            return followCommand(runtime, name);
         });
     };
-    follow("follow_edits.resume", "Resume");
-    follow("follow_edits.pause", "Pause");
-    follow("follow_edits.toggle", "Toggle");
+    follow("follow_edits.resume", "Follow Edits Resume");
+    follow("follow_edits.pause", "Follow Edits Pause");
+    follow("follow_edits.toggle", "Follow Edits Toggle");
 }
 
 // Moving around and acting on whichever tree the panel shows.
-void registerTreeCommands(CommandCatalog& catalog,
-                          Editor& runtime) {
-    auto spec = [](std::string id, std::string summary) {
-        return CommandSpec{
-            .id = std::move(id),
-            .owner = "tree-providers",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-        };
-    };
-    // The id is captured by value so the lambda owns it: a string_view into
-    // the caller's temporary would dangle by the time the command runs.
-    auto bare = [&](std::string id, std::string summary) {
+void registerTreeCommands(Commands& commands, Editor& runtime) {
+    auto declare = [&](std::string id, std::string label) {
         auto name = id;
-        auto built = spec(std::move(id), std::move(summary));
-        built.binding = bindNoArgumentHandler(
-            [&runtime, name](CommandContext&) {
-                return treeCommand(runtime, name);
-            });
-        catalog.add(std::move(built));
+        commands.add(std::move(id), std::move(label), [&runtime, name] {
+            return treeCommand(runtime, name);
+        });
     };
 
-    bare("tree.toggle_expanded", "Toggle Expanded");
-    bare("tree.select_next", "Select Next");
-    bare("tree.select_previous", "Select Previous");
-
-    {
-        auto built = spec("tree.activate", "Open Selected");
-        built.label = "Open Selected";
-        built.binding = bindNoArgumentHandler(
-            [&runtime](CommandContext&) {
-                return treeCommand(runtime, "tree.activate");
-            });
-        catalog.add(std::move(built));
-    }
+    declare("tree.toggle_expanded", "Tree Toggle Expanded");
+    declare("tree.select_next", "Tree Select Next");
+    declare("tree.select_previous", "Tree Select Previous");
+    declare("tree.activate", "Open Selected");
 }
 
 // The pickers, workspace search, and the go-to jumps.
-void registerSearchPaletteCommands(CommandCatalog& catalog,
-                                   Editor& runtime) {
-    auto spec = [](std::string id, std::string summary) {
-        return CommandSpec{
-            .id = std::move(id),
-            .owner = "search-palette",
-            .summary = std::move(summary),
-            .effect = CommandEffect::Mutation,
-            .luaApi = true,
-        };
-    };
-    auto bare = [&](std::string id, std::string label, std::string summary) {
+void registerSearchPaletteCommands(Commands& commands, Editor& runtime) {
+    auto declare = [&](std::string id, std::string label) {
         auto name = id;
-        auto built = spec(std::move(id), std::move(summary));
-        built.binding = bindNoArgumentHandler(
-            [&runtime, name](CommandContext&) {
-                return searchCommand(runtime, name);
-            });
-        if (!label.empty()) built.label = std::move(label);
-        catalog.add(std::move(built));
+        commands.add(std::move(id), std::move(label), [&runtime, name] {
+            return searchCommand(runtime, name);
+        });
     };
 
-    bare("palette.open", "Command Palette", "Command Palette");
-    bare("file_finder.open", "", "Open");
-    bare("file_finder.toggle_gitignore", "", "Toggle Gitignore");
-    bare("palette.next", "", "Next");
-    bare("palette.previous", "", "Previous");
-    bare("goto.back", "", "Back");
-    bare("goto.forward", "", "Forward");
-    bare("search.results_next", "", "Results Next");
-    bare("search.results_previous", "", "Results Previous");
-
-    {
-        auto built = spec("palette.close", "Close");
-        built.binding = bindNoArgumentHandler(
-            [&runtime](CommandContext&) {
-                return searchCommand(runtime, "palette.close");
-            });
-        catalog.add(std::move(built));
-    }
-
-    {
-        auto built = spec("search.workspace", "Workspace");
-        built.binding = bindNoArgumentHandler(
-            [&runtime](CommandContext&) {
-                return searchCommand(runtime, "search.workspace");
-            });
-        catalog.add(std::move(built));
-    }
-
-    {
-        auto built = spec("goto.line", "Go to Line");
-        built.label = "Go to Line";
-        built.binding = bindNoArgumentHandler(
-            [&runtime](CommandContext&) {
-                return searchCommand(runtime, "goto.line");
-            });
-        catalog.add(std::move(built));
-    }
+    declare("palette.open", "Command Palette");
+    declare("file_finder.open", "File Finder Open");
+    declare("file_finder.toggle_gitignore", "File Finder Toggle Gitignore");
+    declare("palette.next", "Palette Next");
+    declare("palette.previous", "Palette Previous");
+    declare("goto.back", "Goto Back");
+    declare("goto.forward", "Goto Forward");
+    declare("search.results_next", "Search Results Next");
+    declare("search.results_previous", "Search Results Previous");
+    declare("palette.close", "Palette Close");
+    declare("search.workspace", "Search Workspace");
+    declare("goto.line", "Go to Line");
 }
 
-void bindRuntimeNavigation(CommandCatalog& catalog, Editor& runtime) {
-    registerDiffAndFollowCommands(catalog, runtime);
-    registerSearchPaletteCommands(catalog, runtime);
-    registerTreeCommands(catalog, runtime);
+void bindRuntimeNavigation(Commands& commands, Editor& runtime) {
+    registerDiffAndFollowCommands(commands, runtime);
+    registerSearchPaletteCommands(commands, runtime);
+    registerTreeCommands(commands, runtime);
 }
 
 } // namespace ssg

@@ -1,7 +1,5 @@
 #include <ssg/CompiledKeymap.h>
 
-#include <ssg/CommandCatalog.h>
-
 #include <algorithm>
 
 namespace ssg {
@@ -23,17 +21,11 @@ CompiledContext compileContext(std::string_view name) {
 
 }  // namespace
 
-CompiledKeymap::CompiledKeymap(KeymapViewState const& keymap,
-                               CommandCatalog const& catalog) {
+CompiledKeymap::CompiledKeymap(KeymapViewState const& keymap) {
     entries_.reserve(keymap.bindings.size());
     for (auto const& binding : keymap.bindings) {
         Entry entry;
-        // Resolved once, here.  A binding may name a command the catalog does
-        // not have -- keymap.bind accepts any non-empty id -- and that name is
-        // what the resulting rejection must report, so the ref keeps it either
-        // way.
-        entry.command = CommandName{binding.commandId,
-                                   catalog.handleFor(binding.commandId)};
+        entry.commandId = binding.commandId;
         entry.context = compileContext(binding.context);
         entry.sequence.reserve(binding.sequence.size());
         for (auto const& stroke : binding.sequence) {
@@ -63,7 +55,7 @@ CompiledResolution CompiledKeymap::resolve(
         }
     }
     if (match != nullptr) {
-        return {KeymapMatchKind::Resolved, match->command};
+        return {KeymapMatchKind::Resolved, match->commandId};
     }
     return {KeymapMatchKind::None, {}};
 }

@@ -131,12 +131,12 @@ std::string captureGridMatrix() {
     };
 
     emit("editor-only");
-    (void)runtime.dispatch({"panel.show_files",  {}});
+    (void)runtime.dispatch("panel.show_files");
     emit("panel-files-shown");
-    (void)runtime.dispatch({"palette.open",  {}});
+    (void)runtime.dispatch("palette.open");
     emit("palette-open");
-    (void)runtime.dispatch({"palette.close",  {}});
-    (void)runtime.dispatch({"find.open",  {}});
+    (void)runtime.dispatch("palette.close");
+    (void)runtime.dispatch("find.open");
     emit("find-open");
     return out.str();
 }

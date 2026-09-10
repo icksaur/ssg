@@ -82,9 +82,9 @@ TEST(directAndTuiClientsMatchThroughRealRuntimeSnapshots) {
     ASSERT_TRUE(directSnapshot.has_value());
     ASSERT_EQ(canonical(*directSnapshot), canonical(client.snapshot()));
 
-    const auto runCommand = [&](std::string command, std::any payload = {}) {
-        auto directResult = direct.dispatch({command, payload});
-        auto tuiResult = client.submit(std::move(command), std::move(payload));
+    const auto runCommand = [&](std::string command) {
+        auto directResult = direct.dispatch(command);
+        auto tuiResult = client.submit(std::move(command));
         ASSERT_TRUE(directResult.accepted());
         ASSERT_TRUE(tuiResult.accepted());
         directSnapshot = ssg::test::projectGridFrame(direct, {80, 24});

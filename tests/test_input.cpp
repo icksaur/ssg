@@ -1,4 +1,3 @@
-#include <ssg/CommandCatalog.h>
 #include <ssg/CompiledKeymap.h>
 #include <ssg/focus.h>
 #include <ssg/Keymap.h>
@@ -398,11 +397,8 @@ TEST(compiledKeymapResolvesIdenticallyToTheAuthoredMatcher) {
         {escape, ctrlS}, {escape, keyS, keyQ}, {escape, keyS, keyS},
         {keyS, escape}};
 
-    // An empty catalog is enough: the rule under test is which BINDING wins,
-    // which does not depend on whether the command it names exists.
-    const ssg::CommandCatalog catalog;
     for (const auto& keymap : keymaps) {
-        const ssg::CompiledKeymap compiled{keymap, catalog};
+        const ssg::CompiledKeymap compiled{keymap};
         for (const auto focus : {ssg::FocusTarget::Editor,
                                  ssg::FocusTarget::Panel,
                                  ssg::FocusTarget::Prompt}) {
@@ -415,7 +411,7 @@ TEST(compiledKeymapResolvesIdenticallyToTheAuthoredMatcher) {
                     input, ssg::focusTargetName(focus));
                 const auto fast = compiled.resolve(compiledInput, focus);
                 ASSERT_TRUE(authored.kind == fast.kind);
-                ASSERT_EQ(std::string{fast.command.name()},
+                ASSERT_EQ(fast.commandId,
                           std::string{authored.commandId});
             }
         }
@@ -432,15 +428,13 @@ TEST(compiledKeymapCarriesTheNameOfAnUncataloguedCommand) {
 
     const ssg::KeymapViewState keymap{
         "typo", {ssg::KeyBinding{{escape}, "file.saev", "*"}}};
-    const ssg::CommandCatalog catalog;
-    const ssg::CompiledKeymap compiled{keymap, catalog};
+    const ssg::CompiledKeymap compiled{keymap};
     const std::vector<ssg::CompiledStroke> input{
         ssg::CompiledKeymap::compile(escape)};
 
     const auto resolution = compiled.resolve(input, ssg::FocusTarget::Editor);
     ASSERT_TRUE(resolution.kind == ssg::KeymapMatchKind::Resolved);
-    ASSERT_FALSE(resolution.command.handle().valid());
-    ASSERT_EQ(std::string{resolution.command.name()}, std::string{"file.saev"});
+    ASSERT_EQ(resolution.commandId, std::string{"file.saev"});
 }
 
 SSG_TEST_SUITE(test_input) {

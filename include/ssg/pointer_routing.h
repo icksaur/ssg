@@ -86,7 +86,6 @@ struct ClientScroll {
 // native drag bookkeeping and any client-owned picker scroll.
 struct PointerDispatch {
     std::optional<ssg::ClientInput> semantic_input;
-    std::optional<ssg::ClientCommand> command;
     bool begins_drag = false;  // a press that starts an editor selection drag
     bool ends_drag = false;    // a release that ends a drag
     // Set when the gesture targets a surface whose offset the client owns, so

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/CommandCatalog.h>
+#include <ssg/Command.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/Keymap.h>
 #include <ssg/PaneNavigation.h>

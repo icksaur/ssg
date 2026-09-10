@@ -1,6 +1,5 @@
 #pragma once
 
-#include <ssg/CommandCatalog.h>
 #include <ssg/PaneNavigation.h>
 
 #include <cstdint>

@@ -22,8 +22,8 @@ public:
     }
 
     [[nodiscard]] CommandResult dispatch(Editor& session,
-                                         ClientCommand command) {
-        auto result = session.dispatch(std::move(command));
+                                         std::string_view commandId) {
+        auto result = session.dispatch(commandId);
         applyViewAction(session, result);
         return result;
     }

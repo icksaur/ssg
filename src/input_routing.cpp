@@ -1,14 +1,10 @@
 #include <ssg/InputRouting.h>
-#include <ssg/InputCommandNames.h>
-
 #include <algorithm>
 #include <array>
 #include <utility>
 
 namespace ssg {
 namespace {
-
-using namespace input_command_names;
 
 // An engaged, empty gesture assigns "no gesture" on acceptance.
 std::optional<DocumentPointerGesture> clearGesture() {
@@ -40,10 +36,10 @@ RoutedInput accepted(EditorMutation mutation,
             clearGestureOnRejection};
 }
 
-RoutedInput dispatch(CommandName command, std::any payload = {},
+RoutedInput dispatch(std::string commandId,
                      std::optional<DocumentPointerGesture> gesture = std::nullopt,
                      bool clearGestureOnRejection = false) {
-    return {RouteDispatch{ClientCommand{std::move(command), std::move(payload)}},
+    return {RouteDispatch{std::move(commandId)},
             std::move(gesture), clearGestureOnRejection};
 }
 RoutedInput clientOwned(ClientOwnedInputKind kind, std::string text = {}) {
@@ -139,8 +135,8 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
         auto const resolved = snapshot.keymap.get().resolve(
             std::array{CompiledKeymap::compile(input.stroke)}, routing.focus);
         if (resolved.kind == KeymapMatchKind::Resolved) {
-            auto const& command = resolved.command;
-            if (command == kClipboardPaste) {
+            auto const& command = resolved.commandId;
+            if (command == "clipboard.paste") {
                 if (routing.focus == FocusTarget::Panel && !searchPanel) {
                     return unhandled();
                 }
@@ -168,18 +164,18 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
             }
             switch (routing.prompt) {
             case ActivePrompt::Palette:
-                if (command == kPromptSubmit) {
+                if (command == "prompt.submit") {
                     return clientOwned(ClientOwnedInputKind::Submit);
                 }
-                if (command == kPromptNext || command == kPaletteNext) {
+                if (command == "prompt.next" || command == "palette.next") {
                     return clientOwned(ClientOwnedInputKind::SelectNext);
                 }
-                if (command == kPromptPrevious ||
-                    command == kPalettePrevious) {
+                if (command == "prompt.previous" ||
+                    command == "palette.previous") {
                     return clientOwned(ClientOwnedInputKind::SelectPrevious);
                 }
-                if (command == kPromptCancel) {
-                    return dispatch(kPaletteClose);
+                if (command == "prompt.cancel") {
+                    return dispatch("palette.close");
                 }
                 return dispatch(command);
             case ActivePrompt::Find:
@@ -343,7 +339,7 @@ RoutedInput routeTransition(InputRoutingSnapshot const& snapshot,
     if (snapshot.followMode == FollowMode::Paused) {
         return unhandled();
     }
-    return dispatch(kFollowEditsPause);
+    return dispatch("follow_edits.pause");
 }
 
 RoutedInput routeTransition(InputRoutingSnapshot const& snapshot,
@@ -472,7 +468,7 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
     }
     for (auto const& action : *snapshot.noticeActions) {
         if (action.id == input.actionId) {
-            return dispatch(action.command);
+            return dispatch(action.commandId);
         }
     }
     return rejected("notice action target is not actionable");

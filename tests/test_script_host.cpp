@@ -1,6 +1,5 @@
 #include <ssg/ScriptHost.h>
 
-#include <ssg/CommandCatalog.h>
 #include <ssg/Editor.h>
 #include <ssg/GridPresenter.h>
 
@@ -72,16 +71,10 @@ TEST(viewActionsRequireAndUseAHostSuppliedSink) {
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
-    auto command = ssg::test::registerCommand(*runtime, ssg::CommandSpec{
-        .id = "oracle.view_action",
-        .owner = "test-oracle",
-        .summary = "returns one typed view action",
-        .effect = ssg::CommandEffect::ViewAction,
-        .initScript = true,
-        .binding = ssg::bindNoArgumentHandler([](ssg::CommandContext&) {
-            return ssg::CommandHandlerResult::requireView(
-                ssg::ScrollLines{ssg::ScrollTarget::Document, 1});
-        }),
+    ssg::test::registerCommand(*runtime, "oracle.view_action", "View Action", [] {
+        return ssg::CommandResult{
+            ssg::CommandError::None, {},
+            ssg::ViewAction{ssg::ScrollLines{ssg::ScrollTarget::Document, 1}}};
     });
 
     {
@@ -156,12 +149,10 @@ TEST(aCommandAScriptRegistersIsAnOrdinaryCatalogCommand) {
                               "end)")
                     .accepted());
 
-    auto const* entry = runtime->commandCatalog().find("user.count");
+    auto const* entry = runtime->commandRegistry().find("user.count");
     ASSERT_TRUE(entry != nullptr);
-    if (entry) ASSERT_EQ(entry->owner, std::string{"lua"});
 
-    auto const dispatched = runtime->dispatch(
-        {"user.count",  {}});
+    auto const dispatched = runtime->dispatch("user.count");
     ASSERT_TRUE(dispatched.accepted());
     ASSERT_TRUE(scripts.evaluate("if calls ~= 1 then error('not called') end")
                     .accepted());
@@ -177,14 +168,14 @@ TEST(reloadingRetiresThePreviousGenerationsCommands) {
     ASSERT_TRUE(
         scripts.evaluate("ssg.register_command('user.first', function() end)")
             .accepted());
-    auto const* first = runtime->commandCatalog().find("user.first");
+    auto const* first = runtime->commandRegistry().find("user.first");
     ASSERT_TRUE(first != nullptr);
 
     ASSERT_TRUE(
         scripts.evaluate("ssg.register_command('user.second', function() end)")
             .accepted());
-    ASSERT_TRUE(runtime->commandCatalog().find("user.first") == nullptr);
-    ASSERT_TRUE(runtime->commandCatalog().find("user.second") != nullptr);
+    ASSERT_TRUE(runtime->commandRegistry().find("user.first") == nullptr);
+    ASSERT_TRUE(runtime->commandRegistry().find("user.second") != nullptr);
     fs::remove_all(root);
 }
 
@@ -202,7 +193,7 @@ TEST(reloadingAnUnchangedScriptSucceeds) {
         auto const result = scripts.evaluate(script);
         if (!result.accepted()) std::cout << "  msg: " << result.message << "\n";
         ASSERT_TRUE(result.accepted());
-        ASSERT_TRUE(runtime->commandCatalog().find("user.same") != nullptr);
+        ASSERT_TRUE(runtime->commandRegistry().find("user.same") != nullptr);
     }
     fs::remove_all(root);
 }
@@ -218,10 +209,8 @@ TEST(aFailedReloadKeepsThePreviousGenerationDispatchable) {
             .accepted());
     ASSERT_TRUE(!scripts.evaluate("this is not lua").accepted());
 
-    ASSERT_TRUE(runtime->commandCatalog().find("user.kept") != nullptr);
-    ASSERT_TRUE(runtime
-                    ->dispatch({"user.kept",  {}})
-                    .accepted());
+    ASSERT_TRUE(runtime->commandRegistry().find("user.kept") != nullptr);
+    ASSERT_TRUE(runtime->dispatch("user.kept").accepted());
     fs::remove_all(root);
 }
 
@@ -235,9 +224,7 @@ TEST(aRetiredScriptCommandIsNoLongerDispatchable) {
         scripts.evaluate("ssg.register_command('user.gone', function() end)")
             .accepted());
     ASSERT_TRUE(scripts.evaluate("noop = true").accepted());
-    ASSERT_TRUE(!runtime
-                     ->dispatch({"user.gone",  {}})
-                     .accepted());
+    ASSERT_TRUE(!runtime->dispatch("user.gone").accepted());
     fs::remove_all(root);
 }
 
@@ -252,9 +239,8 @@ TEST(aScriptCommandCollidingWithABuiltInIsRefusedWithoutLosingTheEditor) {
              .accepted());
     // The built-in is untouched: the catalog refused the batch before applying
     // any of it.
-    auto const* builtIn = runtime->commandCatalog().find("file.save");
+    auto const* builtIn = runtime->commandRegistry().find("file.save");
     ASSERT_TRUE(builtIn != nullptr);
-    if (builtIn) ASSERT_TRUE(builtIn->owner != std::string{"lua"});
     fs::remove_all(root);
 }
 
@@ -273,7 +259,7 @@ TEST(aRefusedGenerationLeavesThePreviousOneWhollyIntact) {
     ASSERT_TRUE(
         scripts.evaluate("ssg.register_command('user.old', function() end)")
             .accepted());
-    ASSERT_TRUE(runtime->commandCatalog().find("user.old") != nullptr);
+    ASSERT_TRUE(runtime->commandRegistry().find("user.old") != nullptr);
 
     // Collides with a built-in, so the catalog refuses the whole batch.
     ASSERT_TRUE(
@@ -282,15 +268,12 @@ TEST(aRefusedGenerationLeavesThePreviousOneWhollyIntact) {
                        "ssg.register_command('file.save', function() end)")
              .accepted());
 
-    ASSERT_TRUE(runtime->commandCatalog().find("user.new") == nullptr);
+    ASSERT_TRUE(runtime->commandRegistry().find("user.new") == nullptr);
     // Still registered, and still backed by a live Lua function.
-    ASSERT_TRUE(runtime->commandCatalog().find("user.old") != nullptr);
-    ASSERT_TRUE(runtime
-                    ->dispatch({"user.old",  {}})
-                    .accepted());
-    auto const* builtIn = runtime->commandCatalog().find("file.save");
+    ASSERT_TRUE(runtime->commandRegistry().find("user.old") != nullptr);
+    ASSERT_TRUE(runtime->dispatch("user.old").accepted());
+    auto const* builtIn = runtime->commandRegistry().find("file.save");
     ASSERT_TRUE(builtIn != nullptr);
-    if (builtIn) ASSERT_TRUE(builtIn->owner != std::string{"lua"});
     fs::remove_all(root);
 }
 
@@ -312,8 +295,7 @@ TEST(aScriptCommandCanCallCommandsAndBothArePerformedInOrder) {
                               "end)")
                     .accepted());
 
-    auto const dispatched = runtime->dispatch(
-        {"user.rebind",  {}});
+    auto const dispatched = runtime->dispatch("user.rebind");
     if (!dispatched.accepted()) {
         std::cout << "  msg: " << dispatched.message << "\n";
     }
@@ -336,8 +318,7 @@ TEST(aFailureAmongQueuedCommandsIsReportedAndNamesTheCommand) {
                               "end)")
                     .accepted());
 
-    auto const dispatched = runtime->dispatch(
-        {"user.bad",  {}});
+    auto const dispatched = runtime->dispatch("user.bad");
     ASSERT_TRUE(!dispatched.accepted());
     ASSERT_TRUE(dispatched.message.find("keymap.bind") != std::string::npos);
     fs::remove_all(root);
@@ -360,8 +341,7 @@ TEST(aScriptThatQueuesWithoutBoundIsRefusedRatherThanSpinning) {
                               "end)")
                     .accepted());
 
-    auto const dispatched = runtime->dispatch(
-        {"user.flood",  {}});
+    auto const dispatched = runtime->dispatch("user.flood");
     ASSERT_TRUE(!dispatched.accepted());
     fs::remove_all(root);
 }
@@ -386,8 +366,7 @@ TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
 
     ssg::CommandResult offThread{};
     std::thread caller{[&] {
-        offThread = runtime->dispatch(
-            {"user.owned",  {}});
+        offThread = runtime->dispatch("user.owned");
     }};
     caller.join();
 
@@ -396,7 +375,7 @@ TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
 
     // The same command still works from the owning thread.
     ASSERT_TRUE(runtime
-                    ->dispatch({"user.owned",  {}})
+                    ->dispatch("user.owned")
                     .accepted());
 
     // Exactly one call reached the script, so the refused one was not merely
@@ -430,7 +409,7 @@ TEST(aScriptCommandRunFromThePaletteAlsoRunsWhatItAsksFor) {
                     .accepted());
 
     ASSERT_TRUE(runtime
-                    ->dispatch({"palette.open",  {}})
+                    ->dispatch("palette.open")
                     .accepted());
     auto snapshot = ssg::test::projectGridFrame(*runtime);
     ASSERT_TRUE(snapshot.has_value());

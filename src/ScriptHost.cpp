@@ -1,13 +1,13 @@
 #include <ssg/ScriptHost.h>
 
-#include <ssg/CommandCatalog.h>
 #include <ssg/Editor.h>
 #include <ssg/Keymap.h>
 #include <ssg/StatusFields.h>
 #include <ssg/Style.h>
 #include <ssg/Theme.h>
 
-#include <any>
+#include <cctype>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <thread>
@@ -18,14 +18,17 @@ namespace ssg {
 
 namespace {
 
-// The commands a script may call via ssg.command(id, args).  Asked of the
-// running catalog rather than listed here, because whether a command is
-// available at startup is a fact about the component that implements it.
-std::vector<LuaCommand> scriptCommandCatalog(CommandCatalog const& catalog) {
+std::vector<LuaCommand> scriptCommandCatalog(Commands const& commands) {
     std::vector<LuaCommand> result;
-    for (auto const* command : catalog.commands()) {
-        if (command->initScript) result.push_back({command->id});
+    result.reserve(commands.all().size() + 4);
+    for (auto const& [id, command] : commands.all()) {
+        (void)command;
+        result.push_back({id});
     }
+    result.push_back({"theme.set"});
+    result.push_back({"style.define"});
+    result.push_back({"keymap.bind"});
+    result.push_back({"keymap.unbind"});
     return result;
 }
 
@@ -40,6 +43,28 @@ std::string argumentField(
     return it == arguments.end() ? std::string{} : it->second;
 }
 
+std::string scriptCommandLabel(std::string_view id) {
+    std::string label;
+    bool wordStart = true;
+    for (char raw : id) {
+        if (raw == '.' || raw == '_') {
+            label += ' ';
+            wordStart = true;
+            continue;
+        }
+        auto const ch = static_cast<unsigned char>(raw);
+        label += wordStart ? static_cast<char>(std::toupper(ch)) : raw;
+        wordStart = false;
+    }
+    return label;
+}
+
+LuaResult luaResult(OperationResult result) {
+    return result.accepted ? LuaResult{}
+                           : LuaResult{LuaError::DispatchFailed,
+                                       std::move(result.message)};
+}
+
 }  // namespace
 
 struct ScriptHost::Impl {
@@ -47,9 +72,8 @@ struct ScriptHost::Impl {
     std::thread::id owningThread{std::this_thread::get_id()};
     LuaCommandHost host;
     ViewActionSink viewActionSink;
-    // What the last successful evaluation put in the catalog, retired by the
-    // next one.
-    std::vector<CommandHandle> generation;
+    // What the last successful evaluation published, replaced by the next one.
+    std::vector<std::string> generation;
 
     Impl(Editor& editorRuntime, LuaCommandHostOptions options,
          ViewActionSink sink)
@@ -67,106 +91,108 @@ struct ScriptHost::Impl {
     // that dispatch finishes.  A script evaluated at startup or reload is not
     // inside one, and its commands run immediately -- which is what makes an
     // init.lua of bare ssg.command calls behave as it always has.
-    CommandHandlerResult forward(std::string_view id, std::any payload) {
-        ClientCommand command{std::string{id}, std::move(payload)};
+    LuaResult forward(std::string_view id) {
         if (runtime.dispatchInProgress()) {
-            if (!runtime.deferDispatch(std::move(command))) {
-                return CommandHandlerResult::failure(
-                    "too many commands queued from one script command");
+            if (!runtime.deferDispatch(std::string{id})) {
+                return {LuaError::DispatchFailed,
+                        "too many commands queued from one script command"};
             }
             // Queued, not yet run: see doc/config.md on what a script can and
             // cannot conclude from this.
-            return CommandHandlerResult::success();
+            return {};
         }
-        auto result = runtime.dispatch(command);
+        auto result = runtime.dispatch(id);
         if (!result.accepted()) {
-            return CommandHandlerResult::failure(result.message);
+            return {LuaError::DispatchFailed, std::move(result.message)};
         }
-        if (!result.viewAction) return CommandHandlerResult::success();
+        if (!result.viewAction) return {};
         if (!viewActionSink) {
-            return CommandHandlerResult::failure(
-                "view_action_unavailable");
+            return {LuaError::DispatchFailed, "view_action_unavailable"};
         }
         auto applied = viewActionSink(*result.viewAction);
         if (!applied.accepted()) {
-            return CommandHandlerResult::failure(
+            return {LuaError::DispatchFailed,
                 applied.message.empty() ? "view action was rejected"
-                                        : applied.message);
+                                        : applied.message};
         }
         if ((applied.status == ViewActionStatus::TransitionRequired) !=
             applied.transition.has_value()) {
-            return CommandHandlerResult::failure(
-                "view action returned an invalid transition");
+            return {LuaError::DispatchFailed,
+                    "view action returned an invalid transition"};
         }
         if (applied.transition) {
             auto transition = runtime.input(*applied.transition);
             if (transition.outcome == ClientInputOutcome::Rejected) {
-                return CommandHandlerResult::failure(
+                return {LuaError::DispatchFailed,
                     transition.command &&
                             !transition.command->message.empty()
                         ? transition.command->message
-                        : "view action transition was rejected");
+                        : "view action transition was rejected"};
             }
         }
-        return CommandHandlerResult::success();
+        return {};
     }
 
-    // Translates one ssg.command(id, args) call into the matching payload and
-    // sends it through the SAME command boundary every other caller uses.
-    CommandHandlerResult dispatch(LuaInvocation const& invocation) {
-        // Each of these commands always requires its table: a bare call with no
-        // table is a caller mistake and must fail loudly, not silently apply an
-        // empty no-op.
-        auto const requireArguments = [&](std::string_view what)
-            -> std::optional<CommandHandlerResult> {
+    LuaResult dispatchConfiguration(LuaInvocation const& invocation) {
+        std::unique_lock operationLock{runtime.operationMutex, std::defer_lock};
+        if (!runtime.dispatchInProgress()) operationLock.lock();
+        auto const requireArguments = [&](std::string_view message)
+            -> std::optional<LuaResult> {
             if (invocation.arguments) return std::nullopt;
-            return CommandHandlerResult::failure(std::string{what});
+            return LuaResult{LuaError::DispatchFailed, std::string{message}};
         };
-
         if (invocation.commandId == "theme.set") {
             if (auto refused = requireArguments(
                     "theme.set requires a color-table argument")) {
                 return *refused;
             }
-            return forward("theme.set",
-                           ThemeSetArguments{*invocation.arguments});
+            return luaResult(applyThemeSet(
+                runtime, ThemeSetArguments{*invocation.arguments}));
         }
         if (invocation.commandId == "style.define") {
             if (auto refused = requireArguments(
                     "style.define requires a style-table argument")) {
                 return *refused;
             }
-            return forward("style.define",
-                           StyleDefineArguments{*invocation.arguments});
+            return luaResult(applyStyleDefine(
+                runtime, StyleDefineArguments{*invocation.arguments}));
         }
         if (invocation.commandId == "keymap.bind") {
             if (auto refused = requireArguments(
                     "keymap.bind requires a sequence/command argument table")) {
                 return *refused;
             }
-            return forward(
-                "keymap.bind",
-                KeymapBindArguments{
-                    argumentField(*invocation.arguments, "sequence"),
-                    argumentField(*invocation.arguments, "command"),
-                    argumentField(*invocation.arguments, "context")});
+            return luaResult(applyKeymapBind(
+                runtime, {argumentField(*invocation.arguments, "sequence"),
+                          argumentField(*invocation.arguments, "command"),
+                          argumentField(*invocation.arguments, "context")}));
         }
         if (invocation.commandId == "keymap.unbind") {
             if (auto refused = requireArguments(
                     "keymap.unbind requires a sequence argument table")) {
                 return *refused;
             }
-            return forward(
-                "keymap.unbind",
-                KeymapUnbindArguments{
-                    argumentField(*invocation.arguments, "sequence"),
-                    argumentField(*invocation.arguments, "context")});
+            return luaResult(applyKeymapUnbind(
+                runtime, {argumentField(*invocation.arguments, "sequence"),
+                          argumentField(*invocation.arguments, "context")}));
+        }
+        return {LuaError::UnknownCommand,
+                "unknown script configuration: " +
+                    std::string{invocation.commandId}};
+    }
+
+    LuaResult dispatch(LuaInvocation const& invocation) {
+        if (invocation.commandId == "theme.set" ||
+            invocation.commandId == "style.define" ||
+            invocation.commandId == "keymap.bind" ||
+            invocation.commandId == "keymap.unbind") {
+            return dispatchConfiguration(invocation);
         }
         if (!invocation.arguments) {
-            return forward(invocation.commandId, {});
+            return forward(invocation.commandId);
         }
-        return CommandHandlerResult::failure("unknown script command: " +
-                                             std::string{invocation.commandId});
+        return {LuaError::UnknownCommand, "unknown script command: " +
+                                           std::string{invocation.commandId}};
     }
 };
 
@@ -174,7 +200,10 @@ ScriptHost::ScriptHost(Editor& runtime) : ScriptHost(runtime, {}) {}
 
 ScriptHost::ScriptHost(Editor& runtime, ViewActionSink viewActionSink) {
     LuaCommandHostOptions options;
-    options.commands = scriptCommandCatalog(runtime.commandCatalog());
+    options.commands = scriptCommandCatalog(runtime.commandRegistry());
+    options.commandAvailable = [editor = &runtime](std::string_view id) {
+        return editor->commandRegistry().find(id) != nullptr;
+    };
     options.publishGate = [this](std::vector<std::string> const& ids) {
         return offerGeneration(ids);
     };
@@ -198,52 +227,28 @@ LuaResult ScriptHost::evaluate(std::string_view script) {
     return impl_->host.evaluate(script);
 }
 
-// Offers what an evaluation registered to the catalog, before the host makes
-// those registrations its own.
-//
-// A script's command becomes an ORDINARY catalog command: the palette lists it,
-// a keybinding resolves it, and dispatch reaches it through the same path as
-// every built-in.  Nothing downstream knows it came from Lua.  If this needed a
-// second lookup path, the catalog would not have earned its keep.
-//
-// Called as the host's publish gate, so a batch the catalog refuses abandons
-// the whole evaluation: the previous generation keeps both its catalog entries
-// and the Lua functions behind them.  Doing this AFTER the host published would
-// leave the catalog listing commands whose functions had already been released.
 LuaResult ScriptHost::offerGeneration(std::vector<std::string> const& ids) {
-    std::vector<CommandSpec> specs;
-    specs.reserve(ids.size());
+    Commands::Replacements replacements;
+    replacements.reserve(ids.size());
     for (auto const& id : ids) {
-        specs.push_back(CommandSpec{
-            .id = id,
-            .owner = "lua",
-            .summary = "Registered by init.lua",
-            // A script's function may do anything the commands it calls can
-            // do, so it is always treated as a mutation.  It carries no
-            // capability of its own: everything it invokes is gated
-            // individually at dispatch, as any other Lua caller is.
-            .effect = CommandEffect::Mutation,
-            .binding = bindNoArgumentHandler(
-                [impl = impl_.get(), id](CommandContext&) {
-                    // The Lua state belongs to one thread.  A call from another
-                    // is REFUSED rather than serialised: serialising would run
-                    // script code at a moment the caller cannot reason about,
-                    // and the editor has one thread that dispatches commands.
-                    if (std::this_thread::get_id() != impl->owningThread) {
-                        return CommandHandlerResult::failure(
-                            "script commands run only on the editor thread");
-                    }
-                    auto const result = impl->host.invoke(id);
-                    return result.accepted()
-                               ? CommandHandlerResult::success()
-                               : CommandHandlerResult::failure(result.message);
-                }),
-        });
+        replacements.emplace_back(
+            id, Command{scriptCommandLabel(id), [impl = impl_.get(), id] {
+                if (std::this_thread::get_id() != impl->owningThread) {
+                    return CommandResult{
+                        CommandError::HandlerFailed,
+                        "script commands run only on the editor thread", {}};
+                }
+                auto const result = impl->host.invoke(id);
+                return result.accepted()
+                           ? CommandResult{}
+                           : CommandResult{CommandError::HandlerFailed,
+                                           result.message, {}};
+            }});
     }
 
     try {
-        impl_->generation = impl_->runtime.replaceCommandGeneration(
-            impl_->generation, std::move(specs));
+        impl_->runtime.replaceCommands(impl_->generation, std::move(replacements));
+        impl_->generation = ids;
     } catch (std::exception const& refused) {
         // The catalog validated the whole batch before applying any of it, so
         // the previous generation is still installed -- and because this ran

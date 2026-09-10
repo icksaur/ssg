@@ -48,11 +48,11 @@ ssg::EditorConfig configFor(fs::path const& root, bool defer) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
 
-    auto tooEarly = runtime.dispatch({"panel.show_files",  {}});
+    auto tooEarly = runtime.dispatch("panel.show_files");
     ASSERT_FALSE(tooEarly.accepted());
 
     runtime.primeDeferred();
-    auto onTime = runtime.dispatch({"panel.show_files",  {}});
+    auto onTime = runtime.dispatch("panel.show_files");
     ASSERT_TRUE(onTime.accepted());
 
     fs::remove_all(root);
@@ -88,7 +88,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
     // Mirrors src/main.cpp's post-primeDeferred panel dispatch: this
     // moves focus to the panel as a side effect, clobbering the above.
     runtime.primeDeferred();
-    ASSERT_TRUE(runtime.dispatch({"panel.show_files",  {}})
+    ASSERT_TRUE(runtime.dispatch("panel.show_files")
                     .accepted());
     auto afterPanel =
         ssg::test::projectGridFrame(runtime);

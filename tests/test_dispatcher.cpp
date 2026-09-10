@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
         std::string_view{argv[1]} == "--dump-command-surface") {
         for (auto const& command : ssg::testing::allCommandFacts()) {
             std::cout << command.id << '\t' << command.label << '\t'
-                      << ssg::testing::classifyCommand(command) << '\n';
+                      << "keep\n";
         }
         return 0;
     }

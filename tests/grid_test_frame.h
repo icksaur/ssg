@@ -30,10 +30,9 @@ inline DiffIngressResult applyGitDiffScan(Editor& session, GitDiffScan scan) {
     return session.gitDiffIngress.applyGitDiffScanLocked(std::move(scan));
 }
 
-inline CommandHandle registerCommand(Editor& session, CommandSpec command) {
-    std::vector<CommandSpec> commands;
-    commands.push_back(std::move(command));
-    return session.replaceCommandGeneration({}, std::move(commands)).front();
+inline void registerCommand(Editor& session, std::string id, std::string label,
+                            std::function<CommandResult()> handler) {
+    session.addCommand(std::move(id), std::move(label), std::move(handler));
 }
 
 inline GridPresentation copyGridFrame(

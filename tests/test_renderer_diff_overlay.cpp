@@ -116,13 +116,13 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
                                     .workingContent = working}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"panel.show_git_status",  {}})
+                    .dispatch("panel.show_git_status")
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.select_next",  {}})
+                    .dispatch("tree.select_next")
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.activate",  {}})
+                    .dispatch("tree.activate")
                     .accepted());
 
     auto snapshot = ssg::test::projectGridFrame(runtime, {80, 24});

@@ -189,7 +189,10 @@ struct LuaCommandHost::Impl {
 
                 if (!raiseError) {
                     auto const found = host.catalog.find(id);
-                    if (found == host.catalog.end()) {
+                    if (found == host.catalog.end() &&
+                        !host.pluginCommands.contains(id) &&
+                        (!host.options.commandAvailable ||
+                         !host.options.commandAvailable(id))) {
                         host.pendingError = LuaError::UnknownCommand;
                         host.callbackMessage = "unknown Lua command: " + id;
                         raiseError = true;
@@ -200,7 +203,7 @@ struct LuaCommandHost::Impl {
                     try {
                         auto result = host.dispatcher(
                             LuaInvocation{id, std::move(arguments)});
-                        if (!result.accepted) {
+                        if (!result.accepted()) {
                             host.pendingError = LuaError::DispatchFailed;
                             host.callbackMessage =
                                 "Lua dispatch failed: " + result.message;
