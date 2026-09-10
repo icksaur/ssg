@@ -17,7 +17,7 @@
 #include <ssg/InputRouting.h>
 #include <ssg/Keymap.h>
 #include <ssg/LineLayoutCache.h>
-#include <ssg/LspFeatureController.h>
+#include <ssg/LspState.h>
 #include <ssg/LuaCommandHost.h>
 #include <ssg/PaneTopology.h>
 #include <ssg/Picker.h>

@@ -2,15 +2,24 @@
 
 // Private owner of node visibility and keyboard-focus capture for one schema.
 
-#include <ssg/KeyboardFocus.h>
 #include <ssg/UiTree.h>
+#include <ssg/focus.h>
 
+#include <cstdint>
 #include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 namespace ssg {
+
+enum class BaseFocus : std::uint8_t { Editor, Panel };
+
+struct FocusCapture {
+    UiNodeId node;
+
+    friend bool operator==(const FocusCapture&, const FocusCapture&) = default;
+};
 
 class UiInteractionState {
 public:
@@ -23,26 +32,19 @@ public:
     [[nodiscard]] const UiSchema& schema() const noexcept {
         return schema_;
     }
-    [[nodiscard]] const KeyboardFocus& focus() const noexcept { return focus_; }
-    [[nodiscard]] FocusTarget effectiveFocus() const {
-        if (const FocusCapture* capture = focus_.top()) {
-            return focusContext(capture->node);
-        }
-        return focusContext(baseNode(focus_.base()));
-    }
     // CONTRACT: The path is ordered base-to-top, contains only nodes from this
     // schema, and ends at a visible node. The base may be temporarily hidden by
     // the transient surface that captured focus above it.
     [[nodiscard]] std::vector<UiNodeId> focusPath() const {
-        UiNodeId base = baseNode(focus_.base());
+        UiNodeId base = baseNode(baseFocus_);
         if (!findUiNode(schema_, base)) {
             throw std::logic_error(
                 "UiInteractionState: base focus host is outside the schema");
         }
         std::vector<UiNodeId> path;
-        path.reserve(focus_.captures().size() + 1);
+        path.reserve(captures_.size() + 1);
         path.push_back(std::move(base));
-        for (const FocusCapture& capture : focus_.captures()) {
+        for (const FocusCapture& capture : captures_) {
             const UiNode* node = findUiNode(schema_, capture.node);
             if (!node || !node->focusContext ||
                 !isUiNodeVisible(schema_, capture.node)) {
@@ -66,12 +68,12 @@ public:
             throw std::logic_error(
                 "UiInteractionState: base host has the wrong focus context");
         }
-        focus_.setBase(base);
+        baseFocus_ = base;
     }
 
     // Capture focus onto a transient surface. The node must be a node of this
     // schema AND visible, so focus can never be placed on an unknown or hidden
-    // node; a second prompt-backed capture is rejected by KeyboardFocus.
+    // node; a second prompt-backed capture is rejected.
     void captureFocus(FocusCapture capture) {
         if (!findUiNode(schema_, capture.node)) {
             throw std::logic_error(
@@ -84,16 +86,15 @@ public:
         }
         const FocusTarget context = focusContext(capture.node);
         if (context == FocusTarget::Prompt) {
-            for (const auto& held : focus_.captures()) {
+            for (const auto& held : captures_) {
                 if (focusContext(held.node) == FocusTarget::Prompt) {
                     throw std::logic_error(
                         "UiInteractionState: a second prompt-backed capture");
                 }
             }
         }
-        focus_.pushCapture(std::move(capture));
+        captures_.push_back(std::move(capture));
     }
-    void releaseFocus() noexcept { focus_.popCapture(); }
 
 private:
     [[nodiscard]] static UiNodeId baseNode(BaseFocus base) {
@@ -112,7 +113,8 @@ private:
     }
 
     UiSchema schema_;
-    KeyboardFocus focus_;
+    BaseFocus baseFocus_ = BaseFocus::Editor;
+    std::vector<FocusCapture> captures_;
 };
 
 }  // namespace ssg

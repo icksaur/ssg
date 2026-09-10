@@ -50,6 +50,8 @@ def run(command: list[str], **kwargs) -> subprocess.CompletedProcess:
 
 
 def configure(repo: pathlib.Path) -> None:
+    if BUILD.exists():
+        shutil.rmtree(BUILD)
     result = run(
         [
             "cmake",

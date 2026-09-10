@@ -748,37 +748,14 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/LspFeatureController.cpp
-)
-
-if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    ssg_add_test_suite(
-        NAME test_lsp_features
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_lsp_features.cpp
-        SYMBOL test_lsp_features
-        SOURCES
-            ${SSG_SOURCE_DIR}/tests/fake_lsp_server.cpp)
-    ssg_test_include_directories(test_lsp_features PRIVATE
-        ${SSG_SOURCE_DIR}/tests
-    )
-    ssg_test_compile_definitions(test_lsp_features PRIVATE
-        SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}"
-    )
-    ssg_test_link_libraries(test_lsp_features PRIVATE ssg_core)
-
-endif()
-
-target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/LspSyncClient.cpp
+    ${SSG_SOURCE_DIR}/src/LspState.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
         NAME test_lsp_sync
         ENTRY ${SSG_SOURCE_DIR}/tests/test_lsp_sync.cpp
-        SYMBOL test_lsp_sync
-        SOURCES
-            ${SSG_SOURCE_DIR}/tests/fake_lsp_server.cpp)
+        SYMBOL test_lsp_sync)
     ssg_test_include_directories(test_lsp_sync PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
@@ -1627,12 +1604,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/test_ui_node_state.cpp
         SYMBOL test_ui_node_state)
     ssg_test_link_libraries(test_ui_node_state PRIVATE ssg_tui_objects)
-
-    ssg_add_test_suite(
-        NAME test_keyboard_focus
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_keyboard_focus.cpp
-        SYMBOL test_keyboard_focus)
-    ssg_test_link_libraries(test_keyboard_focus PRIVATE ssg_core)
 
     ssg_add_test_suite(
         NAME test_ui_view_surface

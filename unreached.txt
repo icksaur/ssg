@@ -1,27 +1,4 @@
-ssg::(anonymous namespace)::Json::integer() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::(anonymous namespace)::Json::unsignedInteger() const	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::JsonParser::consume(char)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::JsonParser::consume(char)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::(anonymous namespace)::JsonParser::hex4()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::JsonParser::hex4()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::(anonymous namespace)::JsonParser::parse()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::JsonParser::parse()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::(anonymous namespace)::JsonParser::parseString()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::JsonParser::parseString()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::(anonymous namespace)::JsonParser::parseValue(unsigned long)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::JsonParser::parseValue(unsigned long)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::(anonymous namespace)::JsonParser::skipSpace()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::JsonParser::skipSpace()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
 ssg::(anonymous namespace)::appendRemovedIds(ssg::ScratchQuotaResult&, ssg::DurableStoreEvictionResult const&)	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::(anonymous namespace)::ioFailure(ssg::LspIoResult const&)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::(anonymous namespace)::jsonPosition(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::(anonymous namespace)::parseCompletion(ssg::(anonymous namespace)::Json const&, unsigned long)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::parseHover(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::parseLocation(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::parseLocations(ssg::(anonymous namespace)::Json const&, unsigned long)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::parsePosition(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::parseRange(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::(anonymous namespace)::responseResult(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
 ssg::(anonymous namespace)::restoredRemnants(std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
 ssg::(anonymous namespace)::selectionArgumentsEqual(ssg::SelectionCommandArguments const&, ssg::SelectionCommandArguments const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
 ssg::(anonymous namespace)::valid(ssg::SyntaxScope)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
@@ -55,29 +32,6 @@ ssg::LanguageId::csharp()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
 ssg::LanguageId::javascript()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
 ssg::LanguageId::lua()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
 ssg::LanguageId::typescript()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
-ssg::LspFeatureController::acceptCompletion()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspFeatureController::cancel(ssg::LspFeatureController::Kind, ssg::LspFeatureController::Disposition)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspFeatureController::changed()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspFeatureController::dismissCompletion()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspFeatureController::dismissHover()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspFeatureController::poll(unsigned long)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspFeatureController::selectNextCompletion()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspFeatureController::selectPreviousCompletion()	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspFeatureController::supersede(ssg::LspFeatureController::Kind)	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspFrameResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::LspIoResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::LspPositionResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspRequestResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspRequestResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::LspSyncClient::Impl::publishDiagnostics(ssg::(anonymous namespace)::Json const&)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::LspSyncClient::cancel(unsigned long)	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::LspSyncClient::poll()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::LspSyncClient::shutdown()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::LspSyncClient::state() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::LspSyncClient::takeCompletedResponses()	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::LspSyncClient::viewState() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
-ssg::LspSyncResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspFeatureController.cpp.o
-ssg::LspSyncResult::accepted() const	CMakeFiles/ssg_core.dir/src/LspSyncClient.cpp.o
 ssg::LuaCommandHost::expose(void*)	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
 ssg::LuaCommandHost::invalidate(ssg::LuaHandle)	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
 ssg::LuaCommandHost::registeredCommands[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o

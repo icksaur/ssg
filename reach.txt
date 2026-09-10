@@ -1,7 +1,6 @@
 0	CompiledKeymap.h	alias	ssg::CompiledSequence	
 0	InputRouting.h	alias	ssg::InputRouteAction	
 0	KeyCode.h	struct	ssg::KeyCodeEntry	
-0	KeyboardFocus.h	class	ssg::KeyboardFocus	
 0	LineLayoutCache.h	struct	ssg::LineLayoutCache::Entry	
 0	LineLayoutCache.h	struct	ssg::LineLayoutCache::Key	
 0	LineLayoutCache.h	struct	ssg::LineLayoutCache::KeyHash	
@@ -61,7 +60,7 @@
 0	Geometry.h	func	ssg::operator==	
 0	GitDiffSource.h	func	ssg::operator==	
 0	GitDiffSource.h	func	ssg::operator==	
-0	KeyboardFocus.h	func	ssg::operator==	
+0	UiInteractionState.h	func	ssg::operator==
 0	Keymap.h	func	ssg::operator==	
 0	Keymap.h	func	ssg::operator==	
 0	Keymap.h	func	ssg::operator==	
@@ -197,7 +196,7 @@
 0	Editor.h	func	ssg::payloadAs	
 1	WidgetLayout.h	enum	ssg::Align	WidgetLayout.cpp
 1	DraftAutosaveScheduler.h	struct	ssg::AutosaveCandidate	DraftAutosaveScheduler.cpp
-1	KeyboardFocus.h	enum	ssg::BaseFocus	ScreenState.cpp
+1	UiInteractionState.h	enum	ssg::BaseFocus	ScreenState.cpp
 1	Selection.h	struct	ssg::BracketPair	Selection.cpp
 1	CommandCatalog.h	alias	ssg::CatalogRevision	CommandCatalog.cpp
 1	SystemClipboardReader.h	alias	ssg::ClipboardEnvironmentLookup	SystemClipboardReader.cpp
@@ -232,7 +231,7 @@
 1	TextCodec.h	enum	ssg::FinalNewlinePolicy	TextCodec.cpp
 1	FindReplace.h	struct	ssg::FindResult	FindReplace.cpp
 1	WidgetLayout.h	struct	ssg::FitItem	WidgetLayout.cpp
-1	KeyboardFocus.h	struct	ssg::FocusCapture	ScreenState.cpp
+1	UiInteractionState.h	struct	ssg::FocusCapture	ScreenState.cpp
 1	FollowEditsModel.h	struct	ssg::FollowEditsConfig	FollowEditsModel.cpp
 1	FollowEditsModel.h	enum	ssg::FollowEditsError	FollowEditsModel.cpp
 1	GridPresenter.h	struct	ssg::GridPresentationRequest	GridPresenter.cpp
