@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/SharedBytes.h>
-
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -15,8 +13,7 @@ public:
     struct Node;
     using NodePtr = std::unique_ptr<Node>;
 
-    explicit PieceTree(std::string_view original = {});
-    explicit PieceTree(SharedBytes original);
+    explicit PieceTree(std::string original = {});
     ~PieceTree();
 
     PieceTree(const PieceTree&) = delete;
@@ -39,7 +36,7 @@ private:
         NodePtr root,
         std::size_t offset) const;
 
-    SharedBytes originalBuffer_;
+    std::string originalBuffer_;
     std::string addBuffer_;
     NodePtr root_;
 };

@@ -1,14 +1,12 @@
 3	ssg::SearchController::evaluate	Search.cpp
-3	ssg::executeFindReplaceCommand	editing.cpp
 3	ssg::scrollbarMetrics	Viewport.cpp
 2	ssg::canonicalPath	platform_files.cpp
+2	ssg::executeFindReplaceCommand	editing.cpp
 2	ssg::findUiNode	UiTree.cpp
 2	ssg::pathComponentEqual	RecoveryManager.cpp
 2	ssg::routeInput	input_routing.cpp
 2	ssg::sameEventKey	FilesystemWatcher.cpp
 2	ssg::weaklyCanonicalPath	platform_files.cpp
-1	ssg::CommandHandlerResult::failure	CommandCatalog.cpp
-1	ssg::CommandHandlerResult::requireView	CommandCatalog.cpp
 1	ssg::InitScriptWatcher::readInitScriptIfPresentQuiet	InitScriptWatcher.cpp
 1	ssg::LuaCommandHost::Impl::callbackHost	LuaCommandHost.cpp
 1	ssg::RowProjection::row	Viewport.cpp
@@ -17,6 +15,7 @@
 1	ssg::canonicalPath	platform_files.cpp
 1	ssg::containsNul	Workspace.cpp
 1	ssg::encodeText	TextCodec.cpp
+1	ssg::failure	Editor.cpp
 1	ssg::folded	Search.cpp
 1	ssg::isEawWide	GraphemeLayout.cpp
 1	ssg::isEmoji	GraphemeLayout.cpp
@@ -24,6 +23,7 @@
 1	ssg::isExtendedPictographic	GraphemeLayout.cpp
 1	ssg::is_scrollbar_region	pointer_routing.cpp
 1	ssg::liveDiffTextWithoutRemovedRows	Editor.cpp
+1	ssg::luaResult	ScriptHost.cpp
 1	ssg::modeMessage	ClipboardRegister.cpp
 1	ssg::valid	Settings.cpp
 1	ssg::valid	Theme.cpp
@@ -51,11 +51,8 @@
 0	ssg::ScreenState::openPicker	ScreenState.cpp
 0	ssg::Selection::isCaret	Selection.cpp
 0	ssg::SelectionSet::primary	Selection.cpp
-0	ssg::StringBacking::data	SharedBytes.cpp
-0	ssg::StringBacking::size	SharedBytes.cpp
 0	ssg::Style::inputLineReservation	Style.cpp
 0	ssg::TabManager::viewState	TabManager.cpp
 0	ssg::TextModel::lineCount	Selection.cpp
 0	ssg::Workspace::root	Workspace.cpp
 0	ssg::detail::PieceTree::size	PieceTree.cpp
-0	ssg::success	Editor.cpp

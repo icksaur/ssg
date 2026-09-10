@@ -266,7 +266,6 @@
 1	Settings.h	struct	ssg::SettingsDelta	Settings.cpp
 1	Settings.h	struct	ssg::SettingsIoResult	Settings.cpp
 1	Settings.h	struct	ssg::SettingsModel::ScopeData	Settings.cpp
-1	SharedBytes.h	struct	ssg::SharedBytes::Backing	SharedBytes.cpp
 1	Layout.h	struct	ssg::SolvedTabSeparator	PaintChrome.cpp
 1	StatusBar.h	struct	ssg::StatusBar::Entry	StatusBar.cpp
 1	StatusFields.h	struct	ssg::StatusField	EditorViews.cpp
@@ -778,7 +777,6 @@
 3	Settings.h	struct	ssg::SettingError	Settings.cpp,ViewCommands.cpp,navigation.cpp
 3	Settings.h	struct	ssg::SettingMutation	Settings.cpp,ViewCommands.cpp,navigation.cpp
 3	Settings.h	enum	ssg::SettingScope	Settings.cpp,ViewCommands.cpp,navigation.cpp
-3	SharedBytes.h	class	ssg::SharedBytes	Document.cpp,PieceTree.cpp,SharedBytes.cpp
 3	Layout.h	struct	ssg::SolvedExternalModificationRow	HitTester.cpp,Layout.cpp,PaintChrome.cpp
 3	Layout.h	struct	ssg::SolvedExternalModificationSurface	HitTester.cpp,Layout.cpp,PaintChrome.cpp
 3	Layout.h	struct	ssg::SolvedNoticeSurface	HitTester.cpp,Layout.cpp,PaintChrome.cpp

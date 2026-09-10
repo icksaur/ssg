@@ -15,6 +15,8 @@ ssg/ClientInput.h	enumerator	ssg::ClientOwnedInputKind::DeleteWordBackward
 ssg/ClientInput.h	enumerator	ssg::ClientOwnedInputKind::SelectNext
 ssg/ClientInput.h	enumerator	ssg::ClientOwnedInputKind::SelectPrevious
 ssg/ClientInput.h	enumerator	ssg::ClientOwnedInputKind::Submit
+ssg/ClientInput.h	enumerator	ssg::ClientOwnedInputKind::SystemClipboardPasteIntoEditor
+ssg/ClientInput.h	enumerator	ssg::ClientOwnedInputKind::SystemClipboardPasteIntoText
 ssg/ClientInput.h	enumerator	ssg::InputPointerButton::Auxiliary
 ssg/ClientInput.h	enumerator	ssg::InputPointerButton::Primary
 ssg/ClientInput.h	enumerator	ssg::InputPointerButton::Secondary
@@ -33,10 +35,13 @@ ssg/ClientInput.h	func	ssg::operator==	bool (const PickerPointerInput &, const P
 ssg/ClientInput.h	func	ssg::operator==	bool (const PointerSelectionTransition &, const PointerSelectionTransition &) noexcept
 ssg/ClientInput.h	func	ssg::operator==	bool (const ScrollFractionInput &, const ScrollFractionInput &)
 ssg/ClientInput.h	func	ssg::operator==	bool (const ScrollLinesInput &, const ScrollLinesInput &)
+ssg/ClientInput.h	func	ssg::operator==	bool (const SearchQueryPointerInput &, const SearchQueryPointerInput &)
 ssg/ClientInput.h	func	ssg::operator==	bool (const SelectionRangeTransition &, const SelectionRangeTransition &)
 ssg/ClientInput.h	func	ssg::operator==	bool (const SelectionTransition &, const SelectionTransition &) noexcept(false)
 ssg/ClientInput.h	func	ssg::operator==	bool (const TabPointerInput &, const TabPointerInput &)
 ssg/ClientInput.h	func	ssg::operator==	bool (const TreePointerInput &, const TreePointerInput &)
+ssg/ClientInput.h	func	ssg::operator==	bool (const UiNodePointerInput &, const UiNodePointerInput &)
+ssg/ClientInput.h	func	ssg::operator==	bool (const UpdatePromptValueInput &, const UpdatePromptValueInput &)
 ssg/ClientInput.h	func	ssg::operator==	bool (const ViewTransitionInput &, const ViewTransitionInput &)
 ssg/ClientInput.h	struct	ssg::ClientInputResult
 ssg/ClientInput.h	struct	ssg::ClientKeyInput
@@ -50,10 +55,13 @@ ssg/ClientInput.h	struct	ssg::PickerPointerInput
 ssg/ClientInput.h	struct	ssg::PointerSelectionTransition
 ssg/ClientInput.h	struct	ssg::ScrollFractionInput
 ssg/ClientInput.h	struct	ssg::ScrollLinesInput
+ssg/ClientInput.h	struct	ssg::SearchQueryPointerInput
 ssg/ClientInput.h	struct	ssg::SelectionRangeTransition
 ssg/ClientInput.h	struct	ssg::SelectionTransition
 ssg/ClientInput.h	struct	ssg::TabPointerInput
 ssg/ClientInput.h	struct	ssg::TreePointerInput
+ssg/ClientInput.h	struct	ssg::UiNodePointerInput
+ssg/ClientInput.h	struct	ssg::UpdatePromptValueInput
 ssg/ClientInput.h	struct	ssg::ViewTransitionInput
 ssg/ClientInput.h	var	ssg::ClientInputResult::clientOwned	std::optional<ClientOwnedInput>
 ssg/ClientInput.h	var	ssg::ClientInputResult::command	std::optional<CommandResult>
@@ -83,6 +91,8 @@ ssg/ClientInput.h	var	ssg::PickerPointerInput::phase	InputPointerPhase
 ssg/ClientInput.h	var	ssg::PointerSelectionTransition::position	ByteOffset
 ssg/ClientInput.h	var	ssg::ScrollFractionInput::action	ScrollFraction
 ssg/ClientInput.h	var	ssg::ScrollLinesInput::action	ScrollLines
+ssg/ClientInput.h	var	ssg::SearchQueryPointerInput::button	InputPointerButton
+ssg/ClientInput.h	var	ssg::SearchQueryPointerInput::phase	InputPointerPhase
 ssg/ClientInput.h	var	ssg::SelectionRangeTransition::active	ByteOffset
 ssg/ClientInput.h	var	ssg::SelectionRangeTransition::anchor	ByteOffset
 ssg/ClientInput.h	var	ssg::SelectionTransition::activeTab	TabId
@@ -94,6 +104,9 @@ ssg/ClientInput.h	var	ssg::TabPointerInput::tabId	TabId
 ssg/ClientInput.h	var	ssg::TreePointerInput::button	InputPointerButton
 ssg/ClientInput.h	var	ssg::TreePointerInput::nodeId	TreeNodeId
 ssg/ClientInput.h	var	ssg::TreePointerInput::phase	InputPointerPhase
+ssg/ClientInput.h	var	ssg::UiNodePointerInput::nodeId	UiNodeId
+ssg/ClientInput.h	var	ssg::UpdatePromptValueInput::index	std::size_t
+ssg/ClientInput.h	var	ssg::UpdatePromptValueInput::value	std::string
 ssg/ClientInput.h	var	ssg::ViewTransitionInput::transition	ViewTransition
 ssg/ClipboardRegister.h	class	ssg::ClipboardRegister
 ssg/ClipboardRegister.h	enum	ssg::ClipboardError
@@ -112,8 +125,8 @@ ssg/ClipboardRegister.h	func	ssg::ClipboardRegister::cut	ClipboardResult (Docume
 ssg/ClipboardRegister.h	func	ssg::ClipboardRegister::operator=	ClipboardRegister &(ClipboardRegister &&) noexcept
 ssg/ClipboardRegister.h	func	ssg::ClipboardRegister::operator=	ClipboardRegister &(const ClipboardRegister &)
 ssg/ClipboardRegister.h	func	ssg::ClipboardRegister::paste	ClipboardResult (Document &, DocumentHistory &, const SelectionSet &, std::uint64_t)
+ssg/ClipboardRegister.h	func	ssg::ClipboardRegister::plainText	std::string_view () const noexcept
 ssg/ClipboardRegister.h	func	ssg::ClipboardRegister::viewState	ClipboardViewState () const
-ssg/ClipboardRegister.h	func	ssg::ClipboardRegister::writeGeneration	std::uint64_t () const noexcept
 ssg/ClipboardRegister.h	func	ssg::ClipboardResult::accepted	bool () const noexcept
 ssg/ClipboardRegister.h	func	ssg::ClipboardViewState::operator==	bool (const ClipboardViewState &) const
 ssg/ClipboardRegister.h	func	ssg::ClipboardWrite::operator==	bool (const ClipboardWrite &) const noexcept
@@ -132,116 +145,30 @@ ssg/ClipboardRegister.h	var	ssg::ClipboardViewState::systemWrite	std::optional<C
 ssg/ClipboardRegister.h	var	ssg::ClipboardWrite::id	std::uint64_t
 ssg/ClipboardRegister.h	var	ssg::ClipboardWrite::requestRevision	std::uint64_t
 ssg/ClipboardRegister.h	var	ssg::ClipboardWrite::text	std::string
-ssg/CommandCatalog.h	alias	ssg::CatalogRevision
-ssg/CommandCatalog.h	alias	ssg::CommandHandler
-ssg/CommandCatalog.h	class	ssg::CommandCatalog
-ssg/CommandCatalog.h	class	ssg::CommandContext
-ssg/CommandCatalog.h	enum	ssg::CommandEffect
-ssg/CommandCatalog.h	enum	ssg::CommandError
-ssg/CommandCatalog.h	enum	ssg::CommandResult::Outcome
-ssg/CommandCatalog.h	enumerator	ssg::CommandEffect::Mutation
-ssg/CommandCatalog.h	enumerator	ssg::CommandEffect::Observation
-ssg/CommandCatalog.h	enumerator	ssg::CommandEffect::Routing
-ssg/CommandCatalog.h	enumerator	ssg::CommandEffect::ViewAction
-ssg/CommandCatalog.h	enumerator	ssg::CommandError::HandlerFailed
-ssg/CommandCatalog.h	enumerator	ssg::CommandError::None
-ssg/CommandCatalog.h	enumerator	ssg::CommandError::UnknownCommand
-ssg/CommandCatalog.h	enumerator	ssg::CommandResult::Outcome::Completed
-ssg/CommandCatalog.h	enumerator	ssg::CommandResult::Outcome::Rejected
-ssg/CommandCatalog.h	enumerator	ssg::CommandResult::Outcome::ViewActionRequired
-ssg/CommandCatalog.h	func	ssg::CatalogDispatchResult::accepted	bool () const noexcept
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::CommandCatalog	void ()
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::CommandCatalog	void (const CommandCatalog &)
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::add	CommandHandle (CommandSpec)
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::commands	std::vector<const CommandEntry *> () const
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::dispatch	CatalogDispatchResult (const ClientCommand &)
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::dispatchInProgress	bool () const noexcept
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::find	const CommandEntry *(CommandHandle) const
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::find	const CommandEntry *(std::string_view) const
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::handleFor	CommandHandle (std::string_view) const
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::operator=	CommandCatalog &(const CommandCatalog &)
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::ownedBy	std::vector<const CommandEntry *> (std::string_view) const
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::replaceGeneration	std::vector<CommandHandle> (std::span<const CommandHandle>, std::vector<CommandSpec>)
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::revision	CatalogRevision () const
-ssg/CommandCatalog.h	func	ssg::CommandCatalog::size	std::size_t () const
-ssg/CommandCatalog.h	func	ssg::CommandContext::setActiveWorkspace	void (WorkspaceId) noexcept
-ssg/CommandCatalog.h	func	ssg::CommandEntry::displayLabel	std::string () const
-ssg/CommandCatalog.h	func	ssg::CommandHandlerResult::failure	CommandHandlerResult (std::string)
-ssg/CommandCatalog.h	func	ssg::CommandHandlerResult::requireView	CommandHandlerResult (ViewAction)
-ssg/CommandCatalog.h	func	ssg::CommandHandlerResult::success	CommandHandlerResult ()
-ssg/CommandCatalog.h	func	ssg::CommandResult::accepted	bool () const noexcept
-ssg/CommandCatalog.h	func	ssg::CommandResult::completed	bool () const noexcept
-ssg/CommandCatalog.h	func	ssg::CommandResult::outcome	Outcome () const noexcept
-ssg/CommandCatalog.h	func	ssg::WorkspaceId::WorkspaceId	void (std::uint64_t) noexcept
-ssg/CommandCatalog.h	func	ssg::WorkspaceId::operator<=>	std::strong_ordering (const WorkspaceId &) const noexcept
-ssg/CommandCatalog.h	func	ssg::WorkspaceId::value	std::uint64_t () const noexcept
-ssg/CommandCatalog.h	func	ssg::bindInProcessHandler	CommandHandlerBinding (Fn &&)
-ssg/CommandCatalog.h	func	ssg::bindNoArgumentHandler	CommandHandlerBinding (Fn &&)
-ssg/CommandCatalog.h	func	ssg::bindOptionalInProcessHandler	CommandHandlerBinding (Fn &&)
-ssg/CommandCatalog.h	func	ssg::bindOptionalWireHandler	CommandHandlerBinding (Fn &&)
-ssg/CommandCatalog.h	func	ssg::bindUntypedHandler	CommandHandlerBinding (CommandHandler, std::optional<std::type_index>)
-ssg/CommandCatalog.h	func	ssg::bindWireHandler	CommandHandlerBinding (Fn &&)
-ssg/CommandCatalog.h	struct	ssg::CatalogDispatchResult
-ssg/CommandCatalog.h	struct	ssg::ClientCommand
-ssg/CommandCatalog.h	struct	ssg::CommandArgumentType
-ssg/CommandCatalog.h	struct	ssg::CommandEntry
-ssg/CommandCatalog.h	struct	ssg::CommandHandlerBinding
-ssg/CommandCatalog.h	struct	ssg::CommandHandlerResult
-ssg/CommandCatalog.h	struct	ssg::CommandResult
-ssg/CommandCatalog.h	struct	ssg::CommandSpec
-ssg/CommandCatalog.h	struct	ssg::WorkspaceId
-ssg/CommandCatalog.h	var	ssg::CatalogDispatchResult::activeWorkspace	std::optional<WorkspaceId>
-ssg/CommandCatalog.h	var	ssg::CatalogDispatchResult::error	CommandError
-ssg/CommandCatalog.h	var	ssg::CatalogDispatchResult::message	std::string
-ssg/CommandCatalog.h	var	ssg::CatalogDispatchResult::viewAction	std::optional<ViewAction>
-ssg/CommandCatalog.h	var	ssg::ClientCommand::id	CommandName
-ssg/CommandCatalog.h	var	ssg::ClientCommand::payload	std::any
-ssg/CommandCatalog.h	var	ssg::CommandArgumentType::type	std::optional<std::type_index>
-ssg/CommandCatalog.h	var	ssg::CommandArgumentType::wire	bool
-ssg/CommandCatalog.h	var	ssg::CommandCatalog::kMaximumCommands	const std::size_t
-ssg/CommandCatalog.h	var	ssg::CommandEntry::argument	CommandArgumentType
-ssg/CommandCatalog.h	var	ssg::CommandEntry::effect	CommandEffect
-ssg/CommandCatalog.h	var	ssg::CommandEntry::handler	CommandHandler
-ssg/CommandCatalog.h	var	ssg::CommandEntry::id	std::string
-ssg/CommandCatalog.h	var	ssg::CommandEntry::initScript	bool
-ssg/CommandCatalog.h	var	ssg::CommandEntry::label	std::string
-ssg/CommandCatalog.h	var	ssg::CommandEntry::luaApi	bool
-ssg/CommandCatalog.h	var	ssg::CommandEntry::owner	std::string
-ssg/CommandCatalog.h	var	ssg::CommandEntry::retired	bool
-ssg/CommandCatalog.h	var	ssg::CommandEntry::summary	std::string
-ssg/CommandCatalog.h	var	ssg::CommandHandlerBinding::argument	CommandArgumentType
-ssg/CommandCatalog.h	var	ssg::CommandHandlerBinding::handler	CommandHandler
-ssg/CommandCatalog.h	var	ssg::CommandHandlerResult::accepted	bool
-ssg/CommandCatalog.h	var	ssg::CommandHandlerResult::message	std::string
-ssg/CommandCatalog.h	var	ssg::CommandHandlerResult::viewAction	std::optional<ViewAction>
-ssg/CommandCatalog.h	var	ssg::CommandResult::error	CommandError
-ssg/CommandCatalog.h	var	ssg::CommandResult::message	std::string
-ssg/CommandCatalog.h	var	ssg::CommandResult::viewAction	std::optional<ViewAction>
-ssg/CommandCatalog.h	var	ssg::CommandSpec::binding	CommandHandlerBinding
-ssg/CommandCatalog.h	var	ssg::CommandSpec::effect	std::optional<CommandEffect>
-ssg/CommandCatalog.h	var	ssg::CommandSpec::id	std::string
-ssg/CommandCatalog.h	var	ssg::CommandSpec::initScript	bool
-ssg/CommandCatalog.h	var	ssg::CommandSpec::label	std::string
-ssg/CommandCatalog.h	var	ssg::CommandSpec::luaApi	bool
-ssg/CommandCatalog.h	var	ssg::CommandSpec::owner	std::string
-ssg/CommandCatalog.h	var	ssg::CommandSpec::summary	std::string
-ssg/CommandCatalog.h	var	ssg::kNestedDispatchRefusal	const std::string_view
-ssg/CommandHandle.h	class	ssg::CommandHandle
-ssg/CommandHandle.h	class	ssg::CommandName
-ssg/CommandHandle.h	func	ssg::CommandHandle::CommandHandle	void () noexcept
-ssg/CommandHandle.h	func	ssg::CommandHandle::operator==	bool (const CommandHandle &) const noexcept
-ssg/CommandHandle.h	func	ssg::CommandHandle::valid	bool () const noexcept
-ssg/CommandHandle.h	func	ssg::CommandName::CommandName	void ()
-ssg/CommandHandle.h	func	ssg::CommandName::CommandName	void (const char *)
-ssg/CommandHandle.h	func	ssg::CommandName::CommandName	void (std::string)
-ssg/CommandHandle.h	func	ssg::CommandName::CommandName	void (std::string, CommandHandle)
-ssg/CommandHandle.h	func	ssg::CommandName::CommandName	void (std::string_view)
-ssg/CommandHandle.h	func	ssg::CommandName::empty	bool () const noexcept
-ssg/CommandHandle.h	func	ssg::CommandName::handle	CommandHandle () const noexcept
-ssg/CommandHandle.h	func	ssg::CommandName::name	std::string_view () const noexcept
-ssg/CommandHandle.h	func	ssg::CommandName::operator==	bool (const CommandName &) const noexcept
+ssg/Command.h	alias	ssg::Commands::Map
+ssg/Command.h	alias	ssg::Commands::Replacements
+ssg/Command.h	class	ssg::Commands
+ssg/Command.h	enum	ssg::CommandError
+ssg/Command.h	enumerator	ssg::CommandError::HandlerFailed
+ssg/Command.h	enumerator	ssg::CommandError::None
+ssg/Command.h	enumerator	ssg::CommandError::UnknownCommand
+ssg/Command.h	func	ssg::CommandResult::accepted	bool () const noexcept
+ssg/Command.h	func	ssg::CommandResult::completed	bool () const noexcept
+ssg/Command.h	func	ssg::Commands::add	void (std::string, std::string, std::function<CommandResult ()>)
+ssg/Command.h	func	ssg::Commands::all	const Map &() const noexcept
+ssg/Command.h	func	ssg::Commands::dispatch	CommandResult (std::string_view)
+ssg/Command.h	func	ssg::Commands::dispatchInProgress	bool () const noexcept
+ssg/Command.h	func	ssg::Commands::find	const Command *(std::string_view) const
+ssg/Command.h	func	ssg::Commands::replace	void (std::span<const std::string>, Replacements)
+ssg/Command.h	struct	ssg::Command
+ssg/Command.h	struct	ssg::CommandResult
+ssg/Command.h	var	ssg::Command::handler	std::function<CommandResult ()>
+ssg/Command.h	var	ssg::Command::label	std::string
+ssg/Command.h	var	ssg::CommandResult::error	CommandError
+ssg/Command.h	var	ssg::CommandResult::message	std::string
+ssg/Command.h	var	ssg::CommandResult::viewAction	std::optional<ViewAction>
+ssg/Command.h	var	ssg::kNestedDispatchRefusal	const std::string_view
 ssg/CompiledKeymap.h	alias	ssg::CompiledSequence
-ssg/CompiledKeymap.h	class	ssg::CommandCatalog
 ssg/CompiledKeymap.h	class	ssg::CompiledContext
 ssg/CompiledKeymap.h	class	ssg::CompiledKeymap
 ssg/CompiledKeymap.h	class	ssg::CompiledStroke
@@ -252,7 +179,7 @@ ssg/CompiledKeymap.h	func	ssg::CompiledContext::never	CompiledContext () noexcep
 ssg/CompiledKeymap.h	func	ssg::CompiledContext::of	CompiledContext (FocusTarget) noexcept
 ssg/CompiledKeymap.h	func	ssg::CompiledContext::operator==	bool (const CompiledContext &) const noexcept
 ssg/CompiledKeymap.h	func	ssg::CompiledKeymap::CompiledKeymap	void (const CompiledKeymap &)
-ssg/CompiledKeymap.h	func	ssg::CompiledKeymap::CompiledKeymap	void (const KeymapViewState &, const CommandCatalog &)
+ssg/CompiledKeymap.h	func	ssg::CompiledKeymap::CompiledKeymap	void (const KeymapViewState &)
 ssg/CompiledKeymap.h	func	ssg::CompiledKeymap::compile	CompiledStroke (const KeyStroke &) noexcept
 ssg/CompiledKeymap.h	func	ssg::CompiledKeymap::operator=	CompiledKeymap &(const CompiledKeymap &)
 ssg/CompiledKeymap.h	func	ssg::CompiledKeymap::resolve	CompiledResolution (std::span<const CompiledStroke>, FocusTarget) const
@@ -260,7 +187,7 @@ ssg/CompiledKeymap.h	func	ssg::CompiledStroke::CompiledStroke	void ()
 ssg/CompiledKeymap.h	func	ssg::CompiledStroke::CompiledStroke	void (const KeyStroke &) noexcept
 ssg/CompiledKeymap.h	func	ssg::CompiledStroke::operator==	bool (const CompiledStroke &) const noexcept
 ssg/CompiledKeymap.h	struct	ssg::CompiledResolution
-ssg/CompiledKeymap.h	var	ssg::CompiledResolution::command	CommandName
+ssg/CompiledKeymap.h	var	ssg::CompiledResolution::commandId	std::string
 ssg/CompiledKeymap.h	var	ssg::CompiledResolution::kind	KeymapMatchKind
 ssg/DiffModel.h	class	ssg::DiffFileId
 ssg/DiffModel.h	class	ssg::DiffModel
@@ -386,11 +313,8 @@ ssg/DiffRows.h	func	ssg::RealRow::operator==	bool (const RealRow &) const noexce
 ssg/DiffRows.h	func	ssg::RowProjection::RowProjection	void (std::vector<ProjectedRow>)
 ssg/DiffRows.h	func	ssg::RowProjection::movedRealRow	uint32_t (uint32_t, int64_t) const
 ssg/DiffRows.h	func	ssg::RowProjection::row	const ProjectedRow &(uint32_t) const
-ssg/DiffRows.h	func	ssg::RowProjection::rows	std::span<const ProjectedRow> () const noexcept
 ssg/DiffRows.h	func	ssg::RowProjection::totalRows	uint32_t () const noexcept
-ssg/DiffRows.h	func	ssg::RowProjection::visualRowForBufferLine	uint32_t (uint32_t) const
 ssg/DiffRows.h	func	ssg::RowProjection::visualRowForPosition	uint32_t (const DocumentPosition &) const
-ssg/DiffRows.h	func	ssg::RowProjection::visualRowForReal	uint32_t (uint32_t) const
 ssg/DiffRows.h	struct	ssg::PhantomRow
 ssg/DiffRows.h	struct	ssg::RealRow
 ssg/DiffRows.h	var	ssg::PhantomRow::baselineLine	uint32_t
@@ -422,7 +346,6 @@ ssg/Document.h	func	ssg::Document::Document	void (ValidatedUtf8, DocumentMode)
 ssg/Document.h	func	ssg::Document::Document	void (const Document &)
 ssg/Document.h	func	ssg::Document::Document	void (std::string_view, DocumentMode)
 ssg/Document.h	func	ssg::Document::apply	TransactionResult (const EditTransaction &)
-ssg/Document.h	func	ssg::Document::dirty	bool () const noexcept
 ssg/Document.h	func	ssg::Document::mode	DocumentMode () const noexcept
 ssg/Document.h	func	ssg::Document::operator=	Document &(Document &&) noexcept
 ssg/Document.h	func	ssg::Document::operator=	Document &(const Document &)
@@ -467,27 +390,30 @@ ssg/DocumentHistory.h	func	ssg::DocumentHistory::DocumentHistory	void (const Doc
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::DocumentHistory	void (const SettingsModel &)
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::applyEdit	HistoryResult (Document &, const EditTransaction &, const SelectionSet &, const SelectionSet &, HistoryEditKind, std::uint64_t)
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::breakCoalescing	void () noexcept
-ssg/DocumentHistory.h	func	ssg::DocumentHistory::canRedo	bool () const noexcept
-ssg/DocumentHistory.h	func	ssg::DocumentHistory::canUndo	bool () const noexcept
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::operator=	DocumentHistory &(DocumentHistory &&) noexcept
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::operator=	DocumentHistory &(const DocumentHistory &)
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::redo	HistoryResult (Document &)
-ssg/DocumentHistory.h	func	ssg::DocumentHistory::retainedBytes	std::uint64_t () const noexcept
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::undo	HistoryResult (Document &)
-ssg/DocumentHistory.h	func	ssg::DocumentHistory::viewState	HistoryViewState () const noexcept
 ssg/DocumentHistory.h	func	ssg::HistoryResult::accepted	bool () const noexcept
-ssg/DocumentHistory.h	func	ssg::HistoryViewState::operator==	bool (const HistoryViewState &) const noexcept
 ssg/DocumentHistory.h	func	ssg::historyEditKind	HistoryEditKind (TextInputCommand) noexcept
 ssg/DocumentHistory.h	struct	ssg::HistoryResult
-ssg/DocumentHistory.h	struct	ssg::HistoryViewState
 ssg/DocumentHistory.h	var	ssg::HistoryResult::documentError	DocumentError
 ssg/DocumentHistory.h	var	ssg::HistoryResult::error	HistoryError
 ssg/DocumentHistory.h	var	ssg::HistoryResult::message	std::string
 ssg/DocumentHistory.h	var	ssg::HistoryResult::revision	std::uint64_t
 ssg/DocumentHistory.h	var	ssg::HistoryResult::selections	std::optional<SelectionSet>
-ssg/DocumentHistory.h	var	ssg::HistoryViewState::canRedo	bool
-ssg/DocumentHistory.h	var	ssg::HistoryViewState::canUndo	bool
-ssg/DocumentHistory.h	var	ssg::HistoryViewState::retainedBytes	std::uint64_t
+ssg/DocumentPointerGesture.h	class	ssg::DocumentPointerGesture
+ssg/DocumentPointerGesture.h	enum	ssg::DocumentPointerTargetState
+ssg/DocumentPointerGesture.h	enumerator	ssg::DocumentPointerTargetState::Current
+ssg/DocumentPointerGesture.h	enumerator	ssg::DocumentPointerTargetState::DocumentChanged
+ssg/DocumentPointerGesture.h	enumerator	ssg::DocumentPointerTargetState::RevisionChanged
+ssg/DocumentPointerGesture.h	func	ssg::DocumentPointerGesture::additive	bool () const
+ssg/DocumentPointerGesture.h	func	ssg::DocumentPointerGesture::begin	void (FileDocumentId, std::uint64_t, DocumentPosition, bool, std::vector<Selection>)
+ssg/DocumentPointerGesture.h	func	ssg::DocumentPointerGesture::clear	void () noexcept
+ssg/DocumentPointerGesture.h	func	ssg::DocumentPointerGesture::has_value	bool () const noexcept
+ssg/DocumentPointerGesture.h	func	ssg::DocumentPointerGesture::moveTo	void (DocumentPosition)
+ssg/DocumentPointerGesture.h	func	ssg::DocumentPointerGesture::selectionThrough	SelectionCommandArguments (DocumentPosition) const
+ssg/DocumentPointerGesture.h	func	ssg::DocumentPointerGesture::validateTarget	DocumentPointerTargetState (std::optional<FileDocumentId>, std::uint64_t)
 ssg/DraftAutosaveScheduler.h	class	ssg::DraftAutosaveScheduler
 ssg/DraftAutosaveScheduler.h	func	ssg::DraftAutosaveScheduler::DraftAutosaveScheduler	void (std::chrono::milliseconds)
 ssg/DraftAutosaveScheduler.h	func	ssg::DraftAutosaveScheduler::due	std::vector<FileDocumentId> (std::chrono::steady_clock::time_point, std::span<const AutosaveCandidate>)
@@ -579,7 +505,6 @@ ssg/EditCommands.h	var	ssg::EditCommandSettings::tabWidth	std::uint32_t
 ssg/Editor.h	class	ssg::Editor::DeferredCommandQueue
 ssg/Editor.h	enum	ssg::DiffIngressError
 ssg/Editor.h	enum	ssg::DraftReopenOutcome
-ssg/Editor.h	enum	ssg::Editor::DraftReopenNotice
 ssg/Editor.h	enumerator	ssg::DiffIngressError::DiffRejected
 ssg/Editor.h	enumerator	ssg::DiffIngressError::EmptyBurst
 ssg/Editor.h	enumerator	ssg::DiffIngressError::FollowRejected
@@ -587,53 +512,46 @@ ssg/Editor.h	enumerator	ssg::DiffIngressError::None
 ssg/Editor.h	enumerator	ssg::DraftReopenOutcome::Conflict
 ssg/Editor.h	enumerator	ssg::DraftReopenOutcome::None
 ssg/Editor.h	enumerator	ssg::DraftReopenOutcome::Restored
-ssg/Editor.h	enumerator	ssg::Editor::DraftReopenNotice::Conflict
-ssg/Editor.h	enumerator	ssg::Editor::DraftReopenNotice::None
-ssg/Editor.h	enumerator	ssg::Editor::DraftReopenNotice::Restored
 ssg/Editor.h	func	ssg::DiffIngressResult::accepted	bool () const noexcept
 ssg/Editor.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (DocumentRuntimeState &&) noexcept
 ssg/Editor.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (const DocumentRuntimeState &)
 ssg/Editor.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (const SettingsModel &, std::shared_ptr<SyntaxParser>)
-ssg/Editor.h	func	ssg::DocumentRuntimeState::liveInstances	std::uint64_t () noexcept
 ssg/Editor.h	func	ssg::DocumentRuntimeState::operator=	DocumentRuntimeState &(DocumentRuntimeState &&)
 ssg/Editor.h	func	ssg::DocumentRuntimeState::operator=	DocumentRuntimeState &(const DocumentRuntimeState &)
 ssg/Editor.h	func	ssg::Editor::DeferredCommandQueue::clear	void () noexcept
 ssg/Editor.h	func	ssg::Editor::DeferredCommandQueue::contains	bool (std::string_view) const noexcept
 ssg/Editor.h	func	ssg::Editor::DeferredCommandQueue::empty	bool () const noexcept
 ssg/Editor.h	func	ssg::Editor::DeferredCommandQueue::size	std::size_t () const noexcept
-ssg/Editor.h	func	ssg::Editor::DeferredCommandQueue::takeFront	DeferredCommand ()
+ssg/Editor.h	func	ssg::Editor::DeferredCommandQueue::takeFront	std::string ()
 ssg/Editor.h	func	ssg::Editor::Editor	void (Editor &&)
 ssg/Editor.h	func	ssg::Editor::Editor	void (const Editor &)
-ssg/Editor.h	func	ssg::Editor::activateDocument	CommandHandlerResult (FileDocumentId)
+ssg/Editor.h	func	ssg::Editor::activateDocument	OperationResult (FileDocumentId)
 ssg/Editor.h	func	ssg::Editor::activeDiffFile	std::optional<DiffFileView> () const
 ssg/Editor.h	func	ssg::Editor::activeDocument	Document *()
 ssg/Editor.h	func	ssg::Editor::activeDocument	const Document *() const
 ssg/Editor.h	func	ssg::Editor::activeDocumentId	std::optional<FileDocumentId> () const
-ssg/Editor.h	func	ssg::Editor::activeDocumentText	std::string () const
-ssg/Editor.h	func	ssg::Editor::activeDraftReopenNotice	DraftReopenNotice () const
 ssg/Editor.h	func	ssg::Editor::activeSyntaxView	SyntaxViewState () const
 ssg/Editor.h	func	ssg::Editor::activeTabIsLiveDiff	bool () const
 ssg/Editor.h	func	ssg::Editor::activeTabState	const TabState *() const
 ssg/Editor.h	func	ssg::Editor::activeText	const std::string &() const
 ssg/Editor.h	func	ssg::Editor::activeWorkspaceState	std::optional<WorkspaceDocumentState> () const
+ssg/Editor.h	func	ssg::Editor::addCommand	void (std::string, std::string, std::function<CommandResult ()>)
+ssg/Editor.h	func	ssg::Editor::advanceWorkspaceSearch	void ()
 ssg/Editor.h	func	ssg::Editor::applyExternalDiffBurst	DiffIngressResult (std::vector<ExternalDiffRevision>)
-ssg/Editor.h	func	ssg::Editor::applyGitDiffScan	DiffIngressResult (GitDiffScan)
-ssg/Editor.h	func	ssg::Editor::applyWorkspaceReplace	WorkspaceApplyResult (const WorkspaceReplacePreview &)
 ssg/Editor.h	func	ssg::Editor::archiveDiscardedDraft	bool (std::string_view, std::string_view)
 ssg/Editor.h	func	ssg::Editor::clampSelectionToActiveDocument	void ()
 ssg/Editor.h	func	ssg::Editor::clampSelectionsToActiveDocument	void ()
-ssg/Editor.h	func	ssg::Editor::closePane	CommandHandlerResult ()
+ssg/Editor.h	func	ssg::Editor::closePane	OperationResult ()
 ssg/Editor.h	func	ssg::Editor::closeTab	TabLifecycleResult (const TabState &, std::chrono::milliseconds, std::span<const TabId>)
-ssg/Editor.h	func	ssg::Editor::commandCatalog	const CommandCatalog &() const
-ssg/Editor.h	func	ssg::Editor::cyclePane	CommandHandlerResult (CycleDirection)
-ssg/Editor.h	func	ssg::Editor::deferDispatch	bool (ClientCommand)
-ssg/Editor.h	func	ssg::Editor::deferredWorkCounts	DeferredWorkCounts () const
+ssg/Editor.h	func	ssg::Editor::commandRegistry	const Commands &() const
+ssg/Editor.h	func	ssg::Editor::cyclePane	OperationResult (CycleDirection)
+ssg/Editor.h	func	ssg::Editor::deferDispatch	bool (std::string)
 ssg/Editor.h	func	ssg::Editor::discardDocumentRuntimeState	void (FileDocumentId)
-ssg/Editor.h	func	ssg::Editor::discardDraft	CommandHandlerResult ()
-ssg/Editor.h	func	ssg::Editor::dismissDraftNotice	CommandHandlerResult ()
-ssg/Editor.h	func	ssg::Editor::dispatch	CommandResult (const ClientCommand &)
+ssg/Editor.h	func	ssg::Editor::discardDraft	OperationResult ()
+ssg/Editor.h	func	ssg::Editor::dismissDraftNotice	OperationResult ()
+ssg/Editor.h	func	ssg::Editor::dispatch	CommandResult (std::string_view)
 ssg/Editor.h	func	ssg::Editor::dispatchInProgress	bool () const noexcept
-ssg/Editor.h	func	ssg::Editor::dispatchLocked	CommandResult (const ClientCommand &)
+ssg/Editor.h	func	ssg::Editor::dispatchLocked	CommandResult (std::string_view)
 ssg/Editor.h	func	ssg::Editor::draftNotice	std::optional<NoticeView> () const
 ssg/Editor.h	func	ssg::Editor::enqueueStatus	void (StatusPriority, std::string)
 ssg/Editor.h	func	ssg::Editor::ensureDocumentRuntimeState	void (FileDocumentId)
@@ -645,14 +563,13 @@ ssg/Editor.h	func	ssg::Editor::focusPane	bool (PaneId)
 ssg/Editor.h	func	ssg::Editor::gitDiffWakeDescriptor	int () const
 ssg/Editor.h	func	ssg::Editor::historyFor	DocumentHistory &(FileDocumentId)
 ssg/Editor.h	func	ssg::Editor::input	ClientInputResult (const ClientInput &)
-ssg/Editor.h	func	ssg::Editor::liveDocumentRuntimeStateCountForTests	std::uint64_t ()
 ssg/Editor.h	func	ssg::Editor::noticePresent	bool () const
 ssg/Editor.h	func	ssg::Editor::noticeView	std::optional<NoticeView> () const
-ssg/Editor.h	func	ssg::Editor::openDraftDiff	CommandHandlerResult ()
-ssg/Editor.h	func	ssg::Editor::openOrFocusLiveDiffTab	CommandHandlerResult (const DiffFileView &, NavigationClass)
+ssg/Editor.h	func	ssg::Editor::openDraftDiff	OperationResult ()
+ssg/Editor.h	func	ssg::Editor::openOrFocusLiveDiffTab	OperationResult (const DiffFileView &, NavigationClass)
 ssg/Editor.h	func	ssg::Editor::openOrRevealFollowTargetProgrammatic	bool (const FollowTarget &)
 ssg/Editor.h	func	ssg::Editor::openPickerPrompt	bool (PickerKind)
-ssg/Editor.h	func	ssg::Editor::openReadOnlyTab	CommandHandlerResult (TabKind, std::string, std::string, std::string, LanguageId)
+ssg/Editor.h	func	ssg::Editor::openReadOnlyTab	OperationResult (TabKind, std::string, std::string, std::string, LanguageId)
 ssg/Editor.h	func	ssg::Editor::operator=	Editor &(Editor &&)
 ssg/Editor.h	func	ssg::Editor::operator=	Editor &(const Editor &)
 ssg/Editor.h	func	ssg::Editor::paletteView	PaletteViewState () const
@@ -668,67 +585,76 @@ ssg/Editor.h	func	ssg::Editor::recordNavigation	void (NavigationClass)
 ssg/Editor.h	func	ssg::Editor::refreshSyntax	void (std::vector<SyntaxEdit>)
 ssg/Editor.h	func	ssg::Editor::refreshTree	bool ()
 ssg/Editor.h	func	ssg::Editor::refreshTreeForPublication	void ()
-ssg/Editor.h	func	ssg::Editor::registerCommand	CommandHandle (CommandSpec)
 ssg/Editor.h	func	ssg::Editor::reopenTab	TabLifecycleResult (const TabState &, const RecoveryRecordId &)
-ssg/Editor.h	func	ssg::Editor::replaceCommandGeneration	std::vector<CommandHandle> (std::span<const CommandHandle>, std::vector<CommandSpec>)
+ssg/Editor.h	func	ssg::Editor::replaceCommands	void (std::span<const std::string>, Commands::Replacements)
 ssg/Editor.h	func	ssg::Editor::resetKeymapToDefault	void ()
 ssg/Editor.h	func	ssg::Editor::resetSelectionForActiveDocument	void ()
+ssg/Editor.h	func	ssg::Editor::resolveInputKeymap	const CompiledKeymap &()
 ssg/Editor.h	func	ssg::Editor::resolvedPromptControls	std::optional<ResolvedPromptControls> () const
-ssg/Editor.h	func	ssg::Editor::revealDiffTarget	bool (const FollowTarget &, NavigationClass)
-ssg/Editor.h	func	ssg::Editor::snapshot	WorkspaceSnapshot (std::uint64_t) const
-ssg/Editor.h	func	ssg::Editor::splitPane	CommandHandlerResult (SplitAxis)
+ssg/Editor.h	func	ssg::Editor::splitPane	OperationResult (SplitAxis)
+ssg/Editor.h	func	ssg::Editor::startWorkspaceSearch	void (ParsedSearchQuery, std::uint64_t)
+ssg/Editor.h	func	ssg::Editor::startWorkspaceSearch	void (std::string, std::uint64_t)
 ssg/Editor.h	func	ssg::Editor::syntaxFor	SyntaxModel &(FileDocumentId)
-ssg/Editor.h	func	ssg::Editor::topology	SessionTopology () const
+ssg/Editor.h	func	ssg::Editor::toggleTreeExpanded	OperationResult (const TreeProviderId &, const TreeNodeId &)
 ssg/Editor.h	func	ssg::Editor::treeView	TreeViewState () const
 ssg/Editor.h	func	ssg::Editor::uiStatusFields	StatusFieldProjection () const
-ssg/Editor.h	func	ssg::Editor::updateTabsFor	CommandHandlerResult (FileDocumentId)
-ssg/Editor.h	func	ssg::Editor::workspaceRoot	const std::filesystem::path &() const noexcept
+ssg/Editor.h	func	ssg::Editor::updateFindQuery	FindReplaceOperationResult (std::string)
+ssg/Editor.h	func	ssg::Editor::updateReplacement	FindReplaceOperationResult (std::string)
+ssg/Editor.h	func	ssg::Editor::updateTabsFor	OperationResult (FileDocumentId)
+ssg/Editor.h	func	ssg::Editor::workspaceCorpus	WorkspaceCorpus () const
+ssg/Editor.h	func	ssg::Editor::workspaceSearch	WorkspaceSearchState (std::string)
+ssg/Editor.h	func	ssg::Editor::workspaceSearchPending	bool () const noexcept
 ssg/Editor.h	func	ssg::EditorCreateResult::accepted	bool () const noexcept
-ssg/Editor.h	func	ssg::bindRuntimeEditing	void (CommandCatalog &, Editor &)
-ssg/Editor.h	func	ssg::bindRuntimeFiles	void (CommandCatalog &, Editor &)
-ssg/Editor.h	func	ssg::bindRuntimeHelp	void (CommandCatalog &, Editor &)
-ssg/Editor.h	func	ssg::bindRuntimeLanguageServices	void (CommandCatalog &, Editor &)
-ssg/Editor.h	func	ssg::bindRuntimeNavigation	void (CommandCatalog &, Editor &)
-ssg/Editor.h	func	ssg::bindRuntimePresentation	void (CommandCatalog &, Editor &)
+ssg/Editor.h	func	ssg::OperationResult::operator CommandResult	CommandResult () const
+ssg/Editor.h	func	ssg::activateTab	OperationResult (Editor &, TabId)
+ssg/Editor.h	func	ssg::activateTreeNode	OperationResult (Editor &, TreeNodeId)
+ssg/Editor.h	func	ssg::applyEditorSelections	OperationResult (Editor &, ApplySelections)
+ssg/Editor.h	func	ssg::applyEditorTextInput	OperationResult (Editor &, TextInputCommand, TextInputArguments)
+ssg/Editor.h	func	ssg::applyFilePathCompletion	OperationResult (Editor &, PromptCompletion, std::string_view)
+ssg/Editor.h	func	ssg::applyFindQuery	FindReplaceOperationResult (Editor &, std::string)
+ssg/Editor.h	func	ssg::applyGotoLine	OperationResult (Editor &, std::string_view)
+ssg/Editor.h	func	ssg::applyKeymapBind	OperationResult (Editor &, KeymapBindArguments)
+ssg/Editor.h	func	ssg::applyKeymapUnbind	OperationResult (Editor &, KeymapUnbindArguments)
+ssg/Editor.h	func	ssg::applyReplacement	FindReplaceOperationResult (Editor &, std::string)
+ssg/Editor.h	func	ssg::applyStyleDefine	OperationResult (Editor &, StyleDefineArguments)
+ssg/Editor.h	func	ssg::applyThemeSet	OperationResult (Editor &, ThemeSetArguments)
+ssg/Editor.h	func	ssg::applyUiNodeActivation	OperationResult (Editor &, const UiNodeId &)
+ssg/Editor.h	func	ssg::bindRuntimeEditing	void (Commands &, Editor &)
+ssg/Editor.h	func	ssg::bindRuntimeFiles	void (Commands &, Editor &)
+ssg/Editor.h	func	ssg::bindRuntimeHelp	void (Commands &, Editor &)
+ssg/Editor.h	func	ssg::bindRuntimeLanguageServices	void (Commands &, Editor &)
+ssg/Editor.h	func	ssg::bindRuntimeNavigation	void (Commands &, Editor &)
+ssg/Editor.h	func	ssg::bindRuntimePresentation	void (Commands &, Editor &)
 ssg/Editor.h	func	ssg::boolSetting	bool (const SettingsModel &, SettingKey, bool)
+ssg/Editor.h	func	ssg::closeTabById	OperationResult (Editor &, TabId)
 ssg/Editor.h	func	ssg::createEditor	EditorCreateResult (EditorConfig)
-ssg/Editor.h	func	ssg::executeFindReplaceCommand	CommandHandlerResult (Editor &, FindReplaceCommand, const std::any &)
-ssg/Editor.h	func	ssg::failure	CommandHandlerResult (std::string)
-ssg/Editor.h	func	ssg::inputLocked	ClientInputResult (Editor &, const ClientInput &)
+ssg/Editor.h	func	ssg::createFileByPath	OperationResult (Editor &, std::string_view)
+ssg/Editor.h	func	ssg::executeFindReplaceCommand	OperationResult (Editor &, FindReplaceCommand)
+ssg/Editor.h	func	ssg::failure	OperationResult (std::string)
+ssg/Editor.h	func	ssg::invokeExternalAction	OperationResult (Editor &, const ExternalActionInvocation &)
+ssg/Editor.h	func	ssg::navigateTo	OperationResult (Editor &, NavigationTarget, NavigationOrigin)
+ssg/Editor.h	func	ssg::openDroppedContent	OperationResult (Editor &, std::span<const std::uint8_t>, std::string_view)
 ssg/Editor.h	func	ssg::operator==	bool (const NoticeView &, const NoticeView &)
-ssg/Editor.h	func	ssg::payloadAs	const T *(const std::any &)
-ssg/Editor.h	func	ssg::registerAllCommands	void (CommandCatalog &, Editor &)
-ssg/Editor.h	func	ssg::success	CommandHandlerResult ()
+ssg/Editor.h	func	ssg::registerAllCommands	void (Commands &, Editor &)
+ssg/Editor.h	func	ssg::success	OperationResult ()
 ssg/Editor.h	func	ssg::tabMessage	std::string (const TabResult &)
 ssg/Editor.h	func	ssg::uint32Setting	std::uint32_t (const SettingsModel &, SettingKey, std::uint32_t)
 ssg/Editor.h	func	ssg::workspaceMessage	std::string (const WorkspaceResult &)
-ssg/Editor.h	func	ssg::wrongPayload	std::string (std::string_view)
 ssg/Editor.h	struct	ssg::DiffIngressResult
 ssg/Editor.h	struct	ssg::DocumentRuntimeState
 ssg/Editor.h	struct	ssg::Editor
-ssg/Editor.h	struct	ssg::Editor::DeferredCommand
-ssg/Editor.h	struct	ssg::Editor::DeferredWorkCounts
-ssg/Editor.h	struct	ssg::Editor::DocumentPointerGesture
 ssg/Editor.h	struct	ssg::Editor::ResolvedPromptControls
 ssg/Editor.h	struct	ssg::EditorConfig
 ssg/Editor.h	struct	ssg::EditorCreateResult
 ssg/Editor.h	struct	ssg::ExternalDiffRevision
 ssg/Editor.h	struct	ssg::NoticeView
+ssg/Editor.h	struct	ssg::OperationResult
 ssg/Editor.h	struct	ssg::PumpResult
 ssg/Editor.h	var	ssg::DiffIngressResult::error	DiffIngressError
 ssg/Editor.h	var	ssg::DocumentRuntimeState::history	DocumentHistory
 ssg/Editor.h	var	ssg::DocumentRuntimeState::reopen	DraftReopenOutcome
 ssg/Editor.h	var	ssg::DocumentRuntimeState::syntax	SyntaxModel
-ssg/Editor.h	var	ssg::Editor::DeferredCommand::command	ClientCommand
 ssg/Editor.h	var	ssg::Editor::DeferredCommandQueue::kMaximum	const std::size_t
-ssg/Editor.h	var	ssg::Editor::DeferredWorkCounts::syntaxRuns	std::uint64_t
-ssg/Editor.h	var	ssg::Editor::DeferredWorkCounts::treeScans	std::uint64_t
-ssg/Editor.h	var	ssg::Editor::DocumentPointerGesture::active	DocumentPosition
-ssg/Editor.h	var	ssg::Editor::DocumentPointerGesture::additive	bool
-ssg/Editor.h	var	ssg::Editor::DocumentPointerGesture::anchor	DocumentPosition
-ssg/Editor.h	var	ssg::Editor::DocumentPointerGesture::baseline	std::vector<Selection>
-ssg/Editor.h	var	ssg::Editor::DocumentPointerGesture::documentId	FileDocumentId
-ssg/Editor.h	var	ssg::Editor::DocumentPointerGesture::documentRevision	std::uint64_t
 ssg/Editor.h	var	ssg::Editor::ResolvedPromptControls::activeInput	std::size_t
 ssg/Editor.h	var	ssg::Editor::ResolvedPromptControls::controls	std::vector<PromptControl>
 ssg/Editor.h	var	ssg::Editor::activeTextCache	std::string
@@ -736,17 +662,13 @@ ssg/Editor.h	var	ssg::Editor::activeTextDocument	std::optional<FileDocumentId>
 ssg/Editor.h	var	ssg::Editor::activeTextRevision	std::optional<std::uint64_t>
 ssg/Editor.h	var	ssg::Editor::archiveRoot	std::filesystem::path
 ssg/Editor.h	var	ssg::Editor::autosave	DraftAutosaveScheduler
-ssg/Editor.h	var	ssg::Editor::catalog	CommandCatalog
 ssg/Editor.h	var	ssg::Editor::clipboard	ClipboardRegister
-ssg/Editor.h	var	ssg::Editor::commandCandidateCache	std::vector<PaletteCandidate>
-ssg/Editor.h	var	ssg::Editor::commandCandidateCacheValid	bool
-ssg/Editor.h	var	ssg::Editor::commandCandidateCatalogRevision	CatalogRevision
-ssg/Editor.h	var	ssg::Editor::commandCandidateKeymap	KeymapViewState
+ssg/Editor.h	var	ssg::Editor::commands	Commands
 ssg/Editor.h	var	ssg::Editor::deferredCommands	DeferredCommandQueue
 ssg/Editor.h	var	ssg::Editor::deferringEnrichment	bool
 ssg/Editor.h	var	ssg::Editor::diff	DiffModel
 ssg/Editor.h	var	ssg::Editor::documentLanguageOverrides	std::unordered_map<std::uint64_t, LanguageId>
-ssg/Editor.h	var	ssg::Editor::documentPointerGesture	std::optional<DocumentPointerGesture>
+ssg/Editor.h	var	ssg::Editor::documentPointerGesture	DocumentPointerGesture
 ssg/Editor.h	var	ssg::Editor::documentRuntimeStates	std::map<std::uint64_t, DocumentRuntimeState>
 ssg/Editor.h	var	ssg::Editor::external	ExternalModificationFlow
 ssg/Editor.h	var	ssg::Editor::fileCandidates	std::vector<PaletteCandidate>
@@ -755,19 +677,18 @@ ssg/Editor.h	var	ssg::Editor::findReplace	FindReplaceController
 ssg/Editor.h	var	ssg::Editor::follow	FollowEditsModel
 ssg/Editor.h	var	ssg::Editor::gitDiffIngress	GitDiffIngress
 ssg/Editor.h	var	ssg::Editor::homeDirectory	std::string
-ssg/Editor.h	var	ssg::Editor::inputCatalogRevision	std::optional<CatalogRevision>
-ssg/Editor.h	var	ssg::Editor::inputKeymap	std::unique_ptr<CompiledKeymap>
-ssg/Editor.h	var	ssg::Editor::inputKeymapGeneration	std::optional<std::uint64_t>
 ssg/Editor.h	var	ssg::Editor::keymap	KeymapViewState
 ssg/Editor.h	var	ssg::Editor::keymapGeneration	std::uint64_t
 ssg/Editor.h	var	ssg::Editor::lineNumbers	bool
 ssg/Editor.h	var	ssg::Editor::liveDiffDocuments	std::unordered_map<std::string, FileDocumentId>
+ssg/Editor.h	var	ssg::Editor::loadedFilesystemDirectories	std::vector<std::string>
 ssg/Editor.h	var	ssg::Editor::lspFeatures	LspFeatureViewState
 ssg/Editor.h	var	ssg::Editor::lspSync	LspSyncViewState
 ssg/Editor.h	var	ssg::Editor::navigation	NavigationHistory
 ssg/Editor.h	var	ssg::Editor::nextStatusId	std::uint64_t
 ssg/Editor.h	var	ssg::Editor::operationMutex	std::mutex
 ssg/Editor.h	var	ssg::Editor::paneTopology	PaneTopology
+ssg/Editor.h	var	ssg::Editor::panelWorkspaceSearchGeneration	std::optional<std::uint64_t>
 ssg/Editor.h	var	ssg::Editor::pendingSyntaxRefresh	bool
 ssg/Editor.h	var	ssg::Editor::pendingTreeRefresh	bool
 ssg/Editor.h	var	ssg::Editor::readOnlyTabDocuments	std::unordered_map<std::string, FileDocumentId>
@@ -779,21 +700,19 @@ ssg/Editor.h	var	ssg::Editor::scratchRoot	std::filesystem::path
 ssg/Editor.h	var	ssg::Editor::screen	ScreenState
 ssg/Editor.h	var	ssg::Editor::search	SearchController
 ssg/Editor.h	var	ssg::Editor::selection	SelectionViewState
-ssg/Editor.h	var	ssg::Editor::sessionTopology	SessionTopology
 ssg/Editor.h	var	ssg::Editor::settings	SettingsModel
 ssg/Editor.h	var	ssg::Editor::status	StatusBar
 ssg/Editor.h	var	ssg::Editor::style	Style
 ssg/Editor.h	var	ssg::Editor::syntaxParser	std::shared_ptr<SyntaxParser>
-ssg/Editor.h	var	ssg::Editor::syntaxRunCount	std::uint64_t
 ssg/Editor.h	var	ssg::Editor::tabs	TabManager
 ssg/Editor.h	var	ssg::Editor::theme	ThemeSnapshot
 ssg/Editor.h	var	ssg::Editor::tree	TreeModel
-ssg/Editor.h	var	ssg::Editor::treeScanCount	std::uint64_t
 ssg/Editor.h	var	ssg::Editor::wordWrap	bool
 ssg/Editor.h	var	ssg::Editor::workspace	Workspace
-ssg/Editor.h	var	ssg::Editor::workspaceReplaceGeneration	std::uint64_t
-ssg/Editor.h	var	ssg::Editor::workspaceReplacePreview	std::optional<WorkspaceReplacePreview>
+ssg/Editor.h	var	ssg::Editor::workspaceIgnore	std::unique_ptr<GitIgnoreMatcher>
+ssg/Editor.h	var	ssg::Editor::workspaceSearchCorpus	std::optional<WorkspaceCorpus>
 ssg/Editor.h	var	ssg::Editor::workspaceSearchGeneration	std::uint64_t
+ssg/Editor.h	var	ssg::Editor::workspaceSearchState	std::optional<WorkspaceSearchState>
 ssg/Editor.h	var	ssg::EditorConfig::archiveRoot	std::filesystem::path
 ssg/Editor.h	var	ssg::EditorConfig::cwd	std::filesystem::path
 ssg/Editor.h	var	ssg::EditorConfig::deferEnrichment	bool
@@ -808,8 +727,11 @@ ssg/Editor.h	var	ssg::ExternalDiffRevision::event	NonGitDiffEvent
 ssg/Editor.h	var	ssg::ExternalDiffRevision::revision	std::uint64_t
 ssg/Editor.h	var	ssg::NoticeView::actions	std::vector<UiAction>
 ssg/Editor.h	var	ssg::NoticeView::text	std::string
+ssg/Editor.h	var	ssg::OperationResult::accepted	bool
+ssg/Editor.h	var	ssg::OperationResult::message	std::string
+ssg/Editor.h	var	ssg::OperationResult::viewAction	std::optional<ViewAction>
 ssg/Editor.h	var	ssg::PumpResult::advanced	bool
-ssg/ExternalModificationFlow.h	class	ssg::CommandCatalog
+ssg/ExternalModificationFlow.h	class	ssg::Commands
 ssg/ExternalModificationFlow.h	class	ssg::ExternalModificationFlow
 ssg/ExternalModificationFlow.h	enum	ssg::ExternalAction
 ssg/ExternalModificationFlow.h	enum	ssg::ExternalDocumentStatus
@@ -848,7 +770,7 @@ ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::selectPreviou
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::viewState	ExternalModificationViewState () const
 ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationResult::accepted	bool () const noexcept
 ssg/ExternalModificationFlow.h	func	ssg::ExternalOpenDiffResult::accepted	bool () const noexcept
-ssg/ExternalModificationFlow.h	func	ssg::bindExternalModificationCommands	void (CommandCatalog &, Editor &)
+ssg/ExternalModificationFlow.h	func	ssg::bindExternalModificationCommands	void (Commands &, Editor &)
 ssg/ExternalModificationFlow.h	func	ssg::externalActionAffordance	ExternalActionAffordance (ExternalAction)
 ssg/ExternalModificationFlow.h	func	ssg::operator==	bool (const ExternalActionAffordance &, const ExternalActionAffordance &)
 ssg/ExternalModificationFlow.h	func	ssg::operator==	bool (const ExternalActionInvocation &, const ExternalActionInvocation &)
@@ -909,26 +831,20 @@ ssg/FileCommands.h	enumerator	ssg::FileCommand::Create
 ssg/FileCommands.h	enumerator	ssg::FileCommand::NewDirectory
 ssg/FileCommands.h	enumerator	ssg::FileCommand::Open
 ssg/FileCommands.h	enumerator	ssg::FileCommand::OpenDirectory
-ssg/FileCommands.h	enumerator	ssg::FileCommand::OpenDroppedContent
-ssg/FileCommands.h	enumerator	ssg::FileCommand::OpenRecent
 ssg/FileCommands.h	enumerator	ssg::FileCommand::Reload
 ssg/FileCommands.h	enumerator	ssg::FileCommand::Remove
 ssg/FileCommands.h	enumerator	ssg::FileCommand::Rename
 ssg/FileCommands.h	enumerator	ssg::FileCommand::Save
 ssg/FileCommands.h	enumerator	ssg::FileCommand::SaveAll
 ssg/FileCommands.h	enumerator	ssg::FileCommand::SaveAs
-ssg/FileCommands.h	func	ssg::DroppedContentArguments::operator==	bool (const DroppedContentArguments &) const
 ssg/FileCommands.h	func	ssg::fileCommandPathPrompt	PromptRequest (FileCommand)
-ssg/FileCommands.h	struct	ssg::DroppedContentArguments
 ssg/FileCommands.h	struct	ssg::FileCommandDescriptor
-ssg/FileCommands.h	var	ssg::DroppedContentArguments::bytes	std::vector<std::uint8_t>
-ssg/FileCommands.h	var	ssg::DroppedContentArguments::suggestedLabel	std::string
 ssg/FileCommands.h	var	ssg::FileCommandDescriptor::command	FileCommand
 ssg/FileCommands.h	var	ssg::FileCommandDescriptor::id	std::string_view
 ssg/FileCommands.h	var	ssg::FileCommandDescriptor::lua	bool
 ssg/FileCommands.h	var	ssg::FileCommandDescriptor::mutatesActiveDocumentFile	bool
 ssg/FileCommands.h	var	ssg::FileCommandDescriptor::pathPrompt	bool
-ssg/FileCommands.h	var	ssg::kFileCommands	const std::array<FileCommandDescriptor, 12>
+ssg/FileCommands.h	var	ssg::kFileCommands	const std::array<FileCommandDescriptor, 10>
 ssg/FilesystemWatcher.h	alias	ssg::WatchClock
 ssg/FilesystemWatcher.h	alias	ssg::WatchTimePoint
 ssg/FilesystemWatcher.h	alias	ssg::WorkspaceScanner
@@ -1011,14 +927,10 @@ ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::FindToggleCase
 ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::FindToggleRegex
 ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::FindToggleSelection
 ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::FindToggleWholeWord
-ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::FindUpdateQuery
 ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::FindWordUnderCursor
 ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::ReplaceAll
 ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::ReplaceCurrent
 ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::ReplaceOpen
-ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::ReplaceUpdateReplacement
-ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::ReplaceWorkspaceApply
-ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::ReplaceWorkspacePreview
 ssg/FindReplace.h	enumerator	ssg::FindReplaceError::BudgetExhausted
 ssg/FindReplace.h	enumerator	ssg::FindReplaceError::Cancelled
 ssg/FindReplace.h	enumerator	ssg::FindReplaceError::DocumentRejected
@@ -1049,28 +961,14 @@ ssg/FindReplace.h	func	ssg::FindReplaceController::updateReplacement	void (std::
 ssg/FindReplace.h	func	ssg::FindReplaceController::viewState	const FindReplaceViewState &() const noexcept
 ssg/FindReplace.h	func	ssg::FindReplaceOperationResult::accepted	bool () const noexcept
 ssg/FindReplace.h	func	ssg::FindReplaceViewState::operator==	bool (const FindReplaceViewState &) const
-ssg/FindReplace.h	func	ssg::FindResult::accepted	bool () const noexcept
-ssg/FindReplace.h	func	ssg::WorkspaceApplyResult::accepted	bool () const noexcept
-ssg/FindReplace.h	func	ssg::WorkspaceFileReplacement::operator==	bool (const WorkspaceFileReplacement &) const
-ssg/FindReplace.h	func	ssg::WorkspacePreviewResult::accepted	bool () const noexcept
-ssg/FindReplace.h	func	ssg::WorkspaceReplaceArguments::operator==	bool (const WorkspaceReplaceArguments &) const
-ssg/FindReplace.h	func	ssg::WorkspaceReplacePreview::operator==	bool (const WorkspaceReplacePreview &) const
 ssg/FindReplace.h	func	ssg::findTextMatches	FindResult (std::string_view, const FindRequest &)
-ssg/FindReplace.h	func	ssg::operator==	bool (const FindQueryArguments &, const FindQueryArguments &)
-ssg/FindReplace.h	func	ssg::previewWorkspaceReplace	WorkspacePreviewResult (const WorkspaceSnapshot &, const FindRequest &, std::string)
 ssg/FindReplace.h	struct	ssg::ByteRange
 ssg/FindReplace.h	struct	ssg::FindMatch
 ssg/FindReplace.h	struct	ssg::FindOptions
-ssg/FindReplace.h	struct	ssg::FindQueryArguments
 ssg/FindReplace.h	struct	ssg::FindReplaceOperationResult
 ssg/FindReplace.h	struct	ssg::FindReplaceViewState
 ssg/FindReplace.h	struct	ssg::FindRequest
 ssg/FindReplace.h	struct	ssg::FindResult
-ssg/FindReplace.h	struct	ssg::WorkspaceApplyResult
-ssg/FindReplace.h	struct	ssg::WorkspaceFileReplacement
-ssg/FindReplace.h	struct	ssg::WorkspacePreviewResult
-ssg/FindReplace.h	struct	ssg::WorkspaceReplaceArguments
-ssg/FindReplace.h	struct	ssg::WorkspaceReplacePreview
 ssg/FindReplace.h	var	ssg::ByteRange::begin	ByteOffset
 ssg/FindReplace.h	var	ssg::ByteRange::end	ByteOffset
 ssg/FindReplace.h	var	ssg::FindMatch::begin	ByteOffset
@@ -1079,7 +977,6 @@ ssg/FindReplace.h	var	ssg::FindOptions::caseSensitive	bool
 ssg/FindReplace.h	var	ssg::FindOptions::regex	bool
 ssg/FindReplace.h	var	ssg::FindOptions::selectionOnly	bool
 ssg/FindReplace.h	var	ssg::FindOptions::wholeWord	bool
-ssg/FindReplace.h	var	ssg::FindQueryArguments::query	std::string
 ssg/FindReplace.h	var	ssg::FindReplaceOperationResult::error	FindReplaceError
 ssg/FindReplace.h	var	ssg::FindReplaceOperationResult::message	std::string
 ssg/FindReplace.h	var	ssg::FindReplaceOperationResult::revision	std::uint64_t
@@ -1102,23 +999,7 @@ ssg/FindReplace.h	var	ssg::FindRequest::workBudget	std::uint64_t
 ssg/FindReplace.h	var	ssg::FindResult::error	FindReplaceError
 ssg/FindReplace.h	var	ssg::FindResult::matches	std::vector<FindMatch>
 ssg/FindReplace.h	var	ssg::FindResult::message	std::string
-ssg/FindReplace.h	var	ssg::WorkspaceApplyResult::error	FindReplaceError
-ssg/FindReplace.h	var	ssg::WorkspaceApplyResult::message	std::string
-ssg/FindReplace.h	var	ssg::WorkspaceApplyResult::revision	std::uint64_t
-ssg/FindReplace.h	var	ssg::WorkspaceFileReplacement::after	std::string
-ssg/FindReplace.h	var	ssg::WorkspaceFileReplacement::before	std::string
-ssg/FindReplace.h	var	ssg::WorkspaceFileReplacement::matches	std::vector<FindMatch>
-ssg/FindReplace.h	var	ssg::WorkspaceFileReplacement::path	std::string
-ssg/FindReplace.h	var	ssg::WorkspacePreviewResult::error	FindReplaceError
-ssg/FindReplace.h	var	ssg::WorkspacePreviewResult::message	std::string
-ssg/FindReplace.h	var	ssg::WorkspacePreviewResult::preview	std::optional<WorkspaceReplacePreview>
-ssg/FindReplace.h	var	ssg::WorkspaceReplaceArguments::replacement	std::string
-ssg/FindReplace.h	var	ssg::WorkspaceReplaceArguments::request	FindRequest
-ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::changes	std::vector<WorkspaceFileReplacement>
-ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::options	FindOptions
-ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::query	std::string
-ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::replacement	std::string
-ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::sourceRevision	std::uint64_t
+ssg/FindReplace.h	var	ssg::kDefaultFindWorkBudget	const std::uint64_t
 ssg/FollowEditsModel.h	class	ssg::FollowEditsModel
 ssg/FollowEditsModel.h	enum	ssg::FollowEditsError
 ssg/FollowEditsModel.h	enum	ssg::FollowMode
@@ -1131,7 +1012,6 @@ ssg/FollowEditsModel.h	enumerator	ssg::NavigationClass::NonNavigation
 ssg/FollowEditsModel.h	enumerator	ssg::NavigationClass::Programmatic
 ssg/FollowEditsModel.h	enumerator	ssg::NavigationClass::User
 ssg/FollowEditsModel.h	func	ssg::FollowEditsModel::FollowEditsModel	void (FollowEditsConfig)
-ssg/FollowEditsModel.h	func	ssg::FollowEditsModel::acceptExternalChange	FollowEditsResult (const DiffFileView &, std::uint64_t)
 ssg/FollowEditsModel.h	func	ssg::FollowEditsModel::acceptExternalChanges	FollowEditsResult (std::vector<FollowDiffChange>)
 ssg/FollowEditsModel.h	func	ssg::FollowEditsModel::applyNavigation	FollowEditsResult (const FollowNavigation &)
 ssg/FollowEditsModel.h	func	ssg::FollowEditsModel::footerProjection	FollowEditsFooterProjection () const
@@ -1188,7 +1068,6 @@ ssg/GitDiffIngress.h	func	ssg::GitDiffIngress::applyGitDiffScanLocked	DiffIngres
 ssg/GitDiffIngress.h	func	ssg::GitDiffIngress::drainGitDiffWorker	bool ()
 ssg/GitDiffIngress.h	func	ssg::GitDiffIngress::refreshLiveDiffDocuments	void (const DiffViewState &)
 ssg/GitDiffIngress.h	func	ssg::GitDiffIngress::revealCurrentDiffTarget	bool (const FollowTarget &, NavigationClass)
-ssg/GitDiffIngress.h	func	ssg::GitDiffIngress::savedPathFromExternalDiffId	std::optional<std::string> (const DiffFileId &)
 ssg/GitDiffIngress.h	struct	ssg::DiffIngressResult
 ssg/GitDiffIngress.h	struct	ssg::Editor
 ssg/GitDiffIngress.h	struct	ssg::GitDiffIngress
@@ -1199,9 +1078,7 @@ ssg/GitDiffIngress.h	var	ssg::GitDiffIngress::worker	GitDiffWorker
 ssg/GitDiffSource.h	class	ssg::GitDiffSource
 ssg/GitDiffSource.h	class	ssg::GitIgnoreMatcher
 ssg/GitDiffSource.h	class	ssg::GitRepository
-ssg/GitDiffSource.h	enum	ssg::GitBaselineKind
 ssg/GitDiffSource.h	enum	ssg::GitDiffMode
-ssg/GitDiffSource.h	enumerator	ssg::GitBaselineKind::Head
 ssg/GitDiffSource.h	enumerator	ssg::GitDiffMode::Event
 ssg/GitDiffSource.h	enumerator	ssg::GitDiffMode::Poll
 ssg/GitDiffSource.h	func	ssg::GitDiffRefreshResult::shouldRetry	bool () const noexcept
@@ -1226,7 +1103,6 @@ ssg/GitDiffSource.h	struct	ssg::GitDiffConfig
 ssg/GitDiffSource.h	struct	ssg::GitDiffRefreshResult
 ssg/GitDiffSource.h	struct	ssg::GitDiffScan
 ssg/GitDiffSource.h	struct	ssg::GitWorkingTreeScan
-ssg/GitDiffSource.h	var	ssg::GitDiffConfig::baseline	GitBaselineKind
 ssg/GitDiffSource.h	var	ssg::GitDiffConfig::maxBytesPerFile	std::size_t
 ssg/GitDiffSource.h	var	ssg::GitDiffConfig::maxFiles	std::size_t
 ssg/GitDiffSource.h	var	ssg::GitDiffRefreshResult::accepted	bool
@@ -1248,8 +1124,6 @@ ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::GitDiffWorker	void (const std::file
 ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::drain	GitDiffWorkerDrain ()
 ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::fullRefreshCount	std::uint64_t () const noexcept
 ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::operator=	GitDiffWorker &(const GitDiffWorker &)
-ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::registerSavedPath	void (SaveExpectation)
-ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::setAvailabilityForTest	void (bool)
 ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::wakeDescriptor	int () const noexcept
 ssg/GitDiffWorker.h	struct	ssg::GitDiffWorkerDrain
 ssg/GitDiffWorker.h	var	ssg::GitDiffWorkerDrain::fullReconcile	bool
@@ -1267,9 +1141,7 @@ ssg/GraphemeLayout.h	enumerator	ssg::CellKind::Control
 ssg/GraphemeLayout.h	enumerator	ssg::CellKind::InvalidUtf8
 ssg/GraphemeLayout.h	enumerator	ssg::CellKind::Tab
 ssg/GraphemeLayout.h	enumerator	ssg::CellKind::Text
-ssg/GraphemeLayout.h	func	ssg::cellRunCalls	std::uint64_t ()
 ssg/GraphemeLayout.h	func	ssg::computeCellRun	CellRun (std::string_view, int)
-ssg/GraphemeLayout.h	func	ssg::resetCellRunCalls	void ()
 ssg/GraphemeLayout.h	struct	ssg::CellRun
 ssg/GraphemeLayout.h	struct	ssg::CellSpan
 ssg/GraphemeLayout.h	var	ssg::CellRun::spans	std::vector<CellSpan>
@@ -1329,6 +1201,7 @@ ssg/HitTester.h	enumerator	ssg::HitRegion::NoticeAction
 ssg/HitTester.h	enumerator	ssg::HitRegion::Palette
 ssg/HitTester.h	enumerator	ssg::HitRegion::PaletteScrollbar
 ssg/HitTester.h	enumerator	ssg::HitRegion::Panel
+ssg/HitTester.h	enumerator	ssg::HitRegion::PanelQuery
 ssg/HitTester.h	enumerator	ssg::HitRegion::PanelScrollbar
 ssg/HitTester.h	enumerator	ssg::HitRegion::Tab
 ssg/HitTester.h	func	ssg::HitTester::HitTester	void (const GridPresentation &) noexcept
@@ -1364,6 +1237,80 @@ ssg/InitScriptWatcher.h	func	ssg::InitScriptWatcher::wakeDescriptor	int () const
 ssg/InitScriptWatcher.h	func	ssg::evaluateInitScript	void (ScriptHost &, Editor &, const std::filesystem::path &, const std::string &)
 ssg/InitScriptWatcher.h	func	ssg::loadInitScript	std::optional<std::string> (ScriptHost &, Editor &)
 ssg/InitScriptWatcher.h	func	ssg::resolveInitScriptPath	std::optional<std::filesystem::path> ()
+ssg/InputRouting.h	alias	ssg::EditorMutation
+ssg/InputRouting.h	alias	ssg::InputRouteAction
+ssg/InputRouting.h	enum	ssg::SearchQueryChange::Kind
+ssg/InputRouting.h	enumerator	ssg::SearchQueryChange::Kind::Append
+ssg/InputRouting.h	enumerator	ssg::SearchQueryChange::Kind::DeleteGraphemeBack
+ssg/InputRouting.h	enumerator	ssg::SearchQueryChange::Kind::Focus
+ssg/InputRouting.h	enumerator	ssg::SearchQueryChange::Kind::MoveFirst
+ssg/InputRouting.h	enumerator	ssg::SearchQueryChange::Kind::MoveLast
+ssg/InputRouting.h	enumerator	ssg::SearchQueryChange::Kind::Submit
+ssg/InputRouting.h	func	ssg::routeInput	RoutedInput (const InputRoutingSnapshot &, const ClientInput &)
+ssg/InputRouting.h	struct	ssg::ActivateTab
+ssg/InputRouting.h	struct	ssg::ActivateTreeNode
+ssg/InputRouting.h	struct	ssg::ActivateUiNode
+ssg/InputRouting.h	struct	ssg::ApplySelections
+ssg/InputRouting.h	struct	ssg::ApplyTextInput
+ssg/InputRouting.h	struct	ssg::CloseTab
+ssg/InputRouting.h	struct	ssg::FocusPane
+ssg/InputRouting.h	struct	ssg::InputRoutingNoticeAction
+ssg/InputRouting.h	struct	ssg::InputRoutingSnapshot
+ssg/InputRouting.h	struct	ssg::InvokeExternalAction
+ssg/InputRouting.h	struct	ssg::RouteAccepted
+ssg/InputRouting.h	struct	ssg::RouteClientOwned
+ssg/InputRouting.h	struct	ssg::RouteDispatch
+ssg/InputRouting.h	struct	ssg::RouteRejected
+ssg/InputRouting.h	struct	ssg::RouteUnhandled
+ssg/InputRouting.h	struct	ssg::RouteViewAction
+ssg/InputRouting.h	struct	ssg::RoutedInput
+ssg/InputRouting.h	struct	ssg::SearchQueryChange
+ssg/InputRouting.h	struct	ssg::SubmitPicker
+ssg/InputRouting.h	struct	ssg::UpdateFindQuery
+ssg/InputRouting.h	struct	ssg::UpdateReplacement
+ssg/InputRouting.h	var	ssg::ActivateTab::tabId	TabId
+ssg/InputRouting.h	var	ssg::ActivateTreeNode::nodeId	TreeNodeId
+ssg/InputRouting.h	var	ssg::ActivateUiNode::nodeId	UiNodeId
+ssg/InputRouting.h	var	ssg::ApplySelections::document	FileDocumentId
+ssg/InputRouting.h	var	ssg::ApplySelections::focusEditor	bool
+ssg/InputRouting.h	var	ssg::ApplySelections::selections	SelectionSet
+ssg/InputRouting.h	var	ssg::ApplyTextInput::arguments	TextInputArguments
+ssg/InputRouting.h	var	ssg::ApplyTextInput::command	TextInputCommand
+ssg/InputRouting.h	var	ssg::CloseTab::tabId	TabId
+ssg/InputRouting.h	var	ssg::FocusPane::pane	PaneId
+ssg/InputRouting.h	var	ssg::InputRoutingNoticeAction::commandId	std::string
+ssg/InputRouting.h	var	ssg::InputRoutingNoticeAction::id	std::string
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::activeDocument	std::optional<FileDocumentId>
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::activeTab	std::optional<TabId>
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::activeTabKind	std::optional<TabKind>
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::activeText	std::string_view
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::activeTreeProvider	std::optional<TreeProviderKind>
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::clipboardText	std::string_view
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::diffRevision	std::uint64_t
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::documentRevision	std::uint64_t
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::followMode	FollowMode
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::gesture	DocumentPointerGesture
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::keymap	std::reference_wrapper<const CompiledKeymap>
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::noticeActions	std::optional<std::vector<InputRoutingNoticeAction>>
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::panes	std::vector<PaneId>
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::prompt	PromptRoutingState
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::searchEditing	bool
+ssg/InputRouting.h	var	ssg::InputRoutingSnapshot::selections	std::reference_wrapper<const SelectionSet>
+ssg/InputRouting.h	var	ssg::InvokeExternalAction::invocation	ExternalActionInvocation
+ssg/InputRouting.h	var	ssg::RouteAccepted::mutation	std::optional<EditorMutation>
+ssg/InputRouting.h	var	ssg::RouteClientOwned::input	ClientOwnedInput
+ssg/InputRouting.h	var	ssg::RouteDispatch::commandId	std::string
+ssg/InputRouting.h	var	ssg::RouteRejected::message	std::string
+ssg/InputRouting.h	var	ssg::RouteViewAction::action	ViewAction
+ssg/InputRouting.h	var	ssg::RoutedInput::action	InputRouteAction
+ssg/InputRouting.h	var	ssg::RoutedInput::clearGestureOnRejection	bool
+ssg/InputRouting.h	var	ssg::RoutedInput::gestureOnAccepted	std::optional<DocumentPointerGesture>
+ssg/InputRouting.h	var	ssg::SearchQueryChange::kind	enum Kind
+ssg/InputRouting.h	var	ssg::SearchQueryChange::text	std::string
+ssg/InputRouting.h	var	ssg::SubmitPicker::activation	PickerActivation
+ssg/InputRouting.h	var	ssg::SubmitPicker::candidateId	std::string
+ssg/InputRouting.h	var	ssg::UpdateFindQuery::query	std::string
+ssg/InputRouting.h	var	ssg::UpdateReplacement::replacement	std::string
 ssg/KeyCode.h	enum	ssg::KeyCode
 ssg/KeyCode.h	enumerator	ssg::KeyCode::ArrowDown
 ssg/KeyCode.h	enumerator	ssg::KeyCode::ArrowLeft
@@ -1442,32 +1389,13 @@ ssg/KeyCode.h	enumerator	ssg::KeyCode::Space
 ssg/KeyCode.h	enumerator	ssg::KeyCode::Tab
 ssg/KeyCode.h	func	ssg::keyCodeDisplay	std::string_view (KeyCode) noexcept
 ssg/KeyCode.h	func	ssg::keyCodeFromName	KeyCode (std::string_view) noexcept
-ssg/KeyCode.h	func	ssg::keyCodeName	std::string_view (KeyCode) noexcept
 ssg/KeyCode.h	func	ssg::keyCodeTableIsExhaustive	bool ()
 ssg/KeyCode.h	struct	ssg::KeyCodeEntry
 ssg/KeyCode.h	var	ssg::KeyCodeEntry::code	KeyCode
 ssg/KeyCode.h	var	ssg::KeyCodeEntry::display	std::string_view
 ssg/KeyCode.h	var	ssg::KeyCodeEntry::name	std::string_view
 ssg/KeyCode.h	var	ssg::kKeyCodes	const std::array<KeyCodeEntry, static_cast<std::size_t>(KeyCode::Count) - 1>
-ssg/KeyboardFocus.h	class	ssg::KeyboardFocus
-ssg/KeyboardFocus.h	enum	ssg::BaseFocus
-ssg/KeyboardFocus.h	enumerator	ssg::BaseFocus::Editor
-ssg/KeyboardFocus.h	enumerator	ssg::BaseFocus::Panel
-ssg/KeyboardFocus.h	func	ssg::KeyboardFocus::KeyboardFocus	void ()
-ssg/KeyboardFocus.h	func	ssg::KeyboardFocus::base	BaseFocus () const noexcept
-ssg/KeyboardFocus.h	func	ssg::KeyboardFocus::captures	const std::vector<FocusCapture> &() const noexcept
-ssg/KeyboardFocus.h	func	ssg::KeyboardFocus::hasCapture	bool () const noexcept
-ssg/KeyboardFocus.h	func	ssg::KeyboardFocus::popCapture	void () noexcept
-ssg/KeyboardFocus.h	func	ssg::KeyboardFocus::pushCapture	void (FocusCapture)
-ssg/KeyboardFocus.h	func	ssg::KeyboardFocus::reconcile	void (const UiSchema &)
-ssg/KeyboardFocus.h	func	ssg::KeyboardFocus::setBase	void (BaseFocus) noexcept
-ssg/KeyboardFocus.h	func	ssg::KeyboardFocus::top	const FocusCapture *() const noexcept
-ssg/KeyboardFocus.h	func	ssg::operator==	bool (const FocusCapture &, const FocusCapture &)
-ssg/KeyboardFocus.h	struct	ssg::FocusCapture
-ssg/KeyboardFocus.h	var	ssg::FocusCapture::node	UiNodeId
 ssg/Keymap.h	alias	ssg::KeySequence
-ssg/Keymap.h	alias	ssg::SemanticInputArguments
-ssg/Keymap.h	class	ssg::CommittedText
 ssg/Keymap.h	class	ssg::KeymapMatcher
 ssg/Keymap.h	enum	ssg::KeymapErrorCode
 ssg/Keymap.h	enum	ssg::KeymapMatchKind
@@ -1487,44 +1415,35 @@ ssg/Keymap.h	enumerator	ssg::KeymapMatchKind::Resolved
 ssg/Keymap.h	enumerator	ssg::TextRouting::Ignore
 ssg/Keymap.h	enumerator	ssg::TextRouting::Insert
 ssg/Keymap.h	enumerator	ssg::TextRouting::PromptQuery
-ssg/Keymap.h	func	ssg::CommittedText::fromUtf8	std::optional<CommittedText> (std::string)
-ssg/Keymap.h	func	ssg::CommittedText::operator==	bool (const CommittedText &) const
-ssg/Keymap.h	func	ssg::CommittedText::utf8	const std::string &() const noexcept
 ssg/Keymap.h	func	ssg::KeyBinding::operator==	bool (const KeyBinding &) const
 ssg/Keymap.h	func	ssg::KeyStroke::operator==	bool (const KeyStroke &) const
-ssg/Keymap.h	func	ssg::KeymapDelta::operator==	bool (const KeymapDelta &) const
 ssg/Keymap.h	func	ssg::KeymapError::operator==	bool (const KeymapError &) const
 ssg/Keymap.h	func	ssg::KeymapMatcher::KeymapMatcher	void (const KeymapViewState &)
-ssg/Keymap.h	func	ssg::KeymapMatcher::deriveDelta	KeymapDelta (const KeymapViewState &, const KeymapViewState &)
 ssg/Keymap.h	func	ssg::KeymapMatcher::hasGlobalBinding	bool (std::string_view) const
 ssg/Keymap.h	func	ssg::KeymapMatcher::preferredBinding	std::optional<KeySequence> (std::string_view) const
 ssg/Keymap.h	func	ssg::KeymapMatcher::resolveSequence	KeymapResolution (const KeySequence &, std::string_view) const
 ssg/Keymap.h	func	ssg::KeymapMatcher::validate	std::vector<KeymapError> () const
 ssg/Keymap.h	func	ssg::KeymapMutationResult::accepted	bool () const noexcept
 ssg/Keymap.h	func	ssg::KeymapResolution::operator==	bool (const KeymapResolution &) const
-ssg/Keymap.h	func	ssg::KeymapViewState::operator==	bool (const KeymapViewState &) const noexcept(false)
+ssg/Keymap.h	func	ssg::KeymapViewState::operator==	bool (const KeymapViewState &) const
 ssg/Keymap.h	func	ssg::ScrollFractionArguments::ScrollFractionArguments	void (std::uint32_t, std::uint32_t)
 ssg/Keymap.h	func	ssg::ScrollFractionArguments::operator==	bool (const ScrollFractionArguments &) const
 ssg/Keymap.h	func	ssg::ScrollLinesArguments::operator==	bool (const ScrollLinesArguments &) const
 ssg/Keymap.h	func	ssg::ScrollPagesArguments::operator==	bool (const ScrollPagesArguments &) const
-ssg/Keymap.h	func	ssg::SemanticCommand::operator==	bool (const SemanticCommand &) const
 ssg/Keymap.h	func	ssg::applyKeymapBind	KeymapMutationResult (const KeymapViewState &, const KeymapBindArguments &) noexcept
 ssg/Keymap.h	func	ssg::applyKeymapUnbind	KeymapMutationResult (const KeymapViewState &, const KeymapUnbindArguments &) noexcept
 ssg/Keymap.h	func	ssg::defaultTerminalKeymap	KeymapViewState ()
 ssg/Keymap.h	func	ssg::formatKeySequence	std::string (const KeySequence &)
-ssg/Keymap.h	func	ssg::formatKeyStroke	std::string (const KeyStroke &)
 ssg/Keymap.h	func	ssg::operator==	bool (const KeymapBindArguments &, const KeymapBindArguments &)
 ssg/Keymap.h	func	ssg::operator==	bool (const KeymapMutationError &, const KeymapMutationError &)
 ssg/Keymap.h	func	ssg::operator==	bool (const KeymapUnbindArguments &, const KeymapUnbindArguments &)
 ssg/Keymap.h	func	ssg::parseKeySequence	std::optional<KeySequence> (std::initializer_list<std::string_view>)
 ssg/Keymap.h	func	ssg::parseKeySequenceString	std::optional<KeySequence> (std::string_view)
 ssg/Keymap.h	func	ssg::parseKeyStroke	std::optional<KeyStroke> (std::string_view)
-ssg/Keymap.h	func	ssg::semanticInputForText	SemanticCommand (const CommittedText &)
 ssg/Keymap.h	func	ssg::textRoutingForContext	TextRouting (std::string_view) noexcept
 ssg/Keymap.h	struct	ssg::KeyBinding
 ssg/Keymap.h	struct	ssg::KeyStroke
 ssg/Keymap.h	struct	ssg::KeymapBindArguments
-ssg/Keymap.h	struct	ssg::KeymapDelta
 ssg/Keymap.h	struct	ssg::KeymapError
 ssg/Keymap.h	struct	ssg::KeymapMutationError
 ssg/Keymap.h	struct	ssg::KeymapMutationResult
@@ -1534,20 +1453,16 @@ ssg/Keymap.h	struct	ssg::KeymapViewState
 ssg/Keymap.h	struct	ssg::ScrollFractionArguments
 ssg/Keymap.h	struct	ssg::ScrollLinesArguments
 ssg/Keymap.h	struct	ssg::ScrollPagesArguments
-ssg/Keymap.h	struct	ssg::SemanticCommand
 ssg/Keymap.h	var	ssg::KeyBinding::commandId	std::string
 ssg/Keymap.h	var	ssg::KeyBinding::context	std::string
 ssg/Keymap.h	var	ssg::KeyBinding::sequence	KeySequence
-ssg/Keymap.h	var	ssg::KeyStroke::alt	bool
 ssg/Keymap.h	var	ssg::KeyStroke::code	KeyCode
-ssg/Keymap.h	var	ssg::KeyStroke::control	bool
 ssg/Keymap.h	var	ssg::KeyStroke::meta	bool
+ssg/Keymap.h	var	ssg::KeyStroke::mod	bool
 ssg/Keymap.h	var	ssg::KeyStroke::shift	bool
 ssg/Keymap.h	var	ssg::KeymapBindArguments::command	std::string
 ssg/Keymap.h	var	ssg::KeymapBindArguments::context	std::string
 ssg/Keymap.h	var	ssg::KeymapBindArguments::sequence	std::string
-ssg/Keymap.h	var	ssg::KeymapDelta::changed	bool
-ssg/Keymap.h	var	ssg::KeymapDelta::replacement	std::optional<KeymapViewState>
 ssg/Keymap.h	var	ssg::KeymapError::bindingIndex	std::size_t
 ssg/Keymap.h	var	ssg::KeymapError::code	KeymapErrorCode
 ssg/Keymap.h	var	ssg::KeymapError::message	std::string
@@ -1564,8 +1479,6 @@ ssg/Keymap.h	var	ssg::ScrollFractionArguments::denominator	std::uint32_t
 ssg/Keymap.h	var	ssg::ScrollFractionArguments::numerator	std::uint32_t
 ssg/Keymap.h	var	ssg::ScrollLinesArguments::rows	std::int64_t
 ssg/Keymap.h	var	ssg::ScrollPagesArguments::pages	std::int64_t
-ssg/Keymap.h	var	ssg::SemanticCommand::arguments	SemanticInputArguments
-ssg/Keymap.h	var	ssg::SemanticCommand::commandId	std::string
 ssg/Layout.h	func	ssg::SolveUiFrameResult::accepted	bool () const noexcept
 ssg/Layout.h	func	ssg::SolvedGridTree::find	const SolvedGridNode *(const UiNodeId &) const noexcept
 ssg/Layout.h	func	ssg::gridTabDisplay	std::string (std::string_view, bool, const TabGlyphs &)
@@ -1680,10 +1593,15 @@ ssg/Layout.h	var	ssg::SolvedPanelRow::text	std::string
 ssg/Layout.h	var	ssg::SolvedPanelSurface::firstVisible	std::uint32_t
 ssg/Layout.h	var	ssg::SolvedPanelSurface::providerLabel	Rect
 ssg/Layout.h	var	ssg::SolvedPanelSurface::providerText	std::string
+ssg/Layout.h	var	ssg::SolvedPanelSurface::query	Rect
+ssg/Layout.h	var	ssg::SolvedPanelSurface::queryEditing	bool
+ssg/Layout.h	var	ssg::SolvedPanelSurface::queryText	std::string
 ssg/Layout.h	var	ssg::SolvedPanelSurface::rect	Rect
 ssg/Layout.h	var	ssg::SolvedPanelSurface::rows	std::vector<SolvedPanelRow>
 ssg/Layout.h	var	ssg::SolvedPanelSurface::scrollbar	ScrollbarMetrics
 ssg/Layout.h	var	ssg::SolvedPanelSurface::scrollbarGutter	std::optional<Rect>
+ssg/Layout.h	var	ssg::SolvedPanelSurface::status	Rect
+ssg/Layout.h	var	ssg::SolvedPanelSurface::statusText	std::string
 ssg/Layout.h	var	ssg::SolvedTab::active	bool
 ssg/Layout.h	var	ssg::SolvedTab::id	TabId
 ssg/Layout.h	var	ssg::SolvedTab::index	std::size_t
@@ -1742,240 +1660,84 @@ ssg/LineLayoutCache.h	func	ssg::LineLayoutCache::operator=	LineLayoutCache &(con
 ssg/LineLayoutCache.h	func	ssg::LineLayoutCache::run	const CellRun &(std::string_view, int)
 ssg/LineLayoutCache.h	func	ssg::LineLayoutCache::size	std::size_t () const noexcept
 ssg/LineLayoutCache.h	var	ssg::kDefaultLineLayoutCacheCapacity	const std::size_t
-ssg/LspFeatureController.h	class	ssg::LspFeatureController
-ssg/LspFeatureController.h	enum	ssg::LspFeatureError
-ssg/LspFeatureController.h	enum	ssg::LspFeaturePublishResult
-ssg/LspFeatureController.h	enumerator	ssg::LspFeatureError::InvalidPosition
-ssg/LspFeatureController.h	enumerator	ssg::LspFeatureError::None
-ssg/LspFeatureController.h	enumerator	ssg::LspFeatureError::StaleRevision
-ssg/LspFeatureController.h	enumerator	ssg::LspFeatureError::SyncError
-ssg/LspFeatureController.h	enumerator	ssg::LspFeatureError::UnknownDocument
-ssg/LspFeatureController.h	enumerator	ssg::LspFeaturePublishResult::Accepted
-ssg/LspFeatureController.h	enumerator	ssg::LspFeaturePublishResult::Cancelled
-ssg/LspFeatureController.h	enumerator	ssg::LspFeaturePublishResult::MalformedResponse
-ssg/LspFeatureController.h	enumerator	ssg::LspFeaturePublishResult::ServerError
-ssg/LspFeatureController.h	enumerator	ssg::LspFeaturePublishResult::StaleRevision
-ssg/LspFeatureController.h	enumerator	ssg::LspFeaturePublishResult::Superseded
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::LspFeatureController	void (LspSyncClient &, LspFeatureConfig)
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::acceptCompletion	LspCompletionAcceptance ()
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::dismissCompletion	void ()
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::dismissHover	void ()
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::poll	LspFeaturePollResult (std::uint64_t)
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestCompletion	LspFeatureRequestResult (std::string, std::uint64_t, ByteOffset)
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestDefinition	LspFeatureRequestResult (std::string, std::uint64_t, ByteOffset)
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestHover	LspFeatureRequestResult (std::string, std::uint64_t, ByteOffset)
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestReferences	LspFeatureRequestResult (std::string, std::uint64_t, ByteOffset)
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::selectNextCompletion	void ()
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::selectPreviousCompletion	void ()
-ssg/LspFeatureController.h	func	ssg::LspFeatureController::viewState	const LspFeatureViewState &() const noexcept
-ssg/LspFeatureController.h	func	ssg::LspFeaturePollResult::accepted	bool () const noexcept
-ssg/LspFeatureController.h	func	ssg::LspFeatureRequestResult::accepted	bool () const noexcept
-ssg/LspFeatureController.h	func	ssg::operator==	bool (const LspCompletionItem &, const LspCompletionItem &)
-ssg/LspFeatureController.h	func	ssg::operator==	bool (const LspCompletionViewState &, const LspCompletionViewState &)
-ssg/LspFeatureController.h	func	ssg::operator==	bool (const LspFeaturePublication &, const LspFeaturePublication &)
-ssg/LspFeatureController.h	func	ssg::operator==	bool (const LspFeatureViewState &, const LspFeatureViewState &)
-ssg/LspFeatureController.h	func	ssg::operator==	bool (const LspHover &, const LspHover &) noexcept(false)
-ssg/LspFeatureController.h	func	ssg::operator==	bool (const LspNavigationTarget &, const LspNavigationTarget &)
-ssg/LspFeatureController.h	func	ssg::operator==	bool (const LspNavigationViewState &, const LspNavigationViewState &)
-ssg/LspFeatureController.h	struct	ssg::LspCompletionAcceptance
-ssg/LspFeatureController.h	struct	ssg::LspCompletionItem
-ssg/LspFeatureController.h	struct	ssg::LspCompletionViewState
-ssg/LspFeatureController.h	struct	ssg::LspFeatureConfig
-ssg/LspFeatureController.h	struct	ssg::LspFeaturePollResult
-ssg/LspFeatureController.h	struct	ssg::LspFeaturePublication
-ssg/LspFeatureController.h	struct	ssg::LspFeatureRequestResult
-ssg/LspFeatureController.h	struct	ssg::LspFeatureViewState
-ssg/LspFeatureController.h	struct	ssg::LspHover
-ssg/LspFeatureController.h	struct	ssg::LspNavigationTarget
-ssg/LspFeatureController.h	struct	ssg::LspNavigationViewState
-ssg/LspFeatureController.h	var	ssg::LspCompletionAcceptance::accepted	bool
-ssg/LspFeatureController.h	var	ssg::LspCompletionAcceptance::message	std::string
-ssg/LspFeatureController.h	var	ssg::LspCompletionAcceptance::range	std::optional<LspRange>
-ssg/LspFeatureController.h	var	ssg::LspCompletionAcceptance::text	std::string
-ssg/LspFeatureController.h	var	ssg::LspCompletionItem::detail	std::string
-ssg/LspFeatureController.h	var	ssg::LspCompletionItem::insertText	std::string
-ssg/LspFeatureController.h	var	ssg::LspCompletionItem::label	std::string
-ssg/LspFeatureController.h	var	ssg::LspCompletionItem::replacementRange	std::optional<LspRange>
-ssg/LspFeatureController.h	var	ssg::LspCompletionItem::sortText	std::string
-ssg/LspFeatureController.h	var	ssg::LspCompletionViewState::items	std::vector<LspCompletionItem>
-ssg/LspFeatureController.h	var	ssg::LspCompletionViewState::loading	bool
-ssg/LspFeatureController.h	var	ssg::LspCompletionViewState::selectedIndex	std::optional<std::size_t>
-ssg/LspFeatureController.h	var	ssg::LspCompletionViewState::visible	bool
-ssg/LspFeatureController.h	var	ssg::LspFeatureConfig::maximumCompletionItems	std::size_t
-ssg/LspFeatureController.h	var	ssg::LspFeatureConfig::maximumJsonDepth	std::size_t
-ssg/LspFeatureController.h	var	ssg::LspFeatureConfig::maximumNavigationTargets	std::size_t
-ssg/LspFeatureController.h	var	ssg::LspFeaturePollResult::error	LspSyncError
-ssg/LspFeatureController.h	var	ssg::LspFeaturePollResult::message	std::string
-ssg/LspFeatureController.h	var	ssg::LspFeaturePollResult::publications	std::vector<LspFeaturePublication>
-ssg/LspFeatureController.h	var	ssg::LspFeaturePublication::message	std::string
-ssg/LspFeatureController.h	var	ssg::LspFeaturePublication::requestId	std::uint64_t
-ssg/LspFeatureController.h	var	ssg::LspFeaturePublication::result	LspFeaturePublishResult
-ssg/LspFeatureController.h	var	ssg::LspFeatureRequestResult::error	LspFeatureError
-ssg/LspFeatureController.h	var	ssg::LspFeatureRequestResult::message	std::string
-ssg/LspFeatureController.h	var	ssg::LspFeatureRequestResult::requestId	std::uint64_t
-ssg/LspFeatureController.h	var	ssg::LspFeatureViewState::completion	LspCompletionViewState
-ssg/LspFeatureController.h	var	ssg::LspFeatureViewState::hover	std::optional<LspHover>
-ssg/LspFeatureController.h	var	ssg::LspFeatureViewState::navigation	LspNavigationViewState
-ssg/LspFeatureController.h	var	ssg::LspFeatureViewState::revision	std::uint64_t
-ssg/LspFeatureController.h	var	ssg::LspFeatureViewState::status	std::string
-ssg/LspFeatureController.h	var	ssg::LspHover::contents	std::string
-ssg/LspFeatureController.h	var	ssg::LspHover::range	std::optional<LspRange>
-ssg/LspFeatureController.h	var	ssg::LspNavigationTarget::range	LspRange
-ssg/LspFeatureController.h	var	ssg::LspNavigationTarget::uri	std::string
-ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::revealPrimaryCaret	bool
-ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::selectedIndex	std::optional<std::size_t>
-ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::targets	std::vector<LspNavigationTarget>
-ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::userNavigation	bool
-ssg/LspSyncClient.h	class	ssg::LspByteStream
-ssg/LspSyncClient.h	class	ssg::LspFrameDecoder
-ssg/LspSyncClient.h	class	ssg::LspSyncClient
-ssg/LspSyncClient.h	enum	ssg::LspCompletedResponseStatus
-ssg/LspSyncClient.h	enum	ssg::LspDiagnosticSeverity
-ssg/LspSyncClient.h	enum	ssg::LspFrameError
-ssg/LspSyncClient.h	enum	ssg::LspIoStatus
-ssg/LspSyncClient.h	enum	ssg::LspLifecycleState
-ssg/LspSyncClient.h	enum	ssg::LspPositionError
-ssg/LspSyncClient.h	enum	ssg::LspSyncError
-ssg/LspSyncClient.h	enumerator	ssg::LspCompletedResponseStatus::Cancelled
-ssg/LspSyncClient.h	enumerator	ssg::LspCompletedResponseStatus::Result
-ssg/LspSyncClient.h	enumerator	ssg::LspCompletedResponseStatus::ServerError
-ssg/LspSyncClient.h	enumerator	ssg::LspDiagnosticSeverity::Error
-ssg/LspSyncClient.h	enumerator	ssg::LspDiagnosticSeverity::Hint
-ssg/LspSyncClient.h	enumerator	ssg::LspDiagnosticSeverity::Information
-ssg/LspSyncClient.h	enumerator	ssg::LspDiagnosticSeverity::Warning
-ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::DecoderFailed
-ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::DuplicateContentLength
-ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::HeaderTooLarge
-ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::InvalidContentLength
-ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::MessageTooLarge
-ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::MissingContentLength
-ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::None
-ssg/LspSyncClient.h	enumerator	ssg::LspIoStatus::Closed
-ssg/LspSyncClient.h	enumerator	ssg::LspIoStatus::Error
-ssg/LspSyncClient.h	enumerator	ssg::LspIoStatus::Ok
-ssg/LspSyncClient.h	enumerator	ssg::LspIoStatus::Timeout
-ssg/LspSyncClient.h	enumerator	ssg::LspLifecycleState::Failed
-ssg/LspSyncClient.h	enumerator	ssg::LspLifecycleState::Initializing
-ssg/LspSyncClient.h	enumerator	ssg::LspLifecycleState::Ready
-ssg/LspSyncClient.h	enumerator	ssg::LspLifecycleState::ShuttingDown
-ssg/LspSyncClient.h	enumerator	ssg::LspLifecycleState::Stopped
-ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::CharacterOutOfRange
-ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::InvalidUtf8
-ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::InvalidUtf8Boundary
-ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::LineOutOfRange
-ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::None
-ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::SplitSurrogate
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::DiagnosticLimitExceeded
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::InvalidArgument
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::InvalidState
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::MalformedMessage
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::None
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::RequestLimitExceeded
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::ServerError
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::StaleDiagnostics
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::StaleDocument
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::StreamClosed
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::StreamError
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::Timeout
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::UnknownDocument
-ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::UnknownRequest
-ssg/LspSyncClient.h	func	ssg::LspByteOffsetResult::accepted	bool () const noexcept
-ssg/LspSyncClient.h	func	ssg::LspByteStream::read	LspIoResult (std::string &, std::size_t, std::chrono::milliseconds)
-ssg/LspSyncClient.h	func	ssg::LspByteStream::write	LspIoResult (std::string_view, std::chrono::milliseconds)
-ssg/LspSyncClient.h	func	ssg::LspFrameDecoder::LspFrameDecoder	void (LspFrameConfig)
-ssg/LspSyncClient.h	func	ssg::LspFrameDecoder::feed	LspFrameResult (std::string_view)
-ssg/LspSyncClient.h	func	ssg::LspFrameResult::accepted	bool () const noexcept
-ssg/LspSyncClient.h	func	ssg::LspIoResult::accepted	bool () const noexcept
-ssg/LspSyncClient.h	func	ssg::LspPositionResult::accepted	bool () const noexcept
-ssg/LspSyncClient.h	func	ssg::LspRequestResult::accepted	bool () const noexcept
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::LspSyncClient	void (LspByteStream &, LspSyncConfig, std::chrono::milliseconds)
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::LspSyncClient	void (LspSyncClient &&) noexcept
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::LspSyncClient	void (const LspSyncClient &)
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::cancel	LspSyncResult (std::uint64_t)
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::changeDocument	LspSyncResult (std::string_view, std::uint64_t, std::string)
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::closeDocument	LspSyncResult (std::string_view)
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::documentSnapshot	std::optional<LspDocumentSnapshot> (std::string_view) const
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::documentVersion	std::optional<std::int64_t> (std::string_view) const
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::initialize	LspSyncResult (std::string)
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::openDocument	LspSyncResult (std::string, std::string, std::uint64_t, std::string)
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::operator=	LspSyncClient &(LspSyncClient &&) noexcept
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::operator=	LspSyncClient &(const LspSyncClient &)
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::poll	LspSyncResult ()
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::request	LspRequestResult (std::string, std::string)
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::shutdown	LspSyncResult ()
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::state	LspLifecycleState () const noexcept
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::takeCompletedResponses	std::vector<LspCompletedResponse> ()
-ssg/LspSyncClient.h	func	ssg::LspSyncClient::viewState	const LspSyncViewState &() const noexcept
-ssg/LspSyncClient.h	func	ssg::LspSyncResult::accepted	bool () const noexcept
-ssg/LspSyncClient.h	func	ssg::byteOffsetToLspPosition	LspPositionResult (std::string_view, ByteOffset)
-ssg/LspSyncClient.h	func	ssg::encodeLspFrame	std::string (std::string_view)
-ssg/LspSyncClient.h	func	ssg::lspPositionToByteOffset	LspByteOffsetResult (std::string_view, LspPosition)
-ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspCompletedResponse &, const LspCompletedResponse &)
-ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspDiagnostic &, const LspDiagnostic &)
-ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspDocumentDiagnostics &, const LspDocumentDiagnostics &)
-ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspDocumentSnapshot &, const LspDocumentSnapshot &)
-ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspPosition &, const LspPosition &)
-ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspRange &, const LspRange &)
-ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspSyncViewState &, const LspSyncViewState &)
-ssg/LspSyncClient.h	struct	ssg::LspByteOffsetResult
-ssg/LspSyncClient.h	struct	ssg::LspCompletedResponse
-ssg/LspSyncClient.h	struct	ssg::LspDiagnostic
-ssg/LspSyncClient.h	struct	ssg::LspDocumentDiagnostics
-ssg/LspSyncClient.h	struct	ssg::LspDocumentSnapshot
-ssg/LspSyncClient.h	struct	ssg::LspFrameConfig
-ssg/LspSyncClient.h	struct	ssg::LspFrameResult
-ssg/LspSyncClient.h	struct	ssg::LspIoResult
-ssg/LspSyncClient.h	struct	ssg::LspPosition
-ssg/LspSyncClient.h	struct	ssg::LspPositionResult
-ssg/LspSyncClient.h	struct	ssg::LspRange
-ssg/LspSyncClient.h	struct	ssg::LspRequestResult
-ssg/LspSyncClient.h	struct	ssg::LspSyncConfig
-ssg/LspSyncClient.h	struct	ssg::LspSyncResult
-ssg/LspSyncClient.h	struct	ssg::LspSyncViewState
-ssg/LspSyncClient.h	var	ssg::LspByteOffsetResult::error	LspPositionError
-ssg/LspSyncClient.h	var	ssg::LspByteOffsetResult::offset	ByteOffset
-ssg/LspSyncClient.h	var	ssg::LspCompletedResponse::id	std::uint64_t
-ssg/LspSyncClient.h	var	ssg::LspCompletedResponse::message	std::string
-ssg/LspSyncClient.h	var	ssg::LspCompletedResponse::payloadJson	std::string
-ssg/LspSyncClient.h	var	ssg::LspCompletedResponse::status	LspCompletedResponseStatus
-ssg/LspSyncClient.h	var	ssg::LspDiagnostic::code	std::string
-ssg/LspSyncClient.h	var	ssg::LspDiagnostic::message	std::string
-ssg/LspSyncClient.h	var	ssg::LspDiagnostic::range	LspRange
-ssg/LspSyncClient.h	var	ssg::LspDiagnostic::severity	std::optional<LspDiagnosticSeverity>
-ssg/LspSyncClient.h	var	ssg::LspDocumentDiagnostics::diagnostics	std::vector<LspDiagnostic>
-ssg/LspSyncClient.h	var	ssg::LspDocumentDiagnostics::revision	std::uint64_t
-ssg/LspSyncClient.h	var	ssg::LspDocumentDiagnostics::uri	std::string
-ssg/LspSyncClient.h	var	ssg::LspDocumentSnapshot::revision	std::uint64_t
-ssg/LspSyncClient.h	var	ssg::LspDocumentSnapshot::text	std::string
-ssg/LspSyncClient.h	var	ssg::LspDocumentSnapshot::uri	std::string
-ssg/LspSyncClient.h	var	ssg::LspDocumentSnapshot::version	std::int64_t
-ssg/LspSyncClient.h	var	ssg::LspFrameConfig::maximumHeaderBytes	std::size_t
-ssg/LspSyncClient.h	var	ssg::LspFrameConfig::maximumMessageBytes	std::size_t
-ssg/LspSyncClient.h	var	ssg::LspFrameResult::error	LspFrameError
-ssg/LspSyncClient.h	var	ssg::LspFrameResult::message	std::string
-ssg/LspSyncClient.h	var	ssg::LspFrameResult::messages	std::vector<std::string>
-ssg/LspSyncClient.h	var	ssg::LspIoResult::message	std::string
-ssg/LspSyncClient.h	var	ssg::LspIoResult::status	LspIoStatus
-ssg/LspSyncClient.h	var	ssg::LspPosition::character	std::uint64_t
-ssg/LspSyncClient.h	var	ssg::LspPosition::line	std::uint64_t
-ssg/LspSyncClient.h	var	ssg::LspPositionResult::error	LspPositionError
-ssg/LspSyncClient.h	var	ssg::LspPositionResult::position	LspPosition
-ssg/LspSyncClient.h	var	ssg::LspRange::end	LspPosition
-ssg/LspSyncClient.h	var	ssg::LspRange::start	LspPosition
-ssg/LspSyncClient.h	var	ssg::LspRequestResult::error	LspSyncError
-ssg/LspSyncClient.h	var	ssg::LspRequestResult::id	std::uint64_t
-ssg/LspSyncClient.h	var	ssg::LspRequestResult::message	std::string
-ssg/LspSyncClient.h	var	ssg::LspSyncConfig::framing	LspFrameConfig
-ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumDiagnosticMessageBytes	std::size_t
-ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumDiagnosticsPerDocument	std::size_t
-ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumDocuments	std::size_t
-ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumJsonDepth	std::size_t
-ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumPendingRequests	std::size_t
-ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumReadBytes	std::size_t
-ssg/LspSyncClient.h	var	ssg::LspSyncResult::error	LspSyncError
-ssg/LspSyncClient.h	var	ssg::LspSyncResult::message	std::string
-ssg/LspSyncClient.h	var	ssg::LspSyncViewState::documents	std::vector<LspDocumentDiagnostics>
-ssg/LspSyncClient.h	var	ssg::LspSyncViewState::revision	std::uint64_t
+ssg/LspState.h	enum	ssg::LspDiagnosticSeverity
+ssg/LspState.h	enum	ssg::LspPositionError
+ssg/LspState.h	enumerator	ssg::LspDiagnosticSeverity::Error
+ssg/LspState.h	enumerator	ssg::LspDiagnosticSeverity::Hint
+ssg/LspState.h	enumerator	ssg::LspDiagnosticSeverity::Information
+ssg/LspState.h	enumerator	ssg::LspDiagnosticSeverity::Warning
+ssg/LspState.h	enumerator	ssg::LspPositionError::CharacterOutOfRange
+ssg/LspState.h	enumerator	ssg::LspPositionError::InvalidUtf8
+ssg/LspState.h	enumerator	ssg::LspPositionError::InvalidUtf8Boundary
+ssg/LspState.h	enumerator	ssg::LspPositionError::LineOutOfRange
+ssg/LspState.h	enumerator	ssg::LspPositionError::None
+ssg/LspState.h	enumerator	ssg::LspPositionError::SplitSurrogate
+ssg/LspState.h	func	ssg::LspByteOffsetResult::accepted	bool () const noexcept
+ssg/LspState.h	func	ssg::byteOffsetToLspPosition	LspPositionResult (std::string_view, ByteOffset)
+ssg/LspState.h	func	ssg::lspPositionToByteOffset	LspByteOffsetResult (std::string_view, LspPosition)
+ssg/LspState.h	func	ssg::operator==	bool (const LspCompletionItem &, const LspCompletionItem &)
+ssg/LspState.h	func	ssg::operator==	bool (const LspCompletionViewState &, const LspCompletionViewState &)
+ssg/LspState.h	func	ssg::operator==	bool (const LspDiagnostic &, const LspDiagnostic &)
+ssg/LspState.h	func	ssg::operator==	bool (const LspDocumentDiagnostics &, const LspDocumentDiagnostics &)
+ssg/LspState.h	func	ssg::operator==	bool (const LspFeatureViewState &, const LspFeatureViewState &)
+ssg/LspState.h	func	ssg::operator==	bool (const LspHover &, const LspHover &) noexcept(false)
+ssg/LspState.h	func	ssg::operator==	bool (const LspNavigationTarget &, const LspNavigationTarget &)
+ssg/LspState.h	func	ssg::operator==	bool (const LspNavigationViewState &, const LspNavigationViewState &)
+ssg/LspState.h	func	ssg::operator==	bool (const LspPosition &, const LspPosition &) noexcept
+ssg/LspState.h	func	ssg::operator==	bool (const LspRange &, const LspRange &) noexcept
+ssg/LspState.h	func	ssg::operator==	bool (const LspSyncViewState &, const LspSyncViewState &)
+ssg/LspState.h	struct	ssg::LspByteOffsetResult
+ssg/LspState.h	struct	ssg::LspCompletionItem
+ssg/LspState.h	struct	ssg::LspCompletionViewState
+ssg/LspState.h	struct	ssg::LspDiagnostic
+ssg/LspState.h	struct	ssg::LspDocumentDiagnostics
+ssg/LspState.h	struct	ssg::LspFeatureViewState
+ssg/LspState.h	struct	ssg::LspHover
+ssg/LspState.h	struct	ssg::LspNavigationTarget
+ssg/LspState.h	struct	ssg::LspNavigationViewState
+ssg/LspState.h	struct	ssg::LspPosition
+ssg/LspState.h	struct	ssg::LspPositionResult
+ssg/LspState.h	struct	ssg::LspRange
+ssg/LspState.h	struct	ssg::LspSyncViewState
+ssg/LspState.h	var	ssg::LspByteOffsetResult::error	LspPositionError
+ssg/LspState.h	var	ssg::LspByteOffsetResult::offset	ByteOffset
+ssg/LspState.h	var	ssg::LspCompletionItem::detail	std::string
+ssg/LspState.h	var	ssg::LspCompletionItem::insertText	std::string
+ssg/LspState.h	var	ssg::LspCompletionItem::label	std::string
+ssg/LspState.h	var	ssg::LspCompletionItem::replacementRange	std::optional<LspRange>
+ssg/LspState.h	var	ssg::LspCompletionItem::sortText	std::string
+ssg/LspState.h	var	ssg::LspCompletionViewState::items	std::vector<LspCompletionItem>
+ssg/LspState.h	var	ssg::LspCompletionViewState::loading	bool
+ssg/LspState.h	var	ssg::LspCompletionViewState::selectedIndex	std::optional<std::size_t>
+ssg/LspState.h	var	ssg::LspCompletionViewState::visible	bool
+ssg/LspState.h	var	ssg::LspDiagnostic::code	std::string
+ssg/LspState.h	var	ssg::LspDiagnostic::message	std::string
+ssg/LspState.h	var	ssg::LspDiagnostic::range	LspRange
+ssg/LspState.h	var	ssg::LspDiagnostic::severity	std::optional<LspDiagnosticSeverity>
+ssg/LspState.h	var	ssg::LspDocumentDiagnostics::diagnostics	std::vector<LspDiagnostic>
+ssg/LspState.h	var	ssg::LspDocumentDiagnostics::revision	std::uint64_t
+ssg/LspState.h	var	ssg::LspDocumentDiagnostics::uri	std::string
+ssg/LspState.h	var	ssg::LspFeatureViewState::completion	LspCompletionViewState
+ssg/LspState.h	var	ssg::LspFeatureViewState::hover	std::optional<LspHover>
+ssg/LspState.h	var	ssg::LspFeatureViewState::navigation	LspNavigationViewState
+ssg/LspState.h	var	ssg::LspFeatureViewState::revision	std::uint64_t
+ssg/LspState.h	var	ssg::LspFeatureViewState::status	std::string
+ssg/LspState.h	var	ssg::LspHover::contents	std::string
+ssg/LspState.h	var	ssg::LspHover::range	std::optional<LspRange>
+ssg/LspState.h	var	ssg::LspNavigationTarget::range	LspRange
+ssg/LspState.h	var	ssg::LspNavigationTarget::uri	std::string
+ssg/LspState.h	var	ssg::LspNavigationViewState::revealPrimaryCaret	bool
+ssg/LspState.h	var	ssg::LspNavigationViewState::selectedIndex	std::optional<std::size_t>
+ssg/LspState.h	var	ssg::LspNavigationViewState::targets	std::vector<LspNavigationTarget>
+ssg/LspState.h	var	ssg::LspNavigationViewState::userNavigation	bool
+ssg/LspState.h	var	ssg::LspPosition::character	std::uint64_t
+ssg/LspState.h	var	ssg::LspPosition::line	std::uint64_t
+ssg/LspState.h	var	ssg::LspPositionResult::error	LspPositionError
+ssg/LspState.h	var	ssg::LspPositionResult::position	LspPosition
+ssg/LspState.h	var	ssg::LspRange::end	LspPosition
+ssg/LspState.h	var	ssg::LspRange::start	LspPosition
+ssg/LspState.h	var	ssg::LspSyncViewState::documents	std::vector<LspDocumentDiagnostics>
+ssg/LspState.h	var	ssg::LspSyncViewState::revision	std::uint64_t
 ssg/LuaCommandHost.h	alias	ssg::LuaDispatcher
 ssg/LuaCommandHost.h	alias	ssg::LuaGenerationGate
 ssg/LuaCommandHost.h	class	ssg::LuaCommandHost
@@ -1986,52 +1748,32 @@ ssg/LuaCommandHost.h	enumerator	ssg::LuaError::DuplicateCommand
 ssg/LuaCommandHost.h	enumerator	ssg::LuaError::InvalidScript
 ssg/LuaCommandHost.h	enumerator	ssg::LuaError::None
 ssg/LuaCommandHost.h	enumerator	ssg::LuaError::RuntimeFault
-ssg/LuaCommandHost.h	enumerator	ssg::LuaError::StaleHandle
 ssg/LuaCommandHost.h	enumerator	ssg::LuaError::UnknownCommand
 ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::LuaCommandHost	void (LuaCommandHost &&) noexcept
 ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::LuaCommandHost	void (LuaCommandHostOptions, LuaDispatcher)
 ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::LuaCommandHost	void (const LuaCommandHost &)
 ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::evaluate	LuaResult (std::string_view)
-ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::expose	LuaHandle (void *)
 ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::hasCommand	bool (std::string_view) const
-ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::invalidate	void (LuaHandle)
 ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::invoke	LuaResult (std::string_view)
 ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::operator=	LuaCommandHost &(LuaCommandHost &&) noexcept
 ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::operator=	LuaCommandHost &(const LuaCommandHost &)
-ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::registeredCommands	std::vector<std::string> () const
-ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::resolve	LuaResult (LuaHandle, void *&) const
-ssg/LuaCommandHost.h	func	ssg::LuaHandle::operator<=>	std::strong_ordering (const LuaHandle &) const
 ssg/LuaCommandHost.h	func	ssg::LuaResult::accepted	bool () const noexcept
 ssg/LuaCommandHost.h	struct	ssg::LuaCommand
 ssg/LuaCommandHost.h	struct	ssg::LuaCommandHostOptions
-ssg/LuaCommandHost.h	struct	ssg::LuaHandle
 ssg/LuaCommandHost.h	struct	ssg::LuaInvocation
 ssg/LuaCommandHost.h	struct	ssg::LuaResult
 ssg/LuaCommandHost.h	var	ssg::LuaCommand::id	std::string
+ssg/LuaCommandHost.h	var	ssg::LuaCommand::label	std::string
 ssg/LuaCommandHost.h	var	ssg::LuaCommandHost::kApiFunctions	const std::string_view[2]
+ssg/LuaCommandHost.h	var	ssg::LuaCommandHostOptions::commandAvailable	std::function<bool (std::string_view)>
 ssg/LuaCommandHost.h	var	ssg::LuaCommandHostOptions::commands	std::vector<LuaCommand>
 ssg/LuaCommandHost.h	var	ssg::LuaCommandHostOptions::instructionBudget	std::uint64_t
 ssg/LuaCommandHost.h	var	ssg::LuaCommandHostOptions::publishGate	LuaGenerationGate
 ssg/LuaCommandHost.h	var	ssg::LuaCommandHostOptions::timeBudget	std::chrono::milliseconds
-ssg/LuaCommandHost.h	var	ssg::LuaHandle::generation	std::uint32_t
-ssg/LuaCommandHost.h	var	ssg::LuaHandle::index	std::uint32_t
 ssg/LuaCommandHost.h	var	ssg::LuaInvocation::arguments	std::optional<std::unordered_map<std::string, std::string>>
 ssg/LuaCommandHost.h	var	ssg::LuaInvocation::commandId	std::string_view
 ssg/LuaCommandHost.h	var	ssg::LuaResult::error	LuaError
 ssg/LuaCommandHost.h	var	ssg::LuaResult::message	std::string
-ssg/OptionalSubsystemAudit.h	enum	ssg::OptionalSubsystem
-ssg/OptionalSubsystemAudit.h	enumerator	ssg::OptionalSubsystem::Count
-ssg/OptionalSubsystemAudit.h	enumerator	ssg::OptionalSubsystem::FilesystemWatcher
-ssg/OptionalSubsystemAudit.h	enumerator	ssg::OptionalSubsystem::Lsp
-ssg/OptionalSubsystemAudit.h	enumerator	ssg::OptionalSubsystem::Lua
-ssg/OptionalSubsystemAudit.h	enumerator	ssg::OptionalSubsystem::TreeSitterGrammar
-ssg/OptionalSubsystemAudit.h	func	ssg::noteOptionalConstruction	void (OptionalSubsystem) noexcept
-ssg/OptionalSubsystemAudit.h	func	ssg::optionalConstructionCount	std::uint64_t (OptionalSubsystem) noexcept
-ssg/OptionalSubsystemAudit.h	func	ssg::optionalConstructionTotal	std::uint64_t () noexcept
-ssg/OptionalSubsystemAudit.h	func	ssg::optionalSubsystemName	std::string_view (OptionalSubsystem) noexcept
-ssg/OptionalSubsystemAudit.h	func	ssg::resetOptionalConstructionAudit	void () noexcept
-ssg/OptionalSubsystemAudit.h	var	ssg::kAllOptionalSubsystems	const array<remove_cv_t<ssg::OptionalSubsystem>, 4UL>
-ssg/OptionalSubsystemAudit.h	var	ssg::kOptionalSubsystemCount	const std::size_t
 ssg/PaletteSearcher.h	enum	ssg::PalettePresenceOpKind
 ssg/PaletteSearcher.h	enumerator	ssg::PalettePresenceOpKind::Hide
 ssg/PaletteSearcher.h	enumerator	ssg::PalettePresenceOpKind::Show
@@ -2041,24 +1783,20 @@ ssg/PaletteSearcher.h	func	ssg::buildPaletteReport	PaletteReport (const std::vec
 ssg/PaletteSearcher.h	func	ssg::matcherParametersInDomain	bool (const MatcherParameters &)
 ssg/PaletteSearcher.h	func	ssg::operator==	bool (const MatcherParameters &, const MatcherParameters &)
 ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PaletteCandidate &, const PaletteCandidate &)
-ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PaletteExecuteArguments &, const PaletteExecuteArguments &)
 ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PalettePresenceOp &, const PalettePresenceOp &)
 ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PalettePresenceOverlay &, const PalettePresenceOverlay &)
 ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PaletteReport &, const PaletteReport &)
 ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PaletteViewState &, const PaletteViewState &)
-ssg/PaletteSearcher.h	func	ssg::operator==	bool (const PickerSubmitArguments &, const PickerSubmitArguments &)
 ssg/PaletteSearcher.h	func	ssg::paletteGhost	std::string (std::string_view, std::string_view)
 ssg/PaletteSearcher.h	func	ssg::rankPaletteCandidates	std::vector<std::size_t> (const std::vector<PaletteCandidate> &, std::string_view)
 ssg/PaletteSearcher.h	func	ssg::referenceRank	std::vector<std::size_t> (const PaletteViewState &, SearchMode, std::string_view)
 ssg/PaletteSearcher.h	struct	ssg::MatcherParameters
 ssg/PaletteSearcher.h	struct	ssg::PaletteCandidate
-ssg/PaletteSearcher.h	struct	ssg::PaletteExecuteArguments
 ssg/PaletteSearcher.h	struct	ssg::PalettePresenceOp
 ssg/PaletteSearcher.h	struct	ssg::PalettePresenceOverlay
 ssg/PaletteSearcher.h	struct	ssg::PaletteReport
 ssg/PaletteSearcher.h	struct	ssg::PaletteViewState
 ssg/PaletteSearcher.h	struct	ssg::PaletteWindowState
-ssg/PaletteSearcher.h	struct	ssg::PickerSubmitArguments
 ssg/PaletteSearcher.h	var	ssg::MatcherParameters::baseScore	int
 ssg/PaletteSearcher.h	var	ssg::MatcherParameters::contiguityBonus	int
 ssg/PaletteSearcher.h	var	ssg::MatcherParameters::exactCaseBonus	int
@@ -2067,7 +1805,6 @@ ssg/PaletteSearcher.h	var	ssg::MatcherParameters::wordBoundaryBonus	int
 ssg/PaletteSearcher.h	var	ssg::PaletteCandidate::detail	std::string
 ssg/PaletteSearcher.h	var	ssg::PaletteCandidate::id	std::string
 ssg/PaletteSearcher.h	var	ssg::PaletteCandidate::label	std::string
-ssg/PaletteSearcher.h	var	ssg::PaletteExecuteArguments::commandId	std::string
 ssg/PaletteSearcher.h	var	ssg::PalettePresenceOp::kind	PalettePresenceOpKind
 ssg/PaletteSearcher.h	var	ssg::PalettePresenceOp::target	UiNodeId
 ssg/PaletteSearcher.h	var	ssg::PalettePresenceOverlay::ops	std::vector<PalettePresenceOp>
@@ -2088,8 +1825,6 @@ ssg/PaletteSearcher.h	var	ssg::PaletteWindowState::firstVisible	std::uint32_t
 ssg/PaletteSearcher.h	var	ssg::PaletteWindowState::paneRows	std::uint32_t
 ssg/PaletteSearcher.h	var	ssg::PaletteWindowState::query	std::string
 ssg/PaletteSearcher.h	var	ssg::PaletteWindowState::selected	std::size_t
-ssg/PaletteSearcher.h	var	ssg::PickerSubmitArguments::activation	PickerActivation
-ssg/PaletteSearcher.h	var	ssg::PickerSubmitArguments::candidateId	std::string
 ssg/PaletteSearcher.h	var	ssg::kMaxCandidateBytes	const std::int64_t
 ssg/PaletteSearcher.h	var	ssg::kMaxExactDoubleInteger	const std::int64_t
 ssg/PaletteSearcher.h	var	ssg::kMaxMatcherParameterMagnitude	const std::int64_t
@@ -2118,16 +1853,12 @@ ssg/PaneTopology.h	func	ssg::PaneTopology::panes	std::vector<PaneId> () const
 ssg/PaneTopology.h	func	ssg::PaneTopology::root	const PaneTopologyNode &() const noexcept
 ssg/PaneTopology.h	func	ssg::PaneTopology::splitActive	PaneId (SplitAxis)
 ssg/PaneTopology.h	func	ssg::PaneTopologyNode::isLeaf	bool () const noexcept
-ssg/PaneTopology.h	func	ssg::SessionTopology::operator==	bool (const SessionTopology &) const
 ssg/PaneTopology.h	func	ssg::operator==	bool (const PaneTopology &, const PaneTopology &)
 ssg/PaneTopology.h	func	ssg::operator==	bool (const PaneTopologyNode &, const PaneTopologyNode &)
 ssg/PaneTopology.h	struct	ssg::PaneTopologyNode
-ssg/PaneTopology.h	struct	ssg::SessionTopology
 ssg/PaneTopology.h	var	ssg::PaneTopologyNode::axis	SplitAxis
 ssg/PaneTopology.h	var	ssg::PaneTopologyNode::children	std::vector<PaneTopologyNode>
 ssg/PaneTopology.h	var	ssg::PaneTopologyNode::id	PaneId
-ssg/PaneTopology.h	var	ssg::SessionTopology::activeWorkspace	std::optional<WorkspaceId>
-ssg/PaneTopology.h	var	ssg::SessionTopology::panes	PaneTopology
 ssg/Picker.h	class	ssg::PickerCatalog
 ssg/Picker.h	enum	ssg::PickerKind
 ssg/Picker.h	enumerator	ssg::PickerKind::Command
@@ -2153,6 +1884,7 @@ ssg/Picker.h	var	ssg::kAllPickerKinds	const std::array<PickerKind, 2>
 ssg/Picker.h	var	ssg::kPickerDescriptors	const std::array<PickerDescriptor, 2>
 ssg/PromptSurface.h	class	ssg::PromptSurface
 ssg/PromptSurface.h	enum	ssg::ActivePrompt
+ssg/PromptSurface.h	enum	ssg::PromptCompletion
 ssg/PromptSurface.h	enum	ssg::PromptControlKind
 ssg/PromptSurface.h	enum	ssg::PromptErrorCode
 ssg/PromptSurface.h	enum	ssg::PromptKind
@@ -2164,6 +1896,13 @@ ssg/PromptSurface.h	enumerator	ssg::ActivePrompt::None
 ssg/PromptSurface.h	enumerator	ssg::ActivePrompt::Palette
 ssg/PromptSurface.h	enumerator	ssg::ActivePrompt::Replace
 ssg/PromptSurface.h	enumerator	ssg::ActivePrompt::TextPrompt
+ssg/PromptSurface.h	enumerator	ssg::PromptCompletion::FileNewDirectory
+ssg/PromptSurface.h	enumerator	ssg::PromptCompletion::FileOpen
+ssg/PromptSurface.h	enumerator	ssg::PromptCompletion::FileRename
+ssg/PromptSurface.h	enumerator	ssg::PromptCompletion::FileSaveAs
+ssg/PromptSurface.h	enumerator	ssg::PromptCompletion::GotoLine
+ssg/PromptSurface.h	enumerator	ssg::PromptCompletion::None
+ssg/PromptSurface.h	enumerator	ssg::PromptCompletion::WorkspaceOpenDirectory
 ssg/PromptSurface.h	enumerator	ssg::PromptControlKind::Count
 ssg/PromptSurface.h	enumerator	ssg::PromptControlKind::Input
 ssg/PromptSurface.h	enumerator	ssg::PromptControlKind::Toggle
@@ -2182,8 +1921,10 @@ ssg/PromptSurface.h	enumerator	ssg::PromptTextEdit::Kind::Append
 ssg/PromptSurface.h	enumerator	ssg::PromptTextEdit::Kind::DeleteGraphemeBack
 ssg/PromptSurface.h	enumerator	ssg::PromptTextEdit::Kind::DeleteWordBack
 ssg/PromptSurface.h	enumerator	ssg::PromptTextRoute::Kind::AppendPaletteQuery
-ssg/PromptSurface.h	enumerator	ssg::PromptTextRoute::Kind::Dispatch
 ssg/PromptSurface.h	enumerator	ssg::PromptTextRoute::Kind::Ignore
+ssg/PromptSurface.h	enumerator	ssg::PromptTextRoute::Kind::UpdateFindQuery
+ssg/PromptSurface.h	enumerator	ssg::PromptTextRoute::Kind::UpdatePromptValue
+ssg/PromptSurface.h	enumerator	ssg::PromptTextRoute::Kind::UpdateReplacement
 ssg/PromptSurface.h	func	ssg::PromptCommandResult::accepted	bool () const noexcept
 ssg/PromptSurface.h	func	ssg::PromptSurface::active	bool () const noexcept
 ssg/PromptSurface.h	func	ssg::PromptSurface::activeInput	std::size_t () const noexcept
@@ -2194,10 +1935,10 @@ ssg/PromptSurface.h	func	ssg::PromptSurface::open	PromptCommandResult (PromptReq
 ssg/PromptSurface.h	func	ssg::PromptSurface::request	const std::optional<PromptRequest> &() const noexcept
 ssg/PromptSurface.h	func	ssg::PromptSurface::submit	PromptCommandResult ()
 ssg/PromptSurface.h	func	ssg::PromptSurface::updateValue	PromptCommandResult (std::size_t, std::string)
+ssg/PromptSurface.h	func	ssg::applyPromptTextEdit	std::string (std::string_view, const PromptTextEdit &)
 ssg/PromptSurface.h	func	ssg::openGenericPrompt	PromptCommandResult (PromptSurface &, PromptRequest)
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptControl &, const PromptControl &)
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptError &, const PromptError &)
-ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptFocusArguments &, const PromptFocusArguments &)
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptInput &, const PromptInput &)
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptMatchCount &, const PromptMatchCount &) noexcept
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptRequest &, const PromptRequest &)
@@ -2211,7 +1952,6 @@ ssg/PromptSurface.h	func	ssg::routePromptTextEdit	PromptTextRoute (const PromptR
 ssg/PromptSurface.h	struct	ssg::PromptCommandResult
 ssg/PromptSurface.h	struct	ssg::PromptControl
 ssg/PromptSurface.h	struct	ssg::PromptError
-ssg/PromptSurface.h	struct	ssg::PromptFocusArguments
 ssg/PromptSurface.h	struct	ssg::PromptInput
 ssg/PromptSurface.h	struct	ssg::PromptMatchCount
 ssg/PromptSurface.h	struct	ssg::PromptRequest
@@ -2232,7 +1972,6 @@ ssg/PromptSurface.h	var	ssg::PromptControl::kind	PromptControlKind
 ssg/PromptSurface.h	var	ssg::PromptControl::value	std::string
 ssg/PromptSurface.h	var	ssg::PromptError::code	PromptErrorCode
 ssg/PromptSurface.h	var	ssg::PromptError::message	std::string
-ssg/PromptSurface.h	var	ssg::PromptFocusArguments::controlId	std::string
 ssg/PromptSurface.h	var	ssg::PromptInput::accessibleLabel	std::string
 ssg/PromptSurface.h	var	ssg::PromptInput::id	std::string
 ssg/PromptSurface.h	var	ssg::PromptInput::value	std::string
@@ -2240,7 +1979,7 @@ ssg/PromptSurface.h	var	ssg::PromptMatchCount::accessibleLabel	std::string
 ssg/PromptSurface.h	var	ssg::PromptMatchCount::id	std::string
 ssg/PromptSurface.h	var	ssg::PromptMatchCount::value	std::string
 ssg/PromptSurface.h	var	ssg::PromptRequest::accessibleLabel	std::string
-ssg/PromptSurface.h	var	ssg::PromptRequest::commandId	std::string
+ssg/PromptSurface.h	var	ssg::PromptRequest::completion	PromptCompletion
 ssg/PromptSurface.h	var	ssg::PromptRequest::inputs	std::vector<PromptInput>
 ssg/PromptSurface.h	var	ssg::PromptRequest::kind	PromptKind
 ssg/PromptSurface.h	var	ssg::PromptRequest::matchCount	std::optional<PromptMatchCount>
@@ -2251,28 +1990,26 @@ ssg/PromptSurface.h	var	ssg::PromptRoutingState::focus	FocusTarget
 ssg/PromptSurface.h	var	ssg::PromptRoutingState::prompt	ActivePrompt
 ssg/PromptSurface.h	var	ssg::PromptStatusViewState::activeKind	std::optional<PromptKind>
 ssg/PromptSurface.h	var	ssg::PromptStatusViewState::status	StatusViewState
-ssg/PromptSurface.h	var	ssg::PromptSubmission::commandId	std::string
+ssg/PromptSurface.h	var	ssg::PromptSubmission::completion	PromptCompletion
 ssg/PromptSurface.h	var	ssg::PromptSubmission::kind	PromptKind
 ssg/PromptSurface.h	var	ssg::PromptSubmission::toggles	std::vector<bool>
 ssg/PromptSurface.h	var	ssg::PromptSubmission::values	std::vector<std::string>
 ssg/PromptSurface.h	var	ssg::PromptTextEdit::kind	enum Kind
 ssg/PromptSurface.h	var	ssg::PromptTextEdit::text	std::string
 ssg/PromptSurface.h	var	ssg::PromptTextRoute::appendText	std::string
-ssg/PromptSurface.h	var	ssg::PromptTextRoute::command	CommandName
 ssg/PromptSurface.h	var	ssg::PromptTextRoute::kind	enum Kind
-ssg/PromptSurface.h	var	ssg::PromptTextRoute::payload	std::any
+ssg/PromptSurface.h	var	ssg::PromptTextRoute::promptValue	PromptValueArguments
+ssg/PromptSurface.h	var	ssg::PromptTextRoute::query	std::string
 ssg/PromptSurface.h	var	ssg::PromptToggle::accessibleLabel	std::string
 ssg/PromptSurface.h	var	ssg::PromptToggle::id	std::string
 ssg/PromptSurface.h	var	ssg::PromptToggle::value	bool
 ssg/PromptSurface.h	var	ssg::PromptToggle::width	int
 ssg/PromptSurface.h	var	ssg::PromptValueArguments::index	std::size_t
 ssg/PromptSurface.h	var	ssg::PromptValueArguments::value	std::string
-ssg/RecoveryManager.h	class	ssg::RecoveryFaultInjector
 ssg/RecoveryManager.h	class	ssg::RecoveryManager
 ssg/RecoveryManager.h	class	ssg::RecoveryRecordId
 ssg/RecoveryManager.h	enum	ssg::RecoveryErrorCode
 ssg/RecoveryManager.h	enum	ssg::RecoveryRecordKind
-ssg/RecoveryManager.h	enum	ssg::RecoveryStep
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryErrorCode::ActionAndRollbackFailed
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryErrorCode::ActionFailed
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryErrorCode::BudgetExceeded
@@ -2285,31 +2022,16 @@ ssg/RecoveryManager.h	enumerator	ssg::RecoveryErrorCode::RestorationFailed
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryRecordKind::DocumentClose
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryRecordKind::PathDelete
 ssg/RecoveryManager.h	enumerator	ssg::RecoveryRecordKind::PathRename
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::CleanupRecord
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::InstallRecord
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::MutateDocument
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::MutateFilesystem
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::PrepareArtifact
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::PublishRecord
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::RestoreDocument
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::RestoreFilesystem
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::RollbackDocument
-ssg/RecoveryManager.h	enumerator	ssg::RecoveryStep::RollbackFilesystem
 ssg/RecoveryManager.h	func	ssg::RecoveryActionResult::accepted	bool () const noexcept
-ssg/RecoveryManager.h	func	ssg::RecoveryFaultInjector::beforeStep	void (RecoveryStep)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::RecoveryManager	void (RecoveryManager &&) noexcept
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::RecoveryManager	void (const RecoveryManager &)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::closeDocument	RecoveryActionResult (std::optional<JournalDocument> &, ScratchStore &, std::chrono::milliseconds)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::create	RecoveryManager (const std::filesystem::path &, RecoveryConfig)
-ssg/RecoveryManager.h	func	ssg::RecoveryManager::create	RecoveryManager (const std::filesystem::path &, RecoveryConfig, RecoveryFaultInjector &)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::deletePath	RecoveryActionResult (const std::filesystem::path &)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::operator=	RecoveryManager &(RecoveryManager &&) noexcept
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::operator=	RecoveryManager &(const RecoveryManager &)
-ssg/RecoveryManager.h	func	ssg::RecoveryManager::records	std::vector<RecoveryRecord> () const
-ssg/RecoveryManager.h	func	ssg::RecoveryManager::renamePath	RecoveryActionResult (const std::filesystem::path &, const std::filesystem::path &)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::renamePathNoClobber	RecoveryActionResult (const std::filesystem::path &, const std::filesystem::path &)
 ssg/RecoveryManager.h	func	ssg::RecoveryManager::restoreDocument	RecoveryRestoreResult (const RecoveryRecordId &, std::optional<JournalDocument> &)
-ssg/RecoveryManager.h	func	ssg::RecoveryManager::restoreFilesystem	RecoveryRestoreResult (const RecoveryRecordId &)
 ssg/RecoveryManager.h	func	ssg::RecoveryRecordId::RecoveryRecordId	void (std::string)
 ssg/RecoveryManager.h	func	ssg::RecoveryRecordId::value	std::string_view () const noexcept
 ssg/RecoveryManager.h	func	ssg::RecoveryRestoreResult::accepted	bool () const noexcept
@@ -2348,13 +2070,11 @@ ssg/Renderer.h	enumerator	ssg::DiffTint::None
 ssg/Renderer.h	enumerator	ssg::DiffTint::RemovedRow
 ssg/Renderer.h	enumerator	ssg::DiffTint::RemovedWord
 ssg/Renderer.h	func	ssg::CellGrid::at	const CellGridCell &(int, int) const
-ssg/Renderer.h	func	ssg::CellGrid::canonical	std::string () const
+ssg/Renderer.h	func	ssg::CellGrid::operator==	bool (const CellGrid &) const
 ssg/Renderer.h	func	ssg::CellGridCell::operator==	bool (const CellGridCell &) const
 ssg/Renderer.h	func	ssg::CellHyperlink::operator==	bool (const CellHyperlink &) const
-ssg/Renderer.h	func	ssg::GridPosition::operator==	bool (const GridPosition &) const
+ssg/Renderer.h	func	ssg::GridPosition::operator==	bool (const GridPosition &) const noexcept
 ssg/Renderer.h	func	ssg::renderFrame	CellGrid (const GridPresentation &, LineLayoutCache &)
-ssg/Renderer.h	func	ssg::renderSegmentationCalls	std::uint64_t ()
-ssg/Renderer.h	func	ssg::resetRenderSegmentationCalls	void ()
 ssg/Renderer.h	struct	ssg::CellGrid
 ssg/Renderer.h	struct	ssg::CellGridCell
 ssg/Renderer.h	struct	ssg::CellHyperlink
@@ -2391,7 +2111,6 @@ ssg/ScratchJournal.h	func	ssg::JournalDocumentKey::savedPath	const std::string &
 ssg/ScratchJournal.h	func	ssg::JournalDocumentKey::untitled	JournalDocumentKey (UntitledDocumentId)
 ssg/ScratchJournal.h	func	ssg::JournalDocumentKey::untitledId	UntitledDocumentId () const
 ssg/ScratchJournal.h	func	ssg::ScratchJournal::ScratchJournal	void (std::filesystem::path)
-ssg/ScratchJournal.h	func	ssg::ScratchJournal::appendCheckpoint	void (const JournalRecoverySet &) const
 ssg/ScratchJournal.h	func	ssg::ScratchJournal::appendDocument	void (const JournalDocument &) const
 ssg/ScratchJournal.h	func	ssg::ScratchJournal::appendRemove	void (const JournalDocumentKey &) const
 ssg/ScratchJournal.h	func	ssg::ScratchJournal::path	const std::filesystem::path &() const noexcept
@@ -2440,7 +2159,6 @@ ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::journalPath	std::filesystem::p
 ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::markRestored	void ()
 ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::operator=	ScratchRemnantClaim &(ScratchRemnantClaim &&) noexcept
 ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::operator=	ScratchRemnantClaim &(const ScratchRemnantClaim &)
-ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::path	const std::filesystem::path &() const noexcept
 ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::replay	JournalReplayResult () const
 ssg/ScratchStore.h	func	ssg::ScratchSession::ScratchSession	void (ScratchSession &&) noexcept
 ssg/ScratchStore.h	func	ssg::ScratchSession::ScratchSession	void (const ScratchSession &)
@@ -2450,42 +2168,28 @@ ssg/ScratchStore.h	func	ssg::ScratchSession::id	const ScratchSessionId &() const
 ssg/ScratchStore.h	func	ssg::ScratchSession::journalPath	std::filesystem::path () const
 ssg/ScratchStore.h	func	ssg::ScratchSession::operator=	ScratchSession &(ScratchSession &&) noexcept
 ssg/ScratchStore.h	func	ssg::ScratchSession::operator=	ScratchSession &(const ScratchSession &)
-ssg/ScratchStore.h	func	ssg::ScratchSession::path	const std::filesystem::path &() const noexcept
 ssg/ScratchStore.h	func	ssg::ScratchSessionId::value	std::string_view () const noexcept
 ssg/ScratchStore.h	func	ssg::ScratchStore::ScratchStore	void (ScratchStore &&) noexcept
 ssg/ScratchStore.h	func	ssg::ScratchStore::ScratchStore	void (const ScratchStore &)
-ssg/ScratchStore.h	func	ssg::ScratchStore::applyQuotas	ScratchQuotaResult ()
-ssg/ScratchStore.h	func	ssg::ScratchStore::compact	void ()
 ssg/ScratchStore.h	func	ssg::ScratchStore::create	ScratchStore (const std::filesystem::path &, const std::filesystem::path &, ScratchStoreConfig)
 ssg/ScratchStore.h	func	ssg::ScratchStore::durabilityState	ScratchDurabilityState () const
-ssg/ScratchStore.h	func	ssg::ScratchStore::journalPath	std::filesystem::path () const
 ssg/ScratchStore.h	func	ssg::ScratchStore::operator=	ScratchStore &(ScratchStore &&) noexcept
 ssg/ScratchStore.h	func	ssg::ScratchStore::operator=	ScratchStore &(const ScratchStore &)
-ssg/ScratchStore.h	func	ssg::ScratchStore::purgeAll	std::size_t ()
-ssg/ScratchStore.h	func	ssg::ScratchStore::purgeWorkspace	std::size_t ()
 ssg/ScratchStore.h	func	ssg::ScratchStore::recovery	JournalRecoverySet () const
 ssg/ScratchStore.h	func	ssg::ScratchStore::removeDocument	void (JournalDocumentKey)
-ssg/ScratchStore.h	func	ssg::ScratchStore::sessionPath	std::filesystem::path () const
-ssg/ScratchStore.h	func	ssg::ScratchStore::shutdown	void ()
 ssg/ScratchStore.h	func	ssg::ScratchStore::updateDocument	void (JournalDocument)
 ssg/ScratchStore.h	func	ssg::ScratchStore::waitUntilDurable	bool (std::chrono::milliseconds) const
 ssg/ScratchStore.h	func	ssg::operator==	bool (const ScratchSessionId &, const ScratchSessionId &)
 ssg/ScratchStore.h	func	ssg::scratchWorkspaceKey	std::string (const std::filesystem::path &)
 ssg/ScratchStore.h	struct	ssg::ScratchDurabilityState
-ssg/ScratchStore.h	struct	ssg::ScratchQuotaResult
 ssg/ScratchStore.h	struct	ssg::ScratchStoreConfig
 ssg/ScratchStore.h	var	ssg::ScratchDurabilityState::acceptedGeneration	std::uint64_t
 ssg/ScratchStore.h	var	ssg::ScratchDurabilityState::durableGeneration	std::uint64_t
 ssg/ScratchStore.h	var	ssg::ScratchDurabilityState::failure	std::string
 ssg/ScratchStore.h	var	ssg::ScratchDurabilityState::kind	ScratchDurability
 ssg/ScratchStore.h	var	ssg::ScratchDurabilityState::overdue	bool
-ssg/ScratchStore.h	var	ssg::ScratchQuotaResult::evictedSessionIds	std::vector<std::string>
-ssg/ScratchStore.h	var	ssg::ScratchQuotaResult::remainingBytes	std::uintmax_t
-ssg/ScratchStore.h	var	ssg::ScratchQuotaResult::withinByteQuota	bool
 ssg/ScratchStore.h	var	ssg::ScratchStoreConfig::compactionThresholdBytes	std::uintmax_t
 ssg/ScratchStore.h	var	ssg::ScratchStoreConfig::durabilityTarget	std::chrono::milliseconds
-ssg/ScratchStore.h	var	ssg::ScratchStoreConfig::maximumAge	std::chrono::seconds
-ssg/ScratchStore.h	var	ssg::ScratchStoreConfig::maximumBytes	std::uintmax_t
 ssg/ScreenLayout.h	func	ssg::assembleFooterPrompt	UiNode (const PromptSurface &)
 ssg/ScreenLayout.h	func	ssg::assembleScreen	UiComposition (std::string_view, const StyleDimensions &, std::string_view)
 ssg/ScreenLayout.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
@@ -2509,6 +2213,7 @@ ssg/ScreenState.h	func	ssg::ScreenState::refreshNoticePresence	bool (bool)
 ssg/ScreenState.h	func	ssg::ScreenState::refreshStatusActions	bool (std::vector<StatusActionNode>)
 ssg/ScreenState.h	func	ssg::ScreenState::releaseExternalFocus	bool ()
 ssg/ScreenState.h	func	ssg::ScreenState::schema	UiSchema () const
+ssg/ScreenState.h	func	ssg::ScreenState::showPanel	bool ()
 ssg/ScreenState.h	func	ssg::ScreenState::showPanelProvider	bool (TreeProviderKind)
 ssg/ScreenState.h	func	ssg::ScreenState::statusActions	const std::vector<StatusActionNode> &() const noexcept
 ssg/ScreenState.h	func	ssg::ScreenState::switchPanelProvider	bool (CycleDirection)
@@ -2557,50 +2262,42 @@ ssg/Search.h	enumerator	ssg::SearchQueryError::None
 ssg/Search.h	func	ssg::NavigationHistory::NavigationHistory	void (std::size_t)
 ssg/Search.h	func	ssg::NavigationHistory::back	NavigationTransition ()
 ssg/Search.h	func	ssg::NavigationHistory::forward	NavigationTransition ()
+ssg/Search.h	func	ssg::NavigationHistory::peekBack	NavigationTransition () const
+ssg/Search.h	func	ssg::NavigationHistory::peekForward	NavigationTransition () const
 ssg/Search.h	func	ssg::NavigationHistory::visit	NavigationTransition (NavigationTarget, NavigationOrigin)
 ssg/Search.h	func	ssg::SearchCancellationToken::SearchCancellationToken	void ()
 ssg/Search.h	func	ssg::SearchCancellationToken::cancel	void () const noexcept
 ssg/Search.h	func	ssg::SearchCancellationToken::cancelled	bool () const noexcept
-ssg/Search.h	func	ssg::SearchController::SearchController	void (SearchCommands)
-ssg/Search.h	func	ssg::SearchController::beginWorkspaceSearch	WorkspaceSearchRequest (std::string, std::uint64_t)
+ssg/Search.h	func	ssg::SearchController::beginWorkspaceSearch	WorkspaceSearchState (ParsedSearchQuery, std::uint64_t)
+ssg/Search.h	func	ssg::SearchController::beginWorkspaceSearch	WorkspaceSearchState (std::string, std::uint64_t)
 ssg/Search.h	func	ssg::SearchController::cancelWorkspaceSearch	void () noexcept
-ssg/Search.h	func	ssg::SearchController::closePalette	void (std::uint64_t)
-ssg/Search.h	func	ssg::SearchController::evaluate	WorkspaceSearchBatch (const WorkspaceSearchRequest &, const WorkspaceSnapshot &) const
-ssg/Search.h	func	ssg::SearchController::executePalette	PaletteExecutionResult ()
-ssg/Search.h	func	ssg::SearchController::openPalette	void (std::uint64_t)
+ssg/Search.h	func	ssg::SearchController::evaluate	WorkspaceSearchBatch (WorkspaceSearchState &, const WorkspaceCorpus &, std::uint64_t) const
 ssg/Search.h	func	ssg::SearchController::publish	SearchPublishResult (const WorkspaceSearchBatch &, std::uint64_t)
 ssg/Search.h	func	ssg::SearchController::selectNext	void ()
 ssg/Search.h	func	ssg::SearchController::selectPrevious	void ()
-ssg/Search.h	func	ssg::SearchController::updatePaletteQuery	void (std::string, std::uint64_t)
 ssg/Search.h	func	ssg::SearchController::viewState	const SearchViewState &() const noexcept
-ssg/Search.h	func	ssg::evaluateWorkspaceSearch	WorkspaceSearchBatch (const WorkspaceSnapshot &, const WorkspaceSearchRequest &)
+ssg/Search.h	func	ssg::evaluateWorkspaceSearch	WorkspaceSearchBatch (const WorkspaceCorpus &, WorkspaceSearchState &, std::uint64_t)
+ssg/Search.h	func	ssg::navigationTransition	NavigationTransition (const NavigationTarget &, NavigationOrigin)
 ssg/Search.h	func	ssg::operator==	bool (const NavigationTarget &, const NavigationTarget &) noexcept(false)
 ssg/Search.h	func	ssg::operator==	bool (const NavigationTransition &, const NavigationTransition &)
-ssg/Search.h	func	ssg::operator==	bool (const PaletteExecutionResult &, const PaletteExecutionResult &)
 ssg/Search.h	func	ssg::operator==	bool (const ParsedSearchQuery &, const ParsedSearchQuery &)
-ssg/Search.h	func	ssg::operator==	bool (const SearchCommandDescriptor &, const SearchCommandDescriptor &)
 ssg/Search.h	func	ssg::operator==	bool (const SearchResult &, const SearchResult &)
 ssg/Search.h	func	ssg::operator==	bool (const SearchViewState &, const SearchViewState &)
 ssg/Search.h	func	ssg::operator==	bool (const WorkspaceFile &, const WorkspaceFile &)
 ssg/Search.h	func	ssg::operator==	bool (const WorkspaceSnapshot &, const WorkspaceSnapshot &)
-ssg/Search.h	func	ssg::operator==	bool (const WorkspaceSymbol &, const WorkspaceSymbol &)
 ssg/Search.h	func	ssg::parseWorkspaceSearchQuery	ParsedSearchQuery (std::string_view)
-ssg/Search.h	func	ssg::rankWorkspaceSearch	std::vector<SearchResult> (const WorkspaceSnapshot &, const ParsedSearchQuery &, const SearchCancellationToken &)
+ssg/Search.h	func	ssg::rankWorkspaceSearch	bool (const WorkspaceCorpus &, WorkspaceSearchState &, std::uint64_t)
 ssg/Search.h	func	ssg::searchGotoLine	std::optional<NavigationTarget> (std::string, const ParsedSearchQuery &)
-ssg/Search.h	func	ssg::searchNavigationTarget	std::optional<NavigationTarget> (const SearchResult &)
 ssg/Search.h	struct	ssg::NavigationTarget
 ssg/Search.h	struct	ssg::NavigationTransition
-ssg/Search.h	struct	ssg::PaletteExecutionResult
 ssg/Search.h	struct	ssg::ParsedSearchQuery
-ssg/Search.h	struct	ssg::SearchCommandDescriptor
-ssg/Search.h	struct	ssg::SearchCommands
 ssg/Search.h	struct	ssg::SearchResult
 ssg/Search.h	struct	ssg::SearchViewState
 ssg/Search.h	struct	ssg::WorkspaceFile
 ssg/Search.h	struct	ssg::WorkspaceSearchBatch
 ssg/Search.h	struct	ssg::WorkspaceSearchRequest
+ssg/Search.h	struct	ssg::WorkspaceSearchState
 ssg/Search.h	struct	ssg::WorkspaceSnapshot
-ssg/Search.h	struct	ssg::WorkspaceSymbol
 ssg/Search.h	var	ssg::NavigationTarget::column	std::size_t
 ssg/Search.h	var	ssg::NavigationTarget::line	LineIndex
 ssg/Search.h	var	ssg::NavigationTarget::path	std::string
@@ -2608,16 +2305,10 @@ ssg/Search.h	var	ssg::NavigationTarget::symbol	std::optional<std::string>
 ssg/Search.h	var	ssg::NavigationTransition::pauseFollowEdits	bool
 ssg/Search.h	var	ssg::NavigationTransition::revealPrimaryCaret	bool
 ssg/Search.h	var	ssg::NavigationTransition::target	std::optional<NavigationTarget>
-ssg/Search.h	var	ssg::PaletteExecutionResult::accepted	bool
-ssg/Search.h	var	ssg::PaletteExecutionResult::message	std::string
 ssg/Search.h	var	ssg::ParsedSearchQuery::error	SearchQueryError
 ssg/Search.h	var	ssg::ParsedSearchQuery::line	std::optional<LineIndex>
 ssg/Search.h	var	ssg::ParsedSearchQuery::mode	SearchMode
 ssg/Search.h	var	ssg::ParsedSearchQuery::text	std::string
-ssg/Search.h	var	ssg::SearchCommandDescriptor::id	std::string
-ssg/Search.h	var	ssg::SearchCommandDescriptor::label	std::string
-ssg/Search.h	var	ssg::SearchCommands::descriptors	std::function<std::vector<SearchCommandDescriptor> ()>
-ssg/Search.h	var	ssg::SearchCommands::execute	std::function<PaletteExecutionResult (std::string_view)>
 ssg/Search.h	var	ssg::SearchResult::column	std::size_t
 ssg/Search.h	var	ssg::SearchResult::label	std::string
 ssg/Search.h	var	ssg::SearchResult::line	std::optional<LineIndex>
@@ -2625,7 +2316,6 @@ ssg/Search.h	var	ssg::SearchResult::mode	SearchMode
 ssg/Search.h	var	ssg::SearchResult::path	std::string
 ssg/Search.h	var	ssg::SearchResult::score	int
 ssg/Search.h	var	ssg::SearchViewState::mode	SearchMode
-ssg/Search.h	var	ssg::SearchViewState::paletteOpen	bool
 ssg/Search.h	var	ssg::SearchViewState::query	std::string
 ssg/Search.h	var	ssg::SearchViewState::results	std::vector<SearchResult>
 ssg/Search.h	var	ssg::SearchViewState::revision	std::uint64_t
@@ -2635,6 +2325,7 @@ ssg/Search.h	var	ssg::SearchViewState::selectedIndex	std::optional<std::size_t>
 ssg/Search.h	var	ssg::WorkspaceFile::path	std::string
 ssg/Search.h	var	ssg::WorkspaceFile::text	std::string
 ssg/Search.h	var	ssg::WorkspaceSearchBatch::cancelled	bool
+ssg/Search.h	var	ssg::WorkspaceSearchBatch::finished	bool
 ssg/Search.h	var	ssg::WorkspaceSearchBatch::generation	std::uint64_t
 ssg/Search.h	var	ssg::WorkspaceSearchBatch::results	std::vector<SearchResult>
 ssg/Search.h	var	ssg::WorkspaceSearchBatch::sourceRevision	std::uint64_t
@@ -2642,13 +2333,12 @@ ssg/Search.h	var	ssg::WorkspaceSearchRequest::cancellation	SearchCancellationTok
 ssg/Search.h	var	ssg::WorkspaceSearchRequest::generation	std::uint64_t
 ssg/Search.h	var	ssg::WorkspaceSearchRequest::query	ParsedSearchQuery
 ssg/Search.h	var	ssg::WorkspaceSearchRequest::sourceRevision	std::uint64_t
+ssg/Search.h	var	ssg::WorkspaceSearchState::cursor	std::size_t
+ssg/Search.h	var	ssg::WorkspaceSearchState::finished	bool
+ssg/Search.h	var	ssg::WorkspaceSearchState::request	WorkspaceSearchRequest
+ssg/Search.h	var	ssg::WorkspaceSearchState::results	std::vector<SearchResult>
 ssg/Search.h	var	ssg::WorkspaceSnapshot::files	std::vector<WorkspaceFile>
 ssg/Search.h	var	ssg::WorkspaceSnapshot::revision	std::uint64_t
-ssg/Search.h	var	ssg::WorkspaceSnapshot::symbols	std::vector<WorkspaceSymbol>
-ssg/Search.h	var	ssg::WorkspaceSymbol::column	std::size_t
-ssg/Search.h	var	ssg::WorkspaceSymbol::line	std::size_t
-ssg/Search.h	var	ssg::WorkspaceSymbol::name	std::string
-ssg/Search.h	var	ssg::WorkspaceSymbol::path	std::string
 ssg/Search.h	var	ssg::kAllSearchModes	const std::array<enable_if_t<is_same_v<ssg::SearchMode, ssg::SearchMode> && is_same_v<ssg::SearchMode, ssg::SearchMode> && is_same_v<ssg::SearchMode, ssg::SearchMode> && is_same_v<ssg::SearchMode, ssg::SearchMode>, ssg::SearchMode>, 1 + sizeof...(_Up)>
 ssg/Selection.h	class	ssg::SelectionSet
 ssg/Selection.h	enum	ssg::SelectionCommand
@@ -2739,7 +2429,6 @@ ssg/Selection.h	var	ssg::SelectionViewState::selections	SelectionSet
 ssg/Selection.h	var	ssg::kSelectionCommands	const std::array<SelectionCommandDescriptor, 38>
 ssg/Settings.h	alias	ssg::SettingValue
 ssg/Settings.h	class	ssg::SettingsModel
-ssg/Settings.h	class	ssg::SettingsPersistence
 ssg/Settings.h	class	ssg::TabWidth
 ssg/Settings.h	enum	ssg::IndentStyle
 ssg/Settings.h	enum	ssg::LineEnding
@@ -2759,7 +2448,6 @@ ssg/Settings.h	enumerator	ssg::SettingErrorCode::InvalidRecord
 ssg/Settings.h	enumerator	ssg::SettingErrorCode::InvalidSchema
 ssg/Settings.h	enumerator	ssg::SettingErrorCode::IoFailure
 ssg/Settings.h	enumerator	ssg::SettingErrorCode::OutOfRange
-ssg/Settings.h	enumerator	ssg::SettingErrorCode::StaleCompensation
 ssg/Settings.h	enumerator	ssg::SettingErrorCode::UnknownKey
 ssg/Settings.h	enumerator	ssg::SettingErrorCode::WrongValueType
 ssg/Settings.h	enumerator	ssg::SettingKey::AutoIndent
@@ -2793,164 +2481,42 @@ ssg/Settings.h	enumerator	ssg::TextEncoding::Utf8
 ssg/Settings.h	enumerator	ssg::TextEncoding::Utf8Bom
 ssg/Settings.h	enumerator	ssg::TextEncoding::Windows1252
 ssg/Settings.h	func	ssg::SettingMutation::accepted	bool () const noexcept
-ssg/Settings.h	func	ssg::SettingResetArguments::operator==	bool (const SettingResetArguments &) const
-ssg/Settings.h	func	ssg::SettingResetScopeArguments::operator==	bool (const SettingResetScopeArguments &) const
 ssg/Settings.h	func	ssg::SettingSetArguments::operator==	bool (const SettingSetArguments &) const
 ssg/Settings.h	func	ssg::SettingsModel::SettingsModel	void ()
-ssg/Settings.h	func	ssg::SettingsModel::apply	SettingMutation (const SettingCompensation &)
 ssg/Settings.h	func	ssg::SettingsModel::exportScope	std::string (SettingScope) const
 ssg/Settings.h	func	ssg::SettingsModel::importScope	SettingsIoResult (SettingScope, std::string_view)
-ssg/Settings.h	func	ssg::SettingsModel::reset	SettingMutation (SettingScope, SettingKey)
 ssg/Settings.h	func	ssg::SettingsModel::resolve	EffectiveSetting (SettingKey) const
-ssg/Settings.h	func	ssg::SettingsModel::scopedValue	std::optional<SettingValue> (SettingScope, SettingKey) const
 ssg/Settings.h	func	ssg::SettingsModel::set	SettingMutation (SettingScope, SettingKey, SettingValue)
-ssg/Settings.h	func	ssg::SettingsModel::viewState	SettingsViewState () const
-ssg/Settings.h	func	ssg::SettingsPersistence::SettingsPersistence	void (SettingsPaths)
-ssg/Settings.h	func	ssg::SettingsPersistence::load	SettingsIoResult (SettingsModel &) const
-ssg/Settings.h	func	ssg::SettingsPersistence::save	SettingsIoResult (const SettingsModel &) const
-ssg/Settings.h	func	ssg::SettingsViewState::find	const SettingViewEntry *(SettingKey) const noexcept
 ssg/Settings.h	func	ssg::TabWidth::TabWidth	void (int)
 ssg/Settings.h	func	ssg::TabWidth::operator==	bool (const TabWidth &) const noexcept
 ssg/Settings.h	func	ssg::TabWidth::value	int () const noexcept
-ssg/Settings.h	func	ssg::linuxSettingsPaths	SettingsPaths (const std::filesystem::path &, const std::filesystem::path &, std::string_view)
 ssg/Settings.h	func	ssg::operator==	bool (const EffectiveSetting &, const EffectiveSetting &)
-ssg/Settings.h	func	ssg::operator==	bool (const SettingCompensation &, const SettingCompensation &)
 ssg/Settings.h	func	ssg::operator==	bool (const SettingError &, const SettingError &)
-ssg/Settings.h	func	ssg::operator==	bool (const SettingViewEntry &, const SettingViewEntry &)
 ssg/Settings.h	func	ssg::operator==	bool (const SettingsDelta &, const SettingsDelta &)
-ssg/Settings.h	func	ssg::operator==	bool (const SettingsViewState &, const SettingsViewState &)
-ssg/Settings.h	func	ssg::windowsSettingsPaths	SettingsPaths (const std::filesystem::path &, const std::filesystem::path &, std::string_view)
 ssg/Settings.h	struct	ssg::EffectiveSetting
-ssg/Settings.h	struct	ssg::SettingCompensation
 ssg/Settings.h	struct	ssg::SettingError
 ssg/Settings.h	struct	ssg::SettingMutation
-ssg/Settings.h	struct	ssg::SettingResetArguments
-ssg/Settings.h	struct	ssg::SettingResetScopeArguments
 ssg/Settings.h	struct	ssg::SettingSetArguments
-ssg/Settings.h	struct	ssg::SettingViewEntry
 ssg/Settings.h	struct	ssg::SettingsDelta
 ssg/Settings.h	struct	ssg::SettingsIoResult
-ssg/Settings.h	struct	ssg::SettingsPaths
-ssg/Settings.h	struct	ssg::SettingsViewState
 ssg/Settings.h	var	ssg::EffectiveSetting::source	SettingScope
 ssg/Settings.h	var	ssg::EffectiveSetting::value	SettingValue
-ssg/Settings.h	var	ssg::SettingCompensation::expected	std::optional<SettingValue>
-ssg/Settings.h	var	ssg::SettingCompensation::expectedGeneration	std::uint64_t
-ssg/Settings.h	var	ssg::SettingCompensation::key	SettingKey
-ssg/Settings.h	var	ssg::SettingCompensation::restore	std::optional<SettingValue>
-ssg/Settings.h	var	ssg::SettingCompensation::scope	SettingScope
 ssg/Settings.h	var	ssg::SettingError::code	SettingErrorCode
 ssg/Settings.h	var	ssg::SettingError::key	SettingKey
 ssg/Settings.h	var	ssg::SettingError::message	std::string
-ssg/Settings.h	var	ssg::SettingMutation::compensation	SettingCompensation
 ssg/Settings.h	var	ssg::SettingMutation::delta	std::optional<SettingsDelta>
 ssg/Settings.h	var	ssg::SettingMutation::error	std::optional<SettingError>
-ssg/Settings.h	var	ssg::SettingResetArguments::key	SettingKey
-ssg/Settings.h	var	ssg::SettingResetArguments::scope	SettingScope
-ssg/Settings.h	var	ssg::SettingResetScopeArguments::scope	SettingScope
 ssg/Settings.h	var	ssg::SettingSetArguments::key	SettingKey
 ssg/Settings.h	var	ssg::SettingSetArguments::scope	SettingScope
 ssg/Settings.h	var	ssg::SettingSetArguments::value	SettingValue
-ssg/Settings.h	var	ssg::SettingViewEntry::effective	EffectiveSetting
-ssg/Settings.h	var	ssg::SettingViewEntry::key	SettingKey
 ssg/Settings.h	var	ssg::SettingsDelta::after	EffectiveSetting
 ssg/Settings.h	var	ssg::SettingsDelta::before	EffectiveSetting
 ssg/Settings.h	var	ssg::SettingsDelta::key	SettingKey
 ssg/Settings.h	var	ssg::SettingsIoResult::message	std::string
 ssg/Settings.h	var	ssg::SettingsIoResult::ok	bool
-ssg/Settings.h	var	ssg::SettingsPaths::userFile	std::filesystem::path
-ssg/Settings.h	var	ssg::SettingsPaths::workspaceFile	std::filesystem::path
-ssg/Settings.h	var	ssg::SettingsViewState::entries	std::array<SettingViewEntry, kSettingKeyCount>
 ssg/Settings.h	var	ssg::TabWidth::kMaxValue	const int
 ssg/Settings.h	var	ssg::TabWidth::kMinValue	const int
 ssg/Settings.h	var	ssg::kSettingKeyCount	const std::size_t
-ssg/SharedBytes.h	class	ssg::SharedBytes
-ssg/SharedBytes.h	func	ssg::SharedBytes::Backing::Backing	void ()
-ssg/SharedBytes.h	func	ssg::SharedBytes::Backing::Backing	void (const Backing &)
-ssg/SharedBytes.h	func	ssg::SharedBytes::Backing::data	const char *() const noexcept
-ssg/SharedBytes.h	func	ssg::SharedBytes::Backing::operator=	Backing &(const Backing &)
-ssg/SharedBytes.h	func	ssg::SharedBytes::Backing::size	std::size_t () const noexcept
-ssg/SharedBytes.h	func	ssg::SharedBytes::SharedBytes	void ()
-ssg/SharedBytes.h	func	ssg::SharedBytes::SharedBytes	void (std::shared_ptr<const Backing>) noexcept
-ssg/SharedBytes.h	func	ssg::SharedBytes::data	const char *() const noexcept
-ssg/SharedBytes.h	func	ssg::SharedBytes::empty	bool () const noexcept
-ssg/SharedBytes.h	func	ssg::SharedBytes::owning	SharedBytes (std::string)
-ssg/SharedBytes.h	func	ssg::SharedBytes::size	std::size_t () const noexcept
-ssg/SharedBytes.h	func	ssg::SharedBytes::view	std::string_view () const noexcept
-ssg/SharedBytes.h	struct	ssg::SharedBytes::Backing
-ssg/ShellViewState.h	enum	ssg::ShellNodeKind
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::EmptyState
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::ExternalModificationAction
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::ExternalModificationBar
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::ExternalModificationRow
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::Footer
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::FooterAction
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::FooterField
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::FooterHint
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::Header
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::HeaderField
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::NoticeAction
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::NoticeBar
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::Pane
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::Panel
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::PanelProvider
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::PromptReservation
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::Scrollbar
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::Tab
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::TabBar
-ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::TabSeparator
-ssg/ShellViewState.h	func	ssg::ShellViewState::scrollbarCount	std::size_t () const noexcept
-ssg/ShellViewState.h	func	ssg::operator==	bool (const AccessibilityNode &, const AccessibilityNode &)
-ssg/ShellViewState.h	func	ssg::operator==	bool (const ExternalActionHit &, const ExternalActionHit &)
-ssg/ShellViewState.h	func	ssg::operator==	bool (const PaletteProjection &, const PaletteProjection &)
-ssg/ShellViewState.h	func	ssg::operator==	bool (const PaletteRow &, const PaletteRow &)
-ssg/ShellViewState.h	func	ssg::operator==	bool (const PaneGeometry &, const PaneGeometry &)
-ssg/ShellViewState.h	func	ssg::operator==	bool (const TabHit &, const TabHit &)
-ssg/ShellViewState.h	struct	ssg::AccessibilityNode
-ssg/ShellViewState.h	struct	ssg::ExternalActionHit
-ssg/ShellViewState.h	struct	ssg::PaletteProjection
-ssg/ShellViewState.h	struct	ssg::PaletteRow
-ssg/ShellViewState.h	struct	ssg::PaneGeometry
-ssg/ShellViewState.h	struct	ssg::ShellViewState
-ssg/ShellViewState.h	struct	ssg::StatusViewState
-ssg/ShellViewState.h	struct	ssg::TabHit
-ssg/ShellViewState.h	var	ssg::AccessibilityNode::commandId	std::optional<std::string>
-ssg/ShellViewState.h	var	ssg::AccessibilityNode::content	std::string
-ssg/ShellViewState.h	var	ssg::AccessibilityNode::id	std::string
-ssg/ShellViewState.h	var	ssg::AccessibilityNode::kind	ShellNodeKind
-ssg/ShellViewState.h	var	ssg::AccessibilityNode::label	std::string
-ssg/ShellViewState.h	var	ssg::AccessibilityNode::rect	Rect
-ssg/ShellViewState.h	var	ssg::AccessibilityNode::role	SemanticRole
-ssg/ShellViewState.h	var	ssg::ExternalActionHit::commandId	std::string
-ssg/ShellViewState.h	var	ssg::ExternalActionHit::fileId	std::string
-ssg/ShellViewState.h	var	ssg::ExternalActionHit::rect	Rect
-ssg/ShellViewState.h	var	ssg::PaletteProjection::firstVisible	std::uint32_t
-ssg/ShellViewState.h	var	ssg::PaletteProjection::rect	Rect
-ssg/ShellViewState.h	var	ssg::PaletteProjection::rows	std::vector<PaletteRow>
-ssg/ShellViewState.h	var	ssg::PaletteProjection::scrollbar	ScrollbarMetrics
-ssg/ShellViewState.h	var	ssg::PaletteProjection::scrollbarRect	Rect
-ssg/ShellViewState.h	var	ssg::PaletteProjection::selected	std::optional<std::uint32_t>
-ssg/ShellViewState.h	var	ssg::PaletteRow::detail	std::string
-ssg/ShellViewState.h	var	ssg::PaletteRow::label	std::string
-ssg/ShellViewState.h	var	ssg::PaneGeometry::content	Rect
-ssg/ShellViewState.h	var	ssg::PaneGeometry::frame	Rect
-ssg/ShellViewState.h	var	ssg::PaneGeometry::id	PaneId
-ssg/ShellViewState.h	var	ssg::PaneGeometry::lineNumbers	Rect
-ssg/ShellViewState.h	var	ssg::PaneGeometry::scrollbar	Rect
-ssg/ShellViewState.h	var	ssg::ShellViewState::accessibilityNodes	std::vector<AccessibilityNode>
-ssg/ShellViewState.h	var	ssg::ShellViewState::externalActions	std::vector<ExternalActionHit>
-ssg/ShellViewState.h	var	ssg::ShellViewState::footer	std::optional<Rect>
-ssg/ShellViewState.h	var	ssg::ShellViewState::header	std::optional<Rect>
-ssg/ShellViewState.h	var	ssg::ShellViewState::palette	std::optional<PaletteProjection>
-ssg/ShellViewState.h	var	ssg::ShellViewState::panel	std::optional<Rect>
-ssg/ShellViewState.h	var	ssg::ShellViewState::panelScrollbar	std::optional<Rect>
-ssg/ShellViewState.h	var	ssg::ShellViewState::panes	std::vector<PaneGeometry>
-ssg/ShellViewState.h	var	ssg::ShellViewState::prompt	std::optional<Rect>
-ssg/ShellViewState.h	var	ssg::ShellViewState::tabBar	std::optional<Rect>
-ssg/ShellViewState.h	var	ssg::ShellViewState::tabHits	std::vector<TabHit>
-ssg/ShellViewState.h	var	ssg::ShellViewState::viewport	GridSize
-ssg/ShellViewState.h	var	ssg::TabHit::index	std::uint32_t
-ssg/ShellViewState.h	var	ssg::TabHit::rect	Rect
 ssg/StatusBar.h	class	ssg::StatusBar
 ssg/StatusBar.h	class	ssg::StatusId
 ssg/StatusBar.h	enum	ssg::StatusPriority
@@ -3028,7 +2594,6 @@ ssg/Style.h	enumerator	ssg::ScrollbarCellKind::Gutter
 ssg/Style.h	enumerator	ssg::ScrollbarCellKind::Thumb
 ssg/Style.h	enumerator	ssg::ScrollbarCellKind::Track
 ssg/Style.h	func	ssg::Style::Style	void ()
-ssg/Style.h	func	ssg::Style::defineKeys	std::vector<std::string> ()
 ssg/Style.h	func	ssg::Style::glyphValues	std::vector<std::pair<std::string, std::string>> () const
 ssg/Style.h	func	ssg::Style::inputLineReservation	int () const
 ssg/Style.h	func	ssg::Style::operator==	bool (const Style &) const
@@ -3097,6 +2662,7 @@ ssg/Style.h	var	ssg::ToggleGlyphs::unchecked	std::string
 ssg/Style.h	var	ssg::TreeGlyphs::collapsed	std::string
 ssg/Style.h	var	ssg::TreeGlyphs::expanded	std::string
 ssg/Style.h	var	ssg::TreeGlyphs::indentPerDepth	int
+ssg/Style.h	var	ssg::kPanelMinimumWidth	const int
 ssg/SyntaxModel.h	alias	ssg::SyntaxParseHandle
 ssg/SyntaxModel.h	class	ssg::LanguageId
 ssg/SyntaxModel.h	class	ssg::OpaqueSyntaxParse
@@ -3104,23 +2670,9 @@ ssg/SyntaxModel.h	class	ssg::SyntaxModel
 ssg/SyntaxModel.h	class	ssg::SyntaxParseRequest
 ssg/SyntaxModel.h	class	ssg::SyntaxParser
 ssg/SyntaxModel.h	class	ssg::SyntaxViewState
-ssg/SyntaxModel.h	enum	ssg::BracketKind
-ssg/SyntaxModel.h	enum	ssg::BracketRole
-ssg/SyntaxModel.h	enum	ssg::CommentKind
-ssg/SyntaxModel.h	enum	ssg::CommentTokenRole
 ssg/SyntaxModel.h	enum	ssg::SyntaxAcceptError
 ssg/SyntaxModel.h	enum	ssg::SyntaxParseStatus
 ssg/SyntaxModel.h	enum	ssg::SyntaxRequestError
-ssg/SyntaxModel.h	enumerator	ssg::BracketKind::Curly
-ssg/SyntaxModel.h	enumerator	ssg::BracketKind::Round
-ssg/SyntaxModel.h	enumerator	ssg::BracketKind::Square
-ssg/SyntaxModel.h	enumerator	ssg::BracketRole::Close
-ssg/SyntaxModel.h	enumerator	ssg::BracketRole::Open
-ssg/SyntaxModel.h	enumerator	ssg::CommentKind::Block
-ssg/SyntaxModel.h	enumerator	ssg::CommentKind::Line
-ssg/SyntaxModel.h	enumerator	ssg::CommentTokenRole::BlockClose
-ssg/SyntaxModel.h	enumerator	ssg::CommentTokenRole::BlockOpen
-ssg/SyntaxModel.h	enumerator	ssg::CommentTokenRole::Line
 ssg/SyntaxModel.h	enumerator	ssg::SyntaxAcceptError::Cancelled
 ssg/SyntaxModel.h	enumerator	ssg::SyntaxAcceptError::MalformedOutput
 ssg/SyntaxModel.h	enumerator	ssg::SyntaxAcceptError::None
@@ -3135,16 +2687,10 @@ ssg/SyntaxModel.h	enumerator	ssg::SyntaxRequestError::MalformedEdits
 ssg/SyntaxModel.h	enumerator	ssg::SyntaxRequestError::None
 ssg/SyntaxModel.h	enumerator	ssg::SyntaxRequestError::StaleRevision
 ssg/SyntaxModel.h	func	ssg::LanguageId::LanguageId	void (std::string)
-ssg/SyntaxModel.h	func	ssg::LanguageId::c	LanguageId ()
-ssg/SyntaxModel.h	func	ssg::LanguageId::cpp	LanguageId ()
-ssg/SyntaxModel.h	func	ssg::LanguageId::csharp	LanguageId ()
 ssg/SyntaxModel.h	func	ssg::LanguageId::fromPath	LanguageId (std::string_view)
 ssg/SyntaxModel.h	func	ssg::LanguageId::isPlainText	bool () const noexcept
-ssg/SyntaxModel.h	func	ssg::LanguageId::javascript	LanguageId ()
-ssg/SyntaxModel.h	func	ssg::LanguageId::lua	LanguageId ()
 ssg/SyntaxModel.h	func	ssg::LanguageId::operator<=>	std::strong_ordering (const LanguageId &) const
 ssg/SyntaxModel.h	func	ssg::LanguageId::plainText	LanguageId ()
-ssg/SyntaxModel.h	func	ssg::LanguageId::typescript	LanguageId ()
 ssg/SyntaxModel.h	func	ssg::LanguageId::value	const std::string &() const noexcept
 ssg/SyntaxModel.h	func	ssg::SyntaxAcceptResult::accepted	bool () const noexcept
 ssg/SyntaxModel.h	func	ssg::SyntaxModel::SyntaxModel	void (std::shared_ptr<SyntaxParser>, SyntaxConfig)
@@ -3168,53 +2714,29 @@ ssg/SyntaxModel.h	func	ssg::SyntaxParseRequestResult::accepted	bool () const noe
 ssg/SyntaxModel.h	func	ssg::SyntaxParseResult::accepted	bool () const noexcept
 ssg/SyntaxModel.h	func	ssg::SyntaxParser::hasGrammar	bool (const LanguageId &) const
 ssg/SyntaxModel.h	func	ssg::SyntaxParser::parse	SyntaxParseOutput (const SyntaxParseRequest &)
-ssg/SyntaxModel.h	func	ssg::SyntaxViewState::SyntaxViewState	void (std::uint64_t, LanguageId, std::uint64_t, std::vector<SyntaxSpan>, std::vector<SyntaxBracketPair>, std::vector<UnmatchedBracket>, std::vector<CommentToken>, std::vector<CommentRange>, std::vector<LineIndentation>)
-ssg/SyntaxModel.h	func	ssg::SyntaxViewState::bracketPairs	const std::vector<SyntaxBracketPair> &() const noexcept
-ssg/SyntaxModel.h	func	ssg::SyntaxViewState::commentRanges	const std::vector<CommentRange> &() const noexcept
-ssg/SyntaxModel.h	func	ssg::SyntaxViewState::commentTokens	const std::vector<CommentToken> &() const noexcept
+ssg/SyntaxModel.h	func	ssg::SyntaxViewState::SyntaxViewState	void (std::uint64_t, LanguageId, std::uint64_t, std::vector<SyntaxSpan>, std::vector<LineIndentation>)
 ssg/SyntaxModel.h	func	ssg::SyntaxViewState::fromParse	SyntaxViewState (std::uint64_t, LanguageId, std::string_view, const SyntaxParseOutput &, const SyntaxConfig &)
 ssg/SyntaxModel.h	func	ssg::SyntaxViewState::indentation	const std::vector<LineIndentation> &() const noexcept
 ssg/SyntaxModel.h	func	ssg::SyntaxViewState::language	const LanguageId &() const noexcept
-ssg/SyntaxModel.h	func	ssg::SyntaxViewState::matchingBracket	std::optional<ByteOffset> (ByteOffset) const
 ssg/SyntaxModel.h	func	ssg::SyntaxViewState::plainText	SyntaxViewState (std::uint64_t, LanguageId, std::string_view, std::uint32_t)
 ssg/SyntaxModel.h	func	ssg::SyntaxViewState::revision	std::uint64_t () const noexcept
 ssg/SyntaxModel.h	func	ssg::SyntaxViewState::scopeAt	SyntaxScope (ByteOffset) const
 ssg/SyntaxModel.h	func	ssg::SyntaxViewState::spans	const std::vector<SyntaxSpan> &() const noexcept
 ssg/SyntaxModel.h	func	ssg::SyntaxViewState::textBytes	std::uint64_t () const noexcept
-ssg/SyntaxModel.h	func	ssg::SyntaxViewState::unmatchedBrackets	const std::vector<UnmatchedBracket> &() const noexcept
-ssg/SyntaxModel.h	func	ssg::operator==	bool (const BracketToken &, const BracketToken &)
-ssg/SyntaxModel.h	func	ssg::operator==	bool (const CommentRange &, const CommentRange &)
-ssg/SyntaxModel.h	func	ssg::operator==	bool (const CommentToken &, const CommentToken &)
 ssg/SyntaxModel.h	func	ssg::operator==	bool (const LineIndentation &, const LineIndentation &)
-ssg/SyntaxModel.h	func	ssg::operator==	bool (const SyntaxBracketPair &, const SyntaxBracketPair &)
 ssg/SyntaxModel.h	func	ssg::operator==	bool (const SyntaxEdit &, const SyntaxEdit &)
 ssg/SyntaxModel.h	func	ssg::operator==	bool (const SyntaxPoint &, const SyntaxPoint &)
-ssg/SyntaxModel.h	func	ssg::operator==	bool (const SyntaxRange &, const SyntaxRange &)
 ssg/SyntaxModel.h	func	ssg::operator==	bool (const SyntaxSpan &, const SyntaxSpan &)
 ssg/SyntaxModel.h	func	ssg::operator==	bool (const SyntaxViewState &, const SyntaxViewState &)
-ssg/SyntaxModel.h	func	ssg::operator==	bool (const UnmatchedBracket &, const UnmatchedBracket &)
-ssg/SyntaxModel.h	struct	ssg::BracketToken
-ssg/SyntaxModel.h	struct	ssg::CommentRange
-ssg/SyntaxModel.h	struct	ssg::CommentToken
 ssg/SyntaxModel.h	struct	ssg::LineIndentation
 ssg/SyntaxModel.h	struct	ssg::SyntaxAcceptResult
-ssg/SyntaxModel.h	struct	ssg::SyntaxBracketPair
 ssg/SyntaxModel.h	struct	ssg::SyntaxConfig
 ssg/SyntaxModel.h	struct	ssg::SyntaxEdit
 ssg/SyntaxModel.h	struct	ssg::SyntaxParseOutput
 ssg/SyntaxModel.h	struct	ssg::SyntaxParseRequestResult
 ssg/SyntaxModel.h	struct	ssg::SyntaxParseResult
 ssg/SyntaxModel.h	struct	ssg::SyntaxPoint
-ssg/SyntaxModel.h	struct	ssg::SyntaxRange
 ssg/SyntaxModel.h	struct	ssg::SyntaxSpan
-ssg/SyntaxModel.h	struct	ssg::UnmatchedBracket
-ssg/SyntaxModel.h	var	ssg::BracketToken::kind	BracketKind
-ssg/SyntaxModel.h	var	ssg::BracketToken::offset	ByteOffset
-ssg/SyntaxModel.h	var	ssg::BracketToken::role	BracketRole
-ssg/SyntaxModel.h	var	ssg::CommentRange::kind	CommentKind
-ssg/SyntaxModel.h	var	ssg::CommentRange::range	SyntaxRange
-ssg/SyntaxModel.h	var	ssg::CommentToken::range	SyntaxRange
-ssg/SyntaxModel.h	var	ssg::CommentToken::role	CommentTokenRole
 ssg/SyntaxModel.h	var	ssg::LineIndentation::blank	bool
 ssg/SyntaxModel.h	var	ssg::LineIndentation::columns	std::uint32_t
 ssg/SyntaxModel.h	var	ssg::LineIndentation::contentStart	ByteOffset
@@ -3224,10 +2746,6 @@ ssg/SyntaxModel.h	var	ssg::LineIndentation::spaces	std::uint32_t
 ssg/SyntaxModel.h	var	ssg::LineIndentation::tabs	std::uint32_t
 ssg/SyntaxModel.h	var	ssg::SyntaxAcceptResult::error	SyntaxAcceptError
 ssg/SyntaxModel.h	var	ssg::SyntaxAcceptResult::usedFallback	bool
-ssg/SyntaxModel.h	var	ssg::SyntaxBracketPair::close	ByteOffset
-ssg/SyntaxModel.h	var	ssg::SyntaxBracketPair::depth	std::uint32_t
-ssg/SyntaxModel.h	var	ssg::SyntaxBracketPair::kind	BracketKind
-ssg/SyntaxModel.h	var	ssg::SyntaxBracketPair::open	ByteOffset
 ssg/SyntaxModel.h	var	ssg::SyntaxConfig::maximumDocumentBytes	std::size_t
 ssg/SyntaxModel.h	var	ssg::SyntaxConfig::tabWidth	std::uint32_t
 ssg/SyntaxModel.h	var	ssg::SyntaxEdit::newEndByte	ByteOffset
@@ -3236,9 +2754,6 @@ ssg/SyntaxModel.h	var	ssg::SyntaxEdit::oldEndByte	ByteOffset
 ssg/SyntaxModel.h	var	ssg::SyntaxEdit::oldEndPosition	SyntaxPoint
 ssg/SyntaxModel.h	var	ssg::SyntaxEdit::startByte	ByteOffset
 ssg/SyntaxModel.h	var	ssg::SyntaxEdit::startPosition	SyntaxPoint
-ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::brackets	std::vector<BracketToken>
-ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::commentRanges	std::vector<CommentRange>
-ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::commentTokens	std::vector<CommentToken>
 ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::parse	SyntaxParseHandle
 ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::revision	std::uint64_t
 ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::spans	std::vector<SyntaxSpan>
@@ -3250,14 +2765,41 @@ ssg/SyntaxModel.h	var	ssg::SyntaxParseResult::requestError	SyntaxRequestError
 ssg/SyntaxModel.h	var	ssg::SyntaxParseResult::usedFallback	bool
 ssg/SyntaxModel.h	var	ssg::SyntaxPoint::columnByte	std::uint64_t
 ssg/SyntaxModel.h	var	ssg::SyntaxPoint::row	LineIndex
-ssg/SyntaxModel.h	var	ssg::SyntaxRange::begin	ByteOffset
-ssg/SyntaxModel.h	var	ssg::SyntaxRange::end	ByteOffset
 ssg/SyntaxModel.h	var	ssg::SyntaxSpan::begin	ByteOffset
 ssg/SyntaxModel.h	var	ssg::SyntaxSpan::end	ByteOffset
 ssg/SyntaxModel.h	var	ssg::SyntaxSpan::scope	SyntaxScope
-ssg/SyntaxModel.h	var	ssg::UnmatchedBracket::kind	BracketKind
-ssg/SyntaxModel.h	var	ssg::UnmatchedBracket::offset	ByteOffset
-ssg/SyntaxModel.h	var	ssg::UnmatchedBracket::role	BracketRole
+ssg/SystemClipboardReader.h	alias	ssg::ClipboardEnvironmentLookup
+ssg/SystemClipboardReader.h	alias	ssg::ClipboardExecutableLookup
+ssg/SystemClipboardReader.h	class	ssg::SystemClipboardReader
+ssg/SystemClipboardReader.h	enum	ssg::SystemClipboardPasteKind
+ssg/SystemClipboardReader.h	enum	ssg::SystemClipboardReadStatus
+ssg/SystemClipboardReader.h	enumerator	ssg::SystemClipboardPasteKind::CommittedText
+ssg/SystemClipboardReader.h	enumerator	ssg::SystemClipboardPasteKind::InternalRegister
+ssg/SystemClipboardReader.h	enumerator	ssg::SystemClipboardPasteKind::None
+ssg/SystemClipboardReader.h	enumerator	ssg::SystemClipboardReadStatus::Failed
+ssg/SystemClipboardReader.h	enumerator	ssg::SystemClipboardReadStatus::InvalidUtf8
+ssg/SystemClipboardReader.h	enumerator	ssg::SystemClipboardReadStatus::Success
+ssg/SystemClipboardReader.h	enumerator	ssg::SystemClipboardReadStatus::TimedOut
+ssg/SystemClipboardReader.h	enumerator	ssg::SystemClipboardReadStatus::TooLarge
+ssg/SystemClipboardReader.h	enumerator	ssg::SystemClipboardReadStatus::Unavailable
+ssg/SystemClipboardReader.h	func	ssg::SystemClipboardRead::accepted	bool () const noexcept
+ssg/SystemClipboardReader.h	func	ssg::SystemClipboardReader::SystemClipboardReader	void ()
+ssg/SystemClipboardReader.h	func	ssg::SystemClipboardReader::SystemClipboardReader	void (std::vector<SystemClipboardProgram>, std::chrono::milliseconds, std::size_t)
+ssg/SystemClipboardReader.h	func	ssg::SystemClipboardReader::read	SystemClipboardRead () const
+ssg/SystemClipboardReader.h	func	ssg::discoverSystemClipboardPrograms	std::vector<SystemClipboardProgram> (const ClipboardEnvironmentLookup &, const ClipboardExecutableLookup &)
+ssg/SystemClipboardReader.h	func	ssg::operator==	bool (const SystemClipboardProgram &, const SystemClipboardProgram &)
+ssg/SystemClipboardReader.h	func	ssg::planSystemClipboardPaste	SystemClipboardPaste (const ClientOwnedInput &, SystemClipboardRead)
+ssg/SystemClipboardReader.h	struct	ssg::SystemClipboardPaste
+ssg/SystemClipboardReader.h	struct	ssg::SystemClipboardProgram
+ssg/SystemClipboardReader.h	struct	ssg::SystemClipboardRead
+ssg/SystemClipboardReader.h	var	ssg::SystemClipboardPaste::kind	SystemClipboardPasteKind
+ssg/SystemClipboardReader.h	var	ssg::SystemClipboardPaste::text	std::string
+ssg/SystemClipboardReader.h	var	ssg::SystemClipboardProgram::arguments	std::vector<std::string>
+ssg/SystemClipboardReader.h	var	ssg::SystemClipboardProgram::executable	std::filesystem::path
+ssg/SystemClipboardReader.h	var	ssg::SystemClipboardRead::status	SystemClipboardReadStatus
+ssg/SystemClipboardReader.h	var	ssg::SystemClipboardRead::text	std::string
+ssg/SystemClipboardReader.h	var	ssg::kSystemClipboardReadDeadline	const std::chrono::milliseconds
+ssg/SystemClipboardReader.h	var	ssg::kSystemClipboardReadLimit	const std::size_t
 ssg/TabManager.h	class	ssg::TabId
 ssg/TabManager.h	class	ssg::TabManager
 ssg/TabManager.h	enum	ssg::TabError
@@ -3296,7 +2838,6 @@ ssg/TabManager.h	func	ssg::TabManager::openDocument	TabResult (FileDocumentId, J
 ssg/TabManager.h	func	ssg::TabManager::operator=	TabManager &(TabManager &&) noexcept
 ssg/TabManager.h	func	ssg::TabManager::operator=	TabManager &(const TabManager &)
 ssg/TabManager.h	func	ssg::TabManager::previous	TabResult ()
-ssg/TabManager.h	func	ssg::TabManager::recentlyClosedCount	std::size_t () const noexcept
 ssg/TabManager.h	func	ssg::TabManager::updateDocument	TabResult (FileDocumentId, JournalDocumentKey, std::string_view, DocumentMode, bool, std::optional<ScratchDurability>)
 ssg/TabManager.h	func	ssg::TabManager::viewState	const TabViewState &() const noexcept
 ssg/TabManager.h	func	ssg::TabResult::accepted	bool () const noexcept
@@ -3353,7 +2894,6 @@ ssg/Terminal.h	func	ssg::TerminalModes::Guard::operator=	Guard &(Guard &&) noexc
 ssg/Terminal.h	func	ssg::TerminalModes::Guard::operator=	Guard &(const Guard &)
 ssg/Terminal.h	func	ssg::TerminalModes::TerminalModes	void (Writer)
 ssg/Terminal.h	func	ssg::TerminalModes::TerminalModes	void (const TerminalModes &)
-ssg/Terminal.h	func	ssg::TerminalModes::depth	std::size_t () const noexcept
 ssg/Terminal.h	func	ssg::TerminalModes::enter	Guard (TerminalMode)
 ssg/Terminal.h	func	ssg::TerminalModes::operator=	TerminalModes &(const TerminalModes &)
 ssg/Terminal.h	func	ssg::TerminalSession::TerminalSession	void ()
@@ -3362,7 +2902,6 @@ ssg/Terminal.h	func	ssg::TerminalSession::active	bool () const noexcept
 ssg/Terminal.h	func	ssg::TerminalSession::enableKeyboardProtocol	void ()
 ssg/Terminal.h	func	ssg::TerminalSession::operator=	TerminalSession &(const TerminalSession &)
 ssg/Terminal.h	func	ssg::TerminalSession::restore	void () noexcept
-ssg/Terminal.h	func	ssg::allModesUndoSequence	std::string_view () noexcept
 ssg/Terminal.h	func	ssg::classifySignalTags	SignalEvents (std::string_view)
 ssg/Terminal.h	func	ssg::terminalSize	ViewportDimensions ()
 ssg/Terminal.h	func	ssg::writeAll	void (std::string_view)
@@ -3394,7 +2933,6 @@ ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::colorDepth	ColorDepth
 ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::endProbe	void ()
 ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::has	bool (Capability) const
 ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::observeReply	void (std::string_view)
-ssg/TerminalCapabilities.h	func	ssg::TerminalCapabilities::probing	bool () const
 ssg/TerminalCapabilities.h	func	ssg::capabilityName	std::string_view (Capability)
 ssg/TerminalCapabilities.h	var	ssg::TerminalCapabilities::kProbeWindow	const std::chrono::milliseconds
 ssg/TerminalCapabilities.h	var	ssg::kAllCapabilities	const std::array<Capability, 3>
@@ -3435,7 +2973,6 @@ ssg/TerminalInput.h	var	ssg::kMaxPasteBytes	const std::size_t
 ssg/TerminalInput.h	var	ssg::kMaxSequenceBytes	const std::size_t
 ssg/TerminalOutput.h	class	ssg::SystemClipboardWriter
 ssg/TerminalOutput.h	func	ssg::SystemClipboardWriter::bytesFor	std::optional<std::string> (const std::optional<ClipboardWrite> &, bool)
-ssg/TerminalOutput.h	func	ssg::colorDepthName	std::string_view (ColorDepth)
 ssg/TerminalOutput.h	func	ssg::detectColorDepth	ColorDepth (const char *, const char *, const char *, const char *)
 ssg/TerminalOutput.h	func	ssg::encodeAnsiFrame	std::string (const CellGrid &, ColorDepth)
 ssg/TerminalOutput.h	func	ssg::encodeClipboardWrite	std::string (std::string_view)
@@ -3457,13 +2994,8 @@ ssg/TextCodec.h	enumerator	ssg::TextEncodingErrorCode::LossyConversion
 ssg/TextCodec.h	func	ssg::DecodeTextResult::accepted	bool () const noexcept
 ssg/TextCodec.h	func	ssg::DecodeTextResult::validated	ValidatedUtf8 () const
 ssg/TextCodec.h	func	ssg::EncodeTextResult::accepted	bool () const noexcept
-ssg/TextCodec.h	func	ssg::ReopenWithEncodingArguments::operator==	bool (const ReopenWithEncodingArguments &) const
-ssg/TextCodec.h	func	ssg::SetEncodingArguments::operator==	bool (const SetEncodingArguments &) const
-ssg/TextCodec.h	func	ssg::SetFinalNewlineArguments::operator==	bool (const SetFinalNewlineArguments &) const
-ssg/TextCodec.h	func	ssg::SetLineEndingArguments::operator==	bool (const SetLineEndingArguments &) const
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::ValidatedUtf8	void (ValidatedUtf8 &&) noexcept
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::ValidatedUtf8	void (const ValidatedUtf8 &)
-ssg/TextCodec.h	func	ssg::ValidatedUtf8::bytes	SharedBytes () const noexcept
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::operator=	ValidatedUtf8 &(ValidatedUtf8 &&) noexcept
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::operator=	ValidatedUtf8 &(const ValidatedUtf8 &)
 ssg/TextCodec.h	func	ssg::ValidatedUtf8::view	std::string_view () const noexcept
@@ -3471,25 +3003,15 @@ ssg/TextCodec.h	func	ssg::decodeText	DecodeTextResult (std::span<const std::uint
 ssg/TextCodec.h	func	ssg::decodeText	DecodeTextResult (std::span<const std::uint8_t>, TextEncoding)
 ssg/TextCodec.h	func	ssg::encodeText	EncodeTextResult (const DecodedText &)
 ssg/TextCodec.h	func	ssg::encodeText	EncodeTextResult (const DecodedText &, EncodeTextOptions)
-ssg/TextCodec.h	func	ssg::noteUtf8Validation	void ()
 ssg/TextCodec.h	func	ssg::operator==	bool (const DecodedText &, const DecodedText &)
 ssg/TextCodec.h	func	ssg::operator==	bool (const TextEncodingError &, const TextEncodingError &)
 ssg/TextCodec.h	func	ssg::operator==	bool (const TextEncodingStatus &, const TextEncodingStatus &)
-ssg/TextCodec.h	func	ssg::operator==	bool (const TextEncodingViewState &, const TextEncodingViewState &)
-ssg/TextCodec.h	func	ssg::resetUtf8ValidationCalls	void ()
-ssg/TextCodec.h	func	ssg::textEncodingViewState	TextEncodingViewState (const DecodedText &) noexcept
-ssg/TextCodec.h	func	ssg::utf8ValidationCalls	std::uint64_t ()
 ssg/TextCodec.h	struct	ssg::DecodeTextResult
 ssg/TextCodec.h	struct	ssg::DecodedText
 ssg/TextCodec.h	struct	ssg::EncodeTextOptions
 ssg/TextCodec.h	struct	ssg::EncodeTextResult
-ssg/TextCodec.h	struct	ssg::ReopenWithEncodingArguments
-ssg/TextCodec.h	struct	ssg::SetEncodingArguments
-ssg/TextCodec.h	struct	ssg::SetFinalNewlineArguments
-ssg/TextCodec.h	struct	ssg::SetLineEndingArguments
 ssg/TextCodec.h	struct	ssg::TextEncodingError
 ssg/TextCodec.h	struct	ssg::TextEncodingStatus
-ssg/TextCodec.h	struct	ssg::TextEncodingViewState
 ssg/TextCodec.h	var	ssg::DecodeTextResult::error	std::optional<TextEncodingError>
 ssg/TextCodec.h	var	ssg::DecodeTextResult::text	std::optional<DecodedText>
 ssg/TextCodec.h	var	ssg::DecodedText::lineTerminators	std::vector<LineTerminator>
@@ -3500,10 +3022,6 @@ ssg/TextCodec.h	var	ssg::EncodeTextOptions::finalNewline	FinalNewlinePolicy
 ssg/TextCodec.h	var	ssg::EncodeTextOptions::lineEnding	LineEnding
 ssg/TextCodec.h	var	ssg::EncodeTextResult::bytes	std::vector<std::uint8_t>
 ssg/TextCodec.h	var	ssg::EncodeTextResult::error	std::optional<TextEncodingError>
-ssg/TextCodec.h	var	ssg::ReopenWithEncodingArguments::encoding	TextEncoding
-ssg/TextCodec.h	var	ssg::SetEncodingArguments::encoding	TextEncoding
-ssg/TextCodec.h	var	ssg::SetFinalNewlineArguments::finalNewline	bool
-ssg/TextCodec.h	var	ssg::SetLineEndingArguments::lineEnding	LineEnding
 ssg/TextCodec.h	var	ssg::TextEncodingError::code	TextEncodingErrorCode
 ssg/TextCodec.h	var	ssg::TextEncodingError::message	std::string
 ssg/TextCodec.h	var	ssg::TextEncodingError::utf8Offset	std::size_t
@@ -3511,7 +3029,6 @@ ssg/TextCodec.h	var	ssg::TextEncodingStatus::encoding	TextEncoding
 ssg/TextCodec.h	var	ssg::TextEncodingStatus::finalNewline	bool
 ssg/TextCodec.h	var	ssg::TextEncodingStatus::hadBom	bool
 ssg/TextCodec.h	var	ssg::TextEncodingStatus::lineEnding	LineEnding
-ssg/TextCodec.h	var	ssg::TextEncodingViewState::status	TextEncodingStatus
 ssg/TextInputCommands.h	enum	ssg::TextInputCommand
 ssg/TextInputCommands.h	enum	ssg::TextInputError
 ssg/TextInputCommands.h	enumerator	ssg::TextInputCommand::DeleteBackward
@@ -3589,7 +3106,6 @@ ssg/Theme.h	enumerator	ssg::SyntaxScope::Variable
 ssg/Theme.h	func	ssg::SrgbColor::fromSerializedChannels	SrgbColor (std::uint8_t, std::uint8_t, std::uint8_t) noexcept
 ssg/Theme.h	func	ssg::ThemeSetResult::accepted	bool () const noexcept
 ssg/Theme.h	func	ssg::ThemeSnapshot::color	SrgbColor (SemanticRole) const
-ssg/Theme.h	func	ssg::ThemeSnapshot::color	SrgbColor (SyntaxScope) const
 ssg/Theme.h	func	ssg::ThemeSnapshot::withOverrides	ThemeSetResult (const ThemeSetArguments &) const noexcept
 ssg/Theme.h	func	ssg::defaultTheme	ThemeSnapshot () noexcept
 ssg/Theme.h	func	ssg::operator==	bool (const DiffTints &, const DiffTints &)
@@ -3598,9 +3114,7 @@ ssg/Theme.h	func	ssg::operator==	bool (const ThemeSetArguments &, const ThemeSet
 ssg/Theme.h	func	ssg::operator==	bool (const ThemeSetError &, const ThemeSetError &)
 ssg/Theme.h	func	ssg::operator==	bool (const ThemeSnapshot &, const ThemeSnapshot &)
 ssg/Theme.h	func	ssg::semanticRoleFromName	std::optional<SemanticRole> (std::string_view)
-ssg/Theme.h	func	ssg::semanticRoleName	std::string_view (SemanticRole)
 ssg/Theme.h	func	ssg::syntaxScopeFromName	std::optional<SyntaxScope> (std::string_view)
-ssg/Theme.h	func	ssg::syntaxScopeName	std::string_view (SyntaxScope)
 ssg/Theme.h	struct	ssg::DiffTints
 ssg/Theme.h	struct	ssg::SrgbColor
 ssg/Theme.h	struct	ssg::ThemeSetArguments
@@ -3637,31 +3151,31 @@ ssg/TreeModel.h	enum	ssg::TreeProviderKind
 ssg/TreeModel.h	enumerator	ssg::TreeNodeKind::Directory
 ssg/TreeModel.h	enumerator	ssg::TreeNodeKind::File
 ssg/TreeModel.h	enumerator	ssg::TreeNodeKind::GitEntry
-ssg/TreeModel.h	enumerator	ssg::TreeNodeKind::Root
+ssg/TreeModel.h	enumerator	ssg::TreeNodeKind::SearchResult
 ssg/TreeModel.h	enumerator	ssg::TreeNodeKind::Symbol
 ssg/TreeModel.h	enumerator	ssg::TreeNodeKind::Symlink
 ssg/TreeModel.h	enumerator	ssg::TreeProviderKind::Filesystem
 ssg/TreeModel.h	enumerator	ssg::TreeProviderKind::Git
+ssg/TreeModel.h	enumerator	ssg::TreeProviderKind::Search
 ssg/TreeModel.h	enumerator	ssg::TreeProviderKind::Symbols
 ssg/TreeModel.h	func	ssg::GitTreeAffordance::operator==	bool (const GitTreeAffordance &) const noexcept
+ssg/TreeModel.h	func	ssg::SearchTreeState::operator==	bool (const SearchTreeState &) const noexcept(false)
 ssg/TreeModel.h	func	ssg::TreeCommandInvocation::operator==	bool (const TreeCommandInvocation &) const
 ssg/TreeModel.h	func	ssg::TreeModel::activateOrCreate	bool (const TreeProviderBinding &)
 ssg/TreeModel.h	func	ssg::TreeModel::activateProvider	bool (const TreeProviderId &)
 ssg/TreeModel.h	func	ssg::TreeModel::activeProviderBinding	std::optional<TreeProviderBinding> () const
-ssg/TreeModel.h	func	ssg::TreeModel::activeVisibleNodeCount	std::size_t () const
 ssg/TreeModel.h	func	ssg::TreeModel::invokeNodeCommand	std::optional<TreeCommandInvocation> (const TreeProviderId &, const TreeNodeId &, std::string_view) const
 ssg/TreeModel.h	func	ssg::TreeModel::isExpanded	bool (const TreeProviderId &, const TreeNodeId &) const
 ssg/TreeModel.h	func	ssg::TreeModel::providerIdentities	std::vector<ProviderIdentity> () const
 ssg/TreeModel.h	func	ssg::TreeModel::replaceProvider	void (TreeProviderSnapshot)
-ssg/TreeModel.h	func	ssg::TreeModel::resetVisibleNodesRecomputeCount	void ()
+ssg/TreeModel.h	func	ssg::TreeModel::searchState	std::optional<SearchTreeState> (const TreeProviderId &) const
 ssg/TreeModel.h	func	ssg::TreeModel::select	bool (const TreeNodeId &)
 ssg/TreeModel.h	func	ssg::TreeModel::selectNext	bool ()
 ssg/TreeModel.h	func	ssg::TreeModel::selectPrevious	bool ()
 ssg/TreeModel.h	func	ssg::TreeModel::selectedNode	std::optional<TreeNode> () const
+ssg/TreeModel.h	func	ssg::TreeModel::setSearchState	bool (const TreeProviderId &, SearchTreeState)
 ssg/TreeModel.h	func	ssg::TreeModel::toggleExpanded	bool (const TreeProviderId &, const TreeNodeId &)
-ssg/TreeModel.h	func	ssg::TreeModel::toggleSelected	bool ()
 ssg/TreeModel.h	func	ssg::TreeModel::viewState	TreeViewState () const
-ssg/TreeModel.h	func	ssg::TreeModel::visibleNodesRecomputeCount	std::uint64_t ()
 ssg/TreeModel.h	func	ssg::TreeNode::operator==	bool (const TreeNode &) const
 ssg/TreeModel.h	func	ssg::TreeNodeCommand::operator==	bool (const TreeNodeCommand &) const
 ssg/TreeModel.h	func	ssg::TreeNodeId::TreeNodeId	void (std::string)
@@ -3673,8 +3187,9 @@ ssg/TreeModel.h	func	ssg::TreeProviderId::TreeProviderId	void (std::string)
 ssg/TreeModel.h	func	ssg::TreeProviderId::operator<=>	std::strong_ordering (const TreeProviderId &) const
 ssg/TreeModel.h	func	ssg::TreeProviderId::value	const std::string &() const noexcept
 ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::TreeProviderSnapshot	void (TreeProviderId, TreeProviderKind, std::vector<TreeNode>)
-ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::fromFilesystem	TreeProviderSnapshot (TreeProviderId, const std::filesystem::path &)
+ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::fromFilesystemDirectories	TreeProviderSnapshot (TreeProviderId, const std::filesystem::path &, std::span<const std::string>)
 ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::fromGit	TreeProviderSnapshot (TreeProviderId, std::vector<GitTreeRecord>)
+ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::fromSearch	TreeProviderSnapshot (TreeProviderId, std::vector<SearchTreeRecord>)
 ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::fromSymbols	TreeProviderSnapshot (TreeProviderId, std::vector<SymbolTreeRecord>)
 ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::kind	TreeProviderKind () const noexcept
 ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::nodes	const std::vector<TreeNode> &() const noexcept
@@ -3684,15 +3199,15 @@ ssg/TreeModel.h	func	ssg::TreeProviderView::operator==	bool (const TreeProviderV
 ssg/TreeModel.h	func	ssg::TreeRevision::TreeRevision	void (std::uint64_t) noexcept
 ssg/TreeModel.h	func	ssg::TreeRevision::operator<=>	std::strong_ordering (const TreeRevision &) const
 ssg/TreeModel.h	func	ssg::TreeRevision::value	std::uint64_t () const noexcept
-ssg/TreeModel.h	func	ssg::TreeSelectArguments::operator==	bool (const TreeSelectArguments &) const
 ssg/TreeModel.h	func	ssg::TreeViewState::operator==	bool (const TreeViewState &) const
 ssg/TreeModel.h	func	ssg::activeTreeProvider	const TreeProviderView *(const TreeViewState &) noexcept
 ssg/TreeModel.h	func	ssg::gitTreeAffordance	GitTreeAffordance (DiffFileStatus)
-ssg/TreeModel.h	func	ssg::isValidTreeViewState	bool (const TreeViewState &) noexcept
 ssg/TreeModel.h	func	ssg::treeProviderCanBeCreatedEmpty	bool (TreeProviderKind)
 ssg/TreeModel.h	func	ssg::treeProviderLabel	std::string_view (TreeProviderKind)
 ssg/TreeModel.h	struct	ssg::GitTreeAffordance
 ssg/TreeModel.h	struct	ssg::GitTreeRecord
+ssg/TreeModel.h	struct	ssg::SearchTreeRecord
+ssg/TreeModel.h	struct	ssg::SearchTreeState
 ssg/TreeModel.h	struct	ssg::SymbolTreeRecord
 ssg/TreeModel.h	struct	ssg::TreeCommandInvocation
 ssg/TreeModel.h	struct	ssg::TreeModel::ProviderIdentity
@@ -3701,7 +3216,6 @@ ssg/TreeModel.h	struct	ssg::TreeNodeCommand
 ssg/TreeModel.h	struct	ssg::TreeNodeView
 ssg/TreeModel.h	struct	ssg::TreeProviderBinding
 ssg/TreeModel.h	struct	ssg::TreeProviderView
-ssg/TreeModel.h	struct	ssg::TreeSelectArguments
 ssg/TreeModel.h	struct	ssg::TreeViewState
 ssg/TreeModel.h	var	ssg::GitTreeAffordance::role	SemanticRole
 ssg/TreeModel.h	var	ssg::GitTreeAffordance::shortLabel	std::string
@@ -3710,6 +3224,14 @@ ssg/TreeModel.h	var	ssg::GitTreeRecord::commands	std::vector<TreeNodeCommand>
 ssg/TreeModel.h	var	ssg::GitTreeRecord::label	std::string
 ssg/TreeModel.h	var	ssg::GitTreeRecord::status	DiffFileStatus
 ssg/TreeModel.h	var	ssg::GitTreeRecord::workspacePath	std::string
+ssg/TreeModel.h	var	ssg::SearchTreeRecord::label	std::string
+ssg/TreeModel.h	var	ssg::SearchTreeRecord::sourceColumn	std::uint64_t
+ssg/TreeModel.h	var	ssg::SearchTreeRecord::sourceLine	std::uint64_t
+ssg/TreeModel.h	var	ssg::SearchTreeRecord::workspacePath	std::string
+ssg/TreeModel.h	var	ssg::SearchTreeState::editing	bool
+ssg/TreeModel.h	var	ssg::SearchTreeState::query	std::string
+ssg/TreeModel.h	var	ssg::SearchTreeState::searching	bool
+ssg/TreeModel.h	var	ssg::SearchTreeState::submittedQuery	std::optional<std::string>
 ssg/TreeModel.h	var	ssg::SymbolTreeRecord::commands	std::vector<TreeNodeCommand>
 ssg/TreeModel.h	var	ssg::SymbolTreeRecord::label	std::string
 ssg/TreeModel.h	var	ssg::SymbolTreeRecord::parentKey	std::optional<std::string>
@@ -3729,7 +3251,8 @@ ssg/TreeModel.h	var	ssg::TreeNode::id	TreeNodeId
 ssg/TreeModel.h	var	ssg::TreeNode::kind	TreeNodeKind
 ssg/TreeModel.h	var	ssg::TreeNode::label	std::string
 ssg/TreeModel.h	var	ssg::TreeNode::parentId	std::optional<TreeNodeId>
-ssg/TreeModel.h	var	ssg::TreeNode::sourceLine	std::optional<std::uint32_t>
+ssg/TreeModel.h	var	ssg::TreeNode::sourceColumn	std::optional<std::uint64_t>
+ssg/TreeModel.h	var	ssg::TreeNode::sourceLine	std::optional<std::uint64_t>
 ssg/TreeModel.h	var	ssg::TreeNode::workspacePath	std::optional<std::string>
 ssg/TreeModel.h	var	ssg::TreeNodeCommand::id	std::string
 ssg/TreeModel.h	var	ssg::TreeNodeCommand::label	std::string
@@ -3741,8 +3264,8 @@ ssg/TreeModel.h	var	ssg::TreeProviderBinding::kind	TreeProviderKind
 ssg/TreeModel.h	var	ssg::TreeProviderView::kind	TreeProviderKind
 ssg/TreeModel.h	var	ssg::TreeProviderView::nodes	std::vector<TreeNodeView>
 ssg/TreeModel.h	var	ssg::TreeProviderView::providerId	TreeProviderId
+ssg/TreeModel.h	var	ssg::TreeProviderView::search	std::optional<SearchTreeState>
 ssg/TreeModel.h	var	ssg::TreeProviderView::selected	std::optional<TreeNodeId>
-ssg/TreeModel.h	var	ssg::TreeSelectArguments::nodeId	TreeNodeId
 ssg/TreeModel.h	var	ssg::TreeViewState::activeBinding	std::optional<TreeProviderBinding>
 ssg/TreeModel.h	var	ssg::TreeViewState::providers	std::vector<TreeProviderView>
 ssg/TreeModel.h	var	ssg::TreeViewState::revision	TreeRevision
@@ -3769,14 +3292,17 @@ ssg/TreeSitterParser.h	func	ssg::TreeSitterParser::hasGrammar	bool (const Langua
 ssg/TreeSitterParser.h	func	ssg::TreeSitterParser::parse	SyntaxParseOutput (const SyntaxParseRequest &)
 ssg/TreeSitterParser.h	struct	ssg::TreeSitterParser::QueryCache
 ssg/UiInteractionState.h	class	ssg::UiInteractionState
+ssg/UiInteractionState.h	enum	ssg::BaseFocus
+ssg/UiInteractionState.h	enumerator	ssg::BaseFocus::Editor
+ssg/UiInteractionState.h	enumerator	ssg::BaseFocus::Panel
 ssg/UiInteractionState.h	func	ssg::UiInteractionState::UiInteractionState	void (UiSchema, std::vector<UiNodeId>)
 ssg/UiInteractionState.h	func	ssg::UiInteractionState::captureFocus	void (FocusCapture)
-ssg/UiInteractionState.h	func	ssg::UiInteractionState::effectiveFocus	FocusTarget () const
-ssg/UiInteractionState.h	func	ssg::UiInteractionState::focus	const KeyboardFocus &() const noexcept
 ssg/UiInteractionState.h	func	ssg::UiInteractionState::focusPath	std::vector<UiNodeId> () const
-ssg/UiInteractionState.h	func	ssg::UiInteractionState::releaseFocus	void () noexcept
 ssg/UiInteractionState.h	func	ssg::UiInteractionState::schema	const UiSchema &() const noexcept
 ssg/UiInteractionState.h	func	ssg::UiInteractionState::setBaseFocus	void (BaseFocus)
+ssg/UiInteractionState.h	func	ssg::operator==	bool (const FocusCapture &, const FocusCapture &)
+ssg/UiInteractionState.h	struct	ssg::FocusCapture
+ssg/UiInteractionState.h	var	ssg::FocusCapture::node	UiNodeId
 ssg/UiRegionProjection.h	func	ssg::UiRegionProjectionResult::ok	bool () const
 ssg/UiRegionProjection.h	func	ssg::operator==	bool (const SolvedUiInput &, const SolvedUiInput &) noexcept(false)
 ssg/UiRegionProjection.h	func	ssg::operator==	bool (const SolvedUiItem &, const SolvedUiItem &)
@@ -3979,7 +3505,6 @@ ssg/Viewport.h	func	ssg::ScrollOffset::revealSelection	void (uint32_t, uint32_t,
 ssg/Viewport.h	func	ssg::ScrollOffset::setFirstVisible	void (uint32_t) noexcept
 ssg/Viewport.h	func	ssg::ScrollOffset::toFraction	void (uint32_t, uint32_t, uint32_t, uint32_t)
 ssg/Viewport.h	func	ssg::SelectionNavigation::operator==	bool (const SelectionNavigation &) const noexcept
-ssg/Viewport.h	func	ssg::ViewportDelta::operator==	bool (const ViewportDelta &) const noexcept
 ssg/Viewport.h	func	ssg::ViewportDimensions::ViewportDimensions	void (uint32_t, uint32_t)
 ssg/Viewport.h	func	ssg::ViewportDimensions::operator==	bool (const ViewportDimensions &) const noexcept
 ssg/Viewport.h	func	ssg::ViewportViewState::editableOffset	uint32_t (uint32_t) const
@@ -3988,7 +3513,6 @@ ssg/Viewport.h	func	ssg::ViewportViewState::projectedRow	ProjectedRow (uint32_t)
 ssg/Viewport.h	func	ssg::VisualRow::operator==	bool (const VisualRow &) const noexcept
 ssg/Viewport.h	func	ssg::computeUnwrappedViewport	ViewportViewState (std::string_view, ViewportDimensions, uint32_t, uint32_t, int, const DiffFileView *, std::optional<ViewportDimensions>, LineLayoutCache *)
 ssg/Viewport.h	func	ssg::computeViewport	ViewportViewState (std::span<const CellRun>, ViewportDimensions, uint32_t, const DiffFileView *, std::optional<ViewportDimensions>)
-ssg/Viewport.h	func	ssg::deriveViewportDelta	ViewportDelta (const ViewportViewState &, const ViewportViewState &)
 ssg/Viewport.h	func	ssg::listScrollView	ListScrollView (uint32_t, uint32_t, uint32_t, std::optional<uint32_t>, bool)
 ssg/Viewport.h	func	ssg::rowProjection	RowProjection (std::span<const CellRun>, uint32_t, const DiffFileView &)
 ssg/Viewport.h	func	ssg::rowProjectionUnwrapped	RowProjection (std::string_view, const DiffFileView &)
@@ -3998,7 +3522,6 @@ ssg/Viewport.h	struct	ssg::CellHitTarget
 ssg/Viewport.h	struct	ssg::DiffFileView
 ssg/Viewport.h	struct	ssg::ListScrollView
 ssg/Viewport.h	struct	ssg::SelectionNavigation
-ssg/Viewport.h	struct	ssg::ViewportDelta
 ssg/Viewport.h	struct	ssg::ViewportDimensions
 ssg/Viewport.h	struct	ssg::ViewportViewState
 ssg/Viewport.h	struct	ssg::VisualRow
@@ -4014,8 +3537,6 @@ ssg/Viewport.h	var	ssg::ListScrollView::visibleCount	uint32_t
 ssg/Viewport.h	var	ssg::SelectionNavigation::desiredCell	std::optional<CellIndex>
 ssg/Viewport.h	var	ssg::SelectionNavigation::firstVisualColumn	std::uint32_t
 ssg/Viewport.h	var	ssg::SelectionNavigation::firstVisualRow	std::uint32_t
-ssg/Viewport.h	var	ssg::ViewportDelta::changed	bool
-ssg/Viewport.h	var	ssg::ViewportDelta::replacement	std::optional<ViewportViewState>
 ssg/Viewport.h	var	ssg::ViewportDimensions::columns	uint32_t
 ssg/Viewport.h	var	ssg::ViewportDimensions::rows	uint32_t
 ssg/Viewport.h	var	ssg::ViewportViewState::dimensions	ViewportDimensions
@@ -4053,12 +3574,7 @@ ssg/Widget.h	enumerator	ssg::WidgetKind::Spacer
 ssg/Widget.h	enumerator	ssg::WidgetKind::StatusActions
 ssg/Widget.h	enumerator	ssg::WidgetKind::TextInput
 ssg/Widget.h	enumerator	ssg::WidgetKind::View
-ssg/Widget.h	func	ssg::viewSurfaceName	std::string_view (ViewSurface)
-ssg/Widget.h	func	ssg::widgetKindName	std::string_view (WidgetKind)
 ssg/Widget.h	var	ssg::kAllViewSurfaces	const std::array<enable_if_t<is_same_v<ssg::ViewSurface, ssg::ViewSurface> && is_same_v<ssg::ViewSurface, ssg::ViewSurface> && is_same_v<ssg::ViewSurface, ssg::ViewSurface> && is_same_v<ssg::ViewSurface, ssg::ViewSurface> && is_same_v<ssg::ViewSurface, ssg::ViewSurface>, ssg::ViewSurface>, 1 + sizeof...(_Up)>
-ssg/Widget.h	var	ssg::kAllWidgetKinds	const std::array<enable_if_t<is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind>, ssg::WidgetKind>, 1 + sizeof...(_Up)>
-ssg/Widget.h	var	ssg::kViewSurfaceCount	const std::size_t
-ssg/Widget.h	var	ssg::kWidgetKindCount	const std::size_t
 ssg/WidgetLayout.h	class	ssg::WidgetStack
 ssg/WidgetLayout.h	enum	ssg::Align
 ssg/WidgetLayout.h	enum	ssg::CenterWidth
@@ -4151,34 +3667,29 @@ ssg/Workspace.h	func	ssg::Workspace::documents	std::vector<FileDocumentId> () co
 ssg/Workspace.h	func	ssg::Workspace::matchesExternalBaseline	bool (FileDocumentId, const std::optional<std::string> &) const
 ssg/Workspace.h	func	ssg::Workspace::newDirectory	WorkspaceResult (std::string_view)
 ssg/Workspace.h	func	ssg::Workspace::newDocument	WorkspaceResult (std::string_view)
+ssg/Workspace.h	func	ssg::Workspace::newFile	WorkspaceResult (std::string_view)
 ssg/Workspace.h	func	ssg::Workspace::openDirectory	WorkspaceResult (const std::filesystem::path &)
 ssg/Workspace.h	func	ssg::Workspace::openDroppedContent	WorkspaceResult (std::span<const std::uint8_t>, std::string_view)
 ssg/Workspace.h	func	ssg::Workspace::openFile	WorkspaceResult (std::string_view)
-ssg/Workspace.h	func	ssg::Workspace::openRecent	WorkspaceResult (std::size_t)
 ssg/Workspace.h	func	ssg::Workspace::openVirtualDocument	WorkspaceResult (std::string_view, std::string_view, DocumentMode)
 ssg/Workspace.h	func	ssg::Workspace::operator=	Workspace &(Workspace &&) noexcept
 ssg/Workspace.h	func	ssg::Workspace::operator=	Workspace &(const Workspace &)
 ssg/Workspace.h	func	ssg::Workspace::pruneArchive	FileArchivePruneReport (std::chrono::system_clock::time_point)
 ssg/Workspace.h	func	ssg::Workspace::rawDiskContent	std::optional<std::string> (FileDocumentId) const
-ssg/Workspace.h	func	ssg::Workspace::recentFiles	std::vector<std::string> () const
 ssg/Workspace.h	func	ssg::Workspace::reload	WorkspaceResult (FileDocumentId)
 ssg/Workspace.h	func	ssg::Workspace::reloadWithContent	WorkspaceResult (FileDocumentId, std::string)
 ssg/Workspace.h	func	ssg::Workspace::removeDocument	WorkspaceResult (FileDocumentId)
 ssg/Workspace.h	func	ssg::Workspace::renameFile	WorkspaceResult (FileDocumentId, std::string_view)
-ssg/Workspace.h	func	ssg::Workspace::reopenWithEncoding	WorkspaceResult (FileDocumentId, TextEncoding)
-ssg/Workspace.h	func	ssg::Workspace::restore	WorkspaceResult (const RecoveryRecordId &)
 ssg/Workspace.h	func	ssg::Workspace::restoreDraft	bool (FileDocumentId, std::string_view)
 ssg/Workspace.h	func	ssg::Workspace::root	const std::filesystem::path &() const noexcept
 ssg/Workspace.h	func	ssg::Workspace::save	WorkspaceResult (FileDocumentId)
 ssg/Workspace.h	func	ssg::Workspace::saveAll	WorkspaceResult ()
 ssg/Workspace.h	func	ssg::Workspace::saveAs	WorkspaceResult (FileDocumentId, std::string_view)
-ssg/Workspace.h	func	ssg::Workspace::setEncoding	WorkspaceResult (FileDocumentId, TextEncoding)
-ssg/Workspace.h	func	ssg::Workspace::setFinalNewline	WorkspaceResult (FileDocumentId, bool)
-ssg/Workspace.h	func	ssg::Workspace::setLineEnding	WorkspaceResult (FileDocumentId, LineEnding)
 ssg/Workspace.h	func	ssg::Workspace::setSaveObserver	void (std::function<void (const std::filesystem::path &)>)
 ssg/Workspace.h	func	ssg::Workspace::state	std::optional<WorkspaceDocumentState> (FileDocumentId) const
 ssg/Workspace.h	func	ssg::Workspace::tryDocument	const Document *(FileDocumentId) const noexcept
 ssg/Workspace.h	func	ssg::WorkspaceResult::accepted	bool () const noexcept
+ssg/Workspace.h	func	ssg::containsBinaryNul	bool (std::span<const std::uint8_t>) noexcept
 ssg/Workspace.h	func	ssg::operator==	bool (const WorkspaceDocumentState &, const WorkspaceDocumentState &)
 ssg/Workspace.h	func	ssg::operator==	bool (const WorkspaceFailure &, const WorkspaceFailure &)
 ssg/Workspace.h	struct	ssg::WorkspaceDocumentState
@@ -4193,12 +3704,26 @@ ssg/Workspace.h	var	ssg::WorkspaceDocumentState::key	JournalDocumentKey
 ssg/Workspace.h	var	ssg::WorkspaceFailure::document	std::optional<FileDocumentId>
 ssg/Workspace.h	var	ssg::WorkspaceFailure::error	WorkspaceError
 ssg/Workspace.h	var	ssg::WorkspaceFailure::message	std::string
-ssg/Workspace.h	var	ssg::WorkspaceResult::compensation	std::optional<RecoveryRecordId>
 ssg/Workspace.h	var	ssg::WorkspaceResult::document	std::optional<FileDocumentId>
 ssg/Workspace.h	var	ssg::WorkspaceResult::error	WorkspaceError
 ssg/Workspace.h	var	ssg::WorkspaceResult::failures	std::vector<WorkspaceFailure>
 ssg/Workspace.h	var	ssg::WorkspaceResult::message	std::string
 ssg/Workspace.h	var	ssg::kNewBufferLabel	const std::string_view
+ssg/WorkspaceCorpus.h	alias	ssg::WorkspaceCorpusReader
+ssg/WorkspaceCorpus.h	class	ssg::WorkspaceCorpus
+ssg/WorkspaceCorpus.h	func	ssg::WorkspaceCorpus::WorkspaceCorpus	void (std::filesystem::path, std::vector<WorkspaceCorpusBuffer>, const GitIgnoreMatcher &, WorkspaceCorpusReader, WorkspaceCorpusOptions)
+ssg/WorkspaceCorpus.h	func	ssg::WorkspaceCorpus::paths	const std::vector<std::string> &() const noexcept
+ssg/WorkspaceCorpus.h	func	ssg::WorkspaceCorpus::read	std::optional<WorkspaceCorpusFile> (std::size_t) const
+ssg/WorkspaceCorpus.h	struct	ssg::WorkspaceCorpusBuffer
+ssg/WorkspaceCorpus.h	struct	ssg::WorkspaceCorpusFile
+ssg/WorkspaceCorpus.h	struct	ssg::WorkspaceCorpusOptions
+ssg/WorkspaceCorpus.h	var	ssg::WorkspaceCorpusBuffer::path	std::optional<std::string>
+ssg/WorkspaceCorpus.h	var	ssg::WorkspaceCorpusBuffer::read	std::function<std::optional<std::string> ()>
+ssg/WorkspaceCorpus.h	var	ssg::WorkspaceCorpusFile::path	std::string
+ssg/WorkspaceCorpus.h	var	ssg::WorkspaceCorpusFile::text	std::string
+ssg/WorkspaceCorpus.h	var	ssg::WorkspaceCorpusOptions::excludedDirectories	std::vector<std::filesystem::path>
+ssg/WorkspaceCorpus.h	var	ssg::WorkspaceCorpusOptions::maximumFiles	std::size_t
+ssg/WorkspaceCorpus.h	var	ssg::WorkspaceCorpusOptions::respectGitignore	bool
 ssg/WorkspaceFileIndex.h	func	ssg::buildWorkspaceFileIndex	WorkspaceFileIndexResult (const std::filesystem::path &, const GitIgnoreMatcher &, const WorkspaceFileIndexOptions &)
 ssg/WorkspaceFileIndex.h	struct	ssg::WorkspaceFileIndexOptions
 ssg/WorkspaceFileIndex.h	struct	ssg::WorkspaceFileIndexResult
@@ -4227,7 +3752,6 @@ ssg/focus.h	enumerator	ssg::FocusTarget::Prompt
 ssg/focus.h	func	ssg::focusTargetName	std::string_view (FocusTarget) noexcept
 ssg/focus.h	func	ssg::keymapContexts	std::array<std::string_view, 5> () noexcept
 ssg/platform_files.h	class	ssg::ExclusiveFileLock
-ssg/platform_files.h	class	ssg::FileIoFaultInjector
 ssg/platform_files.h	enum	ssg::DirectoryTraversal
 ssg/platform_files.h	enum	ssg::FileIoStatus
 ssg/platform_files.h	enum	ssg::FileKind
@@ -4266,7 +3790,6 @@ ssg/platform_files.h	func	ssg::ExclusiveFileLock::ExclusiveFileLock	void (Exclus
 ssg/platform_files.h	func	ssg::ExclusiveFileLock::ExclusiveFileLock	void (const ExclusiveFileLock &)
 ssg/platform_files.h	func	ssg::ExclusiveFileLock::operator=	ExclusiveFileLock &(ExclusiveFileLock &&) noexcept
 ssg/platform_files.h	func	ssg::ExclusiveFileLock::operator=	ExclusiveFileLock &(const ExclusiveFileLock &)
-ssg/platform_files.h	func	ssg::FileIoFaultInjector::beforeOperation	FileIoStatus (std::string_view, const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::FileIoResult::ok	bool () const noexcept
 ssg/platform_files.h	func	ssg::FileReadResult::ok	bool () const noexcept
 ssg/platform_files.h	func	ssg::PathValidation::valid	bool () const noexcept
@@ -4277,11 +3800,9 @@ ssg/platform_files.h	func	ssg::copyFileDurably	FileIoResult (const std::filesyst
 ssg/platform_files.h	func	ssg::createDirectoriesDurably	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::createFileExclusively	FileIoResult (const std::filesystem::path &, std::span<const std::byte>)
 ssg/platform_files.h	func	ssg::ensureDirectory	FileIoResult (const std::filesystem::path &)
-ssg/platform_files.h	func	ssg::installFileIoFaultInjector	FileIoFaultInjector *(FileIoFaultInjector *) noexcept
 ssg/platform_files.h	func	ssg::listDirectory	DirectoryListResult (const std::filesystem::path &, DirectoryTraversal, std::size_t)
 ssg/platform_files.h	func	ssg::operator==	bool (const FileIdentity &, const FileIdentity &)
 ssg/platform_files.h	func	ssg::readFile	FileReadResult (const std::filesystem::path &)
-ssg/platform_files.h	func	ssg::removeFile	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::removeTree	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::removeTreeIfPresent	FileIoResult (const std::filesystem::path &)
 ssg/platform_files.h	func	ssg::renameFileNoClobber	FileIoResult (const std::filesystem::path &, const std::filesystem::path &)
@@ -4335,14 +3856,12 @@ ssg/pointer_routing.h	func	ssg::is_scrollbar_region	bool (ssg::HitRegion) noexce
 ssg/pointer_routing.h	func	ssg::register_click_is_double	bool (ClickTracker &, std::chrono::steady_clock::time_point, std::uint64_t, int, int, std::chrono::milliseconds) noexcept
 ssg/pointer_routing.h	func	ssg::route_pointer	PointerDispatch (const ssg::RegionHit &, PointerButton, PointerKind, bool, bool, std::optional<ssg::DocumentPosition>, const PointerTargets &)
 ssg/pointer_routing.h	func	ssg::route_wheel	WheelTarget (ssg::HitRegion)
-ssg/pointer_routing.h	func	ssg::scrollable_regions	std::span<const ScrollableRegionDescriptor> () noexcept
 ssg/pointer_routing.h	func	ssg::scrollbar_grab_offset	int (int, int, int) noexcept
 ssg/pointer_routing.h	struct	ssg::ClickTracker
 ssg/pointer_routing.h	struct	ssg::ClientScroll
 ssg/pointer_routing.h	struct	ssg::GutterFraction
 ssg/pointer_routing.h	struct	ssg::PointerDispatch
 ssg/pointer_routing.h	struct	ssg::PointerTargets
-ssg/pointer_routing.h	struct	ssg::ScrollableRegionDescriptor
 ssg/pointer_routing.h	var	ssg::ClickTracker::column	int
 ssg/pointer_routing.h	var	ssg::ClickTracker::row	int
 ssg/pointer_routing.h	var	ssg::ClickTracker::surface	std::uint64_t
@@ -4354,7 +3873,6 @@ ssg/pointer_routing.h	var	ssg::GutterFraction::denominator	std::uint32_t
 ssg/pointer_routing.h	var	ssg::GutterFraction::numerator	std::uint32_t
 ssg/pointer_routing.h	var	ssg::PointerDispatch::begins_drag	bool
 ssg/pointer_routing.h	var	ssg::PointerDispatch::client_scroll	std::optional<ClientScroll>
-ssg/pointer_routing.h	var	ssg::PointerDispatch::command	std::optional<ssg::ClientCommand>
 ssg/pointer_routing.h	var	ssg::PointerDispatch::ends_drag	bool
 ssg/pointer_routing.h	var	ssg::PointerDispatch::semantic_input	std::optional<ssg::ClientInput>
 ssg/pointer_routing.h	var	ssg::PointerTargets::document_position	std::optional<ssg::DocumentPosition>
@@ -4364,9 +3882,6 @@ ssg/pointer_routing.h	var	ssg::PointerTargets::picker_activation	std::optional<s
 ssg/pointer_routing.h	var	ssg::PointerTargets::picker_candidate_id	std::optional<std::string>
 ssg/pointer_routing.h	var	ssg::PointerTargets::tab_id	std::optional<ssg::TabId>
 ssg/pointer_routing.h	var	ssg::PointerTargets::ui_node_id	std::optional<ssg::UiNodeId>
-ssg/pointer_routing.h	var	ssg::ScrollableRegionDescriptor::content	ssg::HitRegion
-ssg/pointer_routing.h	var	ssg::ScrollableRegionDescriptor::scrollbar	ssg::HitRegion
-ssg/pointer_routing.h	var	ssg::ScrollableRegionDescriptor::target	WheelTarget
 ssg/types.h	enum	ssg::CycleDirection
 ssg/types.h	enum	ssg::DocumentMode
 ssg/types.h	enumerator	ssg::CycleDirection::Next

@@ -126,14 +126,7 @@ void appendText(
 
 } // namespace
 
-PieceTree::PieceTree(std::string_view original)
-    : originalBuffer_(SharedBytes::owning(std::string{original})) {
-    if (!originalBuffer_.empty()) {
-        root_ = makeNode(false, 0, originalBuffer_.size());
-    }
-}
-
-PieceTree::PieceTree(SharedBytes original)
+PieceTree::PieceTree(std::string original)
     : originalBuffer_(std::move(original)) {
     if (!originalBuffer_.empty()) {
         root_ = makeNode(false, 0, originalBuffer_.size());
@@ -151,7 +144,7 @@ std::size_t PieceTree::size() const noexcept {
 std::string PieceTree::text() const {
     std::string result;
     result.reserve(size());
-    appendText(root_, originalBuffer_.view(), addBuffer_, result);
+    appendText(root_, originalBuffer_, addBuffer_, result);
     return result;
 }
 

@@ -81,8 +81,8 @@ TransactionResult failure(DocumentError error, std::uint64_t revision,
 
 struct Document::Impl {
     explicit Impl(std::string_view text, DocumentMode documentMode)
-        : tree(text), mode(documentMode) {}
-    explicit Impl(SharedBytes text, DocumentMode documentMode)
+        : tree(std::string{text}), mode(documentMode) {}
+    explicit Impl(std::string text, DocumentMode documentMode)
         : tree(std::move(text)), mode(documentMode) {}
 
     detail::PieceTree tree;
