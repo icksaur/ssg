@@ -246,30 +246,6 @@ LanguageId LanguageId::plainText() {
     return LanguageId{"plain_text"};
 }
 
-LanguageId LanguageId::c() {
-    return LanguageId{"c"};
-}
-
-LanguageId LanguageId::cpp() {
-    return LanguageId{"cpp"};
-}
-
-LanguageId LanguageId::javascript() {
-    return LanguageId{"javascript"};
-}
-
-LanguageId LanguageId::typescript() {
-    return LanguageId{"typescript"};
-}
-
-LanguageId LanguageId::csharp() {
-    return LanguageId{"csharp"};
-}
-
-LanguageId LanguageId::lua() {
-    return LanguageId{"lua"};
-}
-
 LanguageId LanguageId::fromPath(std::string_view path) {
     auto name = fileName(path);
     auto separator = name.find_last_of('.');

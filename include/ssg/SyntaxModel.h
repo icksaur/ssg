@@ -20,12 +20,6 @@ public:
     explicit LanguageId(std::string value);
 
     [[nodiscard]] static LanguageId plainText();
-    [[nodiscard]] static LanguageId c();
-    [[nodiscard]] static LanguageId cpp();
-    [[nodiscard]] static LanguageId javascript();
-    [[nodiscard]] static LanguageId typescript();
-    [[nodiscard]] static LanguageId csharp();
-    [[nodiscard]] static LanguageId lua();
     [[nodiscard]] static LanguageId fromPath(std::string_view path);
     [[nodiscard]] const std::string& value() const noexcept { return value_; }
     [[nodiscard]] bool isPlainText() const noexcept;

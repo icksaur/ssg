@@ -227,14 +227,6 @@ std::vector<KeymapError> KeymapMatcher::validate() const {
     return errors;
 }
 
-KeymapDelta KeymapMatcher::deriveDelta(const KeymapViewState& previous,
-                                       const KeymapViewState& current) {
-    if (previous == current) {
-        return {false, std::nullopt};
-    }
-    return {true, current};
-}
-
 namespace {
 
 bool eligibleIn(const KeyBinding& binding, std::string_view context) {

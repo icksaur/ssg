@@ -82,8 +82,6 @@ class FollowEditsModel {
 public:
     explicit FollowEditsModel(FollowEditsConfig config = {});
 
-    [[nodiscard]] FollowEditsResult acceptExternalChange(
-        const DiffFileView& file, std::uint64_t sourceRevision);
     [[nodiscard]] FollowEditsResult acceptExternalChanges(
         std::vector<FollowDiffChange> changes);
     [[nodiscard]] FollowEditsResult applyNavigation(

@@ -46,11 +46,6 @@ FollowEditsModel::FollowEditsModel(FollowEditsConfig config)
     }
 }
 
-FollowEditsResult FollowEditsModel::acceptExternalChange(
-    const DiffFileView& file, std::uint64_t sourceRevision) {
-    return acceptExternalChanges({FollowDiffChange{file, {}, sourceRevision}});
-}
-
 FollowEditsResult FollowEditsModel::acceptExternalChanges(
     std::vector<FollowDiffChange> changes) {
     auto expectedRevision = latestSourceRevision_;

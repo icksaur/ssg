@@ -59,13 +59,6 @@ struct KeymapViewState {
 
 [[nodiscard]] KeymapViewState defaultTerminalKeymap();
 
-struct KeymapDelta {
-    bool changed;
-    std::optional<KeymapViewState> replacement;
-
-    bool operator==(const KeymapDelta&) const = default;
-};
-
 enum class KeymapErrorCode : std::uint8_t {
     EmptyName,
     EmptySequence,
@@ -106,9 +99,6 @@ public:
     [[nodiscard]] bool hasGlobalBinding(std::string_view commandId) const;
     [[nodiscard]] std::optional<KeySequence> preferredBinding(
         std::string_view commandId) const;
-    [[nodiscard]] static KeymapDelta deriveDelta(
-        const KeymapViewState& previous, const KeymapViewState& current);
-
 private:
     const KeymapViewState& keymap_;
 };

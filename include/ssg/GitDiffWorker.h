@@ -62,17 +62,6 @@ public:
     // change queued since the last call. Runtime-thread only.
     [[nodiscard]] GitDiffWorkerDrain drain();
 
-    // Hands a save expectation to the worker thread so it registers with the
-    // real watcher's normalizer without racing poll(). A no-op before the
-    // watcher exists; bounded so an expectation the worker never drains cannot
-    // grow without limit.
-    void registerSavedPath(SaveExpectation expectation);
-
-    // Test hook: overrides the durable watcher-availability fact directly and
-    // republishes it synchronously, mirroring the mid-session watcher-death
-    // edge the worker thread signals in production.
-    void setAvailabilityForTest(bool available);
-
     [[nodiscard]] std::uint64_t fullRefreshCount() const noexcept {
         return fullRefreshCount_.load(std::memory_order_relaxed);
     }
@@ -116,10 +105,6 @@ private:
     // drain consumes it and re-scans every open document against disk, because
     // the individual change events were dropped.
     bool pendingExternalFullReconcile_ = false;
-    // Save expectations handed from the save primitive to the worker thread,
-    // applied to the watcher on the worker thread so registration never races
-    // poll().
-    std::deque<SaveExpectation> pendingSaveRegistrations_;
     std::thread thread_;
     std::atomic<std::uint64_t> fullRefreshCount_{0};
 

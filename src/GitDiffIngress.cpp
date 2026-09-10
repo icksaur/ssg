@@ -275,14 +275,4 @@ bool GitDiffIngress::revealCurrentDiffTarget(
     return true;
 }
 
-std::optional<std::string> GitDiffIngress::savedPathFromExternalDiffId(
-    const DiffFileId& id) {
-    static constexpr std::string_view prefix{"external:"};
-    const auto& value = id.value();
-    if (std::string_view{value}.substr(0, prefix.size()) != prefix) {
-        return std::nullopt;
-    }
-    return value.substr(prefix.size());
-}
-
 } // namespace ssg

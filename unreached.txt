@@ -1,14 +1,3 @@
-ssg::FollowEditsModel::acceptExternalChange(ssg::DiffFileView const&, unsigned long)	CMakeFiles/ssg_core.dir/src/FollowEditsModel.cpp.o
-ssg::GitDiffIngress::savedPathFromExternalDiffId[abi:cxx11](ssg::DiffFileId const&)	CMakeFiles/ssg_core.dir/src/GitDiffIngress.cpp.o
-ssg::GitDiffWorker::registerSavedPath(ssg::SaveExpectation)	CMakeFiles/ssg_core.dir/src/GitDiffWorker.cpp.o
-ssg::GitDiffWorker::setAvailabilityForTest(bool)	CMakeFiles/ssg_core.dir/src/GitDiffWorker.cpp.o
-ssg::KeymapMatcher::deriveDelta(ssg::KeymapViewState const&, ssg::KeymapViewState const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
-ssg::LanguageId::c()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
-ssg::LanguageId::cpp()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
-ssg::LanguageId::csharp()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
-ssg::LanguageId::javascript()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
-ssg::LanguageId::lua()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
-ssg::LanguageId::typescript()	CMakeFiles/ssg_core.dir/src/SyntaxModel.cpp.o
 ssg::LuaCommandHost::expose(void*)	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
 ssg::LuaCommandHost::invalidate(ssg::LuaHandle)	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
 ssg::LuaCommandHost::registeredCommands[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o

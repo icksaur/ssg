@@ -262,21 +262,6 @@ void GitDiffWorker::run(bool gitUsable, bool enableWatcher,
         }
     };
 
-    const auto applyPendingSaveRegistrations = [&]() {
-        std::deque<SaveExpectation> registrations;
-        {
-            std::lock_guard lock(mutex_);
-            registrations.swap(pendingSaveRegistrations_);
-        }
-        // Drain unconditionally so registrations never accumulate; apply only
-        // when a watcher exists (accessed on this, the owning, thread).
-        if (!watcher_) {
-            return;
-        }
-        for (auto& expectation : registrations) {
-            watcher_->registerSave(std::move(expectation));
-        }
-    };
     // Hand normalized external events to the runtime-thread reconcile, coalescing
     // the wake byte with the git-scan queue so the host drains both at once.
     const auto queueWatchEvents = [&](const std::vector<WatchEvent>& events) {
@@ -313,7 +298,6 @@ void GitDiffWorker::run(bool gitUsable, bool enableWatcher,
                                       : kGitDiffEventRecoveryInterval;
     nextBackstop = std::chrono::steady_clock::now() + backstopInterval;
     while (!shouldStop()) {
-        applyPendingSaveRegistrations();
         const auto now = std::chrono::steady_clock::now();
         auto wakeAt = now + kGitMetadataWatchPollInterval;
         {
@@ -505,22 +489,6 @@ GitDiffWorkerDrain GitDiffWorker::drain() {
         pendingExternalFullReconcile_ = false;
     }
     return result;
-}
-
-void GitDiffWorker::registerSavedPath(SaveExpectation expectation) {
-    std::lock_guard lock(mutex_);
-    pendingSaveRegistrations_.push_back(std::move(expectation));
-    // Bound the deque: a save the worker never drains must not accumulate
-    // forever.
-    constexpr std::size_t kMaxSaveRegistrations = 256;
-    while (pendingSaveRegistrations_.size() > kMaxSaveRegistrations) {
-        pendingSaveRegistrations_.pop_front();
-    }
-}
-
-void GitDiffWorker::setAvailabilityForTest(bool available) {
-    watcherAvailable_.store(available, std::memory_order_relaxed);
-    lastPublishedWatcherAvailable_ = available;
 }
 
 }  // namespace ssg
