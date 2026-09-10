@@ -20,14 +20,23 @@
 0	CommandCatalog.h	func	ssg::detail::optionalTypedHandler	
 0	CommandCatalog.h	func	ssg::detail::typedHandler	
 0	KeyCode.h	func	ssg::keyCodeTableIsExhaustive	
-0	ViewAction.h	func	ssg::operator==	
-0	ViewAction.h	func	ssg::operator==	
-0	ViewAction.h	func	ssg::operator==	
-0	ViewAction.h	func	ssg::operator==	
-0	ViewAction.h	func	ssg::operator==	
-0	ViewAction.h	func	ssg::operator==	
-0	ViewAction.h	func	ssg::operator==	
-0	ViewAction.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
+0	ClientInput.h	func	ssg::operator==	
 0	DiffModel.h	func	ssg::operator==	
 0	DiffModel.h	func	ssg::operator==	
 0	DiffModel.h	func	ssg::operator==	
@@ -36,124 +45,103 @@
 0	DiffModel.h	func	ssg::operator==	
 0	DiffModel.h	func	ssg::operator==	
 0	DiffModel.h	func	ssg::operator==	
-0	platform_files.h	func	ssg::operator==	
+0	Editor.h	func	ssg::operator==	
+0	ExternalModificationFlow.h	func	ssg::operator==	
+0	ExternalModificationFlow.h	func	ssg::operator==	
+0	ExternalModificationFlow.h	func	ssg::operator==	
+0	ExternalModificationFlow.h	func	ssg::operator==	
 0	FilesystemWatcher.h	func	ssg::operator==	
 0	FilesystemWatcher.h	func	ssg::operator==	
 0	FilesystemWatcher.h	func	ssg::operator==	
+0	FindReplace.h	func	ssg::operator==	
+0	FollowEditsModel.h	func	ssg::operator==	
+0	FollowEditsModel.h	func	ssg::operator==	
+0	FollowEditsModel.h	func	ssg::operator==	
+0	Geometry.h	func	ssg::operator==	
+0	Geometry.h	func	ssg::operator==	
+0	GitDiffSource.h	func	ssg::operator==	
+0	GitDiffSource.h	func	ssg::operator==	
+0	KeyboardFocus.h	func	ssg::operator==	
+0	Keymap.h	func	ssg::operator==	
+0	Keymap.h	func	ssg::operator==	
+0	Keymap.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	Layout.h	func	ssg::operator==	
+0	LspFeatureController.h	func	ssg::operator==	
+0	LspFeatureController.h	func	ssg::operator==	
+0	LspFeatureController.h	func	ssg::operator==	
+0	LspFeatureController.h	func	ssg::operator==	
+0	LspFeatureController.h	func	ssg::operator==	
+0	LspFeatureController.h	func	ssg::operator==	
+0	LspFeatureController.h	func	ssg::operator==	
+0	LspSyncClient.h	func	ssg::operator==	
+0	LspSyncClient.h	func	ssg::operator==	
+0	LspSyncClient.h	func	ssg::operator==	
+0	LspSyncClient.h	func	ssg::operator==	
+0	LspSyncClient.h	func	ssg::operator==	
+0	LspSyncClient.h	func	ssg::operator==	
+0	LspSyncClient.h	func	ssg::operator==	
+0	PaletteSearcher.h	func	ssg::operator==	
+0	PaletteSearcher.h	func	ssg::operator==	
+0	PaletteSearcher.h	func	ssg::operator==	
+0	PaletteSearcher.h	func	ssg::operator==	
+0	PaletteSearcher.h	func	ssg::operator==	
+0	PaletteSearcher.h	func	ssg::operator==	
+0	PaletteSearcher.h	func	ssg::operator==	
+0	PaletteSearcher.h	func	ssg::operator==	
+0	PaneTopology.h	func	ssg::operator==	
+0	PaneTopology.h	func	ssg::operator==	
+0	Picker.h	func	ssg::operator==	
+0	PromptSurface.h	func	ssg::operator==	
+0	PromptSurface.h	func	ssg::operator==	
+0	PromptSurface.h	func	ssg::operator==	
+0	PromptSurface.h	func	ssg::operator==	
+0	PromptSurface.h	func	ssg::operator==	
+0	PromptSurface.h	func	ssg::operator==	
+0	PromptSurface.h	func	ssg::operator==	
+0	PromptSurface.h	func	ssg::operator==	
+0	PromptSurface.h	func	ssg::operator==	
+0	PromptSurface.h	func	ssg::operator==	
+0	RecoveryManager.h	func	ssg::operator==	
+0	RecoveryManager.h	func	ssg::operator==	
 0	ScratchJournal.h	func	ssg::operator==	
 0	ScratchJournal.h	func	ssg::operator==	
 0	ScratchJournal.h	func	ssg::operator==	
 0	ScratchJournal.h	func	ssg::operator==	
 0	ScratchStore.h	func	ssg::operator==	
-0	RecoveryManager.h	func	ssg::operator==	
-0	RecoveryManager.h	func	ssg::operator==	
+0	Search.h	func	ssg::operator==	
+0	Search.h	func	ssg::operator==	
+0	Search.h	func	ssg::operator==	
+0	Search.h	func	ssg::operator==	
+0	Search.h	func	ssg::operator==	
+0	Search.h	func	ssg::operator==	
+0	Search.h	func	ssg::operator==	
+0	Search.h	func	ssg::operator==	
 0	Settings.h	func	ssg::operator==	
 0	Settings.h	func	ssg::operator==	
 0	Settings.h	func	ssg::operator==	
 0	Settings.h	func	ssg::operator==	
 0	Settings.h	func	ssg::operator==	
 0	Settings.h	func	ssg::operator==	
-0	TextCodec.h	func	ssg::operator==	
-0	TextCodec.h	func	ssg::operator==	
-0	TextCodec.h	func	ssg::operator==	
-0	Workspace.h	func	ssg::operator==	
-0	Workspace.h	func	ssg::operator==	
-0	ExternalModificationFlow.h	func	ssg::operator==	
-0	ExternalModificationFlow.h	func	ssg::operator==	
-0	ExternalModificationFlow.h	func	ssg::operator==	
-0	ExternalModificationFlow.h	func	ssg::operator==	
-0	Keymap.h	func	ssg::operator==	
-0	Keymap.h	func	ssg::operator==	
-0	Keymap.h	func	ssg::operator==	
-0	GitDiffSource.h	func	ssg::operator==	
-0	GitDiffSource.h	func	ssg::operator==	
-0	Search.h	func	ssg::operator==	
-0	Search.h	func	ssg::operator==	
-0	Search.h	func	ssg::operator==	
-0	Search.h	func	ssg::operator==	
-0	Search.h	func	ssg::operator==	
-0	Search.h	func	ssg::operator==	
-0	Search.h	func	ssg::operator==	
-0	Search.h	func	ssg::operator==	
-0	Picker.h	func	ssg::operator==	
-0	TabManager.h	func	ssg::operator==	
-0	TabManager.h	func	ssg::operator==	
-0	TabManager.h	func	ssg::operator==	
-0	Theme.h	func	ssg::operator==	
-0	Theme.h	func	ssg::operator==	
-0	Theme.h	func	ssg::operator==	
-0	Theme.h	func	ssg::operator==	
-0	Theme.h	func	ssg::operator==	
-0	UiWidget.h	func	ssg::operator==	
-0	UiTree.h	func	ssg::operator==	
-0	UiTree.h	func	ssg::operator==	
-0	UiTree.h	func	ssg::operator==	
-0	UiTree.h	func	ssg::operator==	
-0	UiTree.h	func	ssg::operator==	
-0	UiTree.h	func	ssg::operator==	
-0	UiTree.h	func	ssg::operator==	
-0	UiTree.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
-0	ClientInput.h	func	ssg::operator==	
 0	StatusBar.h	func	ssg::operator==	
 0	StatusBar.h	func	ssg::operator==	
 0	StatusBar.h	func	ssg::operator==	
 0	StatusBar.h	func	ssg::operator==	
 0	StatusBar.h	func	ssg::operator==	
-0	PromptSurface.h	func	ssg::operator==	
-0	PromptSurface.h	func	ssg::operator==	
-0	PromptSurface.h	func	ssg::operator==	
-0	PromptSurface.h	func	ssg::operator==	
-0	PromptSurface.h	func	ssg::operator==	
-0	PromptSurface.h	func	ssg::operator==	
-0	PromptSurface.h	func	ssg::operator==	
-0	PromptSurface.h	func	ssg::operator==	
-0	PromptSurface.h	func	ssg::operator==	
-0	PromptSurface.h	func	ssg::operator==	
-0	FindReplace.h	func	ssg::operator==	
-0	FollowEditsModel.h	func	ssg::operator==	
-0	FollowEditsModel.h	func	ssg::operator==	
-0	FollowEditsModel.h	func	ssg::operator==	
-0	PaletteSearcher.h	func	ssg::operator==	
-0	PaletteSearcher.h	func	ssg::operator==	
-0	PaletteSearcher.h	func	ssg::operator==	
-0	PaletteSearcher.h	func	ssg::operator==	
-0	PaletteSearcher.h	func	ssg::operator==	
-0	PaletteSearcher.h	func	ssg::operator==	
-0	PaletteSearcher.h	func	ssg::operator==	
-0	PaletteSearcher.h	func	ssg::operator==	
-0	PaneTopology.h	func	ssg::operator==	
-0	PaneTopology.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspSyncClient.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	LspFeatureController.h	func	ssg::operator==	
-0	KeyboardFocus.h	func	ssg::operator==	
 0	Style.h	func	ssg::operator==	
 0	Style.h	func	ssg::operator==	
 0	Style.h	func	ssg::operator==	
@@ -165,40 +153,47 @@
 0	SyntaxModel.h	func	ssg::operator==	
 0	SyntaxModel.h	func	ssg::operator==	
 0	SyntaxModel.h	func	ssg::operator==	
-0	SyntaxModel.h	func	ssg::operator==	
-0	SyntaxModel.h	func	ssg::operator==	
-0	SyntaxModel.h	func	ssg::operator==	
-0	SyntaxModel.h	func	ssg::operator==	
-0	SyntaxModel.h	func	ssg::operator==	
-0	Editor.h	func	ssg::operator==	
-0	Geometry.h	func	ssg::operator==	
-0	Geometry.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	Layout.h	func	ssg::operator==	
-0	UiRegionProjection.h	func	ssg::operator==	
-0	UiRegionProjection.h	func	ssg::operator==	
-0	UiRegionProjection.h	func	ssg::operator==	
 0	SystemClipboardReader.h	func	ssg::operator==	
-0	color.h	func	ssg::operator==	
+0	TabManager.h	func	ssg::operator==	
+0	TabManager.h	func	ssg::operator==	
+0	TabManager.h	func	ssg::operator==	
 0	TerminalInput.h	func	ssg::operator==	
+0	TextCodec.h	func	ssg::operator==	
+0	TextCodec.h	func	ssg::operator==	
+0	TextCodec.h	func	ssg::operator==	
+0	Theme.h	func	ssg::operator==	
+0	Theme.h	func	ssg::operator==	
+0	Theme.h	func	ssg::operator==	
+0	Theme.h	func	ssg::operator==	
+0	Theme.h	func	ssg::operator==	
+0	UiRegionProjection.h	func	ssg::operator==	
+0	UiRegionProjection.h	func	ssg::operator==	
+0	UiRegionProjection.h	func	ssg::operator==	
+0	UiTree.h	func	ssg::operator==	
+0	UiTree.h	func	ssg::operator==	
+0	UiTree.h	func	ssg::operator==	
+0	UiTree.h	func	ssg::operator==	
+0	UiTree.h	func	ssg::operator==	
+0	UiTree.h	func	ssg::operator==	
+0	UiTree.h	func	ssg::operator==	
+0	UiTree.h	func	ssg::operator==	
+0	UiWidget.h	func	ssg::operator==	
+0	ViewAction.h	func	ssg::operator==	
+0	ViewAction.h	func	ssg::operator==	
+0	ViewAction.h	func	ssg::operator==	
+0	ViewAction.h	func	ssg::operator==	
+0	ViewAction.h	func	ssg::operator==	
+0	ViewAction.h	func	ssg::operator==	
+0	ViewAction.h	func	ssg::operator==	
+0	ViewAction.h	func	ssg::operator==	
 0	WidgetLayout.h	func	ssg::operator==	
 0	WidgetLayout.h	func	ssg::operator==	
 0	WidgetLayout.h	func	ssg::operator==	
 0	WidgetLayout.h	func	ssg::operator==	
+0	Workspace.h	func	ssg::operator==	
+0	Workspace.h	func	ssg::operator==	
+0	color.h	func	ssg::operator==	
+0	platform_files.h	func	ssg::operator==	
 0	Editor.h	func	ssg::payloadAs	
 1	WidgetLayout.h	enum	ssg::Align	WidgetLayout.cpp
 1	DraftAutosaveScheduler.h	struct	ssg::AutosaveCandidate	DraftAutosaveScheduler.cpp
@@ -407,11 +402,10 @@
 1	WidgetLayout.h	func	ssg::layoutTextInput	WidgetLayout.cpp
 1	Settings.h	func	ssg::linuxSettingsPaths	linux_settings.cpp
 1	PaletteSearcher.h	func	ssg::matcherParametersInDomain	PaletteSearcher.cpp
-1	TextCodec.h	func	ssg::operator==	Workspace.cpp
 1	Search.h	func	ssg::operator==	Search.cpp
+1	SyntaxModel.h	func	ssg::operator==	SyntaxModel.cpp
+1	TextCodec.h	func	ssg::operator==	Workspace.cpp
 1	UiTree.h	func	ssg::operator==	ScreenState.cpp
-1	SyntaxModel.h	func	ssg::operator==	SyntaxModel.cpp
-1	SyntaxModel.h	func	ssg::operator==	SyntaxModel.cpp
 1	OptionalSubsystemAudit.h	func	ssg::optionalConstructionCount	OptionalSubsystemAudit.cpp
 1	OptionalSubsystemAudit.h	func	ssg::optionalConstructionTotal	OptionalSubsystemAudit.cpp
 1	OptionalSubsystemAudit.h	func	ssg::optionalSubsystemName	OptionalSubsystemAudit.cpp
@@ -742,8 +736,8 @@
 2	DiffModel.h	func	ssg::nextDiffHunk	DiffModel.cpp,navigation.cpp
 2	TextCodec.h	func	ssg::noteUtf8Validation	Document.cpp,TextCodec.cpp
 2	FilesystemWatcher.h	func	ssg::operator==	ExternalModificationFlow.cpp,FilesystemWatcher.cpp
-2	ScratchJournal.h	func	ssg::operator==	Editor.cpp,ScratchStore.cpp
 2	RecoveryManager.h	func	ssg::operator==	RecoveryManager.cpp,TabManager.cpp
+2	ScratchJournal.h	func	ssg::operator==	Editor.cpp,ScratchStore.cpp
 2	Layout.h	func	ssg::paneInDirection	GridPresenter.cpp,Layout.cpp
 2	Keymap.h	func	ssg::parseKeySequence	Editor.cpp,Keymap.cpp
 2	SystemClipboardReader.h	func	ssg::planSystemClipboardPaste	SystemClipboardReader.cpp,main.cpp
@@ -908,8 +902,8 @@
 3	Viewport.h	func	ssg::computeUnwrappedViewport	GridPresenter.cpp,Selection.cpp,Viewport.cpp
 3	Viewport.h	func	ssg::computeViewport	GridPresenter.cpp,Selection.cpp,Viewport.cpp
 3	platform_files.h	func	ssg::createFileExclusively	Editor.cpp,Workspace.cpp,linux_files.cpp
-3	TextCodec.h	func	ssg::decodeText	TextCodec.cpp,Workspace.cpp,WorkspaceCorpus.cpp
 3	TextCodec.h	func	ssg::decodeText	SystemClipboardReader.cpp,TextCodec.cpp,Workspace.cpp
+3	TextCodec.h	func	ssg::decodeText	TextCodec.cpp,Workspace.cpp,WorkspaceCorpus.cpp
 3	UiTree.h	func	ssg::effectiveUiFocus	Renderer.cpp,UiTree.cpp,main.cpp
 3	ScratchJournal.h	func	ssg::encodeJournalCheckpoint	RecoveryManager.cpp,ScratchJournal.cpp,ScratchStore.cpp
 3	UiTree.h	func	ssg::findUiNode	ScreenState.cpp,UiTree.cpp,ViewCommands.cpp
@@ -1118,4 +1112,3 @@
 19	platform_files.h	struct	ssg::FileStat	DurableStore.cpp,Editor.cpp,ExternalModificationFlow.cpp,FileArchive.cpp,FilesystemWatcher.cpp,GitRepository.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchSession.cpp,ScratchStore.cpp,TreeModel.cpp,Workspace.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,main.cpp,platform_files.cpp
 19	platform_files.h	func	ssg::statFile	DurableStore.cpp,Editor.cpp,ExternalModificationFlow.cpp,FileArchive.cpp,FilesystemWatcher.cpp,GitRepository.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchSession.cpp,ScratchStore.cpp,TreeModel.cpp,Workspace.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,main.cpp,platform_files.cpp
 20	types.h	struct	ssg::ByteOffset	ClipboardRegister.cpp,Document.cpp,DocumentHistory.cpp,EditCommands.cpp,Editor.cpp,FindReplace.cpp,GitDiffIngress.cpp,LspFeatureController.cpp,LspSyncClient.cpp,PaintDocument.cpp,Selection.cpp,SyntaxModel.cpp,TextInputCommands.cpp,TreeSitterParser.cpp,Viewport.cpp,Workspace.cpp,editing.cpp,input_routing.cpp,main.cpp,navigation.cpp
-

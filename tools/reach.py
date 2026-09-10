@@ -114,13 +114,8 @@ def system_include_args() -> list[str]:
     return [arg for p in paths for arg in ("-isystem", p)]
 
 
-def declarations(repo: pathlib.Path) -> dict[str, tuple[str, str]]:
-    """Every public concept, keyed by USR so overloads and redeclarations merge."""
-    root = (repo / INCLUDE_ROOT).resolve()
-    index = ci.Index.create()
-    found: dict[str, tuple[str, str]] = {}
-    headers = sorted(p for p in root.rglob("*.h") if "detail" not in p.parts)
-    args = [
+def header_args(root: pathlib.Path) -> list[str]:
+    return [
         "-std=c++20",
         # A .h is C by default; the census's headers are C++.
         "-xc++-header",
@@ -129,27 +124,56 @@ def declarations(repo: pathlib.Path) -> dict[str, tuple[str, str]]:
         *(f"-I{d}" for d in root.iterdir() if d.is_dir()),
         *system_include_args(),
     ]
-    for header in headers:
-        unit = index.parse(str(header), args=args)
-        for cursor in unit.cursor.walk_preorder():
-            kind = KINDS.get(cursor.kind)
-            if kind is None:
-                continue
-            # A free function declared in a header has no definition there, so
-            # requiring one would report only the few defined inline.
-            if kind != "func" and not cursor.is_definition():
-                continue
-            if not is_public_header(
-                cursor.location.file.name if cursor.location.file else None, root
-            ):
-                continue
-            name = qualified_name(cursor)
-            if not name or name.startswith(SKIP_NAMES) or "::" not in name:
-                continue
-            usr = cursor.get_usr()
-            if usr:
-                declared = pathlib.Path(cursor.location.file.name).name
-                found.setdefault(usr, (declared, kind, name))
+
+
+def header_declarations(
+    header: pathlib.Path, root: pathlib.Path, args: list[str]
+) -> dict[str, tuple[str, str]]:
+    """The public concepts written in this header."""
+    unit = ci.Index.create().parse(str(header), args=args)
+    found: dict[str, tuple[str, str]] = {}
+    # Walking the whole tree revisits every included header, once per header
+    # that includes it. Every public header is parsed in its own turn, so
+    # descending only into what this file declares yields the same union.
+    pending = list(unit.cursor.get_children())
+    while pending:
+        cursor = pending.pop()
+        located = cursor.location.file
+        if located is None or pathlib.Path(located.name) != header:
+            continue
+        pending.extend(cursor.get_children())
+        kind = KINDS.get(cursor.kind)
+        if kind is None:
+            continue
+        # A free function declared in a header has no definition there, so
+        # requiring one would report only the few defined inline.
+        if kind != "func" and not cursor.is_definition():
+            continue
+        if not is_public_header(located.name, root):
+            continue
+        name = qualified_name(cursor)
+        if not name or name.startswith(SKIP_NAMES) or "::" not in name:
+            continue
+        usr = cursor.get_usr()
+        if usr:
+            found.setdefault(usr, (pathlib.Path(located.name).name, kind, name))
+    return found
+
+
+def declarations(repo: pathlib.Path, jobs: int) -> dict[str, tuple[str, str]]:
+    """Every public concept, keyed by USR so overloads and redeclarations merge."""
+    root = (repo / INCLUDE_ROOT).resolve()
+    headers = sorted(p for p in root.rglob("*.h") if "detail" not in p.parts)
+    args = header_args(root)
+    found: dict[str, tuple[str, str]] = {}
+    with multiprocessing.Pool(jobs) as pool:
+        for one in pool.imap_unordered(
+            functools.partial(header_declarations, root=root, args=args),
+            headers,
+            chunksize=1,
+        ):
+            for usr, value in one.items():
+                found.setdefault(usr, value)
     return found
 
 
@@ -251,7 +275,7 @@ def main() -> int:
         for e in json.loads(database.read_text())
         if options.tests or "/tests/" not in e["file"]
     ]
-    declared = declarations(repo)
+    declared = declarations(repo, options.jobs)
 
     users: dict[str, set[str]] = collections.defaultdict(set)
     with multiprocessing.Pool(options.jobs) as pool:
@@ -273,7 +297,9 @@ def main() -> int:
 
     report = "".join(
         "\t".join(str(field) for field in row) + "\n"
-        for row in sorted(rows, key=lambda r: (r[0], r[3]))
+        # Overloads share a name, so sort on the whole row; a partial key would
+        # leave their order at the mercy of which worker finished first.
+        for row in sorted(rows, key=lambda r: (r[0], r[3], r[1], r[2], r[4]))
     )
 
     if options.check is not None:
