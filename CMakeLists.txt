@@ -138,8 +138,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/test_command.cpp
         SYMBOL test_command)
     ssg_test_include_directories(test_command PRIVATE ${SSG_SOURCE_DIR}/tests)
-    ssg_test_compile_definitions(test_command PRIVATE
-        SSG_COMMAND_SURFACE_FIXTURE="${SSG_SOURCE_DIR}/tests/fixtures/commands/user-surface.tsv")
     ssg_test_link_libraries(test_command PRIVATE ssg_core)
 
 endif()

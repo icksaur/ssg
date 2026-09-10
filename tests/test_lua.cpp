@@ -1,9 +1,10 @@
 #include "test_helpers.h"
 
 
-#include "all_command_ids.h"
+#include <ssg/Editor.h>
 #include <ssg/LuaCommandHost.h>
 
+#include <filesystem>
 #include <fstream>
 #include <optional>
 #include <sstream>
@@ -19,14 +20,6 @@ namespace {
 
 using namespace ssg;
 
-std::vector<std::string> commandIds() {
-    std::vector<std::string> entries;
-    for (auto const& facts : ssg::testing::allCommandFacts()) {
-        entries.push_back(facts.id);
-    }
-    return entries;
-}
-
 LuaCommandHostOptions options(std::vector<LuaCommand> commands = {}) {
     LuaCommandHostOptions result;
     result.commands = std::move(commands);
@@ -34,26 +27,33 @@ LuaCommandHostOptions options(std::vector<LuaCommand> commands = {}) {
 }
 
 TEST(registeredCommandsAreCallable) {
-    auto const catalog = commandIds();
+    const auto root = testRuntimePath("lua_command_registry");
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    auto runtime = createEditor({root});
+    ASSERT_TRUE(runtime.accepted());
+    if (!runtime.accepted()) return;
+
     std::vector<LuaCommand> commands;
     std::unordered_set<std::string> called;
-    std::size_t callableCount = 0;
-    for (auto const& id : catalog) {
-        commands.push_back({id, id});
-        ++callableCount;
+    for (auto const& [id, command] :
+         runtime.session->commandRegistry().all()) {
+        commands.push_back({id, command.label});
     }
-    LuaCommandHost host{options(std::move(commands)),
+    LuaCommandHost host{options(commands),
         [&](LuaInvocation const& invocation) {
             called.emplace(invocation.commandId);
             return LuaResult{};
         }};
 
-    for (auto const& id : catalog) {
-        auto const result = host.evaluate("ssg.command(\"" + id + "\")");
+    for (auto const& command : commands) {
+        auto const result =
+            host.evaluate("ssg.command(\"" + command.id + "\")");
         ASSERT_TRUE(result.accepted());
     }
-    ASSERT_EQ(called.size(), callableCount);
-    ASSERT_EQ(callableCount, catalog.size());
+    ASSERT_EQ(called.size(), commands.size());
+    runtime.session.reset();
+    std::filesystem::remove_all(root);
 }
 
 

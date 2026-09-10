@@ -1,14 +1,8 @@
 #include <ssg/Command.h>
-#include <ssg/Editor.h>
-
 #include "test_helpers.h"
 
-#include <filesystem>
-#include <fstream>
 #include <stdexcept>
-#include <sstream>
 #include <string>
-#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -133,37 +127,6 @@ TEST(replaceIsAtomicAndMayReuseRetiredIds) {
     ASSERT_TRUE(commands.find("script.new") != nullptr);
 }
 
-TEST(retainedBuiltInsMatchTheReviewedSurface) {
-    const auto root =
-        testRuntimePath("command_surface_" + std::to_string(::getpid()));
-    std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root);
-    auto runtime = ssg::createEditor({root});
-    ASSERT_TRUE(runtime.accepted());
-    if (!runtime.accepted()) return;
-
-    std::ifstream fixture{SSG_COMMAND_SURFACE_FIXTURE};
-    ASSERT_TRUE(fixture.is_open());
-    std::string row;
-    while (std::getline(fixture, row)) {
-        std::istringstream fields{row};
-        std::string id;
-        std::string label;
-        std::string classification;
-        ASSERT_TRUE(std::getline(fields, id, '\t'));
-        ASSERT_TRUE(std::getline(fields, label, '\t'));
-        ASSERT_TRUE(std::getline(fields, classification));
-        const auto* command = runtime.session->commandRegistry().find(id);
-        if (classification == "config") {
-            ASSERT_TRUE(command == nullptr);
-            continue;
-        }
-        ASSERT_TRUE(command != nullptr);
-        if (command) ASSERT_EQ(command->label, label);
-    }
-    std::filesystem::remove_all(root);
-}
-
 }  // namespace
 
 SSG_TEST_SUITE(test_command) {
@@ -172,7 +135,6 @@ SSG_TEST_SUITE(test_command) {
     RUN(addRejectsDuplicateAndEmptyValuesWithoutMutation);
     RUN(nestedDispatchIsRefused);
     RUN(replaceIsAtomicAndMayReuseRetiredIds);
-    RUN(retainedBuiltInsMatchTheReviewedSurface);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

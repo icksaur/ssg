@@ -3,7 +3,6 @@
 #include <string_view>
 #include <vector>
 
-#include "all_command_ids.h"
 #include "suite_declarations.inc"
 
 namespace {
@@ -16,17 +15,8 @@ int unexpectedSuiteArguments(std::string_view suite) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    if (argc == 2 &&
-        std::string_view{argv[1]} == "--dump-command-surface") {
-        for (auto const& command : ssg::testing::allCommandFacts()) {
-            std::cout << command.id << '\t' << command.label << '\t'
-                      << "keep\n";
-        }
-        return 0;
-    }
     if (argc < 3 || std::string_view{argv[1]} != "--suite") {
-        std::cerr << "usage: ssg_tests --suite <name> [suite arguments]\n"
-                     "       ssg_tests --dump-command-surface\n";
+        std::cerr << "usage: ssg_tests --suite <name> [suite arguments]\n";
         return 2;
     }
 

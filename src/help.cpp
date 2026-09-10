@@ -163,7 +163,7 @@ std::string renderCommandList(Commands const& commands) {
 // Assembles the read-only help document: compiled-in prose, then the live
 // keybinding table, then configuration help and the full command list.
 // Reassembled on every help.open so the generated sections always reflect the
-// current keymap and catalog.
+// current keymap and registry.
 std::string buildHelpDocument(Editor const& runtime) {
     std::string document{kHelpPreamble};
     document += renderKeybindings(runtime.keymap, runtime.commands);

@@ -1,26 +1,15 @@
 #include <ssg/Picker.h>
 
-#include "all_command_ids.h"
-
+#include <ssg/Editor.h>
 #include <ssg/Search.h>
 
 #include "test_helpers.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <string>
 
 namespace {
-
-// Against the runtime's catalog: a picker's open command may be declared by the
-// component that implements it rather than by the static table.
-bool isP0Command(std::string_view id) {
-    for (auto const& facts : ssg::testing::allCommandFacts()) {
-        if (facts.id == id) return true;
-    }
-    return false;
-}
-
-}  // namespace
 
 // Exhaustiveness oracle.  A picker kind is only usable if every wiring point in
 // its descriptor is filled, and none of those points is checkable by the
@@ -28,6 +17,13 @@ bool isP0Command(std::string_view id) {
 // from the table (or pointing at a command id that does not exist) builds
 // cleanly and fails only at runtime, as an empty prompt or a no-op open.
 TEST(everyPickerKindHasACompletelyWiredDescriptor) {
+    const auto root = testRuntimePath("picker_commands");
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    auto runtime = ssg::createEditor({root});
+    ASSERT_TRUE(runtime.accepted());
+    if (!runtime.accepted()) return;
+
     for (auto kind : ssg::kAllPickerKinds) {
         auto const* descriptor = ssg::pickerCatalog().find(kind);
         ASSERT_TRUE(descriptor != nullptr);
@@ -35,8 +31,11 @@ TEST(everyPickerKindHasACompletelyWiredDescriptor) {
         ASSERT_TRUE(descriptor->kind == kind);
         ASSERT_FALSE(descriptor->promptTitle.empty());
         ASSERT_FALSE(descriptor->openCommandId.empty());
-        ASSERT_TRUE(isP0Command(descriptor->openCommandId));
+        ASSERT_TRUE(runtime.session->commandRegistry().find(
+                        descriptor->openCommandId) != nullptr);
     }
+    runtime.session.reset();
+    std::filesystem::remove_all(root);
 }
 
 // Existence alone is a weak oracle: a descriptor naming the wrong (but real)
@@ -72,6 +71,8 @@ TEST(noTwoDescriptorsClaimTheSameKind) {
         }
     }
 }
+
+}  // namespace
 
 SSG_TEST_SUITE(test_picker) {
     RUN(everyPickerKindHasACompletelyWiredDescriptor);

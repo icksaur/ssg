@@ -166,6 +166,18 @@ TEST(aCommandAScriptRegistersIsAnOrdinaryCatalogCommand) {
 
     auto const dispatched = runtime->dispatch("user.count");
     ASSERT_TRUE(dispatched.accepted());
+    ASSERT_TRUE(runtime->dispatch("help.open").accepted());
+    const auto help = runtime->readOnlyTabDocuments.find("help:main");
+    ASSERT_TRUE(help != runtime->readOnlyTabDocuments.end());
+    if (help != runtime->readOnlyTabDocuments.end()) {
+        const auto* document = runtime->workspace.tryDocument(help->second);
+        ASSERT_TRUE(document != nullptr);
+        if (document != nullptr) {
+            ASSERT_TRUE(document->snapshot().text.find(
+                            "- `user.count` -- Test Command") !=
+                        std::string::npos);
+        }
+    }
     ASSERT_TRUE(scripts.evaluate("if calls ~= 1 then error('not called') end")
                     .accepted());
     fs::remove_all(root);
