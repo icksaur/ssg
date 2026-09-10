@@ -542,12 +542,6 @@ ScratchJournal::ScratchJournal(std::filesystem::path path)
     }
 }
 
-void ScratchJournal::appendCheckpoint(
-    const JournalRecoverySet& recovery) const {
-    const auto record = encodeJournalCheckpoint(recovery);
-    append(record);
-}
-
 void ScratchJournal::appendDocument(const JournalDocument& document) const {
     const auto record = encodeJournalDocument(document);
     append(record);

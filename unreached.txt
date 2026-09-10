@@ -1,5 +1,3 @@
-ssg::(anonymous namespace)::appendRemovedIds(ssg::ScratchQuotaResult&, ssg::DurableStoreEvictionResult const&)	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::(anonymous namespace)::restoredRemnants(std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
 ssg::(anonymous namespace)::selectionArgumentsEqual(ssg::SelectionCommandArguments const&, ssg::SelectionCommandArguments const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
 ssg::(anonymous namespace)::valid(ssg::SyntaxScope)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
 ssg::CellGrid::canonical[abi:cxx11]() const	CMakeFiles/ssg_tui_objects.dir/src/Renderer.cpp.o
@@ -46,23 +44,6 @@ ssg::RecoveryManager::restoreFilesystem(ssg::RecoveryRecordId const&)	CMakeFiles
 ssg::RowProjection::rows() const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
 ssg::RowProjection::visualRowForBufferLine(unsigned int) const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
 ssg::RowProjection::visualRowForReal(unsigned int) const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
-ssg::ScratchJournal::appendCheckpoint(ssg::JournalRecoverySet const&) const	CMakeFiles/ssg_core.dir/src/ScratchJournal.cpp.o
-ssg::ScratchSession::path[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::Impl::applyQuotas()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::Impl::compact()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::Impl::journalPath[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::Impl::purgeAll()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::Impl::purgeAll()::{lambda(ssg::(anonymous namespace)::Remnant const&)#1}::operator()(ssg::(anonymous namespace)::Remnant const&) const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::Impl::purgeWorkspace()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::Impl::purgeWorkspace()::{lambda(ssg::(anonymous namespace)::Remnant const&)#1}::operator()(ssg::(anonymous namespace)::Remnant const&) const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::Impl::sessionPath[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::applyQuotas()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::compact()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::journalPath[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::purgeAll()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::purgeWorkspace()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::sessionPath[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
-ssg::ScratchStore::shutdown()	CMakeFiles/ssg_core.dir/src/ScratchStore.cpp.o
 ssg::SearchController::closePalette(unsigned long)	CMakeFiles/ssg_core.dir/src/Search.cpp.o
 ssg::SearchController::executePalette()	CMakeFiles/ssg_core.dir/src/Search.cpp.o
 ssg::SearchController::openPalette(unsigned long)	CMakeFiles/ssg_core.dir/src/Search.cpp.o

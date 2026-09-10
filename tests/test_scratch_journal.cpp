@@ -273,31 +273,6 @@ TEST(untitledIdsAreNonzeroUniqueAndStableValues) {
     ASSERT_EQ(ssg::JournalDocumentKey::untitled(first).untitledId(), first);
 }
 
-TEST(durableAppendSurvivesCloseAndRestartReplay) {
-    TemporaryDirectory temporary;
-    const auto path = temporary.path() / "document.journal";
-    {
-        ssg::ScratchJournal journal{path};
-        journal.appendCheckpoint({{savedDocument("base")}});
-        journal.appendDocument(savedDocument("after restart"));
-    }
-
-    const ssg::ScratchJournal reopened{path};
-    const auto replayed = reopened.replay();
-    ASSERT_FALSE(replayed.discardedTail);
-    ASSERT_EQ(replayed.recovery.documents,
-              std::vector<ssg::JournalDocument>{
-                  savedDocument("after restart")});
-}
-
-TEST(appendRequiresSessionLayerToCreateParentDirectory) {
-    TemporaryDirectory temporary;
-    const ssg::ScratchJournal journal{
-        temporary.path() / "missing" / "document.journal"};
-    ASSERT_THROWS(journal.appendCheckpoint({{savedDocument()}}),
-                  std::invalid_argument);
-}
-
 TEST(appendRejectsInvalidSavedIdentityAndInvalidUtf8) {
     ASSERT_THROWS(ssg::JournalDocumentKey::saved("../escape"),
                   std::invalid_argument);
@@ -307,6 +282,14 @@ TEST(appendRejectsInvalidSavedIdentityAndInvalidUtf8) {
             {ssg::JournalDocumentKey::saved("valid"),
              ssg::DocumentMode::Edit, true, std::string{"bad\xff", 4}}),
         std::invalid_argument);
+}
+
+TEST(appendRequiresSessionLayerToCreateParentDirectory) {
+    TemporaryDirectory temporary;
+    const ssg::ScratchJournal journal{
+        temporary.path() / "missing" / "document.journal"};
+    ASSERT_THROWS(journal.appendDocument(savedDocument()),
+                  std::invalid_argument);
 }
 
 } // namespace
@@ -321,9 +304,8 @@ SSG_TEST_SUITE(test_scratch_journal) {
     RUN(corruptOrTruncatedTailStopsAtLastValidRecord);
     RUN(malformedInputFailsClosedWithoutAllocationOrState);
     RUN(untitledIdsAreNonzeroUniqueAndStableValues);
-    RUN(durableAppendSurvivesCloseAndRestartReplay);
-    RUN(appendRequiresSessionLayerToCreateParentDirectory);
     RUN(appendRejectsInvalidSavedIdentityAndInvalidUtf8);
+    RUN(appendRequiresSessionLayerToCreateParentDirectory);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

@@ -142,12 +142,22 @@ ssg::RecoveryConfig recoveryConfig(
 
 ssg::ScratchStoreConfig scratchConfig() {
     ssg::ScratchStoreConfig result;
-    result.maximumBytes = std::numeric_limits<std::uintmax_t>::max();
-    result.maximumAge = std::chrono::hours{24 * 365};
     result.compactionThresholdBytes =
         std::numeric_limits<std::uintmax_t>::max();
     result.durabilityTarget = 100ms;
     return result;
+}
+
+std::filesystem::path scratchJournalPath(
+    const std::filesystem::path& root,
+    const std::filesystem::path& workspace) {
+    const auto sessions =
+        root / "workspaces" / ssg::scratchWorkspaceKey(workspace) / "sessions";
+    const auto entries = ssg::listDirectory(sessions);
+    if (!entries.ok() || entries.entries.size() != 1) {
+        throw std::runtime_error("expected one scratch session");
+    }
+    return entries.entries.front().path() / "journal.bin";
 }
 
 class InjectedRecoveryFailures final : public ssg::RecoveryFaultInjector {
@@ -233,9 +243,11 @@ TEST(dirtyCloseDurabilityFailurePreservesDocumentAndPublishesNothing) {
     const auto workspace =
         std::filesystem::absolute(temporary.path() / "workspace");
     std::filesystem::create_directories(workspace);
-    auto scratch = ssg::ScratchStore::create(
-        temporary.path() / "scratch", workspace, scratchConfig());
-    std::filesystem::create_directory(scratch.journalPath());
+    const auto scratchRoot = temporary.path() / "scratch";
+    auto scratch =
+        ssg::ScratchStore::create(scratchRoot, workspace, scratchConfig());
+    std::filesystem::create_directory(
+        scratchJournalPath(scratchRoot, workspace));
     auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
     const auto expected = savedDocument("draft.txt", "not durable");

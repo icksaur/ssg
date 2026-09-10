@@ -40,9 +40,6 @@ public:
     ScratchRemnantClaim& operator=(const ScratchRemnantClaim&) = delete;
 
     [[nodiscard]] const ScratchSessionId& id() const noexcept { return id_; }
-    [[nodiscard]] const std::filesystem::path& path() const noexcept {
-        return path_;
-    }
     [[nodiscard]] std::filesystem::path journalPath() const {
         return path_ / "journal.bin";
     }
@@ -73,9 +70,6 @@ public:
     ScratchSession& operator=(const ScratchSession&) = delete;
 
     [[nodiscard]] const ScratchSessionId& id() const noexcept { return id_; }
-    [[nodiscard]] const std::filesystem::path& path() const noexcept {
-        return path_;
-    }
     [[nodiscard]] std::filesystem::path journalPath() const {
         return path_ / "journal.bin";
     }
@@ -99,8 +93,6 @@ private:
 };
 
 struct ScratchStoreConfig {
-    std::uintmax_t maximumBytes = 256U * 1024U * 1024U;
-    std::chrono::seconds maximumAge = std::chrono::hours{24 * 30};
     std::uintmax_t compactionThresholdBytes = 4U * 1024U * 1024U;
     std::chrono::milliseconds durabilityTarget{100};
 };
@@ -119,12 +111,6 @@ struct ScratchDurabilityState {
     std::string failure;
 };
 
-struct ScratchQuotaResult {
-    std::vector<std::string> evictedSessionIds;
-    std::uintmax_t remainingBytes = 0;
-    bool withinByteQuota = true;
-};
-
 class ScratchStore {
 public:
     [[nodiscard]] static ScratchStore create(
@@ -139,21 +125,13 @@ public:
     ScratchStore& operator=(const ScratchStore&) = delete;
 
     [[nodiscard]] JournalRecoverySet recovery() const;
-    [[nodiscard]] std::filesystem::path sessionPath() const;
-    [[nodiscard]] std::filesystem::path journalPath() const;
 
     void updateDocument(JournalDocument document);
     void removeDocument(JournalDocumentKey key);
-    void compact();
 
     [[nodiscard]] ScratchDurabilityState durabilityState() const;
     [[nodiscard]] bool waitUntilDurable(
         std::chrono::milliseconds timeout) const;
-
-    [[nodiscard]] ScratchQuotaResult applyQuotas();
-    [[nodiscard]] std::size_t purgeWorkspace();
-    [[nodiscard]] std::size_t purgeAll();
-    void shutdown();
 
 private:
     class Impl;

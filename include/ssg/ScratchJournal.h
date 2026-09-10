@@ -124,7 +124,6 @@ public:
         return path_;
     }
 
-    void appendCheckpoint(const JournalRecoverySet& recovery) const;
     void appendDocument(const JournalDocument& document) const;
     void appendRemove(const JournalDocumentKey& key) const;
     [[nodiscard]] JournalReplayResult replay() const;

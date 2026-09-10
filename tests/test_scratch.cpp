@@ -52,29 +52,21 @@ std::filesystem::path workspace(const TemporaryDirectory& temporary,
     return std::filesystem::absolute(temporary.path() / name).lexically_normal();
 }
 
-std::string makeRestoredRemnant(const std::filesystem::path& root,
-                                  const std::filesystem::path& workspacePath,
-                                  std::string contents) {
-    std::string id;
-    {
-        auto remnant = ssg::ScratchSession::create(root, workspacePath);
-        id = std::string{remnant.id().value()};
-        ssg::ScratchJournal{remnant.journalPath()}.appendDocument(
-            document("file.txt", std::move(contents)));
+std::filesystem::path journalPath(
+    const TemporaryDirectory& temporary,
+    const std::filesystem::path& workspacePath) {
+    const auto sessions =
+        temporary.path() / "workspaces" /
+        ssg::scratchWorkspaceKey(workspacePath) / "sessions";
+    const auto entries = ssg::listDirectory(sessions);
+    if (!entries.ok() || entries.entries.size() != 1) {
+        throw std::runtime_error("expected one scratch session");
     }
-    {
-        auto selector = ssg::ScratchSession::create(root, workspacePath);
-        auto claim = selector.claimNewestRestorable();
-        if (!claim) throw std::runtime_error("failed to create test remnant");
-        claim->markRestored();
-    }
-    return id;
+    return entries.entries.front().path() / "journal.bin";
 }
 
 ssg::ScratchStoreConfig configuration() {
     ssg::ScratchStoreConfig result;
-    result.maximumBytes = std::numeric_limits<std::uintmax_t>::max();
-    result.maximumAge = std::chrono::hours{24 * 365};
     result.compactionThresholdBytes =
         std::numeric_limits<std::uintmax_t>::max();
     result.durabilityTarget = 100ms;
@@ -83,19 +75,18 @@ ssg::ScratchStoreConfig configuration() {
 
 TEST(compactionPreservesReplayAndLeavesOneAtomicCheckpoint) {
     TemporaryDirectory temporary;
+    const auto workspacePath = workspace(temporary);
+    auto config = configuration();
+    config.compactionThresholdBytes = 1;
     auto store =
-        ssg::ScratchStore::create(temporary.path(), workspace(temporary),
-                                  configuration());
+        ssg::ScratchStore::create(temporary.path(), workspacePath, config);
     store.updateDocument(document("a.txt", "one"));
     store.updateDocument(document("b.txt", "two"));
     store.updateDocument(document("a.txt", "three"));
     ASSERT_TRUE(store.waitUntilDurable(2s));
-    const auto before = ssg::ScratchJournal{store.journalPath()}.replay();
-
-    store.compact();
-    ASSERT_TRUE(store.waitUntilDurable(2s));
-    const auto after = ssg::ScratchJournal{store.journalPath()}.replay();
-    ASSERT_EQ(after.recovery, before.recovery);
+    const auto after =
+        ssg::ScratchJournal{journalPath(temporary, workspacePath)}.replay();
+    ASSERT_EQ(after.recovery, store.recovery());
     ASSERT_FALSE(after.discardedTail);
     ASSERT_EQ(after.validBytes,
               ssg::encodeJournalCheckpoint(after.recovery).size());
@@ -108,7 +99,7 @@ TEST(startupImportsBeforeMarkingRemnantRestored) {
     {
         auto remnant =
             ssg::ScratchSession::create(temporary.path(), workspacePath);
-        remnantPath = remnant.path();
+        remnantPath = remnant.journalPath().parent_path();
         ssg::ScratchJournal{remnant.journalPath()}.appendDocument(
             document("draft.txt", "recover me"));
     }
@@ -119,65 +110,15 @@ TEST(startupImportsBeforeMarkingRemnantRestored) {
               std::vector<ssg::JournalDocument>{
                   document("draft.txt", "recover me")});
     ASSERT_TRUE(std::filesystem::exists(remnantPath / "restored"));
-    ASSERT_EQ(ssg::ScratchJournal{store.journalPath()}.replay().recovery,
-              store.recovery());
-}
-
-TEST(quotaEvictsOnlyRestoredRemnantsOldestFirst) {
-    TemporaryDirectory temporary;
-    const auto workspacePath = workspace(temporary);
-    std::vector<std::string> ids;
-    ids.push_back(
-        makeRestoredRemnant(temporary.path(), workspacePath, "oldest"));
-    ids.push_back(
-        makeRestoredRemnant(temporary.path(), workspacePath, "middle"));
-    ids.push_back(
-        makeRestoredRemnant(temporary.path(), workspacePath, "newest"));
-    ASSERT_TRUE(std::is_sorted(ids.begin(), ids.end()));
-
-    auto config = configuration();
-    config.maximumBytes = 0;
-    auto store =
-        ssg::ScratchStore::create(temporary.path(), workspacePath, config);
-    {
-        auto protectedRemnant =
-            ssg::ScratchSession::create(temporary.path(), workspacePath);
-        ssg::ScratchJournal{protectedRemnant.journalPath()}.appendDocument(
-            document("protected.txt", "unrestored quota state"));
-    }
-    const auto result = store.applyQuotas();
-    ASSERT_EQ(result.evictedSessionIds, ids);
-    ASSERT_FALSE(result.withinByteQuota);
-    ASSERT_TRUE(std::filesystem::exists(store.sessionPath()));
-}
-
-TEST(purgeWorkspaceAndAllLeaveUnrestoredState) {
-    TemporaryDirectory temporary;
-    const auto workspaceA = workspace(temporary, "a");
-    const auto workspaceB = workspace(temporary, "b");
-    makeRestoredRemnant(temporary.path(), workspaceA, "a");
-    makeRestoredRemnant(temporary.path(), workspaceB, "b");
-    std::filesystem::path protectedPath;
-    {
-        auto protectedRemnant =
-            ssg::ScratchSession::create(temporary.path(), workspaceB);
-        protectedPath = protectedRemnant.path();
-        ssg::ScratchJournal{protectedRemnant.journalPath()}.appendDocument(
-            document("protected.txt", "unrestored"));
-    }
-
-    auto store = ssg::ScratchStore::create(
-        temporary.path(), workspaceA, configuration());
-    ASSERT_EQ(store.purgeWorkspace(), std::size_t{1});
-    ASSERT_EQ(store.purgeAll(), std::size_t{1});
-    ASSERT_TRUE(std::filesystem::exists(protectedPath));
 }
 
 TEST(writeFailureIsActionableAndNeverReportsDurable) {
     TemporaryDirectory temporary;
+    const auto workspacePath = workspace(temporary);
     auto store = ssg::ScratchStore::create(
-        temporary.path(), workspace(temporary), configuration());
-    std::filesystem::create_directory(store.journalPath());
+        temporary.path(), workspacePath, configuration());
+    std::filesystem::create_directory(
+        journalPath(temporary, workspacePath));
 
     store.updateDocument(document("failed.txt", "not durable"));
     ASSERT_FALSE(store.waitUntilDurable(2s));
@@ -188,17 +129,19 @@ TEST(writeFailureIsActionableAndNeverReportsDurable) {
     ASSERT_FALSE(state.failure.empty());
 }
 
-TEST(shutdownDrainsAndRejectsNewMutations) {
+TEST(destructionDrainsAcceptedMutations) {
     TemporaryDirectory temporary;
-    auto store = ssg::ScratchStore::create(
-        temporary.path(), workspace(temporary), configuration());
-    store.updateDocument(document("drain.txt", "accepted"));
-    store.shutdown();
-
-    ASSERT_EQ(ssg::ScratchJournal{store.journalPath()}.replay().recovery,
-              store.recovery());
-    ASSERT_THROWS(store.updateDocument(document("late.txt", "rejected")),
-                  std::logic_error);
+    const auto workspacePath = workspace(temporary);
+    std::filesystem::path path;
+    {
+        auto store = ssg::ScratchStore::create(
+            temporary.path(), workspacePath, configuration());
+        path = journalPath(temporary, workspacePath);
+        store.updateDocument(document("drain.txt", "accepted"));
+    }
+    ASSERT_EQ(ssg::ScratchJournal{path}.replay().recovery.documents,
+              std::vector<ssg::JournalDocument>{
+                  document("drain.txt", "accepted")});
 }
 
 } // namespace
@@ -206,10 +149,8 @@ TEST(shutdownDrainsAndRejectsNewMutations) {
 SSG_TEST_SUITE(test_scratch) {
     RUN(compactionPreservesReplayAndLeavesOneAtomicCheckpoint);
     RUN(startupImportsBeforeMarkingRemnantRestored);
-    RUN(quotaEvictsOnlyRestoredRemnantsOldestFirst);
-    RUN(purgeWorkspaceAndAllLeaveUnrestoredState);
     RUN(writeFailureIsActionableAndNeverReportsDurable);
-    RUN(shutdownDrainsAndRejectsNewMutations);
+    RUN(destructionDrainsAcceptedMutations);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

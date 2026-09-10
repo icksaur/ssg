@@ -1,5 +1,4 @@
 #include <ssg/ScratchStore.h>
-#include <ssg/DurableStore.h>
 
 #include <ssg/platform_files.h>
 
@@ -18,10 +17,6 @@ namespace ssg {
 namespace {
 
 void validateConfig(const ScratchStoreConfig& config) {
-    if (config.maximumAge < std::chrono::seconds::zero()) {
-        throw std::invalid_argument(
-            "scratch maximum age must not be negative");
-    }
     if (config.compactionThresholdBytes == 0) {
         throw std::invalid_argument(
             "scratch compaction threshold must be greater than zero");
@@ -60,66 +55,6 @@ void applyRemove(JournalRecoverySet& recovery,
     });
 }
 
-struct Remnant {
-    std::string id;
-    std::filesystem::path path;
-    std::filesystem::path workspacePath;
-    std::optional<std::chrono::system_clock::time_point> created;
-};
-
-std::vector<Remnant> restoredRemnants(
-    const std::filesystem::path& scratchRoot) {
-    std::vector<Remnant> result;
-    const auto workspaces = scratchRoot / "workspaces";
-    const auto workspaceEntries = listDirectory(workspaces);
-    if (!workspaceEntries.ok()) return result;
-    for (const auto& workspaceEntry : workspaceEntries.entries) {
-        const auto workspaceStat = statFile(workspaceEntry.path());
-        if (!workspaceStat ||
-            workspaceStat->kind != FileKind::Directory) continue;
-        const auto sessions = workspaceEntry.path() / "sessions";
-        const auto sessionEntries = DurableStore{sessions}.entries();
-        if (!sessionEntries.ok()) continue;
-        for (const auto& sessionEntry : sessionEntries.entries) {
-            const auto marker = sessionEntry.path / "restored";
-            const auto markerStat = statFile(marker);
-            if (!markerStat || markerStat->kind != FileKind::Regular) continue;
-            result.push_back({sessionEntry.path.filename().string(),
-                              sessionEntry.path, workspaceEntry.path(),
-                              sessionEntry.created});
-        }
-    }
-    return result;
-}
-
-bool olderThan(const Remnant& remnant,
-                std::chrono::seconds maximumAge,
-                std::chrono::system_clock::time_point now) {
-    return remnant.created && now - *remnant.created > maximumAge;
-}
-
-std::vector<DurableStoreEntry> storeEntries(
-    const std::vector<Remnant>& remnants) {
-    std::vector<DurableStoreEntry> result;
-    result.reserve(remnants.size());
-    for (const auto& remnant : remnants) {
-        result.push_back({remnant.path, remnant.created});
-    }
-    return result;
-}
-
-void appendRemovedIds(ScratchQuotaResult& result,
-                      const DurableStoreEvictionResult& eviction) {
-    if (!eviction.ok()) {
-        throw std::runtime_error("purge restored scratch remnant: " +
-                                 eviction.message);
-    }
-    for (const auto& removed : eviction.removed) {
-        result.evictedSessionIds.push_back(
-            removed.path.filename().string());
-    }
-}
-
 } // namespace
 
 class ScratchStore::Impl {
@@ -138,12 +73,10 @@ public:
         std::optional<JournalDocumentKey> key;
     };
 
-    Impl(std::filesystem::path scratchRoot,
-         ScratchStoreConfig config,
+    Impl(ScratchStoreConfig config,
          ScratchSession session,
          JournalRecoverySet recovery)
-        : scratchRoot_(std::move(scratchRoot)),
-          config_(config),
+        : config_(config),
           session_(std::move(session)),
           recovery_(std::move(recovery)),
           worker_([this] { run(); }) {}
@@ -164,13 +97,6 @@ public:
         applyRemove(recovery_, key);
         enqueueLocked({JobKind::Remove, ++acceptedGeneration_, recovery_,
                         std::nullopt, std::move(key)});
-    }
-
-    void compact() {
-        std::lock_guard lock{mutex_};
-        requireAccepting();
-        enqueueLocked({JobKind::Checkpoint, ++acceptedGeneration_, recovery_,
-                        std::nullopt, std::nullopt});
     }
 
     JournalRecoverySet recovery() const {
@@ -205,47 +131,6 @@ public:
         return failure_.empty() && durableGeneration_ >= target;
     }
 
-    ScratchQuotaResult applyQuotas() {
-        ScratchQuotaResult result;
-        auto remnants = restoredRemnants(scratchRoot_);
-        const auto now = std::chrono::system_clock::now();
-        std::vector<DurableStoreEntry> expired;
-        for (const auto& remnant : remnants) {
-            if (olderThan(remnant, config_.maximumAge, now)) {
-                expired.push_back({remnant.path, remnant.created});
-            }
-        }
-        appendRemovedIds(
-            result, DurableStore::evictOldestWhile(
-                        std::move(expired),
-                        [](std::span<const DurableStoreEntry> remaining) {
-                            return remaining.empty();
-                        }));
-
-        auto remaining = restoredRemnants(scratchRoot_);
-        const auto quotaEviction = DurableStore::evictOldestWhile(
-            storeEntries(remaining),
-            [&](std::span<const DurableStoreEntry>) {
-                return treeBytes(scratchRoot_) <= config_.maximumBytes;
-            });
-        appendRemovedIds(result, quotaEviction);
-        result.remainingBytes = treeBytes(scratchRoot_);
-        result.withinByteQuota =
-            result.remainingBytes <= config_.maximumBytes;
-        return result;
-    }
-
-    std::size_t purgeWorkspace() {
-        const auto currentWorkspace = session_.path().parent_path().parent_path();
-        return purge([&](const Remnant& remnant) {
-            return remnant.workspacePath == currentWorkspace;
-        });
-    }
-
-    std::size_t purgeAll() {
-        return purge([](const Remnant&) { return true; });
-    }
-
     void shutdown() {
         {
             std::lock_guard lock{mutex_};
@@ -257,30 +142,7 @@ public:
         if (worker_.joinable()) worker_.join();
     }
 
-    std::filesystem::path sessionPath() const { return session_.path(); }
-    std::filesystem::path journalPath() const { return session_.journalPath(); }
-
 private:
-    template <typename Predicate>
-    std::size_t purge(Predicate predicate) {
-        std::vector<DurableStoreEntry> selected;
-        for (const auto& remnant : restoredRemnants(scratchRoot_)) {
-            if (predicate(remnant)) {
-                selected.push_back({remnant.path, remnant.created});
-            }
-        }
-        const auto eviction = DurableStore::evictOldestWhile(
-            std::move(selected),
-            [](std::span<const DurableStoreEntry> remaining) {
-                return remaining.empty();
-            });
-        if (!eviction.ok()) {
-            throw std::runtime_error("purge restored scratch remnant: " +
-                                     eviction.message);
-        }
-        return eviction.removed.size();
-    }
-
     void requireAccepting() const {
         if (!accepting_) {
             throw std::logic_error("scratch store is shut down");
@@ -353,7 +215,6 @@ private:
         }
     }
 
-    std::filesystem::path scratchRoot_;
     ScratchStoreConfig config_;
     ScratchSession session_;
     mutable std::mutex mutex_;
@@ -382,7 +243,7 @@ ScratchStore ScratchStore::create(
         remnant->markRestored();
     }
     return ScratchStore{std::make_unique<ScratchStore::Impl>(
-        scratchRoot, config, std::move(session), std::move(recovery))};
+        config, std::move(session), std::move(recovery))};
 }
 
 ScratchStore::ScratchStore(std::unique_ptr<Impl> implementation) noexcept
@@ -393,19 +254,12 @@ ScratchStore::ScratchStore(ScratchStore&&) noexcept = default;
 ScratchStore& ScratchStore::operator=(ScratchStore&&) noexcept = default;
 
 JournalRecoverySet ScratchStore::recovery() const { return impl_->recovery(); }
-std::filesystem::path ScratchStore::sessionPath() const {
-    return impl_->sessionPath();
-}
-std::filesystem::path ScratchStore::journalPath() const {
-    return impl_->journalPath();
-}
 void ScratchStore::updateDocument(JournalDocument document) {
     impl_->updateDocument(std::move(document));
 }
 void ScratchStore::removeDocument(JournalDocumentKey key) {
     impl_->removeDocument(std::move(key));
 }
-void ScratchStore::compact() { impl_->compact(); }
 ScratchDurabilityState ScratchStore::durabilityState() const {
     return impl_->durabilityState();
 }
@@ -413,13 +267,4 @@ bool ScratchStore::waitUntilDurable(
     std::chrono::milliseconds timeout) const {
     return impl_->waitUntilDurable(timeout);
 }
-ScratchQuotaResult ScratchStore::applyQuotas() {
-    return impl_->applyQuotas();
-}
-std::size_t ScratchStore::purgeWorkspace() {
-    return impl_->purgeWorkspace();
-}
-std::size_t ScratchStore::purgeAll() { return impl_->purgeAll(); }
-void ScratchStore::shutdown() { impl_->shutdown(); }
-
 } // namespace ssg
