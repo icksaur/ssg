@@ -87,6 +87,14 @@ struct WorkspaceDocumentState {
                            const WorkspaceDocumentState&) = default;
 };
 
+struct WorkspacePersistenceState {
+    bool persisted = false;
+    std::vector<std::uint8_t> baseline;
+
+    friend bool operator==(const WorkspacePersistenceState&,
+                           const WorkspacePersistenceState&) = default;
+};
+
 // The tab title for a document that has never been named. Defined once so the
 // library and its clients cannot disagree about what an unnamed buffer is
 // called.
@@ -119,6 +127,10 @@ public:
     [[nodiscard]] std::vector<FileDocumentId> documents() const;
     [[nodiscard]] std::optional<WorkspaceDocumentState> state(
         FileDocumentId document) const;
+    [[nodiscard]] std::optional<WorkspacePersistenceState> persistenceState(
+        FileDocumentId document) const;
+    [[nodiscard]] std::optional<FileDocumentId> documentForPath(
+        std::string_view path) const;
     // Whether an observed disk state equals the document's authoritative external
     // baseline (the state its edits branch from, as advanced by a keep_buffer
     // dismissal). `observedContent` is the raw disk bytes, or nullopt when the file
@@ -145,6 +157,15 @@ public:
     // path is claimed, nothing is written. The document is unsaved until its
     // first save, which creates the file exclusively.
     [[nodiscard]] WorkspaceResult newFile(std::string_view path);
+    [[nodiscard]] WorkspaceResult restoreUntitled(
+        std::string_view label, std::string_view draft, DocumentMode mode);
+    [[nodiscard]] WorkspaceResult restorePathBound(
+        std::string_view path, std::string_view label, std::string_view draft,
+        DocumentMode mode);
+    [[nodiscard]] WorkspaceResult restorePersisted(
+        std::string_view path, std::string_view label,
+        std::vector<std::uint8_t> baseline, std::string_view draft,
+        DocumentMode mode);
     [[nodiscard]] WorkspaceResult openVirtualDocument(
         std::string_view suggestedLabel, std::string_view initialText,
         DocumentMode mode);

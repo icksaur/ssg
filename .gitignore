@@ -4,8 +4,8 @@ build-*/
 build_*/
 pkg/
 /*.pkg.tar.*
-# The editor's private state: scratch, recovery, and the delete archive.
-# Ignored wholesale so a future subdirectory cannot leak into git status.
+# The editor's private state: session snapshots, recovery, and delete archives.
+/ssg/
 .ssg/
 
 # Runtime test artifacts.

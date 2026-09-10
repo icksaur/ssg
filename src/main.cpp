@@ -573,6 +573,7 @@ int main(int argc, char** argv) {
     using namespace ssg;
 
     recordStartupMark("main_entry");
+    const fs::path processStartingDirectory = fs::current_path();
     const int firstOperand = argc > 1 && std::string_view{argv[1]} == "--" ? 2 : 1;
     const fs::path argument = argc > firstOperand ? argv[firstOperand] : fs::path{};
     auto target = resolveLaunch(argument);
@@ -601,6 +602,7 @@ int main(int argc, char** argv) {
     config.cwd = target.cwd;
     config.recoveryRoot = recoveryBase / "recovery";
     config.archiveRoot = stateBase / "archive";
+    config.snapshotPath = sessionSnapshotPath(processStartingDirectory);
     config.deferEnrichment = true;
     config.syntaxParser = ssg::TreeSitterParserFactory::createDefault();
     auto created = ssg::createEditor(config);
@@ -622,21 +624,15 @@ int main(int argc, char** argv) {
         initScriptWatcher.emplace(*scriptPath, appliedInitScript);
     }
 
-    bool startsWithAnEditableDocument = false;
+    bool startsWithAnEditableDocument = !runtime.tabs.viewState().tabs.empty();
     bool openedNamedFile = false;
     if (target.file) {
-        // A named file that exists is opened; a named file that does not is
-        // created as an unsaved buffer claiming that name, so the user can type
-        // and save without naming it again.
-        auto const openResult = ssg::statFile(target.cwd / *target.file)
-                                    ? applyFilePathCompletion(
-                                          runtime, PromptCompletion::FileOpen,
-                                          *target.file)
-                                    : createFileByPath(runtime, *target.file);
+        auto const openResult = openStartupTarget(runtime, *target.file);
         if (!openResult.accepted) {
             std::fprintf(stderr, "ssg: %s\n", openResult.message.c_str());
         }
-        startsWithAnEditableDocument = openResult.accepted;
+        startsWithAnEditableDocument =
+            startsWithAnEditableDocument || openResult.accepted;
         openedNamedFile = openResult.accepted;
     }
     if (!startsWithAnEditableDocument) {
@@ -768,5 +764,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    const auto saved = runtime.saveSession();
+    if (!saved.accepted) {
+        mode.restore();
+        std::fprintf(stderr, "ssg: %s\n", saved.message.c_str());
+        return 1;
+    }
     return 0;
 }

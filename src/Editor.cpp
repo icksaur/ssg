@@ -2,6 +2,7 @@
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/ScreenLayout.h>
+#include <ssg/TextCodec.h>
 #include <ssg/Style.h>
 #include <ssg/platform_files.h>
 
@@ -654,6 +655,7 @@ std::string tabMessage(TabResult const& result) {
 Editor::Editor(std::filesystem::path canonicalCwd,
                std::filesystem::path recoveryRoot,
                std::filesystem::path archiveRoot,
+               std::filesystem::path snapshotPath,
                bool deferEnrichment,
                std::shared_ptr<SyntaxParser> parser,
                bool enableGitDiffWorker,
@@ -662,6 +664,7 @@ Editor::Editor(std::filesystem::path canonicalCwd,
       workspaceIgnore{makePlatformGitIgnoreMatcher(root)},
       recoveryRoot{weaklyCanonicalPath(recoveryRoot)},
       archiveRoot{weaklyCanonicalPath(archiveRoot)},
+      snapshotPath{std::move(snapshotPath)},
       recovery{RecoveryManager::create(recoveryRoot)},
       workspace{Workspace::create(root, recovery, this->archiveRoot)},
       selection{initialSelection()}, clipboard{4}, tabs{},
@@ -1475,6 +1478,156 @@ FindReplaceOperationResult Editor::updateReplacement(std::string replacement) {
     return r;
 }
 
+OperationResult Editor::saveSession() {
+    std::lock_guard lock{operationMutex};
+    if (snapshotPath.empty()) return success();
+
+    SessionSnapshot snapshot;
+    const auto& view = tabs.viewState();
+    for (const auto& tab : view.tabs) {
+        if (tab.kind != TabKind::Document || tab.mode != DocumentMode::Edit ||
+            !tab.document) {
+            continue;
+        }
+        const auto state = workspace.state(*tab.document);
+        if (!state || !state->dirty) continue;
+        const auto persistence = workspace.persistenceState(*tab.document);
+        const auto* document = workspace.tryDocument(*tab.document);
+        if (!persistence || !document || !tab.documentKey) {
+            return failure("could not snapshot an incomplete document tab");
+        }
+
+        SessionSnapshotTab saved;
+        saved.label = state->displayLabel;
+        saved.mode = document->mode();
+        saved.draft = document->snapshot().text;
+        saved.active = view.active == tab.id;
+        if (state->key.kind() == DocumentKeyKind::Untitled) {
+            saved.backing = SessionBackingKind::Untitled;
+        } else {
+            saved.path = state->key.savedPath();
+            if (persistence->persisted) {
+                saved.backing = SessionBackingKind::PersistedPath;
+                saved.baseline = persistence->baseline;
+            } else {
+                saved.backing = SessionBackingKind::NeverCreatedPath;
+            }
+        }
+        snapshot.tabs.push_back(std::move(saved));
+    }
+
+    const auto written = writeSessionSnapshot(snapshotPath, snapshot);
+    return written.accepted() ? success() : failure(written.message);
+}
+
+OperationResult Editor::restoreSession() {
+    if (snapshotPath.empty()) return success();
+    const auto read = readSessionSnapshot(snapshotPath);
+    if (!read.accepted()) return failure(read.message);
+    if (!read.snapshot) return success();
+
+    std::optional<TabId> requestedActive;
+    std::size_t conflicts = 0;
+    try {
+        for (const auto& saved : read.snapshot->tabs) {
+        WorkspaceResult restored;
+        bool recoverUntitled = false;
+        if (saved.backing == SessionBackingKind::Untitled) {
+            restored = workspace.restoreUntitled(
+                saved.label, saved.draft, saved.mode);
+        } else {
+            const auto absolute = workspace.root() / saved.path;
+            std::optional<FileStat> status;
+            try {
+                status = statFile(absolute);
+            } catch (const std::exception&) {
+                recoverUntitled = true;
+            }
+
+            if (!recoverUntitled &&
+                saved.backing == SessionBackingKind::NeverCreatedPath) {
+                if (!status) {
+                    restored = workspace.restorePathBound(
+                        saved.path, saved.label, saved.draft, saved.mode);
+                    if (!restored.accepted() &&
+                        restored.error == WorkspaceError::AlreadyOpen) {
+                        recoverUntitled = true;
+                    }
+                } else {
+                    recoverUntitled = true;
+                }
+            } else if (!recoverUntitled &&
+                       saved.backing == SessionBackingKind::PersistedPath) {
+                if (!status) {
+                    restored = workspace.restorePathBound(
+                        saved.path, saved.label, saved.draft, saved.mode);
+                    if (!restored.accepted() &&
+                        restored.error == WorkspaceError::AlreadyOpen) {
+                        recoverUntitled = true;
+                    }
+                } else if (status->kind != FileKind::Regular) {
+                    recoverUntitled = true;
+                } else {
+                    const auto current = readFile(absolute);
+                    if (current.status == FileIoStatus::NotFound) {
+                        restored = workspace.restorePathBound(
+                            saved.path, saved.label, saved.draft, saved.mode);
+                        if (!restored.accepted()) recoverUntitled = true;
+                    } else if (!current.ok()) {
+                        recoverUntitled = true;
+                    } else {
+                        const auto decoded = decodeText(current.bytes);
+                        if ((decoded.accepted() &&
+                             decoded.text->utf8 == saved.draft) ||
+                            current.bytes == saved.baseline) {
+                            restored = workspace.restorePersisted(
+                                saved.path, saved.label, current.bytes,
+                                saved.draft, saved.mode);
+                        } else {
+                            recoverUntitled = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (recoverUntitled) {
+            ++conflicts;
+            restored = workspace.restoreUntitled(
+                saved.path + " (recovered)", saved.draft, saved.mode);
+        }
+        if (!restored.accepted() || !restored.document) {
+            return failure(
+                "session snapshot '" + snapshotPath.string() +
+                "' could not be restored: " + workspaceMessage(restored) +
+                "; move or delete it to start without recovery");
+        }
+        const auto activated = activateDocument(*restored.document);
+        if (!activated.accepted) return activated;
+        if (saved.active) requestedActive = tabs.viewState().active;
+        }
+
+        if (requestedActive) {
+            const auto activated = tabs.activate(*requestedActive);
+            if (!activated.accepted()) return failure(tabMessage(activated));
+            clampSelectionToActiveDocument();
+            refreshSyntax();
+        }
+        if (conflicts != 0) {
+            showStatus(
+                "Recovered " + std::to_string(conflicts) +
+                (conflicts == 1 ? " session draft" : " session drafts") +
+                " as untitled copies because their disk paths changed");
+        }
+    } catch (const std::exception& error) {
+        return failure(
+            "session snapshot '" + snapshotPath.string() +
+            "' could not be restored: " + error.what() +
+            "; move or delete it to start without recovery");
+    }
+    return success();
+}
+
 EditorCreateResult createEditor(EditorConfig config) {
     try {
         auto cwd = canonicalDirectory(config.cwd);
@@ -1485,7 +1638,7 @@ EditorCreateResult createEditor(EditorConfig config) {
             throw std::runtime_error(recoveryCreated.message);
         }
         auto editor = std::unique_ptr<Editor>{new Editor{
-            cwd, config.recoveryRoot, config.archiveRoot,
+            cwd, config.recoveryRoot, config.archiveRoot, config.snapshotPath,
             config.deferEnrichment, std::move(config.syntaxParser),
             config.enableGitDiffWorker, config.enableFilesystemWatcher}};
         (void)editor->workspace.pruneArchive();
@@ -1498,6 +1651,8 @@ EditorCreateResult createEditor(EditorConfig config) {
                     "default keymap lacks a global settings.open escape hatch"};
         }
         registerAllCommands(editor->commands, *editor);
+        const auto restored = editor->restoreSession();
+        if (!restored.accepted) return {nullptr, restored.message};
         return {std::move(editor), {}};
     } catch (std::exception const& exception) {
         return {nullptr, exception.what()};

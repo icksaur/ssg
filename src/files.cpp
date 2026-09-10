@@ -90,6 +90,21 @@ OperationResult createFileByPath(Editor& runtime, std::string_view path) {
     return openDocumentResult(runtime, result);
 }
 
+OperationResult openStartupTarget(Editor& runtime, std::string_view path) {
+    if (path.empty()) return failure("file path must not be empty");
+    if (const auto restored = runtime.workspace.documentForPath(path)) {
+        return runtime.activateDocument(*restored);
+    }
+    try {
+        return statFile(runtime.workspace.root() / std::filesystem::path{path})
+                   ? applyFilePathCompletion(runtime, PromptCompletion::FileOpen,
+                                             path)
+                   : createFileByPath(runtime, path);
+    } catch (const std::exception& error) {
+        return failure(error.what());
+    }
+}
+
 OperationResult openDroppedContent(Editor& runtime,
                                    std::span<const std::uint8_t> bytes,
                                    std::string_view label) {

@@ -110,9 +110,20 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
     fs::remove_all(root);
 }
 
+TEST(sessionSnapshotPathStaysAtTheProcessStartingDirectory) {
+    const fs::path starting{"/launch/directory"};
+    const fs::path openedWorkspace{"/other/workspace"};
+    const auto snapshot = ssg::sessionSnapshotPath(starting);
+    ASSERT_EQ(snapshot,
+              starting / ssg::kSessionDirectoryName /
+                  ssg::kSessionSnapshotFilename);
+    ASSERT_FALSE(snapshot.string().find(openedWorkspace.string()) == 0);
+}
+
 SSG_TEST_SUITE(test_startup_path) {
     RUN(panelShowFilesRequiresPrimeDeferredFirst);
     RUN(focusEditorSurvivesPanelShowFilesDispatchedAfter);
+    RUN(sessionSnapshotPathStaysAtTheProcessStartingDirectory);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

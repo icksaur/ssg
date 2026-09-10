@@ -239,8 +239,17 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/navigation.cpp
     ${SSG_SOURCE_DIR}/src/ViewCommands.cpp
     ${SSG_SOURCE_DIR}/src/EditorViews.cpp
+    ${SSG_SOURCE_DIR}/src/SessionSnapshot.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    ssg_add_test_suite(
+        NAME test_session_snapshot
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_session_snapshot.cpp
+        SYMBOL test_session_snapshot)
+    ssg_test_include_directories(test_session_snapshot PRIVATE
+        ${SSG_SOURCE_DIR}/tests)
+    ssg_test_link_libraries(test_session_snapshot PRIVATE ssg_core)
+
     ssg_add_test_suite(
         NAME test_session_presentation
         ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_presentation.cpp

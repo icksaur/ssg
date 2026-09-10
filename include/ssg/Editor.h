@@ -23,6 +23,7 @@
 #include <ssg/PromptSurface.h>
 #include <ssg/ScreenState.h>
 #include <ssg/Search.h>
+#include <ssg/SessionSnapshot.h>
 #include <ssg/Settings.h>
 #include <ssg/StatusFields.h>
 #include <ssg/Style.h>
@@ -55,6 +56,7 @@ struct EditorConfig {
     std::filesystem::path cwd;
     std::filesystem::path recoveryRoot;
     std::filesystem::path archiveRoot;
+    std::filesystem::path snapshotPath;
     bool deferEnrichment = false;
     std::shared_ptr<SyntaxParser> syntaxParser;
     bool enableGitDiffWorker = true;
@@ -179,6 +181,7 @@ private:
     Editor(std::filesystem::path canonicalCwd,
            std::filesystem::path recoveryRoot,
            std::filesystem::path archiveRoot,
+           std::filesystem::path snapshotPath,
            bool deferEnrichment = false,
            std::shared_ptr<SyntaxParser> parser = nullptr,
            bool enableGitDiffWorker = true,
@@ -216,6 +219,7 @@ public:
     [[nodiscard]] FindReplaceOperationResult updateFindQuery(std::string query);
     [[nodiscard]] FindReplaceOperationResult updateReplacement(
         std::string replacement);
+    [[nodiscard]] OperationResult saveSession();
 
     struct ResolvedPromptControls {
         std::vector<PromptControl> controls;
@@ -226,6 +230,7 @@ public:
     std::unique_ptr<GitIgnoreMatcher> workspaceIgnore;
     std::filesystem::path recoveryRoot;
     std::filesystem::path archiveRoot;
+    std::filesystem::path snapshotPath;
     RecoveryManager recovery;
     Workspace workspace;
     SelectionViewState selection;
@@ -356,6 +361,7 @@ public:
         const TabState& tab, std::span<const TabId> alreadyClosed = {});
     [[nodiscard]] TabLifecycleResult reopenTab(
         const TabState& tab, const RecoveryRecordId& compensation);
+    [[nodiscard]] OperationResult restoreSession();
 
     [[nodiscard]] WorkspaceCorpus workspaceCorpus() const;
     [[nodiscard]] std::optional<FileDocumentId> activeDocumentId() const;
@@ -479,6 +485,8 @@ public:
 [[nodiscard]] std::string tabMessage(TabResult const& result);
 [[nodiscard]] OperationResult createFileByPath(Editor& runtime,
                                                 std::string_view path);
+[[nodiscard]] OperationResult openStartupTarget(Editor& runtime,
+                                                 std::string_view path);
 [[nodiscard]] OperationResult openDroppedContent(
     Editor& runtime, std::span<const std::uint8_t> bytes,
     std::string_view label);

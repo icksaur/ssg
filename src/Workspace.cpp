@@ -412,8 +412,8 @@ public:
         const bool hasNul = containsBinaryNul(asUnsignedBytes(bytes));
         if (hasNul) {
             entries.push_back({id, std::move(key), std::move(label),
-                               FileContentKind::Binary, {}, std::move(bytes),
-                               Document{"", DocumentMode::ReadOnly}, {}});
+                              FileContentKind::Binary, {}, std::move(bytes),
+                              Document{"", DocumentMode::ReadOnly}, {}});
         } else {
             auto decoded = decodeText(asUnsignedBytes(bytes));
             if (!decoded.accepted()) {
@@ -574,6 +574,21 @@ std::optional<WorkspaceDocumentState> Workspace::state(
     };
 }
 
+std::optional<WorkspacePersistenceState> Workspace::persistenceState(
+    FileDocumentId documentId) const {
+    const auto* entry = impl_->find(documentId);
+    if (!entry) return std::nullopt;
+    return WorkspacePersistenceState{entry->persisted, entry->rawBytes};
+}
+
+std::optional<FileDocumentId> Workspace::documentForPath(
+    std::string_view rawPath) const {
+    const auto path = normalizedRelative(rawPath);
+    const auto* entry = impl_->findPath(path);
+    if (!entry) return std::nullopt;
+    return entry->id;
+}
+
 bool Workspace::matchesExternalBaseline(
     FileDocumentId documentId,
     const std::optional<std::string>& observedContent) const {
@@ -598,6 +613,12 @@ bool Workspace::commitExternalDismissal(
     if (removed) {
         entry->baseline = Impl::ExternalBaseline::removed();
     } else {
+        if (dismissedContent) {
+            entry->rawBytes.assign(dismissedContent->begin(),
+                                   dismissedContent->end());
+        } else {
+            entry->rawBytes.clear();
+        }
         DiskBaseline advanced;
         const std::string_view bytes =
             dismissedContent ? std::string_view{*dismissedContent}
@@ -685,6 +706,110 @@ WorkspaceResult Workspace::newFile(std::string_view rawPath) {
         }
     }
     return result;
+}
+
+WorkspaceResult Workspace::restoreUntitled(
+    std::string_view label, std::string_view draft, DocumentMode mode) {
+    if (mode != DocumentMode::Edit) {
+        return failure(WorkspaceError::ReadOnly,
+                       "session documents must be editable");
+    }
+    try {
+        auto result = impl_->addBytes(
+            {draft.begin(), draft.end()},
+            DocumentKey::untitled(UntitledDocumentId::generate()),
+            std::string{label}, mode);
+        if (result.document &&
+            impl_->find(*result.document)->contentKind != FileContentKind::Text) {
+            impl_->entries.pop_back();
+            return failure(WorkspaceError::DecodeFailed,
+                           "session draft is not valid UTF-8 text");
+        }
+        return result;
+    } catch (const std::exception& error) {
+        return failure(WorkspaceError::DecodeFailed, error.what());
+    }
+}
+
+WorkspaceResult Workspace::restorePathBound(
+    std::string_view rawPath, std::string_view label, std::string_view draft,
+    DocumentMode mode) {
+    if (mode != DocumentMode::Edit) {
+        return failure(WorkspaceError::ReadOnly,
+                       "session documents must be editable");
+    }
+    auto result = newFile(rawPath);
+    if (!result.accepted() || !result.document) return result;
+    auto* entry = impl_->find(*result.document);
+    entry->displayLabel = std::string{label};
+    const auto applied = apply(
+        *result.document,
+        {entry->document.revision(),
+         {{ByteOffset{0}, 0, std::string{draft}}}});
+    if (!applied.accepted()) {
+        impl_->entries.erase(
+            std::remove_if(impl_->entries.begin(), impl_->entries.end(),
+                           [&](const Impl::Entry& candidate) {
+                               return candidate.id == *result.document;
+                           }),
+            impl_->entries.end());
+        return failure(WorkspaceError::DecodeFailed, applied.message);
+    }
+    return result;
+}
+
+WorkspaceResult Workspace::restorePersisted(
+    std::string_view rawPath, std::string_view label,
+    std::vector<std::uint8_t> baseline, std::string_view draft,
+    DocumentMode mode) {
+    if (mode != DocumentMode::Edit) {
+        return failure(WorkspaceError::ReadOnly,
+                       "session documents must be editable");
+    }
+    WorkspaceResult pathError;
+    const auto absolute = impl_->resolve(rawPath, false, pathError);
+    if (!absolute) return pathError;
+    const auto path = normalizedRelative(rawPath);
+    if (impl_->findPath(path)) {
+        return failure(WorkspaceError::AlreadyOpen,
+                       "destination is already open");
+    }
+    auto result = impl_->addBytes(
+        std::move(baseline), DocumentKey::saved(path), std::string{label}, mode);
+    if (!result.accepted() || !result.document) return result;
+    auto* entry = impl_->find(*result.document);
+    if (entry->contentKind != FileContentKind::Text) {
+        impl_->entries.erase(
+            std::remove_if(impl_->entries.begin(), impl_->entries.end(),
+                           [&](const Impl::Entry& candidate) {
+                               return candidate.id == *result.document;
+                           }),
+            impl_->entries.end());
+        return failure(WorkspaceError::DecodeFailed,
+                       "persisted snapshot baseline is not editable text");
+    }
+    entry->baseline = captureDiskBaseline(*absolute, entry->rawBytes);
+    try {
+        const auto original = entry->document.snapshot().text;
+        if (original == draft) return result;
+        const auto applied = apply(
+            *result.document,
+            {entry->document.revision(),
+             {{ByteOffset{0}, static_cast<std::uint64_t>(original.size()),
+               std::string{draft}}}});
+        if (!applied.accepted()) {
+            throw std::invalid_argument{applied.message};
+        }
+        return result;
+    } catch (const std::exception& error) {
+        impl_->entries.erase(
+            std::remove_if(impl_->entries.begin(), impl_->entries.end(),
+                           [&](const Impl::Entry& candidate) {
+                               return candidate.id == *result.document;
+                           }),
+            impl_->entries.end());
+        return failure(WorkspaceError::DecodeFailed, error.what());
+    }
 }
 
 WorkspaceResult Workspace::openVirtualDocument(std::string_view suggestedLabel,

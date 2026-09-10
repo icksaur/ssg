@@ -55,8 +55,9 @@ The user-facing capability set, stated as engineering deliverables:
   selection-into-lines), undo/redo, clipboard registers, find/replace, command
   palette, configurable keymaps, and 160 stable commands.
 - CWD-focused workspaces with tabs and split panes, atomic file operations,
-  encoding and mixed-EOL preservation, scratch recovery, external-change
-  handling, filesystem/Git/symbol trees, live diffs, and follow-edits.
+  encoding and mixed-EOL preservation, normal-exit session snapshots,
+  external-change handling, filesystem/Git/symbol trees, live diffs, and
+  follow-edits.
 - Shared monospace presentation model with wrapping, mouse hit targets (click to
   place the cursor, double-click to select a word, drag to select), wheel and
   scrollbar navigation, middle-click to close a tab, a collapsible left panel,

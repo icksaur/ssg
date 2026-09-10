@@ -83,7 +83,8 @@ is `Alt` specifically, a mouse chord rather than a `Mod` chord.
   symlinked directories appear in the file tree but are not searched or
   descended into.
 - **Safe files** — atomic saves, encoding and line-ending preservation, and
-  crash-safe scratch recovery, so an interrupted session doesn't lose work.
+  restoration of unsaved editable tabs after a normal exit. Session snapshots
+  live in `./ssg/session.snapshot` relative to the process starting directory.
 - **Unicode 15** — correct grapheme and wide/combining-character layout.
 - **Themes** — fully themeable per-role and per-syntax-scope colors, adapting
   down to 256- and 16-color terminals.

@@ -141,6 +141,51 @@ TEST(newFileClaimsANameAndStaysUnsavedUntilItIsWritten) {
     ASSERT_EQ(readBytes(temporary.path() / "fresh.txt"), std::string{"typed"});
 }
 
+TEST(restoredDocumentsKeepTheirBackingAndDraftState) {
+    TemporaryDirectory temporary;
+    auto recovery =
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
+    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
+
+    const auto untitled = workspace.restoreUntitled(
+        "notes", "untitled draft", ssg::DocumentMode::Edit);
+    ASSERT_TRUE(untitled.accepted());
+    ASSERT_EQ(workspace.state(*untitled.document)->key.kind(),
+              ssg::DocumentKeyKind::Untitled);
+    ASSERT_TRUE(workspace.state(*untitled.document)->dirty);
+
+    const auto pathBound = workspace.restorePathBound(
+        "new.txt", "custom label", "new draft", ssg::DocumentMode::Edit);
+    ASSERT_TRUE(pathBound.accepted());
+    ASSERT_EQ(workspace.state(*pathBound.document)->key.savedPath(),
+              std::string{"new.txt"});
+    ASSERT_EQ(workspace.state(*pathBound.document)->displayLabel,
+              std::string{"custom label"});
+    ASSERT_TRUE(workspace.state(*pathBound.document)->dirty);
+    ASSERT_FALSE(workspace.persistenceState(*pathBound.document)->persisted);
+
+    const std::vector<std::uint8_t> baseline{'o', 'l', 'd', '\r', '\n'};
+    const auto persisted = workspace.restorePersisted(
+        "saved.txt", "saved label", baseline, "draft\n",
+        ssg::DocumentMode::Edit);
+    ASSERT_TRUE(persisted.accepted());
+    ASSERT_EQ(workspace.document(*persisted.document).snapshot().text,
+              std::string{"draft\n"});
+    ASSERT_TRUE(workspace.state(*persisted.document)->dirty);
+    ASSERT_TRUE(workspace.persistenceState(*persisted.document)->persisted);
+    ASSERT_EQ(workspace.persistenceState(*persisted.document)->baseline,
+              baseline);
+
+    const auto recovered = workspace.restoreUntitled(
+        "dir/original.txt (recovered)", "recovered draft",
+        ssg::DocumentMode::Edit);
+    ASSERT_TRUE(recovered.accepted());
+    ASSERT_EQ(workspace.state(*recovered.document)->displayLabel,
+              std::string{"dir/original.txt (recovered)"});
+    ASSERT_EQ(workspace.state(*recovered.document)->key.kind(),
+              ssg::DocumentKeyKind::Untitled);
+}
+
 TEST(newFileRefusesANameThatIsAlreadyTaken) {
     TemporaryDirectory temporary;
     auto recovery =
@@ -301,6 +346,7 @@ SSG_TEST_SUITE(test_workspace) {
     RUN(openIsByteExactAndPreventsNormalizedDuplicates);
     RUN(pathsCannotEscapeWorkspaceBeforeMutation);
     RUN(untitledIdentityChangesOnlyAfterSuccessfulSave);
+    RUN(restoredDocumentsKeepTheirBackingAndDraftState);
     RUN(renameDeleteAndOpenDirectoryUpdateWorkspaceState);
     RUN(saveAndReloadUpdateDiskAndDocument);
     RUN(newDirectoryRejectsEscapeAndCreatesOnlyInsideRoot);
