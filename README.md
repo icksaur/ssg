@@ -7,12 +7,18 @@ in your terminal.
 
 ## Install it
 
-On Arch Linux (or a derivative), one script builds an optimized binary and
-installs it to `/usr/local/bin/ssg`:
+On Arch Linux (or a derivative), build a native package and install it through
+pacman:
 
 ```sh
 scripts/install.sh
 ```
+
+The script runs `makepkg --syncdeps --install --force` against the repository's
+`PKGBUILD`, so pacman owns upgrades and removal.
+
+If an earlier version of the script installed `/usr/local/bin/ssg`, remove that
+unmanaged binary first so it does not shadow pacman's `/usr/bin/ssg`.
 
 ## Run from source
 

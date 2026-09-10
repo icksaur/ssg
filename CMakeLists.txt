@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
 project(ssg LANGUAGES CXX)
+include(GNUInstallDirs)
 
 set_property(GLOBAL PROPERTY GLOBAL_DEPENDS_NO_CYCLES ON)
 
@@ -1185,6 +1186,9 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(ssg_app PRIVATE
         ssg_terminal_objects
         ssg_tui_objects)
+    install(TARGETS ssg_app RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    install(FILES "${SSG_SOURCE_DIR}/LICENSE"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/ssg")
 
     ssg_add_test_suite(
         NAME test_terminal

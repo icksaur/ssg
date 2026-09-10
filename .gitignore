@@ -2,6 +2,8 @@ backlog.md
 build/
 build-*/
 build_*/
+pkg/
+/*.pkg.tar.*
 # The editor's private state: scratch, recovery, and the delete archive.
 # Ignored wholesale so a future subdirectory cannot leak into git status.
 .ssg/
