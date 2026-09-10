@@ -73,10 +73,6 @@ std::span<const std::uint8_t> asUnsignedBytes(
     return {bytes.data(), bytes.size()};
 }
 
-bool containsNul(std::string_view text) {
-    return text.find('\0') != std::string_view::npos;
-}
-
 bool isBeneath(const std::filesystem::path& root,
                 const std::filesystem::path& candidate) {
     auto rootIt = root.begin();
@@ -905,7 +901,7 @@ WorkspaceResult Workspace::reloadWithContent(FileDocumentId id,
     if (!decoded.accepted()) {
         return failure(WorkspaceError::DecodeFailed, decoded.error->message);
     }
-    if (containsNul(decoded.text->utf8)) {
+    if (decoded.text->utf8.find('\0') != std::string::npos) {
         return failure(WorkspaceError::DecodeFailed,
                        "binary file cannot replace an editable document");
     }
@@ -951,7 +947,7 @@ WorkspaceResult Workspace::adoptExternalRename(FileDocumentId id,
     if (!decoded.accepted()) {
         return failure(WorkspaceError::DecodeFailed, decoded.error->message);
     }
-    if (containsNul(decoded.text->utf8)) {
+    if (decoded.text->utf8.find('\0') != std::string::npos) {
         return failure(WorkspaceError::DecodeFailed,
                        "binary file cannot replace an editable document");
     }

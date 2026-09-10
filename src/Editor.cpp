@@ -45,10 +45,6 @@ std::string resolveHomeDirectory() {
     return home;
 }
 
-std::string liveDiffTextWithoutRemovedRows(const DiffFileView& file) {
-    return file.currentContent;
-}
-
 std::string uniqueDiscardedDraftArchiveName(std::string_view savedPath) {
     std::string basename =
         std::filesystem::path{std::string{savedPath}}.filename().string();
@@ -1036,7 +1032,7 @@ const TabState* Editor::activeTabState() const {
 OperationResult Editor::openOrFocusLiveDiffTab(
     const DiffFileView& file, NavigationClass classification) {
     const auto target = diffOpenFile(file);
-    const auto diffText = liveDiffTextWithoutRemovedRows(file);
+    const auto diffText = file.currentContent;
     std::optional<FileDocumentId> document;
     auto mapped = liveDiffDocuments.find(target.id.value());
     if (mapped != liveDiffDocuments.end()) {

@@ -182,7 +182,7 @@ def main() -> int:
         allowed = set()
         if allow_path.is_file():
             allowed = {
-                line
+                tuple(line.split("\t", 1))
                 for raw in allow_path.read_text().splitlines()
                 if (line := raw.strip()) and not line.startswith("#")
             }
@@ -195,7 +195,7 @@ def main() -> int:
             for n, s, count in sorted(
                 set(rows), key=lambda r: (-r[2], r[0], r[1])
             )
-            if n not in allowed
+            if (n, s) not in allowed
         )
     else:
         headers = sorted(p for p in root.rglob("*.h") if "detail" not in p.parts)

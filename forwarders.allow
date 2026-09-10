@@ -1,10 +1,33 @@
 # Platform filesystem operations stay behind the platform seam.
-ssg::canonicalPath
+ssg::canonicalPath	platform_files.cpp
 # Schema-level lookup hides recursive UiNode traversal.
-ssg::findUiNode
+ssg::findUiNode	UiTree.cpp
 # Component comparison owns Windows path case folding.
-ssg::pathComponentEqual
+ssg::pathComponentEqual	RecoveryManager.cpp
 # Public variant boundary hides typed input overloads.
-ssg::routeInput
+ssg::routeInput	input_routing.cpp
 # Platform filesystem operations stay behind the platform seam.
-ssg::weaklyCanonicalPath
+ssg::weaklyCanonicalPath	platform_files.cpp
+# Lua callbacks recover their host through one closure-upvalue contract.
+ssg::LuaCommandHost::Impl::callbackHost	LuaCommandHost.cpp
+# Bounds-checked access preserves RowProjection's private storage.
+ssg::RowProjection::row	Viewport.cpp
+# Logical-line access does not expose TextModel's internal LineData.
+ssg::TextModel::line	Selection.cpp
+# Routed-input factories consistently construct the result variant.
+ssg::accepted	input_routing.cpp
+# Default encoding preserves the decoded file's disk representation.
+ssg::encodeText	TextCodec.cpp
+# Editor operation failures share one result construction.
+ssg::failure	Editor.cpp
+# Case folding safely converts bytes before calling the C character API.
+ssg::folded	Search.cpp
+# Named Unicode property queries keep generated range tables distinct.
+ssg::isEawWide	GraphemeLayout.cpp
+ssg::isEmoji	GraphemeLayout.cpp
+ssg::isEmojiPres	GraphemeLayout.cpp
+ssg::isExtendedPictographic	GraphemeLayout.cpp
+# Scrollbar detection shares the authoritative routing descriptor list.
+ssg::is_scrollbar_region	pointer_routing.cpp
+# Script configuration failures share one Lua error translation.
+ssg::luaResult	ScriptHost.cpp
