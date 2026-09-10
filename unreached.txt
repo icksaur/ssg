@@ -44,10 +44,6 @@ ssg::RecoveryManager::restoreFilesystem(ssg::RecoveryRecordId const&)	CMakeFiles
 ssg::RowProjection::rows() const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
 ssg::RowProjection::visualRowForBufferLine(unsigned int) const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
 ssg::RowProjection::visualRowForReal(unsigned int) const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
-ssg::SearchController::closePalette(unsigned long)	CMakeFiles/ssg_core.dir/src/Search.cpp.o
-ssg::SearchController::executePalette()	CMakeFiles/ssg_core.dir/src/Search.cpp.o
-ssg::SearchController::openPalette(unsigned long)	CMakeFiles/ssg_core.dir/src/Search.cpp.o
-ssg::SearchController::rankPalette()	CMakeFiles/ssg_core.dir/src/Search.cpp.o
 ssg::SettingsModel::apply(ssg::SettingCompensation const&)	CMakeFiles/ssg_core.dir/src/Settings.cpp.o
 ssg::SettingsPersistence::load(ssg::SettingsModel&) const	CMakeFiles/ssg_core.dir/src/Settings.cpp.o
 ssg::SettingsPersistence::save(ssg::SettingsModel const&) const	CMakeFiles/ssg_core.dir/src/Settings.cpp.o
@@ -90,7 +86,6 @@ ssg::resetOptionalConstructionAudit()	CMakeFiles/ssg_platform.dir/src/OptionalSu
 ssg::resetRenderSegmentationCalls()	CMakeFiles/ssg_tui_objects.dir/src/Renderer.cpp.o
 ssg::resetUtf8ValidationCalls()	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o
 ssg::scrollable_regions()	CMakeFiles/ssg_terminal_objects.dir/src/pointer_routing.cpp.o
-ssg::searchNavigationTarget(ssg::SearchResult const&)	CMakeFiles/ssg_core.dir/src/Search.cpp.o
 ssg::semanticInputForText(ssg::CommittedText const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
 ssg::semanticRoleName(ssg::SemanticRole)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
 ssg::syntaxScopeName(ssg::SyntaxScope)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o

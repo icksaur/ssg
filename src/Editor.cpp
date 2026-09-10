@@ -532,19 +532,6 @@ Editor::Editor(std::filesystem::path canonicalCwd,
       screen{assembleScreen("help.open", StyleDimensions{},
                             Style{}.inputLineSigil),
              tree},
-      search{SearchCommands{
-          .descriptors = [this] {
-              std::vector<SearchCommandDescriptor> result;
-              for (auto const* command : catalog.commands()) {
-                  result.push_back({command->id, command->id});
-              }
-              return result;
-          },
-          .execute = [this](std::string_view commandId) {
-              return PaletteExecutionResult{
-                  catalog.find(commandId) != nullptr, {}};
-          },
-      }},
       theme{defaultTheme()}, deferringEnrichment{deferEnrichment},
       gitDiffIngress{*this, root, enableGitDiffWorker,
                      enableFilesystemWatcher} {

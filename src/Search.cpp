@@ -230,21 +230,6 @@ WorkspaceSearchBatch evaluateWorkspaceSearch(
     return batch;
 }
 
-std::optional<NavigationTarget> searchNavigationTarget(
-    const SearchResult& result) {
-    if (result.path.empty()) {
-        return std::nullopt;
-    }
-    return NavigationTarget{.path = result.path,
-                            .line = result.line.value_or(LineIndex{0}),
-                            .column = result.column,
-                            .symbol = result.mode == SearchMode::Symbol
-                                          ? std::optional<std::string>{
-                                                result.label.substr(
-                                                    result.label.find(':') + 1)}
-                                          : std::nullopt};
-}
-
 std::optional<NavigationTarget> searchGotoLine(
     std::string path, const ParsedSearchQuery& query) {
     if (path.empty() || query.mode != SearchMode::Line ||
@@ -316,64 +301,6 @@ NavigationTransition NavigationHistory::peekForward() const {
     return navigationTransition(entries_[*cursor_ + 1], NavigationOrigin::User);
 }
 
-SearchController::SearchController(SearchCommands commands)
-    : commands_{std::move(commands)} {}
-
-void SearchController::openPalette(std::uint64_t revision) {
-    state_.paletteOpen = true;
-    state_.revision = revision;
-    state_.query.clear();
-    state_.mode = SearchMode::Command;
-    rankPalette();
-}
-
-void SearchController::closePalette(std::uint64_t revision) {
-    state_.paletteOpen = false;
-    state_.revision = revision;
-    state_.query.clear();
-    state_.results.clear();
-    state_.selectedIndex.reset();
-}
-
-void SearchController::updatePaletteQuery(std::string query,
-                                            std::uint64_t revision) {
-    if (!state_.paletteOpen) {
-        return;
-    }
-    state_.query = std::move(query);
-    state_.revision = revision;
-    rankPalette();
-}
-
-void SearchController::rankPalette() {
-    state_.mode = SearchMode::Command;
-    state_.results.clear();
-    for (const auto& command : commands_.descriptors()) {
-        const auto labelScore = fuzzyScore(command.label, state_.query);
-        const auto idScore = fuzzyScore(command.id, state_.query);
-        if (!labelScore && !idScore) {
-            continue;
-        }
-        state_.results.push_back(
-            {.mode = SearchMode::Command,
-             .path = command.id,
-             .label = command.label,
-             .score = std::max(labelScore.value_or(std::numeric_limits<int>::min()),
-                               idScore.value_or(std::numeric_limits<int>::min()))});
-    }
-    std::ranges::sort(state_.results, [](const auto& left, const auto& right) {
-        if (left.score != right.score) {
-            return left.score > right.score;
-        }
-        if (left.label != right.label) {
-            return left.label < right.label;
-        }
-        return left.path < right.path;  // Mirror palette_rank's stable id tiebreak.
-    });
-    state_.selectedIndex =
-        state_.results.empty() ? std::nullopt : std::optional<std::size_t>{0};
-}
-
 void SearchController::selectNext() {
     if (!state_.selectedIndex || state_.results.empty()) {
         return;
@@ -388,14 +315,6 @@ void SearchController::selectPrevious() {
     *state_.selectedIndex =
         (*state_.selectedIndex + state_.results.size() - 1) %
         state_.results.size();
-}
-
-PaletteExecutionResult SearchController::executePalette() {
-    if (!state_.paletteOpen || !state_.selectedIndex ||
-        *state_.selectedIndex >= state_.results.size()) {
-        return {.accepted = false, .message = "no palette command selected"};
-    }
-    return commands_.execute(state_.results[*state_.selectedIndex].path);
 }
 
 WorkspaceSearchState SearchController::beginWorkspaceSearch(

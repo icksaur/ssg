@@ -73,26 +73,6 @@ std::vector<SearchResult> rank(const WorkspaceCorpus& corpus,
     return state.results;
 }
 
-SearchCommands fixtureCommands(std::vector<std::string>& executed) {
-    return {
-        .descriptors = [] {
-        return std::vector<SearchCommandDescriptor>{
-            {.id = "file.open", .label = "Open File"},
-            {.id = "palette.close", .label = "Close Command Palette"},
-            {.id = "workspace.open", .label = "Open Workspace"},
-        };
-        },
-        .execute = [&executed](std::string_view commandId) {
-        executed.emplace_back(commandId);
-        if (commandId == "file.open") {
-            return PaletteExecutionResult{.accepted = true};
-        }
-        return PaletteExecutionResult{
-            .accepted = false, .message = "command rejected"};
-        },
-    };
-}
-
 std::vector<std::string> split(std::string_view value, char separator) {
     std::vector<std::string> result;
     std::size_t begin = 0;
@@ -174,8 +154,7 @@ TEST(acceptedRankingGoldensMatch) {
 }
 
 TEST(cancellationSupersessionAndStaleRevisionAreRejected) {
-    std::vector<std::string> executed;
-    SearchController controller{fixtureCommands(executed)};
+    SearchController controller;
 
     auto first =
         controller.beginWorkspaceSearch("#search", std::uint64_t{8});
@@ -346,22 +325,6 @@ TEST(navigationHistoryPeekForwardDoesNotMutateCursor) {
     ASSERT_FALSE(history.peekForward().target.has_value());
 }
 
-TEST(paletteUsesInjectedCatalogAndDispatch) {
-    std::vector<std::string> executed;
-    SearchController controller{fixtureCommands(executed)};
-
-    controller.openPalette(std::uint64_t{11});
-    controller.updatePaletteQuery("open f", std::uint64_t{12});
-    ASSERT_TRUE(controller.viewState().paletteOpen);
-    ASSERT_EQ(labels(controller.viewState().results),
-              std::vector<std::string>{"Open File"});
-    ASSERT_EQ(controller.executePalette().accepted, true);
-    ASSERT_EQ(executed, std::vector<std::string>{"file.open"});
-
-    controller.closePalette(std::uint64_t{13});
-    ASSERT_FALSE(controller.executePalette().accepted);
-}
-
 } // namespace
 
 SSG_TEST_SUITE(test_search) {
@@ -373,6 +336,5 @@ SSG_TEST_SUITE(test_search) {
     RUN(navigationHistoryMatchesTransitionTable);
     RUN(navigationHistoryPeekBackDoesNotMutateCursor);
     RUN(navigationHistoryPeekForwardDoesNotMutateCursor);
-    RUN(paletteUsesInjectedCatalogAndDispatch);
     return failed == 0 ? 0 : 1;
 }

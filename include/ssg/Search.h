@@ -6,7 +6,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -58,25 +57,6 @@ struct WorkspaceSnapshot {
     std::vector<WorkspaceFile> files;
     friend bool operator==(const WorkspaceSnapshot&,
                            const WorkspaceSnapshot&) = default;
-};
-
-struct SearchCommandDescriptor {
-    std::string id;
-    std::string label;
-    friend bool operator==(const SearchCommandDescriptor&,
-                           const SearchCommandDescriptor&) = default;
-};
-
-struct PaletteExecutionResult {
-    bool accepted = false;
-    std::string message;
-    friend bool operator==(const PaletteExecutionResult&,
-                           const PaletteExecutionResult&) = default;
-};
-
-struct SearchCommands {
-    std::function<std::vector<SearchCommandDescriptor>()> descriptors;
-    std::function<PaletteExecutionResult(std::string_view)> execute;
 };
 
 class SearchCancellationToken {
@@ -159,8 +139,6 @@ struct NavigationTransition {
 [[nodiscard]] NavigationTransition navigationTransition(
     const NavigationTarget& target, NavigationOrigin origin);
 
-[[nodiscard]] std::optional<NavigationTarget> searchNavigationTarget(
-    const SearchResult& result);
 [[nodiscard]] std::optional<NavigationTarget> searchGotoLine(
     std::string path, const ParsedSearchQuery& query);
 
@@ -185,7 +163,6 @@ private:
 
 struct SearchViewState {
     std::uint64_t revision{0};
-    bool paletteOpen = false;
     std::string query;
     SearchMode mode = SearchMode::File;
     std::vector<SearchResult> results;
@@ -205,14 +182,8 @@ enum class SearchPublishResult : std::uint8_t {
 
 class SearchController {
 public:
-    explicit SearchController(SearchCommands commands);
-
-    void openPalette(std::uint64_t revision);
-    void closePalette(std::uint64_t revision);
-    void updatePaletteQuery(std::string query, std::uint64_t revision);
     void selectNext();
     void selectPrevious();
-    [[nodiscard]] PaletteExecutionResult executePalette();
 
     [[nodiscard]] WorkspaceSearchState beginWorkspaceSearch(
         std::string query, std::uint64_t sourceRevision);
@@ -233,9 +204,6 @@ private:
     [[nodiscard]] WorkspaceSearchState beginWorkspaceSearch(
         ParsedSearchQuery query, std::string displayQuery,
         std::uint64_t sourceRevision);
-    void rankPalette();
-
-    SearchCommands commands_;
     SearchViewState state_;
     std::optional<WorkspaceSearchRequest> activeRequest_;
 };
