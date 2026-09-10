@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 171 commands.
+There are 169 commands.
 
 ## clipboard-register
 
@@ -157,8 +157,6 @@ There are 171 commands.
 | `search.results_next` | Results Next | none | lua |
 | `search.results_previous` | Results Previous | none | lua |
 | `palette.close` | Close | none | lua |
-| `palette.execute` | Execute | palette selection | lua |
-| `picker.submit` | Submit Picker Candidate | picker candidate | lua |
 | `search.workspace` | Workspace | none | lua |
 | `goto.file` | Go to File | none | lua |
 | `goto.symbol` | Go to Symbol | none | lua |

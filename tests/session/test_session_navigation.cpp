@@ -155,7 +155,7 @@ std::optional<ssg::SearchMode> activePickerMode(
                : std::nullopt;
 }
 
-ssg::PickerSubmitArguments pickerSubmit(
+ssg::PickerPointerInput pickerSubmit(
     ssg::Editor& runtime, ssg::SearchMode mode, std::string candidateId) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
@@ -163,7 +163,13 @@ ssg::PickerSubmitArguments pickerSubmit(
         snapshot && snapshot->paletteView.activePicker
             ? snapshot->paletteView.activePicker->id
             : ssg::PickerActivationId{};
-    return {ssg::PickerActivation{mode, activation}, std::move(candidateId)};
+    return ssg::PickerPointerInput{ssg::PickerActivation{mode, activation},
+                                   std::move(candidateId)};
+}
+
+bool inputAccepted(ssg::ClientInputResult const& result) {
+    return result.outcome != ssg::ClientInputOutcome::Rejected &&
+           result.outcome != ssg::ClientInputOutcome::Unhandled;
 }
 
 std::string overDiffLineBudget(char value) {
@@ -922,10 +928,13 @@ TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
     pickerStateAfter("palette.close");
     pickerStateAfter("prompt.cancel");
 
-    // A successful palette.execute cancels the prompt as part of executing; the
+    // A successful picker submit cancels the prompt as part of executing; the
     // picker must not survive into the next open.
+    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"needle.txt"})
+                    .accepted());
     ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
-    (void)runtime.dispatch({"palette.execute",  ssg::PaletteExecuteArguments{"edit.undo"}});
+    (void)runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::Command, "file.save"));
     auto executed = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(executed.has_value());
     if (executed) {
@@ -933,10 +942,9 @@ TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
     }
 }
 
-// The file picker publishes paths, not command ids, so palette.execute must
-// refuse to run while it is open.  Before the picker existed, the guard checked
-// only that a Palette-kind prompt was active, which every picker satisfies.
-TEST(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute) {
+// The file picker publishes workspace paths through the shared picker
+// surface.
+TEST(filePickerPublishesWorkspaceFiles) {
     auto root = uniqueRoot();
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace / "src");
@@ -971,16 +979,6 @@ TEST(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute) {
     for (auto const& candidate : palette.fileCandidates) paths.insert(candidate.id);
     ASSERT_TRUE(paths.contains("alpha.txt"));
     ASSERT_TRUE(paths.contains("src/beta.cpp"));
-
-    // Candidate ids are paths here; executing one as a command must be refused
-    // even though a Palette prompt is genuinely open.
-    auto rejected = runtime.dispatch({"palette.execute",
-         ssg::PaletteExecuteArguments{"src/beta.cpp"}});
-    ASSERT_FALSE(rejected.accepted());
-    // Not even a real command id is executable through the file picker.
-    auto alsoRejected = runtime.dispatch({"palette.execute",
-         ssg::PaletteExecuteArguments{"edit.undo"}});
-    ASSERT_FALSE(alsoRejected.accepted());
     std::filesystem::remove_all(root);
 }
 
@@ -1079,18 +1077,14 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     // A rejected open leaves the picker up.
     ASSERT_TRUE(runtime.dispatch({"file_finder.open",  {}}).accepted());
     ASSERT_TRUE(pickerIsOpen());
-    auto missing = runtime.dispatch({"picker.submit",
-         pickerSubmit(runtime, ssg::SearchMode::File, "gone.txt")});
-    ASSERT_FALSE(missing.accepted());
+    auto missing = runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::File, "gone.txt"));
+    ASSERT_FALSE(inputAccepted(missing));
     ASSERT_TRUE(pickerIsOpen());
 
     // A successful open dismisses it.
-    ASSERT_TRUE(
-        runtime
-            .dispatch({"picker.submit",
-                       pickerSubmit(runtime, ssg::SearchMode::File,
-                                    "present.txt")})
-            .accepted());
+    ASSERT_TRUE(inputAccepted(runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::File, "present.txt"))));
     ASSERT_FALSE(pickerIsOpen());
     std::filesystem::remove_all(root);
 }
@@ -1111,23 +1105,15 @@ TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
 
     // A transport cannot submit against an inventory without first opening the
     // matching authoritative picker.
-    ASSERT_FALSE(
-        runtime
-            .dispatch({"picker.submit",
-                       ssg::PickerSubmitArguments{
-                           {ssg::SearchMode::Command,
-                            ssg::PickerActivationId{1}},
-                           "panel.toggle"}})
-            .accepted());
+    auto missingOpen = runtime.input(ssg::PickerPointerInput{
+        {ssg::SearchMode::Command, ssg::PickerActivationId{1}},
+        "panel.toggle"});
+    ASSERT_FALSE(inputAccepted(missingOpen));
     ASSERT_TRUE(runtime
                     .dispatch({"palette.open",  {}})
                     .accepted());
-    ASSERT_TRUE(
-        runtime
-            .dispatch({"picker.submit",
-                       pickerSubmit(runtime, ssg::SearchMode::Command,
-                                    "panel.toggle")})
-            .accepted());
+    ASSERT_TRUE(inputAccepted(runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::Command, "panel.toggle"))));
     auto commandSubmitted =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(commandSubmitted.has_value());
@@ -1140,12 +1126,8 @@ TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
     ASSERT_TRUE(runtime
             .dispatch({"file_finder.open",  {}})
             .accepted());
-    ASSERT_TRUE(
-        runtime
-            .dispatch({"picker.submit",
-                       pickerSubmit(runtime, ssg::SearchMode::File,
-                                    "present.txt")})
-            .accepted());
+    ASSERT_TRUE(inputAccepted(runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::File, "present.txt"))));
     auto submitted =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(submitted.has_value());
@@ -1167,12 +1149,8 @@ TEST(pickerSubmissionRequiresMatchingPickerMode) {
         runtime
             .dispatch({"file_finder.open",  {}})
             .accepted());
-    ASSERT_FALSE(
-        runtime
-            .dispatch({"picker.submit",
-                       pickerSubmit(runtime, ssg::SearchMode::Command,
-                                    "panel.toggle")})
-            .accepted());
+    ASSERT_FALSE(inputAccepted(runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::Command, "panel.toggle"))));
     auto snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -1187,12 +1165,8 @@ TEST(pickerSubmissionRequiresMatchingPickerMode) {
     ASSERT_TRUE(runtime
                     .dispatch({"palette.open",  {}})
                     .accepted());
-    ASSERT_TRUE(
-        runtime
-            .dispatch({"picker.submit",
-                       pickerSubmit(runtime, ssg::SearchMode::Command,
-                                    "panel.toggle")})
-            .accepted());
+    ASSERT_TRUE(inputAccepted(runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::Command, "panel.toggle"))));
     snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -1212,9 +1186,9 @@ TEST(commandPickerActionThatOpensPromptDismissesPickerWithoutFailure) {
                     .dispatch({"palette.open",  {}})
                     .accepted());
 
-    auto result = runtime.dispatch({"picker.submit",
-         pickerSubmit(runtime, ssg::SearchMode::Command, "goto.line")});
-    ASSERT_TRUE(result.accepted());
+    auto result = runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::Command, "goto.line"));
+    ASSERT_TRUE(inputAccepted(result));
     auto snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -1243,11 +1217,8 @@ TEST(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision) {
         runtime
             .dispatch({"panel.toggle",  {}})
             .accepted());
-    ASSERT_TRUE(
-        runtime
-            .dispatch({"picker.submit",
-                       ssg::PickerSubmitArguments{first, "panel.toggle"}})
-            .accepted());
+    ASSERT_TRUE(inputAccepted(
+        runtime.input(ssg::PickerPointerInput{first, "panel.toggle"})));
 
     ASSERT_TRUE(runtime
                     .dispatch({"palette.open",  {}})
@@ -1258,11 +1229,8 @@ TEST(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision) {
     if (!snapshot || !snapshot->paletteView.activePicker) return;
     const auto second = *snapshot->paletteView.activePicker;
     ASSERT_FALSE(second.id == first.id);
-    ASSERT_FALSE(
-        runtime
-            .dispatch({"picker.submit",
-                       ssg::PickerSubmitArguments{first, "panel.toggle"}})
-            .accepted());
+    ASSERT_FALSE(inputAccepted(
+        runtime.input(ssg::PickerPointerInput{first, "panel.toggle"})));
     snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -1788,7 +1756,6 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    std::optional<ssg::PickerActivation> nestedActivation;
     auto const failureCommand = ssg::test::registerCommand(runtime, ssg::CommandSpec{
         .id = "test.picker_failure",
         .owner = "test",
@@ -1827,43 +1794,11 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
             }),
     });
     ASSERT_TRUE(deferringCommand.valid());
-    auto const nestedSubmit = ssg::test::registerCommand(runtime, ssg::CommandSpec{
-        .id = "test.picker_defers_submit",
-        .owner = "test",
-        .summary = "Picker defers another submit",
-        .effect = ssg::CommandEffect::Mutation,
-        .binding = ssg::bindNoArgumentHandler(
-            [&runtime, &nestedActivation](ssg::CommandContext& context) {
-                if (!nestedActivation) {
-                    return ssg::CommandHandlerResult::failure(
-                        "picker activation was not captured");
-                }
-                if (!runtime.deferDispatch(
-                        {"picker.submit",
-                         ssg::PickerSubmitArguments{*nestedActivation,
-                                                    "panel.toggle"}})) {
-                    return ssg::CommandHandlerResult::failure(
-                        "could not defer nested picker submit");
-                }
-                return ssg::CommandHandlerResult::success();
-            }),
-    });
-    ASSERT_TRUE(nestedSubmit.valid());
     ASSERT_TRUE(runtime
                     .dispatch({"palette.open",  {}})
                     .accepted());
-    auto opened =
-        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(opened.has_value());
-    if (!opened) return;
-    nestedActivation = opened->paletteView.activePicker;
-    ASSERT_TRUE(nestedActivation.has_value());
-    ASSERT_FALSE(
-        runtime
-            .dispatch({"picker.submit",
-                       pickerSubmit(runtime, ssg::SearchMode::Command,
-                                    "test.picker_failure")})
-            .accepted());
+    ASSERT_FALSE(inputAccepted(runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::Command, "test.picker_failure"))));
     auto snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -1873,27 +1808,9 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
     ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->uiTree) ==
                 ssg::FocusTarget::Prompt);
 
-    ASSERT_FALSE(
-        runtime
-            .dispatch({"picker.submit",
-                       pickerSubmit(runtime, ssg::SearchMode::Command,
-                                    "test.picker_defers_submit")})
-            .accepted());
-    snapshot =
-        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    ASSERT_TRUE(activePickerMode(snapshot->paletteView) ==
-                std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
-    ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->uiTree) ==
-                ssg::FocusTarget::Prompt);
-
-    ASSERT_FALSE(
-        runtime
-            .dispatch({"picker.submit",
-                       pickerSubmit(runtime, ssg::SearchMode::Command,
-                                    "test.picker_defers_failure")})
-            .accepted());
+    ASSERT_FALSE(inputAccepted(runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::Command,
+                     "test.picker_defers_failure"))));
     snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -1917,12 +1834,9 @@ TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
         ASSERT_TRUE(runtime
                         .dispatch({"palette.open",  {}})
                         .accepted());
-        ASSERT_TRUE(
-            runtime
-                .dispatch({"picker.submit",
-                           pickerSubmit(runtime, ssg::SearchMode::Command,
-                                        "file_finder.open")})
-                .accepted());
+        ASSERT_TRUE(inputAccepted(runtime.input(
+            pickerSubmit(runtime, ssg::SearchMode::Command,
+                         "file_finder.open"))));
         auto snapshot =
             projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snapshot.has_value());
@@ -1951,11 +1865,8 @@ TEST(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation) {
     if (!before || !before->paletteView.activePicker) return;
     const auto first = *before->paletteView.activePicker;
 
-    ASSERT_TRUE(
-        runtime
-            .dispatch({"picker.submit",
-                       ssg::PickerSubmitArguments{first, "palette.open"}})
-            .accepted());
+    ASSERT_TRUE(inputAccepted(
+        runtime.input(ssg::PickerPointerInput{first, "palette.open"})));
     auto after =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
@@ -1967,7 +1878,7 @@ TEST(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation) {
                 ssg::FocusTarget::Prompt);
 }
 
-TEST(paletteExecuteValidatesCandidateMembership) {
+TEST(submitPickerValidatesCandidateMembership) {
     auto root = uniqueRoot();
     auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
@@ -1977,17 +1888,40 @@ TEST(paletteExecuteValidatesCandidateMembership) {
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"needle.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
 
-    // A command outside the published candidate set is rejected before dispatch.
-    ASSERT_FALSE(runtime.dispatch({"palette.execute",  ssg::PaletteExecuteArguments{"not.a.command"}}).accepted());
-    // Missing the id payload is rejected.
-    ASSERT_FALSE(runtime.dispatch({"palette.execute",  {}}).accepted());
-    // A published command id validates, executes server-side, and closes the palette.
-    ASSERT_TRUE(runtime.dispatch({"palette.execute",  ssg::PaletteExecuteArguments{"file.save"}}).accepted());
+    auto rejected = runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::Command, "not.a.command"));
+    ASSERT_EQ(rejected.outcome, ssg::ClientInputOutcome::Rejected);
+
+    ASSERT_TRUE(inputAccepted(runtime.input(
+        pickerSubmit(runtime, ssg::SearchMode::Command, "file.save"))));
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(ssg::effectiveUiFocus(snapshot->uiTree),
               ssg::FocusTarget::Editor);
+}
+
+TEST(staleCandidateIdIsRejectedBySubmitPicker) {
+    auto root = uniqueRoot();
+    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+
+    ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
+    auto snapshot = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot || !snapshot->paletteView.activePicker) return;
+    auto const activation = *snapshot->paletteView.activePicker;
+
+    auto result = runtime.input(
+        ssg::PickerPointerInput{activation, "not.a.registered.command"});
+    ASSERT_EQ(result.outcome, ssg::ClientInputOutcome::Rejected);
+    auto after = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(after.has_value());
+    if (!after) return;
+    ASSERT_TRUE(after->paletteView.activePicker.has_value());
+    std::filesystem::remove_all(root);
 }
 
 TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
@@ -2774,8 +2708,9 @@ SSG_TEST_SUITE(test_session_follow) {
 SSG_TEST_SUITE(test_session_pickers) {
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
     RUN(everyPaletteClosePathLeavesNoOpenPickerBehind);
-    RUN(paletteExecuteValidatesCandidateMembership);
-    RUN(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute);
+    RUN(submitPickerValidatesCandidateMembership);
+    RUN(staleCandidateIdIsRejectedBySubmitPicker);
+    RUN(filePickerPublishesWorkspaceFiles);
     RUN(togglingGitignoreRebuildsTheOpenFilePickerIndex);
     RUN(workerFilesystemRefreshPublishesChangedFileCandidates);
     RUN(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure);

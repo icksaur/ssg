@@ -4,6 +4,7 @@
 #include <ssg/CompiledKeymap.h>
 #include <ssg/DocumentPointerGesture.h>
 #include <ssg/FollowEditsModel.h>
+#include <ssg/Picker.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/PaneTopology.h>
 #include <ssg/PromptSurface.h>
@@ -84,6 +85,11 @@ struct ActivateTreeNode {
     TreeNodeId nodeId;
 };
 
+struct SubmitPicker {
+    PickerActivation activation;
+    std::string candidateId;
+};
+
 struct UpdateFindQuery {
     std::string query;
 };
@@ -130,7 +136,8 @@ struct ActivateUiNode {
 using InputRouteAction =
     std::variant<RouteUnhandled, RouteRejected, RouteAccepted,
                  RouteClientOwned, RouteViewAction, RouteDispatch,
-                 InvokeExternalAction, ActivateUiNode, ActivateTreeNode>;
+                 InvokeExternalAction, ActivateUiNode, ActivateTreeNode,
+                 SubmitPicker>;
 
 struct RoutedInput {
     InputRouteAction action;

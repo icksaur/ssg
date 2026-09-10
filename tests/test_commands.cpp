@@ -17,7 +17,6 @@
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/FindReplace.h>
 #include <ssg/Keymap.h>
-#include <ssg/PaletteSearcher.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/Search.h>
 #include <ssg/Selection.h>
@@ -64,8 +63,6 @@ std::string_view commandArgumentName(ssg::CommandEntry const& command) {
         {typeid(ssg::SettingResetScopeArguments), "setting scope"},
         {typeid(ssg::WorkspaceReplaceArguments), "workspace replace"},
         {typeid(ssg::WorkspaceReplacePreview), "workspace apply"},
-        {typeid(ssg::PaletteExecuteArguments), "palette selection"},
-        {typeid(ssg::PickerSubmitArguments), "picker candidate"},
         {typeid(ssg::TreeSelectArguments), "tree node"},
         {typeid(ssg::ExternalActionInvocation), "external action"},
         {typeid(ssg::UiNodeActivationArguments), "UI node activation"},

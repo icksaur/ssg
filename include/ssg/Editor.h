@@ -315,10 +315,10 @@ public:
     // handler cannot dispatch; this is how it asks for one.
     //
     // ONE queue, drained inside the dispatch wrapper, rather than a field per
-    // caller: palette.execute, prompt.submit and a script's ssg.command all
-    // want the same thing.  Separate single-slot fields each needed their own
-    // early return, and a return that forgot to drain silently postponed the
-    // work to some later, unrelated dispatch.
+    // caller: prompt.submit and a script's ssg.command both want the same
+    // thing. Separate single-slot fields each needed their own early return,
+    // and a return that forgot to drain silently postponed the work to some
+    // later, unrelated dispatch.
     //
     // Deferring rather than nesting keeps each command complete before the next
     // command starts.

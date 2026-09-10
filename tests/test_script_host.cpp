@@ -411,10 +411,9 @@ TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
 
 
 TEST(aScriptCommandRunFromThePaletteAlsoRunsWhatItAsksFor) {
-    // palette.execute returns its target's result directly, so a drain placed
-    // after it would be skipped entirely: a script command chosen from the
-    // palette would queue its requests and never run them, leaving them to be
-    // performed by some later, unrelated dispatch.
+    // A typed picker submit must still drain the selected command's queue:
+    // a script command chosen from the palette must run what it asks for before
+    // control returns to the caller.
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -433,12 +432,17 @@ TEST(aScriptCommandRunFromThePaletteAlsoRunsWhatItAsksFor) {
     ASSERT_TRUE(runtime
                     ->dispatch({"palette.open",  {}})
                     .accepted());
-    auto const executed = runtime->dispatch(
-        {"palette.execute",
-         ssg::PaletteExecuteArguments{"user.viapalette"}});
+    auto snapshot = ssg::test::projectGridFrame(*runtime);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot || !snapshot->paletteView.activePicker) return;
+    auto const executed = runtime->input(
+        ssg::PickerPointerInput{*snapshot->paletteView.activePicker,
+                                "user.viapalette"});
 
-    ASSERT_TRUE(!executed.accepted());
-    ASSERT_TRUE(executed.message.find("keymap.bind") != std::string::npos);
+    ASSERT_EQ(executed.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_TRUE(executed.command.has_value());
+    ASSERT_TRUE(executed.command->message.find("keymap.bind") !=
+                std::string::npos);
     fs::remove_all(root);
 }
 

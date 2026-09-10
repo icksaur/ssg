@@ -147,8 +147,6 @@ goto.forward	Goto Forward	keep
 search.results_next	Search Results Next	keep
 search.results_previous	Search Results Previous	keep
 palette.close	Palette Close	split
-palette.execute	Palette Execute	remove
-picker.submit	Picker Submit	remove
 search.workspace	Search Workspace	split
 goto.file	Go to File	remove
 goto.symbol	Go to Symbol	remove

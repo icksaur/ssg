@@ -1613,8 +1613,8 @@ TEST(routePointerPalettePressExecutesTheCandidate) {
     ASSERT_FALSE(unresolved.semantic_input.has_value());
 }
 
-// Clicking a row must mean the same as pressing Enter on it.  A file
-// candidate's id is a PATH, so its typed picker.submit mode must remain File;
+// Clicking a row must mean the same as pressing Enter on it. A file
+// candidate's id is a PATH, so its typed SubmitPicker mode must remain File;
 // this is the pointer half of the same mode-dispatched submit used by Enter.
 TEST(routePointerFilePickerPressUsesTheGenericPickerSubmit) {
     ssg::RegionHit hit;

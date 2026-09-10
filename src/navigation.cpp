@@ -18,39 +18,6 @@ namespace ssg {
 
 namespace {
 
-CommandHandlerResult validatePublishedCommand(Editor& runtime,
-                                             std::string const& commandId) {
-    auto const palette = runtime.paletteView();
-    const auto* candidates = palette.candidatesFor(SearchMode::Command);
-    if (candidates == nullptr) {
-        return failure("command picker inventory is unavailable");
-    }
-    bool const published =
-        std::any_of(candidates->begin(), candidates->end(),
-                    [&](auto const& candidate) { return candidate.id == commandId; });
-    if (!published) {
-        return failure("command is not in the palette candidate set: " + commandId);
-    }
-    return success();
-}
-
-CommandHandlerResult validatePaletteTarget(Editor& runtime,
-                                           std::string const& commandId) {
-    bool const paletteOpen = runtime.screen.prompt().active() &&
-                              runtime.screen.prompt().request() &&
-                              runtime.screen.prompt().request()->kind ==
-                                  PromptKind::Palette;
-    if (!paletteOpen) return failure("palette.execute requires the palette to be open");
-    // Every picker uses a Palette-kind prompt, so prompt kind alone no longer
-    // identifies the command palette.  Without this the file picker's
-    // candidates -- which are PATHS, not command ids -- would be submittable as
-    // commands.
-    if (runtime.screen.openPicker() != PickerKind::Command) {
-        return failure("palette.execute requires the command palette to be open");
-    }
-    return validatePublishedCommand(runtime, commandId);
-}
-
 // The authoritative text a navigation target is validated against: the buffer
 // when the file is already open, so an unsaved edit is not validated against a
 // stale disk copy, and the file otherwise.
@@ -171,34 +138,13 @@ CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::an
         runtime.rebuildFileCandidates();
     }
     else if (id == "palette.close") {
-        if (auto const* expected = payloadAs<PickerActivation>(payload)) {
-            if (!runtime.deferredCommands.empty()) {
-                if (!runtime.deferDispatch(
-                        ClientCommand{"palette.close", *expected})) {
-                    return failure("could not defer the picker close");
-                }
-                return success();
-            }
-            if (runtime.screen.openPickerActivation() != *expected) {
-                return success();
-            }
-        }
         if (!runtime.screen.closeFinder()) {
             return failure("no palette to close");
         }
     }
     else if (id == "palette.next" || id == "search.results_next") runtime.search.selectNext();
     else if (id == "palette.previous" || id == "search.results_previous") runtime.search.selectPrevious();
-    else if (id == "palette.execute") {
-        auto const* arguments = payloadAs<PaletteExecuteArguments>(payload);
-        if (arguments == nullptr) return failure("palette.execute requires a command id payload");
-        auto validation = validatePaletteTarget(runtime, arguments->commandId);
-        if (!validation.accepted) return validation;
-        if (!runtime.deferDispatch(ClientCommand{arguments->commandId, {}})) {
-            return failure("could not queue the selected command");
-        }
-        (void)runtime.screen.closeFinder();
-    } else if (id == "search.workspace") {
+    else if (id == "search.workspace") {
         const auto sourceGeneration = ++runtime.workspaceSearchGeneration;
         runtime.startWorkspaceSearch(std::string{}, sourceGeneration);
     } else if (id == "goto.back" || id == "goto.forward") {
@@ -612,102 +558,14 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
     bare("search.results_next", "", "Results Next");
     bare("search.results_previous", "", "Results Previous");
 
-    // Direct clients close unconditionally with no payload. The internal
-    // post-submit close carries the activation it is allowed to dismiss, so a
-    // selected command that replaced the picker cannot have its new UI canceled.
     {
         auto built = spec("palette.close", "Close");
-        built.binding = bindOptionalInProcessHandler<PickerActivation>(
-            [&runtime](CommandContext&,
-                       std::optional<PickerActivation> expected) {
-                return searchCommand(
-                    runtime, "palette.close",
-                    expected ? std::any{*expected} : std::any{});
+        built.binding = bindNoArgumentHandler(
+            [&runtime](CommandContext&) {
+                return searchCommand(runtime, "palette.close", {});
             });
         catalog.add(std::move(built));
     }
-
-    // Names the command to run, so it is the one search command a remote client
-    // may send an argument for.
-    {
-        auto built = spec("palette.execute", "Execute");
-        built.binding = bindWireHandler<PaletteExecuteArguments>(
-            [&runtime](CommandContext&,
-                       PaletteExecuteArguments const& arguments) {
-                return searchCommand(runtime, "palette.execute",
-                                     std::any{arguments});
-            });
-        catalog.add(std::move(built));
-    }
-
-    catalog.add(CommandSpec{
-        .id = "picker.submit",
-        .owner = "search-palette",
-        .summary = "Submit Picker Candidate",
-        .effect = CommandEffect::Mutation,
-        .luaApi = true,
-        .binding = bindWireHandler<PickerSubmitArguments>(
-            [&runtime](CommandContext&,
-                     PickerSubmitArguments const& arguments) {
-               auto const palette = runtime.paletteView();
-               auto const* candidates =
-                  palette.candidatesFor(
-                      arguments.activation.mode);
-               if (candidates == nullptr) {
-                  return failure(
-                      "picker mode has no candidate inventory");
-               }
-               auto const published = std::find_if(
-                  candidates->begin(),
-                  candidates->end(),
-                  [&](auto const& candidate) {
-                      return candidate.id ==
-                             arguments.candidateId;
-                  });
-               if (published == candidates->end()) {
-                  return failure(
-                      "candidate is not in the picker inventory");
-               }
-               if (runtime.screen.openPickerActivation() !=
-                  arguments.activation) {
-                  return failure(
-                      "picker.submit requires a matching open picker");
-               }
-               std::optional<ClientCommand> selected;
-               if (arguments.activation.mode ==
-                  SearchMode::Command) {
-                  auto validation = validatePublishedCommand(
-                      runtime, arguments.candidateId);
-                  if (!validation.accepted) return validation;
-                  selected = ClientCommand{arguments.candidateId, {}};
-               } else if (arguments.activation.mode ==
-                         SearchMode::File) {
-                  auto result = applyFilePathCompletion(
-                      runtime, PromptCompletion::FileOpen,
-                      arguments.candidateId);
-                  if (!result.accepted) return result;
-               } else {
-                  return failure(
-                      "open picker has no submit action");
-               }
-               if (runtime.deferredCommands.contains(
-                      "palette.close")) {
-                  return failure(
-                      "another picker submission is pending");
-               }
-               if (selected && !runtime.deferDispatch(std::move(*selected))) {
-                  return failure(
-                      "could not queue the selected command");
-               }
-               if (!runtime.deferDispatch(
-                      ClientCommand{"palette.close",
-                                    arguments.activation})) {
-                  return failure(
-                      "could not queue the picker close");
-               }
-               return success();
-            }),
-    });
 
     {
         auto built = spec("search.workspace", "Workspace");

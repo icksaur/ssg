@@ -217,6 +217,21 @@ bool existingDocumentMutated(
     return false;
 }
 
+void reconcileAfterOperation(
+    Editor& editor,
+    const std::unordered_map<std::uint64_t, std::uint64_t>& revisionsBefore,
+    bool accepted) {
+    editor.reconcileFindDocument();
+    editor.screen.refreshNoticePresence(editor.noticePresent());
+    editor.screen.refreshExternalModificationPresence(
+        editor.externalModificationPresent());
+    editor.screen.refreshStatusActions(editor.status.actionNodes());
+    if (accepted &&
+        existingDocumentMutated(revisionsBefore, editor.workspace)) {
+        (void)editor.follow.notifyLocalEdit();
+    }
+}
+
 bool pathContains(std::filesystem::path const& root,
                    std::filesystem::path const& candidate) {
     auto rootIt = root.begin();
@@ -629,6 +644,85 @@ ClientInputResult executeInputRoute(Editor& editor, ActivateTreeNode route,
     return {outcome, std::nullopt,
             CommandResult{CommandError::None, {}, std::move(result.viewAction)},
             activation};
+}
+
+ClientInputResult executeInputRoute(Editor& editor, SubmitPicker route,
+                                    RoutedInput) {
+    auto const palette = editor.paletteView();
+    const auto* candidates = palette.candidatesFor(route.activation.mode);
+    if (candidates == nullptr) {
+        return {ClientInputOutcome::Rejected, std::nullopt,
+                CommandResult{CommandError::HandlerFailed,
+                              "picker mode has no candidate inventory", {}},
+                std::nullopt};
+    }
+    auto const published =
+        std::find_if(candidates->begin(), candidates->end(),
+                     [&](auto const& c) { return c.id == route.candidateId; });
+    if (published == candidates->end()) {
+        return {ClientInputOutcome::Rejected, std::nullopt,
+                CommandResult{CommandError::HandlerFailed,
+                              "candidate is not in the picker inventory", {}},
+                std::nullopt};
+    }
+    if (editor.screen.openPickerActivation() != route.activation) {
+        return {ClientInputOutcome::Rejected, std::nullopt,
+                CommandResult{CommandError::HandlerFailed,
+                              "SubmitPicker requires a matching open picker",
+                              {}},
+                std::nullopt};
+    }
+
+    if (route.activation.mode == SearchMode::Command) {
+        auto result = editor.dispatchLocked(ClientCommand{route.candidateId, {}});
+        if (!result.accepted()) {
+            return {ClientInputOutcome::Rejected, std::nullopt,
+                    CommandResult{result.error, std::move(result.message), {}},
+                    std::nullopt};
+        }
+        if (editor.screen.openPickerActivation() == route.activation) {
+            const auto revisionsBeforeClose =
+                documentRevisions(editor.workspace);
+            (void)editor.screen.closeFinder();
+            reconcileAfterOperation(editor, revisionsBeforeClose, true);
+        }
+        auto const activation = editor.screen.openPickerActivation();
+        const auto outcome =
+            result.viewAction ? ClientInputOutcome::ViewOwned
+                              : ClientInputOutcome::Dispatched;
+        return {outcome, std::nullopt, std::move(result), activation};
+    }
+    if (route.activation.mode == SearchMode::File) {
+        const auto revisionsBefore = documentRevisions(editor.workspace);
+        editor.screen.refreshExternalModificationPresence(
+            editor.externalModificationPresent());
+        auto result = applyFilePathCompletion(editor, PromptCompletion::FileOpen,
+                                              route.candidateId);
+        reconcileAfterOperation(editor, revisionsBefore, result.accepted);
+        if (!result.accepted) {
+            return {ClientInputOutcome::Rejected, std::nullopt,
+                    CommandResult{CommandError::HandlerFailed,
+                                  std::move(result.message), {}},
+                    std::nullopt};
+        }
+        if (editor.screen.openPickerActivation() == route.activation) {
+            const auto revisionsBeforeClose =
+                documentRevisions(editor.workspace);
+            (void)editor.screen.closeFinder();
+            reconcileAfterOperation(editor, revisionsBeforeClose, true);
+        }
+        const auto outcome =
+            result.viewAction ? ClientInputOutcome::ViewOwned
+                              : ClientInputOutcome::Dispatched;
+        return {outcome, std::nullopt,
+                CommandResult{CommandError::None, {},
+                              std::move(result.viewAction)},
+                editor.screen.openPickerActivation()};
+    }
+    return {ClientInputOutcome::Rejected, std::nullopt,
+            CommandResult{CommandError::HandlerFailed,
+                          "open picker has no submit action", {}},
+            std::nullopt};
 }
 
 } // namespace

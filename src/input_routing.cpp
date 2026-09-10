@@ -445,9 +445,8 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
     if (!isPrimaryPress(input.phase, input.button)) {
         return unhandled();
     }
-    return dispatch(
-        kPickerSubmit,
-        PickerSubmitArguments{input.activation, input.candidateId});
+    return {SubmitPicker{input.activation, input.candidateId}, std::nullopt,
+            false};
 }
 
 RoutedInput routeInput(InputRoutingSnapshot const&,
