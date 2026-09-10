@@ -61,25 +61,6 @@ TEST(requiredCatalogMinusExclusionsIsCallable) {
 }
 
 
-TEST(generationalHandlesRejectStaleAccessAfterReuse) {
-    LuaCommandHost host{options(), [](LuaInvocation const&) {
-        return CommandHandlerResult::success();
-    }};
-    int first = 1;
-    int second = 2;
-    auto const stale = host.expose(&first);
-    void* resolved = nullptr;
-    ASSERT_TRUE(host.resolve(stale, resolved).accepted());
-    ASSERT_EQ(resolved, static_cast<void*>(&first));
-    host.invalidate(stale);
-    auto const current = host.expose(&second);
-    ASSERT_EQ(current.index, stale.index);
-    ASSERT_NE(current.generation, stale.generation);
-    ASSERT_EQ(host.resolve(stale, resolved).error, LuaError::StaleHandle);
-    ASSERT_TRUE(host.resolve(current, resolved).accepted());
-    ASSERT_EQ(resolved, static_cast<void*>(&second));
-}
-
 TEST(instructionAndWallClockBudgetsIsolateCallbacks) {
     auto configured = options();
     configured.instructionBudget = 2'000;
@@ -309,7 +290,6 @@ TEST(aGateMayNotReEnterTheHostItIsGating) {
 
 SSG_TEST_SUITE(test_lua) {
     RUN(requiredCatalogMinusExclusionsIsCallable);
-    RUN(generationalHandlesRejectStaleAccessAfterReuse);
     RUN(instructionAndWallClockBudgetsIsolateCallbacks);
     RUN(reentrantCallsRestoreTheEnclosingBudget);
     RUN(registrationIsAtomicAndDuplicateSafe);

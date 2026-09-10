@@ -69,7 +69,6 @@ struct WorkspaceResult {
     WorkspaceError error = WorkspaceError::None;
     std::string message;
     std::optional<FileDocumentId> document;
-    std::optional<RecoveryRecordId> compensation;
     std::vector<WorkspaceFailure> failures;
 
     [[nodiscard]] bool accepted() const noexcept {
@@ -211,9 +210,6 @@ public:
     [[nodiscard]] WorkspaceResult deleteFile(FileDocumentId document);
     [[nodiscard]] WorkspaceResult removeDocument(FileDocumentId document);
     [[nodiscard]] WorkspaceResult newDirectory(std::string_view path);
-    [[nodiscard]] WorkspaceResult restore(
-        const RecoveryRecordId& compensation);
-
 private:
     class Impl;
     explicit Workspace(std::unique_ptr<Impl> implementation) noexcept;

@@ -187,7 +187,7 @@ TEST(recentFilesAreBoundedMruAndDropMissingEntries) {    TemporaryDirectory temp
     ASSERT_EQ(afterMissing.front(), std::string{"32.txt"});
 }
 
-TEST(renameDeleteAreCompensatableAndOpenDirectoryClosesWorkspace) {
+TEST(renameDeleteAndOpenDirectoryUpdateWorkspaceState) {
     TemporaryDirectory first;
     TemporaryDirectory second;
     writeBytes(first.path() / "old.txt", "old");
@@ -199,54 +199,20 @@ TEST(renameDeleteAreCompensatableAndOpenDirectoryClosesWorkspace) {
     const auto renamed =
         workspace.renameFile(*opened.document, "renamed.txt");
     ASSERT_TRUE(renamed.accepted());
-    ASSERT_TRUE(renamed.compensation.has_value());
-    ASSERT_TRUE(workspace.restore(*renamed.compensation).accepted());
-    ASSERT_TRUE(std::filesystem::exists(first.path() / "old.txt"));
-    const auto snapshot = workspace.document(*opened.document).snapshot();
-    ASSERT_TRUE(workspace
-                    .apply(*opened.document,
-                           {snapshot.revision,
-                            {{ssg::ByteOffset{0}, snapshot.text.size(),
-                              "unsaved"}}})
-                    .accepted());
+    ASSERT_FALSE(std::filesystem::exists(first.path() / "old.txt"));
+    ASSERT_TRUE(std::filesystem::exists(first.path() / "renamed.txt"));
 
     const auto removed = workspace.deleteFile(*opened.document);
     ASSERT_TRUE(removed.accepted());
-    const auto restored = workspace.restore(*removed.compensation);
-    ASSERT_TRUE(restored.accepted());
-    ASSERT_EQ(restored.document, opened.document);
-    ASSERT_EQ(readBytes(first.path() / "old.txt"), std::string{"old"});
-    ASSERT_EQ(workspace.document(*opened.document).snapshot().text,
-              std::string{"old"});
+    ASSERT_FALSE(std::filesystem::exists(first.path() / "renamed.txt"));
+    ASSERT_TRUE(workspace.documents().empty());
 
     const auto openedDirectory = workspace.openDirectory(second.path());
     ASSERT_TRUE(openedDirectory.accepted());
     ASSERT_EQ(workspace.root(), std::filesystem::canonical(second.path()));
-    ASSERT_TRUE(workspace.documents().empty());
 }
 
-TEST(evictedCompensationCannotRestore) {
-    TemporaryDirectory temporary;
-    writeBytes(temporary.path() / "first.txt", "first");
-    writeBytes(temporary.path() / "second.txt", "second");
-    auto recovery = ssg::RecoveryManager::create(
-        temporary.path() / ".recovery", ssg::RecoveryConfig{1, 1024 * 1024});
-    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
-    const auto first = workspace.openFile("first.txt");
-    const auto second = workspace.openFile("second.txt");
-
-    const auto firstRename =
-        workspace.renameFile(*first.document, "first-renamed.txt");
-    ASSERT_TRUE(firstRename.accepted());
-    const auto secondRename =
-        workspace.renameFile(*second.document, "second-renamed.txt");
-    ASSERT_TRUE(secondRename.accepted());
-
-    ASSERT_FALSE(workspace.restore(*firstRename.compensation).accepted());
-    ASSERT_TRUE(workspace.restore(*secondRename.compensation).accepted());
-}
-
-TEST(saveAndReloadDoNotProduceCompensations) {
+TEST(saveAndReloadUpdateDiskAndDocument) {
     TemporaryDirectory temporary;
     writeBytes(temporary.path() / "file.txt", "disk");
     auto recovery =
@@ -258,17 +224,13 @@ TEST(saveAndReloadDoNotProduceCompensations) {
                                 {{ssg::ByteOffset{4}, 0, "-edited"}}})
                     .accepted());
 
-    const auto saved = workspace.save(id);
-    ASSERT_TRUE(saved.accepted());
+    ASSERT_TRUE(workspace.save(id).accepted());
     ASSERT_EQ(readBytes(temporary.path() / "file.txt"),
               std::string{"disk-edited"});
-    ASSERT_FALSE(saved.compensation.has_value());
 
     writeBytes(temporary.path() / "file.txt", "external");
-    const auto reloaded = workspace.reload(id);
-    ASSERT_TRUE(reloaded.accepted());
+    ASSERT_TRUE(workspace.reload(id).accepted());
     ASSERT_EQ(workspace.document(id).snapshot().text, std::string{"external"});
-    ASSERT_FALSE(reloaded.compensation.has_value());
 }
 
 TEST(newDirectoryRejectsEscapeAndCreatesOnlyInsideRoot) {
@@ -418,9 +380,8 @@ SSG_TEST_SUITE(test_workspace) {
     RUN(pathsCannotEscapeWorkspaceBeforeMutation);
     RUN(untitledIdentityChangesOnlyAfterSuccessfulSave);
     RUN(recentFilesAreBoundedMruAndDropMissingEntries);
-    RUN(renameDeleteAreCompensatableAndOpenDirectoryClosesWorkspace);
-    RUN(evictedCompensationCannotRestore);
-    RUN(saveAndReloadDoNotProduceCompensations);
+    RUN(renameDeleteAndOpenDirectoryUpdateWorkspaceState);
+    RUN(saveAndReloadUpdateDiskAndDocument);
     RUN(newDirectoryRejectsEscapeAndCreatesOnlyInsideRoot);
     RUN(emptyAndMixedEndingEditsSaveWithExactMetadata);
     RUN(tryDocumentReturnsNullForAbsentId);

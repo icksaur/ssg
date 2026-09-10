@@ -85,38 +85,11 @@ struct RecoveryRestoreResult {
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
 };
 
-enum class RecoveryStep : std::uint8_t {
-    PrepareArtifact,
-    InstallRecord,
-    PublishRecord,
-    MutateDocument,
-    MutateFilesystem,
-    RollbackDocument,
-    RollbackFilesystem,
-    RestoreDocument,
-    RestoreFilesystem,
-    CleanupRecord,
-};
-
-class RecoveryFaultInjector {
-public:
-    virtual ~RecoveryFaultInjector() = default;
-
-    // A repeated step denotes another independently fallible part of the same
-    // action. Throwing injects failure before that part begins.
-    // The injector must outlive RecoveryManager.
-    virtual void beforeStep(RecoveryStep step) = 0;
-};
-
 class RecoveryManager {
 public:
     [[nodiscard]] static RecoveryManager create(
         const std::filesystem::path& recoveryRoot,
         RecoveryConfig config = {});
-    [[nodiscard]] static RecoveryManager create(
-        const std::filesystem::path& recoveryRoot,
-        RecoveryConfig config,
-        RecoveryFaultInjector& faultInjector);
 
     ~RecoveryManager();
     RecoveryManager(RecoveryManager&&) noexcept;
@@ -130,15 +103,8 @@ public:
         std::optional<JournalDocument>& document,
         ScratchStore& scratch,
         std::chrono::milliseconds durabilityTimeout);
-    [[nodiscard]] RecoveryActionResult renamePath(
-        const std::filesystem::path& source,
-        const std::filesystem::path& destination);
-
     // Renames only when the destination is free, with the exclusion enforced by
-    // the filesystem rather than by a preceding check. Distinct from
-    // renamePath, which deliberately REPLACES the destination: replacing is
-    // right for an LSP-driven or recovery-internal move, and wrong for a
-    // user-facing rename, where clobbering is data loss.
+    // the filesystem rather than by a preceding check.
     [[nodiscard]] RecoveryActionResult renamePathNoClobber(
         const std::filesystem::path& source,
         const std::filesystem::path& destination);
@@ -149,9 +115,6 @@ public:
     [[nodiscard]] RecoveryRestoreResult restoreDocument(
         const RecoveryRecordId& record,
         std::optional<JournalDocument>& document);
-    [[nodiscard]] RecoveryRestoreResult restoreFilesystem(
-        const RecoveryRecordId& record);
-
 private:
     class Impl;
     explicit RecoveryManager(std::unique_ptr<Impl> implementation) noexcept;

@@ -923,21 +923,9 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/test_recovery.cpp
         SYMBOL test_recovery)
     ssg_add_test_suite(
-        NAME test_recovery_tree
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_recovery.cpp
-        SYMBOL test_recovery_tree)
-    ssg_add_test_suite(
-        NAME test_recovery_failures
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_recovery.cpp
-        SYMBOL test_recovery_failures)
-    ssg_add_test_suite(
         NAME test_recovery_reconstruction
         ENTRY ${SSG_SOURCE_DIR}/tests/test_recovery.cpp
         SYMBOL test_recovery_reconstruction)
-    ssg_add_test_suite(
-        NAME test_recovery_retry
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_recovery.cpp
-        SYMBOL test_recovery_retry)
     ssg_add_test_suite(
         NAME test_recovery_budget
         ENTRY ${SSG_SOURCE_DIR}/tests/test_recovery.cpp

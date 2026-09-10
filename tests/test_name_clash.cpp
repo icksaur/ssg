@@ -223,33 +223,6 @@ TEST(aRuntimeWithNoDocumentOpensAnEditableNewBuffer) {
                 std::string::npos);
 }
 
-// Rolling back a rename must leave the workspace as it was: the file back at
-// its old name AND NOTHING at the new one. This is the oracle that a
-// placeholder-based clash check fails -- it makes the recovery snapshot record
-// the placeholder as the destination's prior state, so a rollback restores an
-// empty file where there had been none. Refusal tests cannot see that.
-TEST(rollingBackARenameLeavesNothingAtTheNewName) {
-    TemporaryDirectory directory;
-    const auto recoveryRoot = directory.path() / "recovery";
-    fs::create_directories(recoveryRoot);
-    writeOutOfBand(directory.path() / "before.txt", "payload\n");
-
-    auto recovery = ssg::RecoveryManager::create(recoveryRoot);
-    auto workspace = ssg::Workspace::create(directory.path(), recovery);
-    const auto opened = workspace.openFile("before.txt");
-    ASSERT_TRUE(opened.accepted());
-
-    const auto renamed = workspace.renameFile(*opened.document, "after.txt");
-    ASSERT_TRUE(renamed.accepted());
-    ASSERT_TRUE(fs::exists(directory.path() / "after.txt"));
-    ASSERT_TRUE(renamed.compensation.has_value());
-    if (!renamed.compensation) return;
-
-    ASSERT_TRUE(workspace.restore(*renamed.compensation).accepted());
-    ASSERT_EQ(readOutOfBand(directory.path() / "before.txt"), "payload\n");
-    ASSERT_FALSE(fs::exists(directory.path() / "after.txt"));
-}
-
 // Deleting must leave the bytes recoverable. This is the invariant the whole
 // archive exists for: the command takes no confirmation, so the only thing
 // standing between a mistaken keystroke and permanent loss is this copy.
@@ -424,7 +397,6 @@ SSG_TEST_SUITE(test_name_clash) {
     RUN(saveAsToAFreeNameSucceedsAndRetitlesTheTab);
     RUN(renameToAFreeNameMovesTheFileAndRetitlesTheTab);
     RUN(aRuntimeWithNoDocumentOpensAnEditableNewBuffer);
-    RUN(rollingBackARenameLeavesNothingAtTheNewName);
     RUN(deletingAFileLeavesTheBytesInTheArchive);
     RUN(aFailedArchiveWriteAbortsTheDeleteAndKeepsTheFile);
     RUN(theActiveFileMutatorSetIsExactlyTheDeclaredOne);

@@ -1,14 +1,5 @@
-ssg::LuaCommandHost::expose(void*)	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
-ssg::LuaCommandHost::invalidate(ssg::LuaHandle)	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
-ssg::LuaCommandHost::registeredCommands[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
-ssg::LuaCommandHost::resolve(ssg::LuaHandle, void*&) const	CMakeFiles/ssg_core.dir/src/LuaCommandHost.cpp.o
-ssg::RecoveryManager::Impl::renamePath(std::filesystem::__cxx11::path const&, std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
-ssg::RecoveryManager::Impl::renamePath(std::filesystem::__cxx11::path const&, std::filesystem::__cxx11::path const&)::{lambda()#1}::operator()() const	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
-ssg::RecoveryManager::Impl::renamePath(std::filesystem::__cxx11::path const&, std::filesystem::__cxx11::path const&)::{lambda(ssg::(anonymous namespace)::StoredRecord const&)#1}::operator()(ssg::(anonymous namespace)::StoredRecord const&) const	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
-ssg::RecoveryManager::Impl::restoreFilesystem(ssg::RecoveryRecordId const&)	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
-ssg::RecoveryManager::create(std::filesystem::__cxx11::path const&, ssg::RecoveryConfig, ssg::RecoveryFaultInjector&)	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
-ssg::RecoveryManager::renamePath(std::filesystem::__cxx11::path const&, std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
-ssg::RecoveryManager::restoreFilesystem(ssg::RecoveryRecordId const&)	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
+ssg::RecoveryManager::Impl::records() const	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
+ssg::RecoveryManager::records() const	CMakeFiles/ssg_core.dir/src/RecoveryManager.cpp.o
 ssg::RowProjection::rows() const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
 ssg::RowProjection::visualRowForBufferLine(unsigned int) const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
 ssg::RowProjection::visualRowForReal(unsigned int) const	CMakeFiles/ssg_core.dir/src/Viewport.cpp.o
@@ -26,7 +17,6 @@ ssg::TreeModel::toggleSelected()	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
 ssg::TreeModel::visibleNodesRecomputeCount()	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
 ssg::TreeProviderSnapshot::fromFilesystem(ssg::TreeProviderId, std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
 ssg::Workspace::recentFiles[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/Workspace.cpp.o
-ssg::Workspace::restore(ssg::RecoveryRecordId const&)	CMakeFiles/ssg_core.dir/src/Workspace.cpp.o
 ssg::WorkspaceCorpus::status() const	CMakeFiles/ssg_core.dir/src/WorkspaceCorpus.cpp.o
 ssg::cellRunCalls()	CMakeFiles/ssg_core.dir/src/GraphemeLayout.cpp.o
 ssg::colorDepthName(ssg::ColorDepth)	CMakeFiles/ssg_terminal_objects.dir/src/TerminalOutput.cpp.o

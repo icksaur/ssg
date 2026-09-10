@@ -26,11 +26,6 @@ struct RegisteredCommand {
     int functionReference;
 };
 
-struct HandleSlot {
-    void* object{};
-    std::uint32_t generation{1};
-};
-
 struct RegistrationTransaction {
     std::vector<RegisteredCommand> commands;
     std::unordered_set<std::string> ids;
@@ -411,7 +406,6 @@ struct LuaCommandHost::Impl {
     std::unordered_map<std::string, LuaCommand> catalog;
     std::unordered_map<std::string, int> pluginCommands;
     std::vector<RegistrationTransaction> registrationStack;
-    std::vector<HandleSlot> handles;
     std::string callbackMessage;
     LuaError pendingError{LuaError::None};
     bool callActive{false};
@@ -430,16 +424,6 @@ LuaCommandHost::LuaCommandHost(LuaCommandHostOptions options,
 LuaCommandHost::~LuaCommandHost() = default;
 LuaCommandHost::LuaCommandHost(LuaCommandHost&&) noexcept = default;
 LuaCommandHost& LuaCommandHost::operator=(LuaCommandHost&&) noexcept = default;
-
-std::vector<std::string> LuaCommandHost::registeredCommands() const {
-    std::vector<std::string> ids;
-    ids.reserve(impl_->pluginCommands.size());
-    for (auto const& [id, reference] : impl_->pluginCommands) ids.push_back(id);
-    // Ordered so a caller registering these downstream produces the same
-    // handles for the same script, rather than depending on hash order.
-    std::sort(ids.begin(), ids.end());
-    return ids;
-}
 
 LuaResult LuaCommandHost::evaluate(std::string_view script) {
     if (impl_->gateActive) {
@@ -534,54 +518,6 @@ LuaResult LuaCommandHost::invoke(std::string_view pluginCommand) {
 
 bool LuaCommandHost::hasCommand(std::string_view pluginCommand) const {
     return impl_->pluginCommands.contains(std::string{pluginCommand});
-}
-
-LuaHandle LuaCommandHost::expose(void* object) {
-    if (object == nullptr) {
-        throw std::invalid_argument{"exposed Lua object must not be null"};
-    }
-    for (std::size_t i = 0; i < impl_->handles.size(); ++i) {
-        auto& slot = impl_->handles[i];
-        if (slot.object == nullptr &&
-            slot.generation !=
-                std::numeric_limits<std::uint32_t>::max()) {
-            slot.object = object;
-            return {static_cast<std::uint32_t>(i), slot.generation};
-        }
-    }
-    if (impl_->handles.size() >=
-        std::numeric_limits<std::uint32_t>::max()) {
-        throw std::overflow_error{"Lua handle table is exhausted"};
-    }
-    impl_->handles.push_back({object, 1});
-    return {static_cast<std::uint32_t>(impl_->handles.size() - 1), 1};
-}
-
-void LuaCommandHost::invalidate(LuaHandle handle) {
-    if (handle.index >= impl_->handles.size()) {
-        return;
-    }
-    auto& slot = impl_->handles[handle.index];
-    if (slot.object == nullptr || slot.generation != handle.generation) {
-        return;
-    }
-    slot.object = nullptr;
-    if (slot.generation != std::numeric_limits<std::uint32_t>::max()) {
-        ++slot.generation;
-    }
-}
-
-LuaResult LuaCommandHost::resolve(LuaHandle handle, void*& object) const {
-    if (handle.index >= impl_->handles.size()) {
-        return {LuaError::StaleHandle, "Lua handle index is stale"};
-    }
-    auto const& slot = impl_->handles[handle.index];
-    if (slot.object == nullptr || slot.generation != handle.generation) {
-        return {LuaError::StaleHandle,
-                "Lua handle generation is stale"};
-    }
-    object = slot.object;
-    return {};
 }
 
 }  // namespace ssg

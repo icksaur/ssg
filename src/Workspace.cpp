@@ -305,13 +305,6 @@ public:
         bool persisted = true;
     };
 
-    struct CompensationState {
-        FileDocumentId id;
-        JournalDocumentKey priorKey;
-        std::string priorLabel;
-        std::optional<std::filesystem::path> archivedPath;
-    };
-
     Impl(std::filesystem::path canonicalRoot, RecoveryManager& actions,
          std::filesystem::path archiveRoot)
         : root(std::move(canonicalRoot)),
@@ -326,7 +319,6 @@ public:
     std::uint64_t nextDocument = 1;
     std::vector<Entry> entries;
     std::vector<std::string> recent;
-    std::unordered_map<std::string, CompensationState> compensations;
     // Notified with the relative path each time saveTo writes a file, so the
     // runtime can correlate SSG's own writes against watcher events. Installed by
     // the runtime; nullptr in isolation (Workspace tests do not observe saves).
@@ -409,19 +401,6 @@ public:
         if (recent.size() > kMaximumRecentFiles) {
             recent.resize(kMaximumRecentFiles);
         }
-    }
-
-    void rememberCompensation(const RecoveryRecordId& id,
-                              CompensationState state) {
-        compensations.insert_or_assign(std::string{id.value()},
-                                       std::move(state));
-        const auto retained = recovery.records();
-        std::erase_if(compensations, [&](const auto& item) {
-            return std::none_of(
-                retained.begin(), retained.end(), [&](const RecoveryRecord& record) {
-                    return record.id.value() == item.first;
-                });
-        });
     }
 
     WorkspaceResult addBytes(std::vector<std::uint8_t> bytes,
@@ -717,7 +696,6 @@ WorkspaceResult Workspace::openDirectory(
     impl_->root = canonical;
     impl_->entries.clear();
     impl_->recent.clear();
-    impl_->compensations.clear();
     return {};
 }
 
@@ -1175,28 +1153,20 @@ WorkspaceResult Workspace::renameFile(FileDocumentId id,
         return failure(WorkspaceError::AlreadyOpen,
                        "destination is already open");
     }
-    // renamePathNoClobber, not renamePath: the latter deliberately replaces the
-    // destination. Letting the recovery action own the exclusion (rather than
-    // claiming the name here first) keeps its snapshot honest -- the
-    // destination is recorded as missing, so a rollback REMOVES it instead of
-    // restoring an empty placeholder that was never really there.
+    // Letting the recovery action own the exclusion (rather than claiming the
+    // name here first) keeps its snapshot honest: a rollback removes the new
+    // destination instead of restoring an empty placeholder.
     const auto action =
         impl_->recovery.renamePathNoClobber(*source, *destination);
     if (!action.accepted()) {
         return failure(WorkspaceError::RecoveryFailed,
                        action.error->message);
     }
-    if (action.compensation) {
-        impl_->rememberCompensation(
-            *action.compensation,
-            Impl::CompensationState{id, entry->key, entry->displayLabel});
-    }
     entry->key = JournalDocumentKey::saved(path);
     entry->displayLabel = destination->filename().string();
     impl_->touchRecent(path);
     WorkspaceResult result;
     result.document = id;
-    result.compensation = action.compensation;
     return result;
 }
 
@@ -1228,17 +1198,10 @@ WorkspaceResult Workspace::deleteFile(FileDocumentId id) {
                        action.error->message);
     }
     WorkspaceResult result;
-    result.compensation = action.compensation;
     result.document = id;
     auto removed = std::find_if(
         impl_->entries.begin(), impl_->entries.end(),
         [id](const Impl::Entry& candidate) { return candidate.id == id; });
-    if (action.compensation) {
-        impl_->rememberCompensation(
-            *action.compensation,
-            Impl::CompensationState{id, removed->key, removed->displayLabel,
-                                    archived.archivedPath});
-    }
     impl_->entries.erase(removed);
     return result;
 }
@@ -1271,56 +1234,6 @@ WorkspaceResult Workspace::newDirectory(std::string_view rawPath) {
     const auto created = createDirectoriesDurably(*path);
     if (!created.ok()) {
         return failure(WorkspaceError::IoFailed, created.message);
-    }
-    return {};
-}
-
-WorkspaceResult Workspace::restore(
-    const RecoveryRecordId& compensation) {
-    auto found =
-        impl_->compensations.find(std::string{compensation.value()});
-    std::vector<std::uint8_t> archivedBytes;
-    if (found != impl_->compensations.end() &&
-        found->second.archivedPath) {
-        try {
-            archivedBytes = readFileBytes(*found->second.archivedPath);
-        } catch (const std::exception& exception) {
-            return failure(WorkspaceError::IoFailed, exception.what());
-        }
-    }
-    const auto restored = impl_->recovery.restoreFilesystem(compensation);
-    if (!restored.accepted()) {
-        if (found != impl_->compensations.end() && restored.error->code ==
-                                                        RecoveryErrorCode::
-                                                            RecordNotFound) {
-            impl_->compensations.erase(found);
-        }
-        return failure(WorkspaceError::RecoveryFailed,
-                       restored.error->message);
-    }
-    if (found != impl_->compensations.end()) {
-        WorkspaceResult result;
-        if (found->second.archivedPath) {
-            const auto prior = found->second;
-            auto added = impl_->addBytes(
-                std::move(archivedBytes), prior.priorKey, prior.priorLabel);
-            auto* entry = impl_->find(*added.document);
-            entry->id = prior.id;
-            WorkspaceResult pathError;
-            const auto path =
-                impl_->resolve(prior.priorKey.savedPath(), true, pathError);
-            if (path) {
-                entry->baseline =
-                    captureDiskBaseline(*path, entry->rawBytes);
-            }
-            result.document = prior.id;
-        } else if (auto* entry = impl_->find(found->second.id)) {
-            entry->key = found->second.priorKey;
-            entry->displayLabel = found->second.priorLabel;
-            result.document = entry->id;
-        }
-        impl_->compensations.erase(found);
-        return result;
     }
     return {};
 }

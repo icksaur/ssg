@@ -16,18 +16,11 @@
 
 namespace ssg {
 
-struct LuaHandle {
-    std::uint32_t index{};
-    std::uint32_t generation{};
-    auto operator<=>(LuaHandle const&) const = default;
-};
-
 enum class LuaError : std::uint8_t {
     None,
     InvalidScript,
     RuntimeFault,
     BudgetExhausted,
-    StaleHandle,
     DuplicateCommand,
     UnknownCommand,
     DispatchFailed,
@@ -98,15 +91,8 @@ public:
     LuaCommandHost& operator=(LuaCommandHost&&) noexcept;
 
     [[nodiscard]] LuaResult evaluate(std::string_view script);
-    // The commands the last successful evaluation registered, sorted.  Each
-    // evaluation replaces this set entirely.
-    [[nodiscard]] std::vector<std::string> registeredCommands() const;
     [[nodiscard]] LuaResult invoke(std::string_view pluginCommand);
     [[nodiscard]] bool hasCommand(std::string_view pluginCommand) const;
-
-    [[nodiscard]] LuaHandle expose(void* object);
-    void invalidate(LuaHandle handle);
-    [[nodiscard]] LuaResult resolve(LuaHandle handle, void*& object) const;
 
 private:
     struct Impl;

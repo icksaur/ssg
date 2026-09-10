@@ -533,14 +533,11 @@ RecoveryRecordId::RecoveryRecordId(std::string value) : value_(std::move(value))
 
 class RecoveryManager::Impl {
 public:
-    Impl(std::filesystem::path recoveryRoot,
-         RecoveryConfig config,
-         RecoveryFaultInjector* faultInjector)
+    Impl(std::filesystem::path recoveryRoot, RecoveryConfig config)
         : recoveryRoot_(
               std::filesystem::absolute(std::move(recoveryRoot))
                   .lexically_normal()),
-          config_(config),
-          faultInjector_(faultInjector) {
+          config_(config) {
         if (config_.maximumRecords == 0) {
             throw std::invalid_argument(
                 "recovery maximum record count must be greater than zero");
@@ -601,63 +598,9 @@ public:
         const auto previous = *document;
         return prepareAndPerform(
             RecoveryRecordKind::DocumentClose, previous, {},
-            [&] {
-                before(RecoveryStep::MutateDocument);
-                document.reset();
-            },
+            [&] { document.reset(); },
             [&](const StoredRecord&) {
-                before(RecoveryStep::RollbackDocument);
                 document = previous;
-            });
-    }
-
-    RecoveryActionResult renamePath(
-        const std::filesystem::path& source,
-        const std::filesystem::path& destination) {
-        if (pathContains(source, destination) ||
-            pathContains(destination, source)) {
-            return {{},
-                    error(RecoveryErrorCode::PreparationFailed,
-                          "rename source and destination must not overlap")};
-        }
-        try {
-            if (snapshotKind(source) == SnapshotKind::Missing) {
-                return {{},
-                        error(RecoveryErrorCode::PreparationFailed,
-                              "rename source does not exist")};
-            }
-        } catch (...) {
-            return {{},
-                    error(RecoveryErrorCode::PreparationFailed,
-                          exceptionMessage(std::current_exception()))};
-        }
-
-        return prepareAndPerform(
-            RecoveryRecordKind::PathRename, std::nullopt,
-            {source, destination},
-            [&] {
-                before(RecoveryStep::MutateFilesystem);
-                const auto removed = removeTreeIfPresent(destination);
-                if (!removed.ok()) {
-                    throw std::runtime_error(
-                        "failed to remove filesystem node: " + removed.message);
-                }
-                before(RecoveryStep::MutateFilesystem);
-                const auto sourceParent =
-                    ensureDirectory(source.parent_path());
-                if (!sourceParent.ok()) {
-                    throw std::runtime_error(sourceParent.message);
-                }
-                const auto destinationParent =
-                    ensureDirectory(destination.parent_path());
-                if (!destinationParent.ok()) {
-                    throw std::runtime_error(destinationParent.message);
-                }
-                renameDurably(source, destination);
-            },
-            [&](const StoredRecord& stored) {
-                before(RecoveryStep::RollbackFilesystem);
-                restoreRename(stored);
             });
     }
 
@@ -696,7 +639,6 @@ public:
             RecoveryRecordKind::PathRename, std::nullopt,
             {source, destination},
             [&] {
-                before(RecoveryStep::MutateFilesystem);
                 const auto parent = ensureDirectory(destination.parent_path());
                 if (!parent.ok()) throw std::runtime_error(parent.message);
                 const auto renamed = renameFileNoClobber(source, destination);
@@ -715,10 +657,7 @@ public:
                     syncPath(destinationParent, true);
                 }
             },
-            [&](const StoredRecord& stored) {
-                before(RecoveryStep::RollbackFilesystem);
-                restoreRename(stored);
-            });
+            [&](const StoredRecord& stored) { restoreRename(stored); });
     }
 
     RecoveryActionResult deletePath(const std::filesystem::path& path) {
@@ -736,7 +675,6 @@ public:
         return prepareAndPerform(
             RecoveryRecordKind::PathDelete, std::nullopt, {path},
             [&] {
-                before(RecoveryStep::MutateFilesystem);
                 const auto removed = removeTreeIfPresent(path);
                 if (!removed.ok()) {
                     throw std::runtime_error(
@@ -744,7 +682,6 @@ public:
                 }
             },
             [&](const StoredRecord& stored) {
-                before(RecoveryStep::RollbackFilesystem);
                 restoreSnapshot(path, artifactPath(stored, 0),
                                  stored.snapshots[0]);
             });
@@ -763,7 +700,6 @@ public:
                           "recovery record does not restore a document")};
         }
         try {
-            before(RecoveryStep::RestoreDocument);
             if (!restoredInThisInstance(*found)) {
                 document = found->document;
                 markRestored(*found);
@@ -776,38 +712,8 @@ public:
         return cleanupRestored(found);
     }
 
-    RecoveryRestoreResult restoreFilesystem(const RecoveryRecordId& id) {
-        const auto found = findRecord(id);
-        if (found == records_.end()) {
-            return {error(RecoveryErrorCode::RecordNotFound,
-                          "recovery record was not found")};
-        }
-        if (documentKind(found->record.kind)) {
-            return {error(RecoveryErrorCode::RecordKindMismatch,
-                          "recovery record does not restore filesystem state")};
-        }
-        if (!found->restoredInMemory && !statFile(restoredMarker(*found))) {
-            try {
-                before(RecoveryStep::RestoreFilesystem);
-                restoreFilesystemState(*found);
-                syncFilesystemState(*found);
-                markRestored(*found);
-            } catch (...) {
-                return {error(RecoveryErrorCode::RestorationFailed,
-                              "filesystem restoration failed: " +
-                                  exceptionMessage(
-                                      std::current_exception()))};
-            }
-        }
-        return cleanupRestored(found);
-    }
-
 private:
     using RecordIterator = std::vector<StoredRecord>::iterator;
-
-    void before(RecoveryStep step) {
-        if (faultInjector_ != nullptr) faultInjector_->beforeStep(step);
-    }
 
     void loadRecords() {
         const auto listed = DurableStore{recoveryRoot_}.entries();
@@ -899,7 +805,6 @@ private:
         std::optional<JournalDocument> document,
         std::vector<std::filesystem::path> paths) {
         validateRecoverySeparation(paths);
-        before(RecoveryStep::PrepareArtifact);
 
         const auto id = makeId();
         const auto staging =
@@ -950,7 +855,6 @@ private:
             protectTree(staging);
             syncTree(staging);
 
-            before(RecoveryStep::InstallRecord);
             installDirectoryDurably(staging, installed);
         } catch (...) {
             (void)removeTreeIfPresent(staging);
@@ -1005,9 +909,7 @@ private:
             if (!documentKind(prepared->record.kind)) {
                 syncFilesystemState(*prepared);
             }
-            before(RecoveryStep::PublishRecord);
             markRecordState(*prepared, RecordState::Published);
-            before(RecoveryStep::PublishRecord);
         } catch (...) {
             actionFailure = std::current_exception();
         }
@@ -1049,7 +951,6 @@ private:
         }
 
         try {
-            before(RecoveryStep::CleanupRecord);
             markRestored(*prepared);
             const auto removed = removeTreeIfPresent(prepared->directory);
             if (!removed.ok()) throw std::runtime_error(removed.message);
@@ -1180,10 +1081,8 @@ private:
             restoreSnapshot(source, artifactPath(stored, 0),
                              stored.snapshots[0]);
         }
-        before(RecoveryStep::RestoreFilesystem);
         restoreSnapshot(destination, artifactPath(stored, 1),
                          stored.snapshots[1]);
-        before(RecoveryStep::RestoreFilesystem);
     }
 
     void restoreFilesystemState(const StoredRecord& stored) {
@@ -1222,7 +1121,6 @@ private:
 
     RecoveryRestoreResult cleanupRestored(RecordIterator record) {
         try {
-            before(RecoveryStep::CleanupRecord);
             const auto removed = removeTreeIfPresent(record->directory);
             if (!removed.ok()) throw std::runtime_error(removed.message);
             records_.erase(record);
@@ -1236,7 +1134,6 @@ private:
 
     std::filesystem::path recoveryRoot_;
     RecoveryConfig config_;
-    RecoveryFaultInjector* faultInjector_;
     std::vector<StoredRecord> records_;
     std::uint64_t nextId_ = 0;
     std::array<std::byte, 16> instanceId_ =
@@ -1247,15 +1144,7 @@ RecoveryManager RecoveryManager::create(
     const std::filesystem::path& recoveryRoot,
     RecoveryConfig config) {
     return RecoveryManager{
-        std::make_unique<Impl>(recoveryRoot, config, nullptr)};
-}
-
-RecoveryManager RecoveryManager::create(
-    const std::filesystem::path& recoveryRoot,
-    RecoveryConfig config,
-    RecoveryFaultInjector& faultInjector) {
-    return RecoveryManager{
-        std::make_unique<Impl>(recoveryRoot, config, &faultInjector)};
+        std::make_unique<Impl>(recoveryRoot, config)};
 }
 
 RecoveryManager::RecoveryManager(
@@ -1278,12 +1167,6 @@ RecoveryActionResult RecoveryManager::closeDocument(
     return impl_->closeDocument(document, scratch, durabilityTimeout);
 }
 
-RecoveryActionResult RecoveryManager::renamePath(
-    const std::filesystem::path& source,
-    const std::filesystem::path& destination) {
-    return impl_->renamePath(source, destination);
-}
-
 RecoveryActionResult RecoveryManager::renamePathNoClobber(
     const std::filesystem::path& source,
     const std::filesystem::path& destination) {
@@ -1299,11 +1182,6 @@ RecoveryRestoreResult RecoveryManager::restoreDocument(
     const RecoveryRecordId& record,
     std::optional<JournalDocument>& document) {
     return impl_->restoreDocument(record, document);
-}
-
-RecoveryRestoreResult RecoveryManager::restoreFilesystem(
-    const RecoveryRecordId& record) {
-    return impl_->restoreFilesystem(record);
 }
 
 } // namespace ssg
