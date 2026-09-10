@@ -1,7 +1,4 @@
-0	SyntaxModel.h	enum	ssg::BracketKind	
 0	CommandCatalog.h	enum	ssg::CommandResult::Outcome	
-0	SyntaxModel.h	enum	ssg::CommentKind	
-0	SyntaxModel.h	enum	ssg::CommentTokenRole	
 0	CompiledKeymap.h	alias	ssg::CompiledSequence	
 0	InputRouting.h	alias	ssg::InputRouteAction	
 0	KeyCode.h	struct	ssg::KeyCodeEntry	
@@ -208,14 +205,10 @@
 1	DraftAutosaveScheduler.h	struct	ssg::AutosaveCandidate	DraftAutosaveScheduler.cpp
 1	KeyboardFocus.h	enum	ssg::BaseFocus	ScreenState.cpp
 1	Selection.h	struct	ssg::BracketPair	Selection.cpp
-1	SyntaxModel.h	enum	ssg::BracketRole	SyntaxModel.cpp
-1	SyntaxModel.h	struct	ssg::BracketToken	SyntaxModel.cpp
 1	CommandCatalog.h	alias	ssg::CatalogRevision	CommandCatalog.cpp
 1	SystemClipboardReader.h	alias	ssg::ClipboardEnvironmentLookup	SystemClipboardReader.cpp
 1	SystemClipboardReader.h	alias	ssg::ClipboardExecutableLookup	SystemClipboardReader.cpp
 1	CommandCatalog.h	alias	ssg::CommandHandler	CommandCatalog.cpp
-1	SyntaxModel.h	struct	ssg::CommentRange	SyntaxModel.cpp
-1	SyntaxModel.h	struct	ssg::CommentToken	SyntaxModel.cpp
 1	Keymap.h	class	ssg::CommittedText	Keymap.cpp
 1	CompiledKeymap.h	class	ssg::CompiledContext	CompiledKeymap.cpp
 1	CompiledKeymap.h	struct	ssg::CompiledKeymap::Entry	CompiledKeymap.cpp
@@ -335,14 +328,12 @@
 1	TreeModel.h	struct	ssg::SymbolTreeRecord	TreeModel.cpp
 1	SyntaxModel.h	enum	ssg::SyntaxAcceptError	SyntaxModel.cpp
 1	SyntaxModel.h	struct	ssg::SyntaxAcceptResult	SyntaxModel.cpp
-1	SyntaxModel.h	struct	ssg::SyntaxBracketPair	SyntaxModel.cpp
 1	SyntaxModel.h	struct	ssg::SyntaxConfig	SyntaxModel.cpp
 1	TreeSitterGrammars.h	alias	ssg::SyntaxLanguageFactory	TreeSitterParser.cpp
 1	TreeSitterGrammars.h	alias	ssg::SyntaxLanguageHandle	TreeSitterParser.cpp
 1	SyntaxModel.h	alias	ssg::SyntaxParseHandle	SyntaxModel.cpp
 1	SyntaxModel.h	struct	ssg::SyntaxParseRequestResult	SyntaxModel.cpp
 1	SyntaxModel.h	struct	ssg::SyntaxParseResult	SyntaxModel.cpp
-1	SyntaxModel.h	struct	ssg::SyntaxRange	SyntaxModel.cpp
 1	SyntaxModel.h	enum	ssg::SyntaxRequestError	SyntaxModel.cpp
 1	SystemClipboardReader.h	struct	ssg::SystemClipboardProgram	SystemClipboardReader.cpp
 1	SystemClipboardReader.h	struct	ssg::SystemClipboardRead	SystemClipboardReader.cpp
@@ -366,7 +357,6 @@
 1	TreeSitterGrammars.h	struct	ssg::TreeSitterGrammar::Injection	TreeSitterParser.cpp
 1	TreeSitterParser.h	class	ssg::TreeSitterParser	TreeSitterParser.cpp
 1	UiInteractionState.h	class	ssg::UiInteractionState	ScreenState.cpp
-1	SyntaxModel.h	struct	ssg::UnmatchedBracket	SyntaxModel.cpp
 1	Viewport.h	struct	ssg::ViewportDelta	Viewport.cpp
 1	FilesystemWatcher.h	alias	ssg::WatchClock	LinuxFilesystemWatcher.cpp
 1	FilesystemWatcher.h	alias	ssg::WatchTimePoint	FilesystemWatcher.cpp
@@ -1129,3 +1119,4 @@
 19	platform_files.h	struct	ssg::FileStat	DurableStore.cpp,Editor.cpp,ExternalModificationFlow.cpp,FileArchive.cpp,FilesystemWatcher.cpp,GitRepository.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchSession.cpp,ScratchStore.cpp,TreeModel.cpp,Workspace.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,main.cpp,platform_files.cpp
 19	platform_files.h	func	ssg::statFile	DurableStore.cpp,Editor.cpp,ExternalModificationFlow.cpp,FileArchive.cpp,FilesystemWatcher.cpp,GitRepository.cpp,LinuxFilesystemWatcher.cpp,LinuxGitMetadataWatcher.cpp,RecoveryManager.cpp,ScratchJournal.cpp,ScratchSession.cpp,ScratchStore.cpp,TreeModel.cpp,Workspace.cpp,WorkspaceCorpus.cpp,WorkspaceFileIndex.cpp,linux_files.cpp,main.cpp,platform_files.cpp
 20	types.h	struct	ssg::ByteOffset	ClipboardRegister.cpp,Document.cpp,DocumentHistory.cpp,EditCommands.cpp,Editor.cpp,FindReplace.cpp,GitDiffIngress.cpp,LspFeatureController.cpp,LspSyncClient.cpp,PaintDocument.cpp,Selection.cpp,SyntaxModel.cpp,TextInputCommands.cpp,TreeSitterParser.cpp,Viewport.cpp,Workspace.cpp,editing.cpp,input_routing.cpp,main.cpp,navigation.cpp
+

@@ -182,10 +182,6 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
         {{ssg::ByteOffset{0}, ssg::ByteOffset{5}, ssg::SyntaxScope::Keyword},
          {ssg::ByteOffset{34}, ssg::ByteOffset{36}, ssg::SyntaxScope::Number}},
         {},
-        {},
-        {},
-        {},
-        {},
     };
     presentation.viewport = ssg::computeUnwrappedViewport(
         text, presentation.viewport.dimensions, 0, 0, 4, &diffFile);

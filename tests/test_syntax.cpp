@@ -151,10 +151,6 @@ private:
                     end == std::string_view::npos ? text.size() : end;
                 output.spans.push_back(
                     {byte(index), byte(rangeEnd), SyntaxScope::Comment});
-                output.commentTokens.push_back(
-                    {{byte(index), byte(index + 2)}, CommentTokenRole::Line});
-                output.commentRanges.push_back(
-                    {{byte(index), byte(rangeEnd)}, CommentKind::Line});
                 index = rangeEnd;
                 continue;
             }
@@ -164,16 +160,6 @@ private:
                     close == std::string_view::npos ? text.size() : close + 2;
                 output.spans.push_back(
                     {byte(index), byte(rangeEnd), SyntaxScope::Comment});
-                output.commentTokens.push_back(
-                    {{byte(index), byte(index + 2)},
-                     CommentTokenRole::BlockOpen});
-                if (close != std::string_view::npos) {
-                    output.commentTokens.push_back(
-                        {{byte(close), byte(close + 2)},
-                         CommentTokenRole::BlockClose});
-                }
-                output.commentRanges.push_back(
-                    {{byte(index), byte(rangeEnd)}, CommentKind::Block});
                 index = rangeEnd;
                 continue;
             }
@@ -212,29 +198,6 @@ private:
                 continue;
             }
 
-            const auto bracket = [](char value)
-                -> std::optional<std::pair<BracketKind, BracketRole>> {
-                switch (value) {
-                case '(':
-                    return {{BracketKind::Round, BracketRole::Open}};
-                case ')':
-                    return {{BracketKind::Round, BracketRole::Close}};
-                case '[':
-                    return {{BracketKind::Square, BracketRole::Open}};
-                case ']':
-                    return {{BracketKind::Square, BracketRole::Close}};
-                case '{':
-                    return {{BracketKind::Curly, BracketRole::Open}};
-                case '}':
-                    return {{BracketKind::Curly, BracketRole::Close}};
-                default:
-                    return std::nullopt;
-                }
-            }(text[index]);
-            if (bracket) {
-                output.brackets.push_back(
-                    {byte(index), bracket->first, bracket->second});
-            }
             ++index;
         }
     }
@@ -267,27 +230,6 @@ TEST(handComputedMetadataGoldenCoversAllExportedSections) {
                 {byte(0), byte(2), SyntaxScope::Keyword},
                 {byte(12), byte(16), SyntaxScope::Comment},
             },
-        .brackets =
-            {
-                {byte(30), BracketKind::Curly, BracketRole::Close},
-                {byte(2), BracketKind::Round, BracketRole::Open},
-                {byte(20), BracketKind::Square, BracketRole::Close},
-                {byte(4), BracketKind::Square, BracketRole::Open},
-                {byte(6), BracketKind::Square, BracketRole::Close},
-                {byte(7), BracketKind::Round, BracketRole::Close},
-                {byte(9), BracketKind::Curly, BracketRole::Open},
-            },
-        .commentTokens =
-            {
-                {{byte(27), byte(29)}, CommentTokenRole::BlockClose},
-                {{byte(12), byte(14)}, CommentTokenRole::Line},
-                {{byte(22), byte(24)}, CommentTokenRole::BlockOpen},
-            },
-        .commentRanges =
-            {
-                {{byte(22), byte(29)}, CommentKind::Block},
-                {{byte(12), byte(16)}, CommentKind::Line},
-            },
     };
 
     const auto state = SyntaxViewState::fromParse(
@@ -309,31 +251,6 @@ TEST(handComputedMetadataGoldenCoversAllExportedSections) {
             {byte(29), byte(32), SyntaxScope::PlainText},
         }));
     ASSERT_EQ(
-        state.bracketPairs(),
-        (std::vector<SyntaxBracketPair>{
-            {byte(2), byte(7), BracketKind::Round, 0},
-            {byte(4), byte(6), BracketKind::Square, 1},
-            {byte(9), byte(30), BracketKind::Curly, 0},
-        }));
-    ASSERT_EQ(
-        state.unmatchedBrackets(),
-        (std::vector<UnmatchedBracket>{
-            {byte(20), BracketKind::Square, BracketRole::Close},
-        }));
-    ASSERT_EQ(
-        state.commentTokens(),
-        (std::vector<CommentToken>{
-            {{byte(12), byte(14)}, CommentTokenRole::Line},
-            {{byte(22), byte(24)}, CommentTokenRole::BlockOpen},
-            {{byte(27), byte(29)}, CommentTokenRole::BlockClose},
-        }));
-    ASSERT_EQ(
-        state.commentRanges(),
-        (std::vector<CommentRange>{
-            {{byte(12), byte(16)}, CommentKind::Line},
-            {{byte(22), byte(29)}, CommentKind::Block},
-        }));
-    ASSERT_EQ(
         state.indentation(),
         (std::vector<LineIndentation>{
             {line(0), byte(0), byte(0), 0, 0, 0, false},
@@ -342,10 +259,6 @@ TEST(handComputedMetadataGoldenCoversAllExportedSections) {
             {line(3), byte(30), byte(30), 0, 0, 0, false},
             {line(4), byte(32), byte(32), 0, 0, 0, true},
         }));
-    ASSERT_EQ(state.matchingBracket(ByteOffset{4}),
-              std::optional<ByteOffset>{ByteOffset{6}});
-    ASSERT_EQ(state.matchingBracket(ByteOffset{20}),
-              std::optional<ByteOffset>{});
     ASSERT_EQ(state.scopeAt(ByteOffset{5}), SyntaxScope::Number);
     ASSERT_EQ(state.scopeAt(ByteOffset{19}), SyntaxScope::PlainText);
 
@@ -465,8 +378,6 @@ TEST(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot) {
               (std::vector<SyntaxSpan>{
                   {byte(0), byte(text.size()), SyntaxScope::PlainText},
               }));
-    ASSERT_TRUE(noParser.viewState().bracketPairs().empty());
-    ASSERT_TRUE(noParser.viewState().commentRanges().empty());
     ASSERT_EQ(noParser.viewState().indentation().at(0).columns,
               std::uint32_t{4});
 }

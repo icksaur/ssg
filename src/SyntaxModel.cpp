@@ -226,121 +226,6 @@ std::vector<SyntaxSpan> canonicalSpans(std::uint64_t textBytes,
     return merged;
 }
 
-std::vector<CommentToken> canonicalCommentTokens(
-    std::uint64_t textBytes, std::vector<CommentToken> tokens) {
-    tokens.erase(
-        std::remove_if(tokens.begin(), tokens.end(),
-                       [textBytes](const CommentToken& token) {
-                           return token.range.begin >= token.range.end ||
-                                  token.range.end.value() > textBytes;
-                       }),
-        tokens.end());
-    std::sort(tokens.begin(), tokens.end(),
-              [](const CommentToken& left, const CommentToken& right) {
-                  return std::tie(left.range.begin, left.range.end, left.role) <
-                         std::tie(right.range.begin, right.range.end,
-                                  right.role);
-              });
-    tokens.erase(
-        std::unique(tokens.begin(), tokens.end(),
-                    [](const CommentToken& left, const CommentToken& right) {
-                        return left.range == right.range;
-                    }),
-        tokens.end());
-    return tokens;
-}
-
-std::vector<CommentRange> canonicalCommentRanges(
-    std::uint64_t textBytes, std::vector<CommentRange> ranges) {
-    ranges.erase(
-        std::remove_if(ranges.begin(), ranges.end(),
-                       [textBytes](const CommentRange& range) {
-                           return range.range.begin >= range.range.end ||
-                                  range.range.end.value() > textBytes;
-                       }),
-        ranges.end());
-    std::sort(ranges.begin(), ranges.end(),
-              [](const CommentRange& left, const CommentRange& right) {
-                  return std::tie(left.range.begin, left.range.end, left.kind) <
-                         std::tie(right.range.begin, right.range.end,
-                                  right.kind);
-              });
-    std::vector<CommentRange> result;
-    for (auto range : ranges) {
-        if (!result.empty() &&
-            range.range.begin < result.back().range.end) {
-            range.range.begin = result.back().range.end;
-        }
-        if (range.range.begin < range.range.end) {
-            result.push_back(range);
-        }
-    }
-    return result;
-}
-
-struct ResolvedBrackets {
-    std::vector<SyntaxBracketPair> pairs;
-    std::vector<UnmatchedBracket> unmatched;
-};
-
-ResolvedBrackets resolveBrackets(std::uint64_t textBytes,
-                                  std::vector<BracketToken> tokens) {
-    tokens.erase(
-        std::remove_if(tokens.begin(), tokens.end(),
-                       [textBytes](const BracketToken& token) {
-                           return token.offset.value() >= textBytes;
-                       }),
-        tokens.end());
-    std::sort(tokens.begin(), tokens.end(),
-              [](const BracketToken& left, const BracketToken& right) {
-                  return std::tie(left.offset, left.role, left.kind) <
-                         std::tie(right.offset, right.role, right.kind);
-              });
-    tokens.erase(
-        std::unique(tokens.begin(), tokens.end(),
-                    [](const BracketToken& left, const BracketToken& right) {
-                        return left.offset == right.offset;
-                    }),
-        tokens.end());
-
-    struct OpenBracket {
-        BracketToken token;
-        std::uint32_t depth;
-    };
-    std::vector<OpenBracket> stack;
-    ResolvedBrackets result;
-    for (const auto& token : tokens) {
-        if (token.role == BracketRole::Open) {
-            stack.push_back(
-                {token, static_cast<std::uint32_t>(stack.size())});
-            continue;
-        }
-        if (!stack.empty() && stack.back().token.kind == token.kind) {
-            result.pairs.push_back(
-                {stack.back().token.offset, token.offset, token.kind,
-                 stack.back().depth});
-            stack.pop_back();
-        } else {
-            result.unmatched.push_back(
-                {token.offset, token.kind, BracketRole::Close});
-        }
-    }
-    for (const auto& open : stack) {
-        result.unmatched.push_back(
-            {open.token.offset, open.token.kind, BracketRole::Open});
-    }
-    std::sort(result.pairs.begin(), result.pairs.end(),
-              [](const SyntaxBracketPair& left, const SyntaxBracketPair& right) {
-                  return left.open < right.open;
-              });
-    std::sort(result.unmatched.begin(), result.unmatched.end(),
-              [](const UnmatchedBracket& left,
-                 const UnmatchedBracket& right) {
-                  return left.offset < right.offset;
-              });
-    return result;
-}
-
 template <typename T>
 std::optional<T> changed(const T& before, const T& after) {
     if (before == after) {
@@ -427,19 +312,12 @@ void SyntaxParseRequest::cancel() const noexcept {
 
 SyntaxViewState::SyntaxViewState(
     std::uint64_t revision, LanguageId language, std::uint64_t textBytes,
-    std::vector<SyntaxSpan> spans, std::vector<SyntaxBracketPair> bracketPairs,
-    std::vector<UnmatchedBracket> unmatchedBrackets,
-    std::vector<CommentToken> commentTokens,
-    std::vector<CommentRange> commentRanges,
+    std::vector<SyntaxSpan> spans,
     std::vector<LineIndentation> indentation)
     : revision_(revision),
       language_(std::move(language)),
       textBytes_(textBytes),
       spans_(std::move(spans)),
-      bracketPairs_(std::move(bracketPairs)),
-      unmatchedBrackets_(std::move(unmatchedBrackets)),
-      commentTokens_(std::move(commentTokens)),
-      commentRanges_(std::move(commentRanges)),
       indentation_(std::move(indentation)) {}
 
 SyntaxViewState SyntaxViewState::plainText(
@@ -457,10 +335,6 @@ SyntaxViewState SyntaxViewState::plainText(
             std::move(language),
             text.size(),
             std::move(spans),
-            {},
-            {},
-            {},
-            {},
             deriveIndentation(text, tabWidth)};
 }
 
@@ -474,31 +348,13 @@ SyntaxViewState SyntaxViewState::fromParse(
         return SyntaxViewState::plainText(
             revision, std::move(language), text, config.tabWidth);
     }
-    auto brackets = resolveBrackets(text.size(), output.brackets);
     return {
         revision,
         std::move(language),
         text.size(),
         canonicalSpans(text.size(), output.spans),
-        std::move(brackets.pairs),
-        std::move(brackets.unmatched),
-        canonicalCommentTokens(text.size(), output.commentTokens),
-        canonicalCommentRanges(text.size(), output.commentRanges),
         deriveIndentation(text, config.tabWidth),
     };
-}
-
-std::optional<ByteOffset> SyntaxViewState::matchingBracket(
-    ByteOffset offset) const {
-    for (const auto& pair : bracketPairs()) {
-        if (pair.open == offset) {
-            return pair.close;
-        }
-        if (pair.close == offset) {
-            return pair.open;
-        }
-    }
-    return std::nullopt;
 }
 
 SyntaxScope SyntaxViewState::scopeAt(ByteOffset offset) const {

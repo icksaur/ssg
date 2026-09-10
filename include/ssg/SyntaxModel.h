@@ -55,80 +55,12 @@ struct SyntaxEdit {
     friend bool operator==(const SyntaxEdit&, const SyntaxEdit&) = default;
 };
 
-struct SyntaxRange {
-    ByteOffset begin;
-    ByteOffset end;
-
-    friend bool operator==(const SyntaxRange&, const SyntaxRange&) = default;
-};
-
 struct SyntaxSpan {
     ByteOffset begin;
     ByteOffset end;
     SyntaxScope scope = SyntaxScope::PlainText;
 
     friend bool operator==(const SyntaxSpan&, const SyntaxSpan&) = default;
-};
-
-enum class BracketKind : std::uint8_t {
-    Round = 0,
-    Square = 1,
-    Curly = 2,
-};
-enum class BracketRole : std::uint8_t {
-    Open = 0,
-    Close = 1,
-};
-
-struct BracketToken {
-    ByteOffset offset;
-    BracketKind kind = BracketKind::Round;
-    BracketRole role = BracketRole::Open;
-
-    friend bool operator==(const BracketToken&, const BracketToken&) = default;
-};
-
-struct SyntaxBracketPair {
-    ByteOffset open;
-    ByteOffset close;
-    BracketKind kind = BracketKind::Round;
-    std::uint32_t depth = 0;
-
-    friend bool operator==(const SyntaxBracketPair&,
-                           const SyntaxBracketPair&) = default;
-};
-
-struct UnmatchedBracket {
-    ByteOffset offset;
-    BracketKind kind = BracketKind::Round;
-    BracketRole role = BracketRole::Open;
-
-    friend bool operator==(const UnmatchedBracket&,
-                           const UnmatchedBracket&) = default;
-};
-
-enum class CommentKind : std::uint8_t {
-    Line = 0,
-    Block = 1,
-};
-enum class CommentTokenRole : std::uint8_t {
-    Line = 0,
-    BlockOpen = 1,
-    BlockClose = 2,
-};
-
-struct CommentToken {
-    SyntaxRange range;
-    CommentTokenRole role = CommentTokenRole::Line;
-
-    friend bool operator==(const CommentToken&, const CommentToken&) = default;
-};
-
-struct CommentRange {
-    SyntaxRange range;
-    CommentKind kind = CommentKind::Line;
-
-    friend bool operator==(const CommentRange&, const CommentRange&) = default;
 };
 
 struct LineIndentation {
@@ -163,9 +95,6 @@ struct SyntaxParseOutput {
     SyntaxParseStatus status = SyntaxParseStatus::Failed;
     SyntaxParseHandle parse;
     std::vector<SyntaxSpan> spans;
-    std::vector<BracketToken> brackets;
-    std::vector<CommentToken> commentTokens;
-    std::vector<CommentRange> commentRanges;
 };
 
 class SyntaxModel;
@@ -218,10 +147,6 @@ class SyntaxViewState {
 public:
     SyntaxViewState(std::uint64_t revision, LanguageId language,
                     std::uint64_t textBytes, std::vector<SyntaxSpan> spans,
-                    std::vector<SyntaxBracketPair> bracketPairs,
-                    std::vector<UnmatchedBracket> unmatchedBrackets,
-                    std::vector<CommentToken> commentTokens,
-                    std::vector<CommentRange> commentRanges,
                     std::vector<LineIndentation> indentation);
 
     // The unhighlighted view for `text`: no spans or brackets, only the
@@ -237,11 +162,6 @@ public:
         std::uint64_t revision, LanguageId language, std::string_view text,
         const SyntaxParseOutput& output, const SyntaxConfig& config);
 
-    // The offset of the bracket matching the one at `offset`, or nullopt when
-    // `offset` is not on a matched bracket.
-    [[nodiscard]] std::optional<ByteOffset> matchingBracket(
-        ByteOffset offset) const;
-
     // The syntax scope covering `offset` (PlainText when none does).
     [[nodiscard]] SyntaxScope scopeAt(ByteOffset offset) const;
 
@@ -254,21 +174,6 @@ public:
     }
     [[nodiscard]] const std::vector<SyntaxSpan>& spans() const noexcept {
         return spans_;
-    }
-    [[nodiscard]] const std::vector<SyntaxBracketPair>& bracketPairs() const noexcept {
-        return bracketPairs_;
-    }
-    [[nodiscard]] const std::vector<UnmatchedBracket>& unmatchedBrackets()
-        const noexcept {
-        return unmatchedBrackets_;
-    }
-    [[nodiscard]] const std::vector<CommentToken>& commentTokens()
-        const noexcept {
-        return commentTokens_;
-    }
-    [[nodiscard]] const std::vector<CommentRange>& commentRanges()
-        const noexcept {
-        return commentRanges_;
     }
     [[nodiscard]] const std::vector<LineIndentation>& indentation()
         const noexcept {
@@ -283,10 +188,6 @@ private:
     LanguageId language_;
     std::uint64_t textBytes_;
     std::vector<SyntaxSpan> spans_;
-    std::vector<SyntaxBracketPair> bracketPairs_;
-    std::vector<UnmatchedBracket> unmatchedBrackets_;
-    std::vector<CommentToken> commentTokens_;
-    std::vector<CommentRange> commentRanges_;
     std::vector<LineIndentation> indentation_;
 };
 
