@@ -232,10 +232,6 @@ struct DirectoryListResult {
     const std::filesystem::path& source,
     const std::filesystem::path& destination);
 
-// Reports a missing file as NotFound rather than as a generic failure, so a
-// caller can tell "already gone" from "not allowed to remove".
-[[nodiscard]] FileIoResult removeFile(const std::filesystem::path& path);
-
 // Creates the full missing directory chain and flushes each new directory and
 // its parent. AlreadyExists means the complete chain was already present.
 [[nodiscard]] FileIoResult createDirectoriesDurably(
@@ -278,29 +274,5 @@ struct DirectoryListResult {
 [[nodiscard]] FileIoResult copyFileDurably(
     const std::filesystem::path& source,
     const std::filesystem::path& destination);
-
-// Forces a chosen seam primitive to fail so that failure handling is reachable
-// from a unit test. Inert unless installed; the default path costs one null
-// check. Modeled on RecoveryFaultInjector, whose lifetime rule it shares: the
-// injector must outlive its installation.
-class FileIoFaultInjector {
-public:
-    virtual ~FileIoFaultInjector() = default;
-
-    // Returning a non-Ok status makes the named operation fail with it before
-    // the operation touches the filesystem. `operation` is the seam function
-    // name; `path` is its primary target.
-    [[nodiscard]] virtual FileIoStatus beforeOperation(
-        std::string_view operation, const std::filesystem::path& path) = 0;
-};
-
-// Installs (or, with nullptr, removes) the process-wide injector and returns
-// the previous one. Test-only; production never calls it.
-//
-// Not synchronized: install and uninstall must not race with seam calls on
-// other threads. Tests install around a single-threaded section and restore
-// afterwards, which is the only supported use.
-FileIoFaultInjector* installFileIoFaultInjector(
-    FileIoFaultInjector* injector) noexcept;
 
 } // namespace ssg

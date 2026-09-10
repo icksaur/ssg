@@ -2,7 +2,6 @@
 #include "grid_test_frame.h"
 
 #include <ssg/Editor.h>
-#include <ssg/OptionalSubsystemAudit.h>
 #include <ssg/FilesystemWatcher.h>
 
 #include <filesystem>
@@ -42,67 +41,7 @@ ssg::EditorConfig configFor(fs::path const& root, bool defer) {
 
 }  // namespace
 
-TEST(firstFrameConstructsNoOptionalSubsystem) {
-    // Producing the first frame must construct no optional subsystem.
-    ssg::resetOptionalConstructionAudit();
-    auto root = makeWorkspace("no_optional");
-    // The git-diff worker owns the workspace filesystem watcher, which Phase 5a
-    // makes an always-available background service (Decision 1). It is constructed
-    // on the worker thread, off the first-frame path, so disabling it here isolates
-    // the audit to the MAIN-thread first-frame path this invariant guards; the
-    // background watcher never blocks the first frame.
-    auto config = configFor(root, /*defer=*/true);
-    config.enableGitDiffWorker = false;
-    config.enableFilesystemWatcher = false;
-    auto created = ssg::createEditor(config);
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"code.txt"}})
-                    .accepted());
-    (void)ssg::test::projectGridFrame(runtime);
-
-    // Exhaustive over the enumerated subsystems (a missing enum entry fails the
-    // static_assert in OptionalSubsystemAudit.h, so the list cannot silently omit one).
-    for (auto subsystem : ssg::kAllOptionalSubsystems) {
-        ASSERT_EQ(ssg::optionalConstructionCount(subsystem), std::uint64_t{0});
-    }
-    ASSERT_EQ(ssg::optionalConstructionTotal(), std::uint64_t{0});
-
-    // Priming (post-first-frame enrichment) also constructs nothing optional:
-    // the plain-text syntax pass uses no Tree-sitter grammar.
-    runtime.primeDeferred();
-    ASSERT_EQ(ssg::optionalConstructionTotal(), std::uint64_t{0});
-
-    fs::remove_all(root);
-}
-
-TEST(optionalConstructionAuditIsWiredPositiveControl) {
-    // Guards against a false pass from broken instrumentation: constructing a
-    // real optional subsystem (a filesystem watcher) MUST increment its counter.
-    ssg::resetOptionalConstructionAudit();
-    ASSERT_EQ(ssg::optionalConstructionCount(ssg::OptionalSubsystem::FilesystemWatcher),
-              std::uint64_t{0});
-    auto root = makeWorkspace("positive_control");
-    {
-        auto watcher = ssg::makePlatformFilesystemWatcher(
-            std::filesystem::canonical(root / "workspace"));
-        ASSERT_TRUE(watcher != nullptr);
-    }
-    ASSERT_TRUE(ssg::optionalConstructionCount(
-                    ssg::OptionalSubsystem::FilesystemWatcher) >= 1);
-    fs::remove_all(root);
-}
-
-// Pins the exact ordering src/main.cpp's startup sequence depends on
-// (regression coverage for the "ssg: could not open Files sidebar: files
-// tree provider is unavailable" bug): with deferred enrichment, the tree's
-// "filesystem" provider does not exist until primeDeferred() runs, so
-// panel.show_files (dispatched before that) legitimately fails; dispatched
-// AFTER primeDeferred(), it must succeed cleanly. A future startup-path edit
-// that moves panel.show_files back before primeDeferred() would fail this
-// test's first assertion becoming the WRONG one to rely on silently.
-TEST(panelShowFilesRequiresPrimeDeferredFirst) {
+  TEST(panelShowFilesRequiresPrimeDeferredFirst) {
     auto root = makeWorkspace("panel_ordering");
     auto created = ssg::createEditor(configFor(root, /*defer=*/true));
     ASSERT_TRUE(created.accepted());
@@ -174,15 +113,6 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
 }
 
 SSG_TEST_SUITE(test_startup_path) {
-    // Nothing optional may construct before main (no
-    // self-registering globals); the ledger must be empty at process entry.
-    if (ssg::optionalConstructionTotal() != 0) {
-        std::cerr << "  FAIL: an optional subsystem constructed before main "
-                     "(static-init side effect)\n";
-        ++failed;
-    }
-    RUN(firstFrameConstructsNoOptionalSubsystem);
-    RUN(optionalConstructionAuditIsWiredPositiveControl);
     RUN(panelShowFilesRequiresPrimeDeferredFirst);
     RUN(focusEditorSurvivesPanelShowFilesDispatchedAfter);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

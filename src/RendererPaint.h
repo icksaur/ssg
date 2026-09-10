@@ -21,7 +21,6 @@ chromeGlyphForeground(const UiSchema& schema, std::string_view nodeId,
 [[nodiscard]] std::uint8_t syntaxIndex(const ThemeSnapshot& theme,
                                        SyntaxScope scope);
 
-void recordRenderSegmentationCall();
 void put(CellGrid& grid, int x, int y, std::string text,
          std::uint8_t foreground, std::uint8_t background, SemanticRole role,
          bool continuation = false, DiffTint tint = DiffTint::None);

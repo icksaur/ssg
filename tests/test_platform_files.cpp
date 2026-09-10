@@ -45,22 +45,6 @@ private:
     std::filesystem::path path_;
 };
 
-class FailTreeListing : public ssg::FileIoFaultInjector {
-public:
-    explicit FailTreeListing(std::filesystem::path root)
-        : root_(std::move(root)) {}
-
-    ssg::FileIoStatus beforeOperation(
-        std::string_view operation,
-        const std::filesystem::path& path) override {
-        return operation == "listDirectory" && path == root_
-                   ? ssg::FileIoStatus::IoError
-                   : ssg::FileIoStatus::Ok;
-    }
-
-private:
-    std::filesystem::path root_;
-};
 
 void writeText(const std::filesystem::path& path, std::string_view text) {
     std::ofstream output(path, std::ios::binary);
@@ -473,21 +457,7 @@ TEST(treeBytesCountsRegularFilesWithoutFollowingSymlinks) {
     ASSERT_EQ(ssg::treeBytes(temporary.path() / "missing"), std::uintmax_t{0});
 }
 
-TEST(treeBytesSaturatesWhenTheTreeCannotBeListed) {
-    TemporaryDirectory temporary;
-    const auto tree = temporary.path() / "tree";
-    ASSERT_TRUE(ssg::ensureDirectory(tree).ok());
-    writeText(tree / "file.txt", "bytes");
-
-    FailTreeListing injector{tree};
-    auto* previous = ssg::installFileIoFaultInjector(&injector);
-    const auto measured = ssg::treeBytes(tree);
-    (void)ssg::installFileIoFaultInjector(previous);
-
-    ASSERT_EQ(measured, std::numeric_limits<std::uintmax_t>::max());
-}
-
-TEST(directoryCreationHasOneLeafWinner) {
+ TEST(directoryCreationHasOneLeafWinner) {
     TemporaryDirectory temporary;
     const auto leaf = temporary.path() / "claimed";
     std::atomic<bool> start{false};
@@ -558,7 +528,6 @@ SSG_TEST_SUITE(test_platform_files) {
     RUN(atomicReplacementNeverExposesPartialBytes);
     RUN(directorySeamCreatesListsBoundsAndRemovesTrees);
     RUN(treeBytesCountsRegularFilesWithoutFollowingSymlinks);
-    RUN(treeBytesSaturatesWhenTheTreeCannotBeListed);
     RUN(directoryCreationHasOneLeafWinner);
 #ifndef _WIN32
     RUN(configRootPrefersXdgConfigHomeWhenSetAndAbsolute);

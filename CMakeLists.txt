@@ -1260,10 +1260,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 
 endif()
 
-target_sources(ssg_platform PRIVATE
-    ${SSG_SOURCE_DIR}/src/OptionalSubsystemAudit.cpp
-)
-
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Style.cpp
 )

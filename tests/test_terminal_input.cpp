@@ -64,27 +64,27 @@ TEST(decodeInputMapsPrintablesAndNamedKeys) {
     auto a = ssg::decodeInput("a", true, consumed);
     ASSERT_EQ(consumed, std::size_t{1});
     ASSERT_TRUE(a.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(a.stroke.code)}, std::string{"KeyA"});
+    ASSERT_EQ(a.stroke.code, ssg::KeyCode::KeyA);
     ASSERT_FALSE(a.stroke.shift);
     ASSERT_EQ(a.text, std::string{"a"});
 
     // Uppercase: Shift+KeyZ plus committed text "Z".
     auto z = ssg::decodeInput("Z", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(z.stroke.code)}, std::string{"KeyZ"});
+    ASSERT_EQ(z.stroke.code, ssg::KeyCode::KeyZ);
     ASSERT_TRUE(z.stroke.shift);
     ASSERT_EQ(z.text, std::string{"Z"});
 
     // Bracket punctuation used by tab chords.
     auto bracket = ssg::decodeInput("]", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(bracket.stroke.code)}, std::string{"BracketRight"});
+    ASSERT_EQ(bracket.stroke.code, ssg::KeyCode::BracketRight);
     ASSERT_EQ(bracket.text, std::string{"]"});
 
     // Enter and Backspace are strokes without committed text.
     auto enter = ssg::decodeInput("\r", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(enter.stroke.code)}, std::string{"Enter"});
+    ASSERT_EQ(enter.stroke.code, ssg::KeyCode::Enter);
     ASSERT_TRUE(enter.text.empty());
     auto back = ssg::decodeInput("\x7f", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(back.stroke.code)}, std::string{"Backspace"});
+    ASSERT_EQ(back.stroke.code, ssg::KeyCode::Backspace);
 }
 
 TEST(decodeInputModifiedArrows) {
@@ -93,45 +93,45 @@ TEST(decodeInputModifiedArrows) {
     auto shiftUp = ssg::decodeInput("\x1b[1;2A", true, consumed);
     ASSERT_EQ(consumed, std::size_t{6});
     ASSERT_TRUE(shiftUp.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(shiftUp.stroke.code)}, std::string{"ArrowUp"});
+    ASSERT_EQ(shiftUp.stroke.code, ssg::KeyCode::ArrowUp);
     ASSERT_TRUE(shiftUp.stroke.shift);
     ASSERT_FALSE(shiftUp.stroke.mod);
 
     // Ctrl+ArrowRight: modifier 5 -> bitmask 4 = Ctrl, which is Mod.
     auto ctrlRight = ssg::decodeInput("\x1b[1;5C", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(ctrlRight.stroke.code)}, std::string{"ArrowRight"});
+    ASSERT_EQ(ctrlRight.stroke.code, ssg::KeyCode::ArrowRight);
     ASSERT_TRUE(ctrlRight.stroke.mod);
     ASSERT_FALSE(ctrlRight.stroke.shift);
 
     // Alt+ArrowLeft: modifier 3 -> bitmask 2 = Alt, the same Mod.
     auto altLeft = ssg::decodeInput("\x1b[1;3D", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altLeft.stroke.code)}, std::string{"ArrowLeft"});
+    ASSERT_EQ(altLeft.stroke.code, ssg::KeyCode::ArrowLeft);
     ASSERT_TRUE(altLeft.stroke.mod);
 
     // Ctrl+Shift+ArrowDown: modifier 6 -> bitmask 5 = Shift|Ctrl.
     auto csDown = ssg::decodeInput("\x1b[1;6B", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(csDown.stroke.code)}, std::string{"ArrowDown"});
+    ASSERT_EQ(csDown.stroke.code, ssg::KeyCode::ArrowDown);
     ASSERT_TRUE(csDown.stroke.shift);
     ASSERT_TRUE(csDown.stroke.mod);
 
     // Shift+Home / Shift+End.
     auto shiftHome = ssg::decodeInput("\x1b[1;2H", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(shiftHome.stroke.code)}, std::string{"Home"});
+    ASSERT_EQ(shiftHome.stroke.code, ssg::KeyCode::Home);
     ASSERT_TRUE(shiftHome.stroke.shift);
     auto shiftEnd = ssg::decodeInput("\x1b[1;2F", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(shiftEnd.stroke.code)}, std::string{"End"});
+    ASSERT_EQ(shiftEnd.stroke.code, ssg::KeyCode::End);
     ASSERT_TRUE(shiftEnd.stroke.shift);
 
     // Plain arrow still decodes unmodified.
     auto plain = ssg::decodeInput("\x1b[A", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(plain.stroke.code)}, std::string{"ArrowUp"});
+    ASSERT_EQ(plain.stroke.code, ssg::KeyCode::ArrowUp);
     ASSERT_FALSE(plain.stroke.shift);
 
     // An unsupported modifier (m=9 -> bitmask 8, a Meta bit) falls back to the
     // plain, unmodified arrow, consuming the whole sequence.
     auto meta = ssg::decodeInput("\x1b[1;9A", true, consumed);
     ASSERT_EQ(consumed, std::size_t{6});
-    ASSERT_EQ(std::string{ssg::keyCodeName(meta.stroke.code)}, std::string{"ArrowUp"});
+    ASSERT_EQ(meta.stroke.code, ssg::KeyCode::ArrowUp);
     ASSERT_FALSE(meta.stroke.shift);
     ASSERT_FALSE(meta.stroke.mod);
 
@@ -139,14 +139,14 @@ TEST(decodeInputModifiedArrows) {
     // to the windowing system, so SSG decodes the PLAIN arrow rather than a Mod
     // chord it would then swallow.
     auto ctrlAlt = ssg::decodeInput("\x1b[1;7C", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(ctrlAlt.stroke.code)}, std::string{"ArrowRight"});
+    ASSERT_EQ(ctrlAlt.stroke.code, ssg::KeyCode::ArrowRight);
     ASSERT_FALSE(ctrlAlt.stroke.mod);
     ASSERT_FALSE(ctrlAlt.stroke.shift);
 
     // Ctrl+Alt+Shift is likewise dropped whole: the Shift bit must not survive a
     // discarded chord, or Shift+ArrowRight would fire on a Ctrl+Alt+Shift press.
     auto ctrlAltShift = ssg::decodeInput("\x1b[1;8C", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(ctrlAltShift.stroke.code)}, std::string{"ArrowRight"});
+    ASSERT_EQ(ctrlAltShift.stroke.code, ssg::KeyCode::ArrowRight);
     ASSERT_FALSE(ctrlAltShift.stroke.mod);
     ASSERT_FALSE(ctrlAltShift.stroke.shift);
 
@@ -154,7 +154,7 @@ TEST(decodeInputModifiedArrows) {
     // Meta bit, so it falls back to the plain arrow (consuming all 7 bytes).
     auto multi = ssg::decodeInput("\x1b[1;16C", true, consumed);
     ASSERT_EQ(consumed, std::size_t{7});
-    ASSERT_EQ(std::string{ssg::keyCodeName(multi.stroke.code)}, std::string{"ArrowRight"});
+    ASSERT_EQ(multi.stroke.code, ssg::KeyCode::ArrowRight);
     ASSERT_FALSE(multi.stroke.mod);
     ASSERT_FALSE(multi.stroke.shift);
 }
@@ -166,24 +166,24 @@ TEST(decodeInputMetaPrefixedCsiFoldsMod) {
     auto altHome = ssg::decodeInput("\x1b\x1b[H", true, consumed);
     ASSERT_EQ(consumed, std::size_t{4});
     ASSERT_TRUE(altHome.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altHome.stroke.code)}, std::string{"Home"});
+    ASSERT_EQ(altHome.stroke.code, ssg::KeyCode::Home);
     ASSERT_TRUE(altHome.stroke.mod);
     ASSERT_FALSE(altHome.stroke.shift);
 
     auto altEnd = ssg::decodeInput("\x1b\x1b[F", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altEnd.stroke.code)}, std::string{"End"});
+    ASSERT_EQ(altEnd.stroke.code, ssg::KeyCode::End);
     ASSERT_TRUE(altEnd.stroke.mod);
 
     // Mod+ArrowLeft via the same meta-prefix form.
     auto altLeft = ssg::decodeInput("\x1b\x1b[D", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altLeft.stroke.code)}, std::string{"ArrowLeft"});
+    ASSERT_EQ(altLeft.stroke.code, ssg::KeyCode::ArrowLeft);
     ASSERT_TRUE(altLeft.stroke.mod);
 
     // The ESC prefix IS Alt, so an inner sequence that already carries Ctrl makes
     // the whole thing Ctrl+Alt -- dropped, leaving the bare key.  This path has
     // no modifier bitmask of its own, so the rule has to hold here separately.
     auto altCtrlHome = ssg::decodeInput("\x1b\x1b[1;5H", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altCtrlHome.stroke.code)}, std::string{"Home"});
+    ASSERT_EQ(altCtrlHome.stroke.code, ssg::KeyCode::Home);
     ASSERT_FALSE(altCtrlHome.stroke.mod);
 
     // An incomplete inner CSI keeps the whole thing pending rather than
@@ -194,7 +194,7 @@ TEST(decodeInputMetaPrefixedCsiFoldsMod) {
     // ESC ESC with no CSI introducer following is still a bare Escape.
     auto doubleEsc = ssg::decodeInput("\x1b\x1bx", true, consumed);
     ASSERT_EQ(consumed, std::size_t{1});
-    ASSERT_EQ(std::string{ssg::keyCodeName(doubleEsc.stroke.code)}, std::string{"Escape"});
+    ASSERT_EQ(doubleEsc.stroke.code, ssg::KeyCode::Escape);
     ASSERT_FALSE(doubleEsc.stroke.mod);
 }
 
@@ -204,31 +204,31 @@ TEST(decodeInputTildeHomeEndPlainAndModified) {
     // ESC[1~/ESC[7~ = Home, ESC[4~/ESC[8~ = End.
     auto home1 = ssg::decodeInput("\x1b[1~", true, consumed);
     ASSERT_EQ(consumed, std::size_t{4});
-    ASSERT_EQ(std::string{ssg::keyCodeName(home1.stroke.code)}, std::string{"Home"});
+    ASSERT_EQ(home1.stroke.code, ssg::KeyCode::Home);
     auto home7 = ssg::decodeInput("\x1b[7~", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(home7.stroke.code)}, std::string{"Home"});
+    ASSERT_EQ(home7.stroke.code, ssg::KeyCode::Home);
     auto end4 = ssg::decodeInput("\x1b[4~", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(end4.stroke.code)}, std::string{"End"});
+    ASSERT_EQ(end4.stroke.code, ssg::KeyCode::End);
     auto end8 = ssg::decodeInput("\x1b[8~", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(end8.stroke.code)}, std::string{"End"});
+    ASSERT_EQ(end8.stroke.code, ssg::KeyCode::End);
 
     // Modified tilde forms fold in the modifier (Alt = m 3, Ctrl = m 5).
     auto altHome = ssg::decodeInput("\x1b[1;3~", true, consumed);
     ASSERT_EQ(consumed, std::size_t{6});
-    ASSERT_EQ(std::string{ssg::keyCodeName(altHome.stroke.code)}, std::string{"Home"});
+    ASSERT_EQ(altHome.stroke.code, ssg::KeyCode::Home);
     ASSERT_TRUE(altHome.stroke.mod);
     auto altEnd = ssg::decodeInput("\x1b[4;3~", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altEnd.stroke.code)}, std::string{"End"});
+    ASSERT_EQ(altEnd.stroke.code, ssg::KeyCode::End);
     ASSERT_TRUE(altEnd.stroke.mod);
     auto ctrlHome7 = ssg::decodeInput("\x1b[7;5~", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(ctrlHome7.stroke.code)}, std::string{"Home"});
+    ASSERT_EQ(ctrlHome7.stroke.code, ssg::KeyCode::Home);
     ASSERT_TRUE(ctrlHome7.stroke.mod);
 
     // Delete/Page tilde forms still work after adding the Home/End numbers.
     auto del = ssg::decodeInput("\x1b[3~", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(del.stroke.code)}, std::string{"Delete"});
+    ASSERT_EQ(del.stroke.code, ssg::KeyCode::Delete);
     auto pageUp = ssg::decodeInput("\x1b[5~", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(pageUp.stroke.code)}, std::string{"PageUp"});
+    ASSERT_EQ(pageUp.stroke.code, ssg::KeyCode::PageUp);
 
     // A split modified tilde form is incomplete until the '~' arrives.
     auto pending = ssg::decodeInput("\x1b[4;3", false, consumed);
@@ -244,35 +244,35 @@ TEST(decodeInputStripsLockModifiersFromFunctionalKeys) {
     // stripped so Alt survives and the binding resolves.
     auto altHome = ssg::decodeInput("\x1b[1;131H", true, consumed);
     ASSERT_EQ(consumed, std::size_t{8});
-    ASSERT_EQ(std::string{ssg::keyCodeName(altHome.stroke.code)}, std::string{"Home"});
+    ASSERT_EQ(altHome.stroke.code, ssg::KeyCode::Home);
     ASSERT_TRUE(altHome.stroke.mod);
     ASSERT_FALSE(altHome.stroke.shift);
     auto altEnd = ssg::decodeInput("\x1b[1;131F", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altEnd.stroke.code)}, std::string{"End"});
+    ASSERT_EQ(altEnd.stroke.code, ssg::KeyCode::End);
     ASSERT_TRUE(altEnd.stroke.mod);
 
     // Plain Home with NumLock on (modifier 129 = NumLock only) stays unmodified.
     auto plainHome = ssg::decodeInput("\x1b[1;129H", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(plainHome.stroke.code)}, std::string{"Home"});
+    ASSERT_EQ(plainHome.stroke.code, ssg::KeyCode::Home);
     ASSERT_FALSE(plainHome.stroke.mod);
     ASSERT_FALSE(plainHome.stroke.shift);
 
     // CapsLock (bit 6 = 64, modifier 65) is likewise stripped; Ctrl+Shift+End
     // with CapsLock (modifier 1 + 64 + 1 + 4 = 70) keeps only Ctrl+Shift.
     auto capsCtrlShiftEnd = ssg::decodeInput("\x1b[1;70F", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(capsCtrlShiftEnd.stroke.code)}, std::string{"End"});
+    ASSERT_EQ(capsCtrlShiftEnd.stroke.code, ssg::KeyCode::End);
     ASSERT_TRUE(capsCtrlShiftEnd.stroke.mod);
     ASSERT_TRUE(capsCtrlShiftEnd.stroke.shift);
 
     // The tilde form carries lock bits too (Alt+End as ESC[4;131~).
     auto altEndTilde = ssg::decodeInput("\x1b[4;131~", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altEndTilde.stroke.code)}, std::string{"End"});
+    ASSERT_EQ(altEndTilde.stroke.code, ssg::KeyCode::End);
     ASSERT_TRUE(altEndTilde.stroke.mod);
 
     // A genuine unsupported modifier (Super, bit 3 = 8, modifier 9) still falls
     // back to the plain key -- stripping locks must not weaken that guard.
     auto superArrow = ssg::decodeInput("\x1b[1;9A", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(superArrow.stroke.code)}, std::string{"ArrowUp"});
+    ASSERT_EQ(superArrow.stroke.code, ssg::KeyCode::ArrowUp);
     ASSERT_FALSE(superArrow.stroke.mod);
     ASSERT_FALSE(superArrow.stroke.shift);
 }
@@ -335,7 +335,7 @@ TEST(decodeKittyKeyHandCasesAndCapsLockImmunity) {
     // Alt+Shift+P: unicode key 'p' (112), mods = 1 + (shift|alt) = 4.
     auto altShiftP = ssg::decodeInput("\x1b[112;4u", true, consumed);
     ASSERT_TRUE(altShiftP.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altShiftP.stroke.code)}, std::string{"KeyP"});
+    ASSERT_EQ(altShiftP.stroke.code, ssg::KeyCode::KeyP);
     ASSERT_TRUE(altShiftP.stroke.mod);
     ASSERT_TRUE(altShiftP.stroke.shift);
     ASSERT_TRUE(altShiftP.text.empty());  // a modified key commits no text
@@ -349,7 +349,7 @@ TEST(decodeKittyKeyHandCasesAndCapsLockImmunity) {
 
     // Ctrl+C: unicode 'c' (99), mods = 1 + ctrl(4) = 5.
     auto ctrlC = ssg::decodeInput("\x1b[99;5u", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(ctrlC.stroke.code)}, std::string{"KeyC"});
+    ASSERT_EQ(ctrlC.stroke.code, ssg::KeyCode::KeyC);
     ASSERT_TRUE(ctrlC.stroke.mod);
     ASSERT_FALSE(ctrlC.stroke.shift);
 
@@ -357,7 +357,7 @@ TEST(decodeKittyKeyHandCasesAndCapsLockImmunity) {
     // (prompt cancel) must survive the reroute.
     auto esc = ssg::decodeInput("\x1b[27u", true, consumed);
     ASSERT_TRUE(esc.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(esc.stroke.code)}, std::string{"Escape"});
+    ASSERT_EQ(esc.stroke.code, ssg::KeyCode::Escape);
     ASSERT_FALSE(esc.stroke.mod);
 }
 
@@ -412,13 +412,13 @@ TEST(decodeKittyKeySelfIdentifyingAndMalformed) {
     // A non-private `CSI <n> u` is a key event (the self-identifying shape).
     auto key = ssg::decodeInput("\x1b[112u", true, consumed);
     ASSERT_TRUE(key.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(key.stroke.code)}, std::string{"KeyP"});
+    ASSERT_EQ(key.stroke.code, ssg::KeyCode::KeyP);
 
     // Field-1 sub-parameters (shifted-key : base-layout-key) are skipped; the
     // unshifted key code and the modifier field still decode.
     auto subparams = ssg::decodeInput("\x1b[112:80;4u", true, consumed);
     ASSERT_TRUE(subparams.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(subparams.stroke.code)}, std::string{"KeyP"});
+    ASSERT_EQ(subparams.stroke.code, ssg::KeyCode::KeyP);
     ASSERT_TRUE(subparams.stroke.mod);
     ASSERT_TRUE(subparams.stroke.shift);
 
@@ -456,7 +456,7 @@ TEST(decodeInputModifiedArrowSplitReadsAreIncomplete) {
     }
     // The completing bytes finish the sequence.
     auto done = ssg::decodeInput("\x1b[1;16D", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(done.stroke.code)}, std::string{"ArrowLeft"});
+    ASSERT_EQ(done.stroke.code, ssg::KeyCode::ArrowLeft);
     ASSERT_EQ(consumed, std::size_t{7});
 
     // A pathologically long modifier parameter must not overflow the decimal
@@ -467,7 +467,7 @@ TEST(decodeInputModifiedArrowSplitReadsAreIncomplete) {
     huge += "A";
     auto overflow = ssg::decodeInput(huge, true, consumed);
     ASSERT_EQ(consumed, huge.size());
-    ASSERT_EQ(std::string{ssg::keyCodeName(overflow.stroke.code)}, std::string{"ArrowUp"});
+    ASSERT_EQ(overflow.stroke.code, ssg::KeyCode::ArrowUp);
     ASSERT_FALSE(overflow.stroke.shift);
     ASSERT_FALSE(overflow.stroke.mod);
 }
@@ -482,13 +482,13 @@ TEST(decodeInputDeleteKeyPlainAndModified) {
     auto del = ssg::decodeInput("\x1b[3~", true, consumed);
     ASSERT_EQ(consumed, std::size_t{4});
     ASSERT_TRUE(del.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(del.stroke.code)}, std::string{"Delete"});
+    ASSERT_EQ(del.stroke.code, ssg::KeyCode::Delete);
     ASSERT_TRUE(del.text.empty());
 
     // Modified form ESC [ 3 ; m ~ (m = 1 + bitmask). Shift+Delete: m=2.
     auto shiftDel = ssg::decodeInput("\x1b[3;2~", true, consumed);
     ASSERT_EQ(consumed, std::size_t{6});
-    ASSERT_EQ(std::string{ssg::keyCodeName(shiftDel.stroke.code)}, std::string{"Delete"});
+    ASSERT_EQ(shiftDel.stroke.code, ssg::KeyCode::Delete);
     ASSERT_TRUE(shiftDel.stroke.shift);
 
     // Split reads of the plain form are incomplete until the '~' arrives.
@@ -506,27 +506,27 @@ TEST(decodeInputPageKeysPlainAndModified) {
     auto pageUp = ssg::decodeInput("\x1b[5~", true, consumed);
     ASSERT_EQ(consumed, std::size_t{4});
     ASSERT_TRUE(pageUp.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(pageUp.stroke.code)}, std::string{"PageUp"});
+    ASSERT_EQ(pageUp.stroke.code, ssg::KeyCode::PageUp);
     ASSERT_FALSE(pageUp.stroke.shift);
     auto pageDown = ssg::decodeInput("\x1b[6~", true, consumed);
     ASSERT_EQ(consumed, std::size_t{4});
-    ASSERT_EQ(std::string{ssg::keyCodeName(pageDown.stroke.code)}, std::string{"PageDown"});
+    ASSERT_EQ(pageDown.stroke.code, ssg::KeyCode::PageDown);
 
     // Modified form ESC [ 5 ; m ~ (m = 1 + bitmask). Shift+PageUp: m=2 -> Shift.
     auto shiftPgup = ssg::decodeInput("\x1b[5;2~", true, consumed);
     ASSERT_EQ(consumed, std::size_t{6});
-    ASSERT_EQ(std::string{ssg::keyCodeName(shiftPgup.stroke.code)}, std::string{"PageUp"});
+    ASSERT_EQ(shiftPgup.stroke.code, ssg::KeyCode::PageUp);
     ASSERT_TRUE(shiftPgup.stroke.shift);
     ASSERT_FALSE(shiftPgup.stroke.mod);
 
     // Shift+PageDown.
     auto shiftPgdn = ssg::decodeInput("\x1b[6;2~", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(shiftPgdn.stroke.code)}, std::string{"PageDown"});
+    ASSERT_EQ(shiftPgdn.stroke.code, ssg::KeyCode::PageDown);
     ASSERT_TRUE(shiftPgdn.stroke.shift);
 
     // Ctrl+PageUp: m=5 -> bitmask 4 = Ctrl.
     auto ctrlPgup = ssg::decodeInput("\x1b[5;5~", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(ctrlPgup.stroke.code)}, std::string{"PageUp"});
+    ASSERT_EQ(ctrlPgup.stroke.code, ssg::KeyCode::PageUp);
     ASSERT_TRUE(ctrlPgup.stroke.mod);
     ASSERT_FALSE(ctrlPgup.stroke.shift);
 
@@ -547,9 +547,9 @@ TEST(decodeInputArrowsAndMouse) {
     std::size_t consumed = 0;
     auto up = ssg::decodeInput("\x1b[A", true, consumed);
     ASSERT_EQ(consumed, std::size_t{3});
-    ASSERT_EQ(std::string{ssg::keyCodeName(up.stroke.code)}, std::string{"ArrowUp"});
+    ASSERT_EQ(up.stroke.code, ssg::KeyCode::ArrowUp);
     auto down = ssg::decodeInput("\x1b[B", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(down.stroke.code)}, std::string{"ArrowDown"});
+    ASSERT_EQ(down.stroke.code, ssg::KeyCode::ArrowDown);
 
     auto wheel = ssg::decodeInput("\x1b[<65;10;5M", true, consumed);
     ASSERT_TRUE(wheel.status == ssg::DecodeStatus::scroll);
@@ -564,13 +564,13 @@ TEST(decodeInputEscapeBoundaryIsBounded) {
     std::size_t consumed = 0;
     // A buffered CSI introducer disambiguates to an arrow, not an Escape stroke.
     auto arrow = ssg::decodeInput("\x1b[A", false, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(arrow.stroke.code)}, std::string{"ArrowUp"});
+    ASSERT_EQ(arrow.stroke.code, ssg::KeyCode::ArrowUp);
 
     // ESC followed by a printable coalesces into one Alt stroke (legacy
     // meta-prefix), consuming both bytes.
     auto escThen = ssg::decodeInput("\x1bs", false, consumed);
     ASSERT_EQ(consumed, std::size_t{2});
-    ASSERT_EQ(std::string{ssg::keyCodeName(escThen.stroke.code)}, std::string{"KeyS"});
+    ASSERT_EQ(escThen.stroke.code, ssg::KeyCode::KeyS);
     ASSERT_TRUE(escThen.stroke.mod);
 
     // A lone ESC with more input possibly coming: incomplete, consume nothing.
@@ -582,7 +582,7 @@ TEST(decodeInputEscapeBoundaryIsBounded) {
     // Escape stroke.
     auto exhausted = ssg::decodeInput("\x1b", true, consumed);
     ASSERT_EQ(consumed, std::size_t{1});
-    ASSERT_EQ(std::string{ssg::keyCodeName(exhausted.stroke.code)}, std::string{"Escape"});
+    ASSERT_EQ(exhausted.stroke.code, ssg::KeyCode::Escape);
 
     // A truncated CSI is always incomplete regardless of exhaustion (the final
     // byte has not arrived).
@@ -601,18 +601,18 @@ TEST(decodeInputCoalescesMetaPrefixIntoModStrokes) {
     auto altS = ssg::decodeInput("\x1bs", false, consumed);
     ASSERT_EQ(consumed, std::size_t{2});
     ASSERT_TRUE(altS.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altS.stroke.code)}, std::string{"KeyS"});
+    ASSERT_EQ(altS.stroke.code, ssg::KeyCode::KeyS);
     ASSERT_TRUE(altS.stroke.mod);
     ASSERT_FALSE(altS.stroke.shift);
 
     // ESC P -> Alt+Shift+KeyP; ESC p -> Alt+KeyP.  Distinct strokes: case is the
     // only shift signal for a letter.
     auto altShiftP = ssg::decodeInput("\x1bP", false, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altShiftP.stroke.code)}, std::string{"KeyP"});
+    ASSERT_EQ(altShiftP.stroke.code, ssg::KeyCode::KeyP);
     ASSERT_TRUE(altShiftP.stroke.mod);
     ASSERT_TRUE(altShiftP.stroke.shift);
     auto altP = ssg::decodeInput("\x1bp", false, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altP.stroke.code)}, std::string{"KeyP"});
+    ASSERT_EQ(altP.stroke.code, ssg::KeyCode::KeyP);
     ASSERT_TRUE(altP.stroke.mod);
     ASSERT_FALSE(altP.stroke.shift);
 
@@ -627,38 +627,38 @@ TEST(decodeInputCoalescesMetaPrefixIntoModStrokes) {
     auto ctrlS = ssg::decodeInput("\x13", true, consumed);
     ASSERT_EQ(consumed, std::size_t{1});
     ASSERT_TRUE(ctrlS.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(ctrlS.stroke.code)}, std::string{"KeyS"});
+    ASSERT_EQ(ctrlS.stroke.code, ssg::KeyCode::KeyS);
     ASSERT_TRUE(ctrlS.stroke.mod);
     ASSERT_TRUE(ctrlS.text.empty());
 
     // Bytes handled as named keys above never fall into the C0 rule: Tab, Enter,
     // Backspace stay themselves.
     auto tab = ssg::decodeInput("\x09", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(tab.stroke.code)}, std::string{"Tab"});
+    ASSERT_EQ(tab.stroke.code, ssg::KeyCode::Tab);
     auto enter = ssg::decodeInput("\x0d", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(enter.stroke.code)}, std::string{"Enter"});
+    ASSERT_EQ(enter.stroke.code, ssg::KeyCode::Enter);
     auto lf = ssg::decodeInput("\x0a", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(lf.stroke.code)}, std::string{"Enter"});
+    ASSERT_EQ(lf.stroke.code, ssg::KeyCode::Enter);
 
     // Alt+Backspace (ESC 0x7f) is one Alt+Backspace stroke -- NOT keycode-less
     // text -- so the delete-word-backward binding resolves.  Alt+Enter/Tab the
     // same way.
     auto altBksp = ssg::decodeInput("\x1b\x7f", false, consumed);
     ASSERT_EQ(consumed, std::size_t{2});
-    ASSERT_EQ(std::string{ssg::keyCodeName(altBksp.stroke.code)}, std::string{"Backspace"});
+    ASSERT_EQ(altBksp.stroke.code, ssg::KeyCode::Backspace);
     ASSERT_TRUE(altBksp.stroke.mod);
     ASSERT_TRUE(altBksp.text.empty());
     auto altBksp8 = ssg::decodeInput("\x1b\x08", false, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(altBksp8.stroke.code)}, std::string{"Backspace"});
+    ASSERT_EQ(altBksp8.stroke.code, ssg::KeyCode::Backspace);
     ASSERT_TRUE(altBksp8.stroke.mod);
 
     // A lone ESC still resolves to Escape once input is exhausted.
     auto esc = ssg::decodeInput("\x1b", true, consumed);
-    ASSERT_EQ(std::string{ssg::keyCodeName(esc.stroke.code)}, std::string{"Escape"});
+    ASSERT_EQ(esc.stroke.code, ssg::KeyCode::Escape);
     // ESC ESC is a bare Escape (consume one), not Alt+Escape.
     auto escEsc = ssg::decodeInput("\x1b\x1b", true, consumed);
     ASSERT_EQ(consumed, std::size_t{1});
-    ASSERT_EQ(std::string{ssg::keyCodeName(escEsc.stroke.code)}, std::string{"Escape"});
+    ASSERT_EQ(escEsc.stroke.code, ssg::KeyCode::Escape);
 }
 
 TEST(modQRequestsApplicationQuitBeforeEditorRouting) {
@@ -785,7 +785,7 @@ TEST(noDcsOrOscQueryMaySolicitAnUnparsedReply) {
     std::size_t consumed = 0;
     auto const osc = ssg::decodeInput("\x1b]", true, consumed);
     ASSERT_TRUE(osc.status == ssg::DecodeStatus::key);
-    ASSERT_EQ(std::string{ssg::keyCodeName(osc.stroke.code)}, std::string{"BracketRight"});
+    ASSERT_EQ(osc.stroke.code, ssg::KeyCode::BracketRight);
     ASSERT_TRUE(osc.stroke.mod);
     // OSC 52 WRITE is emitted (see encodeClipboardWrite) and is deliberately
     // allowed: a write carries a payload and asks nothing, so no reply can come

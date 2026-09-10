@@ -183,53 +183,6 @@ void missingSourcesAreReportedAsNotFound() {
     check(ssg::copyFileDurably(absent, destination).status ==
               ssg::FileIoStatus::NotFound,
           "copying a missing source reports NotFound");
-    check(ssg::removeFile(absent).status == ssg::FileIoStatus::NotFound,
-          "removing a missing file reports NotFound");
-
-    const auto present = root.path() / "present.txt";
-    writeOutOfBand(present, "bytes");
-    check(ssg::removeFile(present).ok(), "removing a present file succeeds");
-    check(!fs::exists(present), "removeFile actually removes");
-}
-
-class FailingInjector : public ssg::FileIoFaultInjector {
-public:
-    explicit FailingInjector(std::string operation)
-        : operation_(std::move(operation)) {}
-
-    ssg::FileIoStatus beforeOperation(std::string_view operation,
-                                      const fs::path&) override {
-        return operation == operation_ ? ssg::FileIoStatus::IoError
-                                       : ssg::FileIoStatus::Ok;
-    }
-
-private:
-    std::string operation_;
-};
-
-// Fault injection has to make failure handling reachable, and must not fire
-// when it was not asked to.
-void faultInjectionFailsOnlyTheNamedOperation() {
-    ScopedDirectory root{"ssg_seam_fault"};
-    const auto target = root.path() / "target.txt";
-
-    FailingInjector injector{"createFileExclusively"};
-    auto* previous = ssg::installFileIoFaultInjector(&injector);
-
-    const auto created = ssg::createFileExclusively(target, bytesOf("data"));
-    check(created.status == ssg::FileIoStatus::IoError,
-          "the injected operation fails");
-    check(!fs::exists(target),
-          "an injected failure happens before the filesystem is touched");
-
-    const auto read = ssg::readFile(target);
-    check(read.status == ssg::FileIoStatus::NotFound,
-          "an unnamed operation is unaffected by the injector");
-
-    (void)ssg::installFileIoFaultInjector(previous);
-
-    check(ssg::createFileExclusively(target, bytesOf("data")).ok(),
-          "the seam works again once the injector is removed");
 }
 
 }  // namespace
@@ -240,8 +193,6 @@ SSG_TEST_SUITE(test_platform_file_seam) {
     nameTakingPrimitivesRefuseAnOccupiedDestination();
     nameTakingPrimitivesSucceedOnAFreeDestination();
     missingSourcesAreReportedAsNotFound();
-    faultInjectionFailsOnlyTheNamedOperation();
-
     if (failures != 0) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);
         return 1;

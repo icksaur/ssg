@@ -385,20 +385,6 @@ void replaceFileAtomically(const std::filesystem::path& target,
 
 namespace {
 
-FileIoFaultInjector*& faultInjectorSlot() noexcept {
-    static FileIoFaultInjector* injector = nullptr;
-    return injector;
-}
-
-std::optional<FileIoStatus> injectedFailure(
-    std::string_view operation, const std::filesystem::path& path) {
-    auto* injector = faultInjectorSlot();
-    if (injector == nullptr) return std::nullopt;
-    const auto status = injector->beforeOperation(operation, path);
-    if (status == FileIoStatus::Ok) return std::nullopt;
-    return status;
-}
-
 FileIoStatus status_for_last_error(DWORD error) noexcept {
     switch (error) {
         case ERROR_FILE_NOT_FOUND:
@@ -421,15 +407,7 @@ FileIoResult last_error_failure(DWORD error, std::string_view operation,
 
 } // namespace
 
-FileIoFaultInjector* installFileIoFaultInjector(
-    FileIoFaultInjector* injector) noexcept {
-    return std::exchange(faultInjectorSlot(), injector);
-}
-
 FileReadResult readFile(const std::filesystem::path& path) {
-    if (const auto injected = injectedFailure("readFile", path)) {
-        return {*injected, {}, "injected fault: readFile"};
-    }
 
     const HANDLE handle =
         CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -469,9 +447,6 @@ FileReadResult readFile(const std::filesystem::path& path) {
 
 FileIoResult createFileExclusively(const std::filesystem::path& target,
                                    std::span<const std::byte> contents) {
-    if (const auto injected = injectedFailure("createFileExclusively", target)) {
-        return {*injected, "injected fault: createFileExclusively"};
-    }
 
     // CREATE_NEW is the Windows counterpart of O_CREAT|O_EXCL: the filesystem,
     // not this process, decides whether the name was already taken.
@@ -517,9 +492,6 @@ FileIoResult createFileExclusively(const std::filesystem::path& target,
 
 FileIoResult appendFileDurably(const std::filesystem::path& target,
                                std::span<const std::byte> contents) {
-    if (const auto injected = injectedFailure("appendFileDurably", target)) {
-        return {*injected, "injected fault: appendFileDurably"};
-    }
     const HANDLE handle =
         CreateFileW(target.c_str(), FILE_APPEND_DATA,
                     FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, OPEN_ALWAYS,
@@ -567,9 +539,6 @@ FileIoResult appendFileDurably(const std::filesystem::path& target,
 }
 
 FileIoResult syncFile(const std::filesystem::path& path) {
-    if (const auto injected = injectedFailure("syncFile", path)) {
-        return {*injected, "injected fault: syncFile"};
-    }
     const HANDLE handle =
         CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -590,9 +559,6 @@ FileIoResult syncFile(const std::filesystem::path& path) {
 
 FileIoResult renamePathDurably(const std::filesystem::path& source,
                                const std::filesystem::path& destination) {
-    if (const auto injected = injectedFailure("renamePathDurably", source)) {
-        return {*injected, "injected fault: renamePathDurably"};
-    }
     if (!MoveFileExW(source.c_str(), destination.c_str(),
                      MOVEFILE_WRITE_THROUGH)) {
         return last_error_failure(GetLastError(), "rename path", destination);
@@ -602,9 +568,6 @@ FileIoResult renamePathDurably(const std::filesystem::path& source,
 
 FileIoResult renameFileNoClobber(const std::filesystem::path& source,
                                  const std::filesystem::path& destination) {
-    if (const auto injected = injectedFailure("renameFileNoClobber", source)) {
-        return {*injected, "injected fault: renameFileNoClobber"};
-    }
 
     // Deliberately WITHOUT MOVEFILE_REPLACE_EXISTING, so an occupied
     // destination fails rather than being overwritten.
@@ -615,21 +578,7 @@ FileIoResult renameFileNoClobber(const std::filesystem::path& source,
     return {FileIoStatus::Ok, {}};
 }
 
-FileIoResult removeFile(const std::filesystem::path& path) {
-    if (const auto injected = injectedFailure("removeFile", path)) {
-        return {*injected, "injected fault: removeFile"};
-    }
-
-    if (!DeleteFileW(path.c_str())) {
-        return last_error_failure(GetLastError(), "remove file", path);
-    }
-    return {FileIoStatus::Ok, {}};
-}
-
 FileIoResult createDirectoriesDurably(const std::filesystem::path& path) {
-    if (const auto injected = injectedFailure("createDirectoriesDurably", path)) {
-        return {*injected, "injected fault: createDirectoriesDurably"};
-    }
     std::error_code error;
     std::vector<std::filesystem::path> missing;
     auto current = path;
@@ -666,9 +615,6 @@ FileIoResult createDirectoriesDurably(const std::filesystem::path& path) {
 }
 
 FileIoResult removeTree(const std::filesystem::path& path) {
-    if (const auto injected = injectedFailure("removeTree", path)) {
-        return {*injected, "injected fault: removeTree"};
-    }
     std::error_code error;
     const auto removed = std::filesystem::remove_all(path, error);
     if (error) return {FileIoStatus::IoError, error.message()};
@@ -679,9 +625,6 @@ FileIoResult removeTree(const std::filesystem::path& path) {
 DirectoryListResult listDirectory(const std::filesystem::path& path,
                                   DirectoryTraversal traversal,
                                   std::size_t maximumEntries) {
-    if (const auto injected = injectedFailure("listDirectory", path)) {
-        return {*injected, {}, false, "injected fault: listDirectory"};
-    }
     DirectoryListResult result{FileIoStatus::Ok, {}, true, {}};
     std::error_code error;
     const auto append = [&](const auto& entry) {
@@ -731,9 +674,6 @@ DirectoryListResult listDirectory(const std::filesystem::path& path,
 }
 
 FileIoResult syncDirectory(const std::filesystem::path& path) {
-    if (const auto injected = injectedFailure("syncDirectory", path)) {
-        return {*injected, "injected fault: syncDirectory"};
-    }
 
     // Windows has no directory-handle flush equivalent; its metadata writes for
     // MoveFileEx/ReplaceFile are ordered by the filesystem, and the write-through
@@ -747,9 +687,6 @@ FileIoResult syncDirectory(const std::filesystem::path& path) {
 
 FileIoResult copyFileDurably(const std::filesystem::path& source,
                              const std::filesystem::path& destination) {
-    if (const auto injected = injectedFailure("copyFileDurably", source)) {
-        return {*injected, "injected fault: copyFileDurably"};
-    }
 
     auto contents = readFile(source);
     if (!contents.ok()) {

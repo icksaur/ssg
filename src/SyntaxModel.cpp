@@ -1,7 +1,5 @@
 #include <ssg/SyntaxModel.h>
 
-#include <ssg/OptionalSubsystemAudit.h>
-
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -354,12 +352,6 @@ SyntaxModel::SyntaxModel(std::shared_ptr<SyntaxParser> parser,
       config_(config),
       viewState_(SyntaxViewState::plainText(
           std::uint64_t{0}, LanguageId::plainText(), {}, config.tabWidth)) {
-    // A real Tree-sitter grammar is only present when a parser is injected; the
-    // plain-text fallback (parser == nullptr) constructs no grammar, so it is not
-    // counted by the optional-subsystem audit.
-    if (parser_ != nullptr) {
-        noteOptionalConstruction(OptionalSubsystem::TreeSitterGrammar);
-    }
     if (config_.tabWidth == 0) {
         throw std::invalid_argument{"tab width must be positive"};
     }

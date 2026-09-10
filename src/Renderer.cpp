@@ -10,10 +10,6 @@
 
 namespace ssg {
 
-static thread_local std::uint64_t gRenderSegmentationCalls = 0;
-
-void recordRenderSegmentationCall() { ++gRenderSegmentationCalls; }
-
 SemanticRole nodeForeground(const UiSchema& schema, std::string_view nodeId,
                             SemanticRole fallback) {
     const auto style = resolveUiNodeStyle(schema, nodeId);
@@ -470,11 +466,5 @@ CellGrid renderFrame(const GridPresentation& snapshot,
     }
     return grid;
 }
-
-std::uint64_t renderSegmentationCalls() {
-    return gRenderSegmentationCalls;
-}
-
-void resetRenderSegmentationCalls() { gRenderSegmentationCalls = 0; }
 
 } // namespace ssg

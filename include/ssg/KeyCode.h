@@ -210,12 +210,6 @@ consteval bool keyCodeTableIsExhaustive() {
 }
 static_assert(keyCodeTableIsExhaustive());
 
-// The name a keymap binds; empty for `None`.
-[[nodiscard]] constexpr std::string_view keyCodeName(KeyCode code) noexcept {
-    if (code == KeyCode::None || code >= KeyCode::Count) return {};
-    return kKeyCodes[static_cast<std::size_t>(code) - 1].name;
-}
-
 // The short form rendered in the keymap help; empty for `None`.
 [[nodiscard]] constexpr std::string_view keyCodeDisplay(KeyCode code) noexcept {
     if (code == KeyCode::None || code >= KeyCode::Count) return {};

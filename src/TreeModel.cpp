@@ -708,14 +708,4 @@ const TreeProviderView* activeTreeProvider(const TreeViewState& state) noexcept 
     return duplicate == state.providers.end() ? &*found : nullptr;
 }
 
-bool isValidTreeViewState(const TreeViewState& state) noexcept {
-    if (state.providers.empty()) return !state.activeBinding;
-    if (!state.activeBinding || activeTreeProvider(state) == nullptr) return false;
-    std::set<TreeProviderId> ids;
-    return std::all_of(state.providers.begin(), state.providers.end(),
-                       [&](const TreeProviderView& provider) {
-                           return ids.insert(provider.providerId).second;
-                       });
-}
-
 } // namespace ssg

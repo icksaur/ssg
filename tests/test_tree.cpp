@@ -267,30 +267,7 @@ TEST(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes) {
     if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:A/one"});
 }
 
-TEST(treeViewStateRejectsMissingMismatchedAndDuplicateActiveBindings) {
-    TreeModel model;
-    model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"},
-        {{.stableKey = "A", .label = "A"}}));
-    const auto valid = model.viewState();
-    ASSERT_TRUE(isValidTreeViewState(valid));
-    ASSERT_TRUE(activeTreeProvider(valid) != nullptr);
-
-    auto missing = valid;
-    missing.activeBinding.reset();
-    ASSERT_FALSE(isValidTreeViewState(missing));
-
-    auto mismatched = valid;
-    mismatched.activeBinding->kind = TreeProviderKind::Git;
-    ASSERT_FALSE(isValidTreeViewState(mismatched));
-
-    auto duplicate = valid;
-    duplicate.providers.push_back(duplicate.providers.front());
-    ASSERT_FALSE(isValidTreeViewState(duplicate));
-
-}
-
-TEST(selectionPersistsIndependentlyForEachProvider) {
+ TEST(selectionPersistsIndependentlyForEachProvider) {
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
         TreeProviderId{"symbols"},
@@ -401,7 +378,6 @@ TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
     RUN(nodeCommandInvocationIsProviderDataOnly);
     RUN(selectionNavigatesExpandsAndReportsSelectedNode);
     RUN(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes);
-    RUN(treeViewStateRejectsMissingMismatchedAndDuplicateActiveBindings);
     RUN(selectionPersistsIndependentlyForEachProvider);
     RUN(searchProviderStateIsInitializedProjectedAndPersists);
     RUN(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem);

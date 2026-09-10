@@ -1,6 +1,5 @@
 #include <ssg/FilesystemWatcher.h>
 
-#include <ssg/OptionalSubsystemAudit.h>
 #include <ssg/platform_files.h>
 
 #include <cerrno>
@@ -61,7 +60,6 @@ public:
     LinuxFilesystemWatcher(std::filesystem::path root, WatcherConfig config)
         : root_(canonicalPath(std::move(root))),
           maxRescanEntries_(config.maxRescanEntries) {
-        noteOptionalConstruction(OptionalSubsystem::FilesystemWatcher);
         descriptor_ = ::inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
         if (descriptor_ == -1) {
             throw std::system_error(errno, std::generic_category(),

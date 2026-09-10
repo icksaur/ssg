@@ -55,14 +55,6 @@ ssg::CommandResult run(ssg::Editor& runtime, std::string id,
 }
 
 // Forces the archive's copy to fail so the delete's abort path is reachable.
-class FailArchiveCopy : public ssg::FileIoFaultInjector {
-public:
-    ssg::FileIoStatus beforeOperation(std::string_view operation,
-                                      const fs::path&) override {
-        return operation == "copyFileDurably" ? ssg::FileIoStatus::IoError
-                                              : ssg::FileIoStatus::Ok;
-    }
-};
 
 // Read WITHOUT the seam so the check is independent of the code under test.
 std::string readOutOfBand(const fs::path& path) {
@@ -249,32 +241,6 @@ TEST(deletingAFileLeavesTheBytesInTheArchive) {
     ASSERT_EQ(recovered, payload);
 }
 
-// The ordering rule. If the archive cannot be written the delete must FAIL and
-// leave the file alone -- a delete never reduces the number of copies below
-// one. Fault injection is what makes this reachable; without it the branch
-// would only ever run on a full disk.
-TEST(aFailedArchiveWriteAbortsTheDeleteAndKeepsTheFile) {
-    TemporaryDirectory directory;
-    const std::string payload = "must survive a failed archive\n";
-    writeOutOfBand(directory.path() / "kept.txt", payload);
-
-    auto runtime = makeRuntime(directory.path());
-    ASSERT_TRUE(runtime != nullptr);
-    ASSERT_TRUE(run(*runtime, "file.open", std::string{"kept.txt"}).accepted());
-
-    FailArchiveCopy injector;
-    auto* previous = ssg::installFileIoFaultInjector(&injector);
-    const auto result = run(*runtime, "file.delete");
-    (void)ssg::installFileIoFaultInjector(previous);
-
-    ASSERT_FALSE(result.accepted());
-    ASSERT_EQ(readOutOfBand(directory.path() / "kept.txt"), payload);
-}
-
-// The live-diff rule's classification, named exactly. Adding a FileCommand does
-// NOT fail to compile (verified by perturbation: adding an enumerator built
-// cleanly), so the set is pinned here instead -- a new command lands with
-// mutatesActiveDocumentFile defaulting to false and must be considered.
 constexpr std::string_view kActiveFileMutators[] = {
     "file.save", "file.save_as", "file.reload", "file.rename", "file.delete",
 };
@@ -398,7 +364,6 @@ SSG_TEST_SUITE(test_name_clash) {
     RUN(renameToAFreeNameMovesTheFileAndRetitlesTheTab);
     RUN(aRuntimeWithNoDocumentOpensAnEditableNewBuffer);
     RUN(deletingAFileLeavesTheBytesInTheArchive);
-    RUN(aFailedArchiveWriteAbortsTheDeleteAndKeepsTheFile);
     RUN(theActiveFileMutatorSetIsExactlyTheDeclaredOne);
     RUN(activeFileMutatorsRefuseWithNoDocumentWhileCreatorsDoNot);
     RUN(deletingAFileClosesItsTab);

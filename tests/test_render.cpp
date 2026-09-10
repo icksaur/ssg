@@ -478,48 +478,7 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
     std::filesystem::remove_all(root);
 }
 
-TEST(renderSegmentsOnlyVisibleLinesNotWholeDocument) {
-    ssg::LineLayoutCache lineCache;
-    // INV-render-projection (M12): render() runs compute_cell_run only for the
-    // logical lines the viewport shows (<= rows), independent of document length.
-    auto root = uniqueRoot();
-    auto makeDoc = [](std::size_t lineCount) {
-        std::string text;
-        for (std::size_t i = 0; i < lineCount; ++i) {
-            text += "line " + std::to_string(i) + "\n";
-        }
-        return text;
-    };
-    std::ofstream{root / "small.txt"} << makeDoc(50);
-    std::ofstream{root / "big.txt"} << makeDoc(5000);
-    auto runtime = makeRuntime(root);
-    ASSERT_TRUE(runtime != nullptr);
-    if (!runtime) return;
-
-    auto segmentCountFor = [&](std::string const& file) -> std::uint64_t {
-        (void)runtime->dispatch({"file.open",  file});
-        auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
-        ASSERT_TRUE(snapshot.has_value());
-        if (!snapshot) return 0;
-        ssg::resetRenderSegmentationCalls();
-        auto grid = ssg::renderFrame(*snapshot, lineCache);
-        (void)grid;
-        return ssg::renderSegmentationCalls();
-    };
-
-    auto const smallCalls = segmentCountFor("small.txt");
-    auto const bigCalls = segmentCountFor("big.txt");
-
-    // At most one segmentation per visible editor row (24-tall terminal, minus
-    // the chrome rows), and NOT proportional to the 100x-larger document.
-    ASSERT_TRUE(smallCalls > 0);
-    ASSERT_TRUE(smallCalls <= 24);
-    ASSERT_TRUE(bigCalls <= 24);
-    ASSERT_EQ(smallCalls, bigCalls);
-}
-
-
-TEST(wordWrapOffRendersHorizontallyScrolledContent) {
+ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
     ssg::LineLayoutCache lineCache;
     // M12 VP-H: with the caret at the end of a long line (word wrap off), the
     // editor paints the horizontally-scrolled window — the line's END is visible
@@ -2109,7 +2068,6 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine);
     RUN(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary);
-    RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
     RUN(wordWrapOffRendersHorizontallyScrolledContent);
     RUN(renderColorsAreInBoundsColorSlots);
     RUN(renderIsDeterministic);

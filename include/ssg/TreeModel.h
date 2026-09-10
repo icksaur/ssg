@@ -206,8 +206,6 @@ struct TreeViewState {
 // never infer active identity from provider ordering.
 [[nodiscard]] const TreeProviderView* activeTreeProvider(
     const TreeViewState& state) noexcept;
-[[nodiscard]] bool isValidTreeViewState(const TreeViewState& state) noexcept;
-
 struct TreeCommandInvocation {
     TreeProviderId providerId;
     TreeNodeId nodeId;

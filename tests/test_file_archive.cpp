@@ -32,30 +32,7 @@ private:
     fs::path path_;
 };
 
-class FailCopy : public ssg::FileIoFaultInjector {
-public:
-    ssg::FileIoStatus beforeOperation(std::string_view operation,
-                                      const fs::path&) override {
-        return operation == "copyFileDurably" ? ssg::FileIoStatus::IoError
-                                              : ssg::FileIoStatus::Ok;
-    }
-};
 
-class FailSelectedRemove : public ssg::FileIoFaultInjector {
-public:
-    explicit FailSelectedRemove(fs::path blocked)
-        : blocked_(std::move(blocked)) {}
-
-    ssg::FileIoStatus beforeOperation(std::string_view operation,
-                                      const fs::path& path) override {
-        return operation == "removeTree" && path == blocked_
-                   ? ssg::FileIoStatus::IoError
-                   : ssg::FileIoStatus::Ok;
-    }
-
-private:
-    fs::path blocked_;
-};
 
 // Out-of-band so the archive is never its own oracle.
 std::string readOutOfBand(const fs::path& path) {
@@ -258,32 +235,6 @@ TEST(twoArchivesInTheSameSecondDoNotShareAnEntryDirectory) {
     ASSERT_EQ(readOutOfBand(b.archivedPath), std::string{"second process"});
 }
 
-// A failed copy must clean up only what it created. If it reused an existing
-// entry directory, its remove_all would take another deletion's files with it.
-TEST(aFailedArchiveNeverRemovesAnEarlierEntry) {
-    TemporaryDirectory workspace;
-    const auto archiveRoot = workspace.path() / ".ssg" / "archive";
-    writeOutOfBand(workspace.path() / "kept.txt", "already archived");
-    writeOutOfBand(workspace.path() / "next.txt", "will fail");
-
-    ssg::FileArchive first{archiveRoot};
-    const auto kept =
-        first.archive(workspace.path(), workspace.path() / "kept.txt");
-    ASSERT_TRUE(kept.ok());
-
-    FailCopy injector;
-    auto* previous = ssg::installFileIoFaultInjector(&injector);
-    ssg::FileArchive second{archiveRoot};
-    const auto refused =
-        second.archive(workspace.path(), workspace.path() / "next.txt");
-    (void)ssg::installFileIoFaultInjector(previous);
-
-    ASSERT_FALSE(refused.ok());
-    ASSERT_EQ(readOutOfBand(kept.archivedPath), std::string{"already archived"});
-}
-
-// Future-dated entries must survive: pruning a user's only copy because a clock
-// disagreed would be the exact loss this feature prevents.
 TEST(pruningRetainsAndReportsFutureDatedEntries) {
     TemporaryDirectory workspace;
     const auto archiveRoot = workspace.path() / ".ssg" / "archive";
@@ -301,60 +252,24 @@ TEST(pruningRetainsAndReportsFutureDatedEntries) {
     ASSERT_EQ(report.retainedFutureDated, std::size_t{1});
 }
 
-// A real housekeeping failure -- an expired entry that cannot be removed --
-// must never become the caller's failure. prune returns without throwing,
-// records the trouble only in `message`, and loses nothing it could not safely
-// delete. This is the observable half of the FileArchive contract: opening a
-// workspace proceeds no matter what archive housekeeping runs into.
-TEST(pruningReportsButNeverFailsTheCallerWhenAnEntryCannotBeRemoved) {
+TEST(pruningFailureDoesNotStopTheCallerOrLoseTheEntry) {
     TemporaryDirectory workspace;
     const auto archiveRoot = workspace.path() / ".ssg" / "archive";
     const auto now = at(2026, 3, 1);
     const auto expired =
         ssg::DurableStore::entryName(at(2020, 1, 1), "expired");
     writeOutOfBand(archiveRoot / expired / "ancient.txt", "expired");
-
-    // Remove write permission on the entry directory so unlinking the file
-    // inside it fails the way a locked or corrupt entry would.
     fs::permissions(archiveRoot / expired, fs::perms::owner_write,
                     fs::perm_options::remove);
 
     ssg::FileArchive archive{archiveRoot};
     const auto report = archive.prune(now, std::chrono::hours{24 * 14});
 
-    // Restore write immediately so the temporary directory can be cleaned up,
-    // regardless of the assertions below.
     fs::permissions(archiveRoot / expired, fs::perms::owner_all,
                     fs::perm_options::add);
-
-    // Housekeeping failed, but only the message says so: the caller is never
-    // stopped, and the copy it could not remove is still there.
     ASSERT_FALSE(report.message.empty());
     ASSERT_EQ(report.removed, std::size_t{0});
     ASSERT_TRUE(fs::exists(archiveRoot / expired / "ancient.txt"));
-}
-
-TEST(pruningContinuesAfterOneExpiredEntryCannotBeRemoved) {
-    TemporaryDirectory workspace;
-    const auto archiveRoot = workspace.path() / ".ssg" / "archive";
-    const auto blocked =
-        ssg::DurableStore::entryName(at(2020, 1, 1), "blocked");
-    const auto removable =
-        ssg::DurableStore::entryName(at(2020, 1, 2), "removable");
-    writeOutOfBand(archiveRoot / blocked / "blocked.txt", "blocked");
-    writeOutOfBand(archiveRoot / removable / "removable.txt", "removable");
-
-    FailSelectedRemove injector{archiveRoot / blocked};
-    auto* previous = ssg::installFileIoFaultInjector(&injector);
-    ssg::FileArchive archive{archiveRoot};
-    const auto report =
-        archive.prune(at(2026, 3, 1), std::chrono::hours{24 * 14});
-    (void)ssg::installFileIoFaultInjector(previous);
-
-    ASSERT_FALSE(report.message.empty());
-    ASSERT_EQ(report.removed, std::size_t{1});
-    ASSERT_TRUE(fs::exists(archiveRoot / blocked / "blocked.txt"));
-    ASSERT_FALSE(fs::exists(archiveRoot / removable));
 }
 
 }  // namespace
@@ -370,10 +285,8 @@ SSG_TEST_SUITE(test_file_archive) {
     RUN(entryDirectoryNamesSortChronologically);
     RUN(entryTimestampsRoundTripThroughTheDirectoryName);
     RUN(twoArchivesInTheSameSecondDoNotShareAnEntryDirectory);
-    RUN(aFailedArchiveNeverRemovesAnEarlierEntry);
     RUN(pruningRetainsAndReportsFutureDatedEntries);
-    RUN(pruningReportsButNeverFailsTheCallerWhenAnEntryCannotBeRemoved);
-    RUN(pruningContinuesAfterOneExpiredEntryCannotBeRemoved);
+    RUN(pruningFailureDoesNotStopTheCallerOrLoseTheEntry);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

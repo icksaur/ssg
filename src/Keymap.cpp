@@ -52,30 +52,6 @@ std::optional<KeyStroke> parseKeyStroke(std::string_view encoded) {
     return result;
 }
 
-std::string formatKeyStroke(const KeyStroke& stroke) {
-    if (!validStroke(stroke)) {
-        return {};
-    }
-    std::string result;
-    const auto append = [&](std::string_view part) {
-        if (!result.empty()) {
-            result += '+';
-        }
-        result += part;
-    };
-    if (stroke.mod) {
-        append("Mod");
-    }
-    if (stroke.meta) {
-        append("Meta");
-    }
-    if (stroke.shift) {
-        append("Shift");
-    }
-    append(keyCodeName(stroke.code));
-    return result;
-}
-
 std::optional<KeySequence> parseKeySequence(
     std::initializer_list<std::string_view> encoded) {
     if (encoded.size() == 0) {

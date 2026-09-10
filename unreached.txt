@@ -1,15 +1,3 @@
-ssg::formatKeyStroke[abi:cxx11](ssg::KeyStroke const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
-ssg::installFileIoFaultInjector(ssg::FileIoFaultInjector*)	CMakeFiles/ssg_platform.dir/src/linux_files.cpp.o
-ssg::isValidTreeViewState(ssg::TreeViewState const&)	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
-ssg::isValidTreeViewState(ssg::TreeViewState const&)::{lambda(ssg::TreeProviderView const&)#1}::operator()(ssg::TreeProviderView const&) const	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
-ssg::keyCodeName(ssg::KeyCode)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
-ssg::optionalConstructionCount(ssg::OptionalSubsystem)	CMakeFiles/ssg_platform.dir/src/OptionalSubsystemAudit.cpp.o
-ssg::optionalConstructionTotal()	CMakeFiles/ssg_platform.dir/src/OptionalSubsystemAudit.cpp.o
-ssg::optionalSubsystemName(ssg::OptionalSubsystem)	CMakeFiles/ssg_platform.dir/src/OptionalSubsystemAudit.cpp.o
-ssg::removeFile(std::filesystem::__cxx11::path const&)	CMakeFiles/ssg_platform.dir/src/linux_files.cpp.o
-ssg::renderSegmentationCalls()	CMakeFiles/ssg_tui_objects.dir/src/Renderer.cpp.o
-ssg::resetOptionalConstructionAudit()	CMakeFiles/ssg_platform.dir/src/OptionalSubsystemAudit.cpp.o
-ssg::resetRenderSegmentationCalls()	CMakeFiles/ssg_tui_objects.dir/src/Renderer.cpp.o
 ssg::resetUtf8ValidationCalls()	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o
 ssg::scrollable_regions()	CMakeFiles/ssg_terminal_objects.dir/src/pointer_routing.cpp.o
 ssg::semanticRoleName(ssg::SemanticRole)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o

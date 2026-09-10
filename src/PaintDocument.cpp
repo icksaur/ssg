@@ -48,7 +48,6 @@ std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
             end == std::string::npos ? text.size() - begin : end - begin;
         if (referenced.contains(index)) {
             auto const line = std::string_view{text}.substr(begin, length);
-            recordRenderSegmentationCall();
             lines.emplace(index,
                           LogicalLine{line, begin, cache.run(line, 4)});
         }

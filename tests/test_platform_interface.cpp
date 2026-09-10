@@ -57,8 +57,6 @@ static_assert(std::same_as<decltype(&ssg::createFileExclusively),
                                                  std::span<const std::byte>)>);
 static_assert(std::same_as<decltype(&ssg::renameFileNoClobber),
                            ssg::FileIoResult (*)(const Path&, const Path&)>);
-static_assert(std::same_as<decltype(&ssg::removeFile),
-                           ssg::FileIoResult (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::createDirectoriesDurably),
                            ssg::FileIoResult (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::ensureDirectory),
@@ -77,9 +75,6 @@ static_assert(std::same_as<decltype(&ssg::syncDirectory),
                            ssg::FileIoResult (*)(const Path&)>);
 static_assert(std::same_as<decltype(&ssg::copyFileDurably),
                            ssg::FileIoResult (*)(const Path&, const Path&)>);
-static_assert(std::same_as<decltype(&ssg::installFileIoFaultInjector),
-                           ssg::FileIoFaultInjector* (*)(
-                               ssg::FileIoFaultInjector*) noexcept>);
 static_assert(std::same_as<decltype(&ssg::makePlatformFilesystemWatcher),
                            std::unique_ptr<ssg::FilesystemWatcher> (*)(
                                const Path&, ssg::WatcherConfig)>);
@@ -113,7 +108,6 @@ SSG_TEST_SUITE(test_platform_interface) {
     [[maybe_unused]] auto createFileExclusively =
         &ssg::createFileExclusively;
     [[maybe_unused]] auto renameFileNoClobber = &ssg::renameFileNoClobber;
-    [[maybe_unused]] auto removeFile = &ssg::removeFile;
     [[maybe_unused]] auto createDirectoriesDurably =
         &ssg::createDirectoriesDurably;
     [[maybe_unused]] auto ensureDirectory = &ssg::ensureDirectory;
@@ -123,8 +117,6 @@ SSG_TEST_SUITE(test_platform_interface) {
     [[maybe_unused]] auto listDirectory = &ssg::listDirectory;
     [[maybe_unused]] auto syncDirectory = &ssg::syncDirectory;
     [[maybe_unused]] auto copyFileDurably = &ssg::copyFileDurably;
-    [[maybe_unused]] auto installFileIoFaultInjector =
-        &ssg::installFileIoFaultInjector;
     [[maybe_unused]] auto watcher = &ssg::makePlatformFilesystemWatcher;
     return 0;
 }

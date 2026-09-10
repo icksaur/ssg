@@ -91,7 +91,4 @@ struct CellGrid {
 [[nodiscard]] CellGrid renderFrame(const GridPresentation& snapshot,
                                    LineLayoutCache& lineCache);
 
-[[nodiscard]] std::uint64_t renderSegmentationCalls();
-void resetRenderSegmentationCalls();
-
 }  // namespace ssg

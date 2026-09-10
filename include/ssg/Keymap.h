@@ -33,7 +33,6 @@ struct KeyStroke {
 using KeySequence = std::vector<KeyStroke>;
 
 [[nodiscard]] std::optional<KeyStroke> parseKeyStroke(std::string_view encoded);
-[[nodiscard]] std::string formatKeyStroke(const KeyStroke& stroke);
 [[nodiscard]] std::optional<KeySequence> parseKeySequence(
     std::initializer_list<std::string_view> encoded);
 // Runtime counterpart to parseKeySequence's compile-time initializer_list, used
