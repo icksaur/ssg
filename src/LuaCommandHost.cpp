@@ -22,6 +22,7 @@ constexpr char kHostRegistryKey[] = "ssg.command_host";
 
 struct RegisteredCommand {
     std::string id;
+    std::string label;
     int functionReference;
 };
 
@@ -58,6 +59,10 @@ struct LuaCommandHost::Impl {
         for (auto& command : options.commands) {
             if (command.id.empty()) {
                 throw std::invalid_argument{"Lua command ID must not be empty"};
+            }
+            if (command.label.empty()) {
+                throw std::invalid_argument{"Lua command label must not be empty: " +
+                                            command.id};
             }
             if (!catalog.emplace(command.id, std::move(command)).second) {
                 throw std::invalid_argument{"duplicate Lua command ID: " +
@@ -251,12 +256,20 @@ struct LuaCommandHost::Impl {
                 std::size_t length = 0;
                 char const* idData =
                     luaL_checklstring(callbackState, 1, &length);
-                luaL_checktype(callbackState, 2, LUA_TFUNCTION);
                 std::string id{idData, length};
+                char const* labelData =
+                    luaL_checklstring(callbackState, 2, &length);
+                std::string label{labelData, length};
+                luaL_checktype(callbackState, 3, LUA_TFUNCTION);
                 if (id.empty()) {
                     host.pendingError = LuaError::RuntimeFault;
                     host.callbackMessage =
                         "plugin command ID must not be empty";
+                    raiseError = true;
+                } else if (label.empty()) {
+                    host.pendingError = LuaError::RuntimeFault;
+                    host.callbackMessage =
+                        "plugin command label must not be empty";
                     raiseError = true;
                 } else if (host.registrationStack.empty()) {
                     host.pendingError = LuaError::RuntimeFault;
@@ -277,7 +290,8 @@ struct LuaCommandHost::Impl {
                         raiseError = true;
                     } else {
                         transaction.commands.push_back(
-                            RegisteredCommand{std::move(id), LUA_NOREF});
+                            RegisteredCommand{std::move(id), std::move(label),
+                                              LUA_NOREF});
                         storeFunction = true;
                     }
                 }
@@ -300,7 +314,7 @@ struct LuaCommandHost::Impl {
             return lua_error(callbackState);
         }
         if (storeFunction) {
-            lua_pushvalue(callbackState, 2);
+            lua_pushvalue(callbackState, 3);
             int const reference =
                 luaL_ref(callbackState, LUA_REGISTRYINDEX);
             host.registrationStack.back().commands.back().functionReference =
@@ -450,12 +464,11 @@ LuaResult LuaCommandHost::evaluate(std::string_view script) {
         // The gate may still refuse, and it is the LAST thing that can: once
         // publishStaged runs, the previous generation's functions are gone.
         if (impl_->options.publishGate) {
-            std::vector<std::string> ids;
-            ids.reserve(transaction.commands.size());
+            std::vector<LuaCommand> commands;
+            commands.reserve(transaction.commands.size());
             for (auto const& command : transaction.commands) {
-                ids.push_back(command.id);
+                commands.push_back({command.id, command.label});
             }
-            std::sort(ids.begin(), ids.end());
             // The gate is caller-supplied, so it is contained the same way a
             // dispatcher is: an escaping exception must still roll the staged
             // registrations back, or their Lua references leak and the
@@ -473,7 +486,7 @@ LuaResult LuaCommandHost::evaluate(std::string_view script) {
                 ~GateScope() { active = false; }
             } const gateScope{impl_->gateActive};
             try {
-                refusal = impl_->options.publishGate(ids);
+                refusal = impl_->options.publishGate(commands);
             } catch (std::exception const& thrown) {
                 refusal = {LuaError::RuntimeFault,
                            "command registration gate threw: " +

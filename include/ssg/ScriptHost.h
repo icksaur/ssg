@@ -55,7 +55,7 @@ public:
     [[nodiscard]] LuaResult evaluate(std::string_view script);
 
 private:
-    LuaResult offerGeneration(std::vector<std::string> const& commandIds);
+    LuaResult offerGeneration(std::vector<LuaCommand> const& commands);
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

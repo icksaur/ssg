@@ -39,7 +39,7 @@ TEST(registeredCommandsAreCallable) {
     std::unordered_set<std::string> called;
     std::size_t callableCount = 0;
     for (auto const& id : catalog) {
-        commands.push_back({id});
+        commands.push_back({id, id});
         ++callableCount;
     }
     LuaCommandHost host{options(std::move(commands)),
@@ -71,7 +71,7 @@ TEST(instructionAndWallClockBudgetsIsolateCallbacks) {
 
 TEST(reentrantCallsRestoreTheEnclosingBudget) {
     LuaCommandHost* reentrant = nullptr;
-    auto configured = options({{"reenter"}});
+    auto configured = options({{"reenter", "Reenter"}});
     configured.instructionBudget = 2'000;
     configured.timeBudget = std::chrono::milliseconds{5};
     LuaCommandHost host{std::move(configured),
@@ -91,36 +91,42 @@ TEST(registrationIsAtomicAndDuplicateSafe) {
         return LuaResult{};
     }};
     auto evaluation = host.evaluate(
-        "ssg.register_command('half', function() end); error('rollback')");
+        "ssg.register('half', 'Test Command', function() end); error('rollback')");
     ASSERT_EQ(evaluation.error, LuaError::RuntimeFault);
     ASSERT_FALSE(host.hasCommand("half"));
     ASSERT_TRUE(host.evaluate(
-        "ssg.register_command('owned', function() ssg.command('missing') end)")
+        "ssg.register('owned', 'Test Command', function() ssg.command('missing') end)")
                     .accepted());
     // Registering the same id TWICE IN ONE evaluation is a mistake in the
     // script, and is refused.
     auto duplicate = host.evaluate(
-        "ssg.register_command('twice', function() end);"
-        "ssg.register_command('twice', function() end)");
+        "ssg.register('twice', 'Test Command', function() end);"
+        "ssg.register('twice', 'Test Command', function() end)");
     ASSERT_EQ(duplicate.error, LuaError::DuplicateCommand);
+    ASSERT_FALSE(
+        host.evaluate("ssg.register('missing-label', function() end)")
+            .accepted());
+    ASSERT_FALSE(
+        host.evaluate("ssg.register('empty-label', '', function() end)")
+            .accepted());
 
     // Registering it again in a LATER evaluation is a reload, not a mistake:
     // each evaluation replaces the previous evaluation's registrations, so a
     // script that registers the same ids every time must keep working.
     ASSERT_TRUE(host.evaluate(
-        "ssg.register_command('owned', function() end)").accepted());
+        "ssg.register('owned', 'Test Command', function() end)").accepted());
     ASSERT_TRUE(host.hasCommand("owned"));
 
     // And a command the newest evaluation did NOT register is gone, rather
     // than accumulating across reloads.
     ASSERT_TRUE(host.evaluate(
-        "ssg.register_command('replacement', function() end)").accepted());
+        "ssg.register('replacement', 'Test Command', function() end)").accepted());
     ASSERT_FALSE(host.hasCommand("owned"));
     ASSERT_TRUE(host.hasCommand("replacement"));
 }
 
 TEST(dispatchAndPluginFaultsAreIsolated) {
-    LuaCommandHost denied{options({{"edit"}}), [](LuaInvocation const&) {
+    LuaCommandHost denied{options({{"edit", "Edit"}}), [](LuaInvocation const&) {
         return LuaResult{LuaError::DispatchFailed, "atomic edit rejected"};
     }};
     ASSERT_EQ(denied.evaluate("ssg.command('edit')").error,
@@ -131,7 +137,7 @@ TEST(dispatchAndPluginFaultsAreIsolated) {
         return LuaResult{};
     }};
     ASSERT_TRUE(callbacks.evaluate(
-        "ssg.register_command('broken', function() error('bad') end)")
+        "ssg.register('broken', 'Test Command', function() error('bad') end)")
                     .accepted());
     ASSERT_EQ(callbacks.invoke("broken").error, LuaError::RuntimeFault);
     ASSERT_EQ(callbacks.invoke("absent").error, LuaError::UnknownCommand);
@@ -139,7 +145,7 @@ TEST(dispatchAndPluginFaultsAreIsolated) {
 
 TEST(commandTableArgumentReachesTheDispatcherDecodedAsAStringMap) {
     std::optional<std::unordered_map<std::string, std::string>> received;
-    LuaCommandHost host{options({{"configure"}}),
+    LuaCommandHost host{options({{"configure", "Configure"}}),
         [&](LuaInvocation const& invocation) {
             received = invocation.arguments;
             return LuaResult{};
@@ -157,7 +163,7 @@ TEST(commandTableArgumentReachesTheDispatcherDecodedAsAStringMap) {
 TEST(commandWithoutSecondArgumentLeavesArgumentsEmpty) {
     std::optional<std::unordered_map<std::string, std::string>> received{
         std::unordered_map<std::string, std::string>{{"stale", "value"}}};
-    LuaCommandHost host{options({{"noop"}}),
+    LuaCommandHost host{options({{"noop", "Noop"}}),
         [&](LuaInvocation const& invocation) {
             received = invocation.arguments;
             return LuaResult{};
@@ -168,7 +174,7 @@ TEST(commandWithoutSecondArgumentLeavesArgumentsEmpty) {
 
 TEST(malformedCommandArgumentIsRejectedBeforeTheDispatcherIsCalled) {
     bool dispatched = false;
-    LuaCommandHost host{options({{"configure"}}),
+    LuaCommandHost host{options({{"configure", "Configure"}}),
         [&](LuaInvocation const&) {
             dispatched = true;
             return LuaResult{};
@@ -218,7 +224,7 @@ TEST(aGateThatThrowsRollsTheEvaluationBackLikeAnyOtherRefusal) {
     bool throwing = true;
     auto configured = options();
     configured.publishGate =
-        [&throwing](std::vector<std::string> const&) -> LuaResult {
+        [&throwing](std::vector<LuaCommand> const&) -> LuaResult {
         if (throwing) throw std::runtime_error{"gate refused loudly"};
         return {};
     };
@@ -227,7 +233,7 @@ TEST(aGateThatThrowsRollsTheEvaluationBackLikeAnyOtherRefusal) {
     }};
 
     auto const thrown =
-        host.evaluate("ssg.register_command('gated', function() end)");
+        host.evaluate("ssg.register('gated', 'Test Command', function() end)");
     ASSERT_EQ(thrown.error, LuaError::RuntimeFault);
     ASSERT_FALSE(host.hasCommand("gated"));
     // And the host is still usable.
@@ -239,7 +245,7 @@ TEST(aGateThatRefusesLeavesThePreviousGenerationRegistered) {
     bool refuse = false;
     auto configured = options();
     configured.publishGate =
-        [&refuse](std::vector<std::string> const&) -> LuaResult {
+        [&refuse](std::vector<LuaCommand> const&) -> LuaResult {
         return refuse ? LuaResult{LuaError::DuplicateCommand, "refused"}
                       : LuaResult{};
     };
@@ -248,14 +254,35 @@ TEST(aGateThatRefusesLeavesThePreviousGenerationRegistered) {
     }};
 
     ASSERT_TRUE(
-        host.evaluate("ssg.register_command('first', function() end)")
+        host.evaluate("ssg.register('first', 'Test Command', function() end)")
             .accepted());
     refuse = true;
     ASSERT_FALSE(
-        host.evaluate("ssg.register_command('second', function() end)")
+        host.evaluate("ssg.register('second', 'Test Command', function() end)")
             .accepted());
     ASSERT_TRUE(host.hasCommand("first"));
     ASSERT_FALSE(host.hasCommand("second"));
+}
+
+TEST(theGenerationGateReceivesAuthoredLabels) {
+    std::vector<LuaCommand> offered;
+    auto configured = options();
+    configured.publishGate =
+        [&](std::vector<LuaCommand> const& commands) -> LuaResult {
+        offered = commands;
+        return {};
+    };
+    LuaCommandHost host{std::move(configured), [](LuaInvocation const&) {
+        return LuaResult{};
+    }};
+
+    ASSERT_TRUE(
+        host.evaluate(
+                "ssg.register('user.named', 'Named Command', function() end)")
+            .accepted());
+    ASSERT_EQ(offered.size(), std::size_t{1});
+    ASSERT_EQ(offered[0].id, std::string{"user.named"});
+    ASSERT_EQ(offered[0].label, std::string{"Named Command"});
 }
 
 TEST(aGateMayNotReEnterTheHostItIsGating) {
@@ -267,7 +294,7 @@ TEST(aGateMayNotReEnterTheHostItIsGating) {
     LuaCommandHost* self = nullptr;
     auto configured = options();
     configured.publishGate =
-        [&nested, &self](std::vector<std::string> const&) -> LuaResult {
+        [&nested, &self](std::vector<LuaCommand> const&) -> LuaResult {
         if (self != nullptr) nested = self->evaluate("return 1");
         return {};
     };
@@ -277,7 +304,7 @@ TEST(aGateMayNotReEnterTheHostItIsGating) {
     self = &host;
 
     ASSERT_TRUE(
-        host.evaluate("ssg.register_command('outer', function() end)")
+        host.evaluate("ssg.register('outer', 'Test Command', function() end)")
             .accepted());
     ASSERT_EQ(nested.error, LuaError::RuntimeFault);
     // The outer evaluation still completed normally.
@@ -291,6 +318,7 @@ SSG_TEST_SUITE(test_lua) {
     RUN(registrationIsAtomicAndDuplicateSafe);
     RUN(aGateThatThrowsRollsTheEvaluationBackLikeAnyOtherRefusal);
     RUN(aGateThatRefusesLeavesThePreviousGenerationRegistered);
+    RUN(theGenerationGateReceivesAuthoredLabels);
     RUN(aGateMayNotReEnterTheHostItIsGating);
     RUN(dispatchAndPluginFaultsAreIsolated);
     RUN(commandTableArgumentReachesTheDispatcherDecodedAsAStringMap);

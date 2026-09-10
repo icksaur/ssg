@@ -6,7 +6,6 @@
 #include <ssg/Style.h>
 #include <ssg/Theme.h>
 
-#include <cctype>
 #include <mutex>
 #include <optional>
 #include <stdexcept>
@@ -22,13 +21,12 @@ std::vector<LuaCommand> scriptCommandCatalog(Commands const& commands) {
     std::vector<LuaCommand> result;
     result.reserve(commands.all().size() + 4);
     for (auto const& [id, command] : commands.all()) {
-        (void)command;
-        result.push_back({id});
+        result.push_back({id, command.label});
     }
-    result.push_back({"theme.set"});
-    result.push_back({"style.define"});
-    result.push_back({"keymap.bind"});
-    result.push_back({"keymap.unbind"});
+    result.push_back({"theme.set", "Set Theme"});
+    result.push_back({"style.define", "Define Style"});
+    result.push_back({"keymap.bind", "Bind Key"});
+    result.push_back({"keymap.unbind", "Unbind Key"});
     return result;
 }
 
@@ -41,22 +39,6 @@ std::string argumentField(
     std::string_view key) {
     auto const it = arguments.find(std::string{key});
     return it == arguments.end() ? std::string{} : it->second;
-}
-
-std::string scriptCommandLabel(std::string_view id) {
-    std::string label;
-    bool wordStart = true;
-    for (char raw : id) {
-        if (raw == '.' || raw == '_') {
-            label += ' ';
-            wordStart = true;
-            continue;
-        }
-        auto const ch = static_cast<unsigned char>(raw);
-        label += wordStart ? static_cast<char>(std::toupper(ch)) : raw;
-        wordStart = false;
-    }
-    return label;
 }
 
 LuaResult luaResult(OperationResult result) {
@@ -204,8 +186,8 @@ ScriptHost::ScriptHost(Editor& runtime, ViewActionSink viewActionSink) {
     options.commandAvailable = [editor = &runtime](std::string_view id) {
         return editor->commandRegistry().find(id) != nullptr;
     };
-    options.publishGate = [this](std::vector<std::string> const& ids) {
-        return offerGeneration(ids);
+    options.publishGate = [this](std::vector<LuaCommand> const& commands) {
+        return offerGeneration(commands);
     };
     impl_ = std::make_unique<Impl>(
         runtime, std::move(options), std::move(viewActionSink));
@@ -219,20 +201,24 @@ LuaResult ScriptHost::evaluate(std::string_view script) {
     // additive, so a line removed from it reverts that binding on the next
     // reload -- matching theme.define's replace-on-reload behavior.
     impl_->runtime.resetKeymapToDefault();
-    // The catalog swap happens inside this call, through the publish gate.  A
-    // failed script -- or a batch the catalog refuses -- leaves the previous
+    // The registry swap happens inside this call, through the publish gate.  A
+    // failed script -- or a batch the registry refuses -- leaves the previous
     // evaluation's commands registered and callable.  Neither can undo effects
     // the script already caused before failing: a theme it applied stays
     // applied.
     return impl_->host.evaluate(script);
 }
 
-LuaResult ScriptHost::offerGeneration(std::vector<std::string> const& ids) {
+LuaResult ScriptHost::offerGeneration(std::vector<LuaCommand> const& commands) {
     Commands::Replacements replacements;
-    replacements.reserve(ids.size());
-    for (auto const& id : ids) {
+    replacements.reserve(commands.size());
+    std::vector<std::string> ids;
+    ids.reserve(commands.size());
+    for (auto const& command : commands) {
+        ids.push_back(command.id);
         replacements.emplace_back(
-            id, Command{scriptCommandLabel(id), [impl = impl_.get(), id] {
+            command.id,
+            Command{command.label, [impl = impl_.get(), id = command.id] {
                 if (std::this_thread::get_id() != impl->owningThread) {
                     return CommandResult{
                         CommandError::HandlerFailed,
@@ -250,7 +236,7 @@ LuaResult ScriptHost::offerGeneration(std::vector<std::string> const& ids) {
         impl_->runtime.replaceCommands(impl_->generation, std::move(replacements));
         impl_->generation = ids;
     } catch (std::exception const& refused) {
-        // The catalog validated the whole batch before applying any of it, so
+        // The registry validated the whole batch before applying any of it, so
         // the previous generation is still installed -- and because this ran
         // before the host published, its Lua functions are still there too.
         return {LuaError::DuplicateCommand, refused.what()};

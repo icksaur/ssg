@@ -6,6 +6,7 @@
 #include "grid_test_frame.h"
 #include "test_helpers.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -144,13 +145,24 @@ TEST(aCommandAScriptRegistersIsAnOrdinaryCatalogCommand) {
 
     ASSERT_TRUE(scripts
                     .evaluate("calls = 0\n"
-                              "ssg.register_command('user.count', function()\n"
+                              "ssg.register('user.count', 'Test Command', function()\n"
                               "  calls = calls + 1\n"
                               "end)")
                     .accepted());
 
     auto const* entry = runtime->commandRegistry().find("user.count");
     ASSERT_TRUE(entry != nullptr);
+    ASSERT_EQ(entry->label, std::string{"Test Command"});
+    const auto palette = runtime->paletteView();
+    const auto candidate = std::find_if(
+        palette.commandCandidates.begin(), palette.commandCandidates.end(),
+        [](ssg::PaletteCandidate const& command) {
+            return command.id == "user.count";
+        });
+    ASSERT_TRUE(candidate != palette.commandCandidates.end());
+    if (candidate != palette.commandCandidates.end()) {
+        ASSERT_EQ(candidate->label, std::string{"Test Command"});
+    }
 
     auto const dispatched = runtime->dispatch("user.count");
     ASSERT_TRUE(dispatched.accepted());
@@ -166,13 +178,13 @@ TEST(reloadingRetiresThePreviousGenerationsCommands) {
     ssg::ScriptHost scripts{*runtime};
 
     ASSERT_TRUE(
-        scripts.evaluate("ssg.register_command('user.first', function() end)")
+        scripts.evaluate("ssg.register('user.first', 'Test Command', function() end)")
             .accepted());
     auto const* first = runtime->commandRegistry().find("user.first");
     ASSERT_TRUE(first != nullptr);
 
     ASSERT_TRUE(
-        scripts.evaluate("ssg.register_command('user.second', function() end)")
+        scripts.evaluate("ssg.register('user.second', 'Test Command', function() end)")
             .accepted());
     ASSERT_TRUE(runtime->commandRegistry().find("user.first") == nullptr);
     ASSERT_TRUE(runtime->commandRegistry().find("user.second") != nullptr);
@@ -188,7 +200,7 @@ TEST(reloadingAnUnchangedScriptSucceeds) {
     ssg::ScriptHost scripts{*runtime};
 
     std::string const script =
-        "ssg.register_command('user.same', function() end)";
+        "ssg.register('user.same', 'Test Command', function() end)";
     for (int reload = 0; reload < 3; ++reload) {
         auto const result = scripts.evaluate(script);
         if (!result.accepted()) std::cout << "  msg: " << result.message << "\n";
@@ -205,7 +217,7 @@ TEST(aFailedReloadKeepsThePreviousGenerationDispatchable) {
     ssg::ScriptHost scripts{*runtime};
 
     ASSERT_TRUE(
-        scripts.evaluate("ssg.register_command('user.kept', function() end)")
+        scripts.evaluate("ssg.register('user.kept', 'Test Command', function() end)")
             .accepted());
     ASSERT_TRUE(!scripts.evaluate("this is not lua").accepted());
 
@@ -221,7 +233,7 @@ TEST(aRetiredScriptCommandIsNoLongerDispatchable) {
     ssg::ScriptHost scripts{*runtime};
 
     ASSERT_TRUE(
-        scripts.evaluate("ssg.register_command('user.gone', function() end)")
+        scripts.evaluate("ssg.register('user.gone', 'Test Command', function() end)")
             .accepted());
     ASSERT_TRUE(scripts.evaluate("noop = true").accepted());
     ASSERT_TRUE(!runtime->dispatch("user.gone").accepted());
@@ -235,9 +247,9 @@ TEST(aScriptCommandCollidingWithABuiltInIsRefusedWithoutLosingTheEditor) {
     ssg::ScriptHost scripts{*runtime};
 
     ASSERT_TRUE(
-        !scripts.evaluate("ssg.register_command('file.save', function() end)")
+        !scripts.evaluate("ssg.register('file.save', 'Test Command', function() end)")
              .accepted());
-    // The built-in is untouched: the catalog refused the batch before applying
+    // The built-in is untouched: the registry refused the batch before applying
     // any of it.
     auto const* builtIn = runtime->commandRegistry().find("file.save");
     ASSERT_TRUE(builtIn != nullptr);
@@ -247,7 +259,7 @@ TEST(aScriptCommandCollidingWithABuiltInIsRefusedWithoutLosingTheEditor) {
 
 
 TEST(aRefusedGenerationLeavesThePreviousOneWhollyIntact) {
-    // The catalog is asked BEFORE the host makes the new registrations its own,
+    // The registry is asked BEFORE the host makes the new registrations its own,
     // so a refused batch abandons the whole evaluation: the previous
     // generation keeps both its catalog entries and the Lua functions behind
     // them.  Asking afterwards would leave one of the two already destroyed.
@@ -257,15 +269,15 @@ TEST(aRefusedGenerationLeavesThePreviousOneWhollyIntact) {
     ssg::ScriptHost scripts{*runtime};
 
     ASSERT_TRUE(
-        scripts.evaluate("ssg.register_command('user.old', function() end)")
+        scripts.evaluate("ssg.register('user.old', 'Test Command', function() end)")
             .accepted());
     ASSERT_TRUE(runtime->commandRegistry().find("user.old") != nullptr);
 
     // Collides with a built-in, so the catalog refuses the whole batch.
     ASSERT_TRUE(
         !scripts
-             .evaluate("ssg.register_command('user.new', function() end);"
-                       "ssg.register_command('file.save', function() end)")
+             .evaluate("ssg.register('user.new', 'Test Command', function() end);"
+                       "ssg.register('file.save', 'Test Command', function() end)")
              .accepted());
 
     ASSERT_TRUE(runtime->commandRegistry().find("user.new") == nullptr);
@@ -287,7 +299,7 @@ TEST(aScriptCommandCanCallCommandsAndBothArePerformedInOrder) {
     ssg::ScriptHost scripts{*runtime};
 
     ASSERT_TRUE(scripts
-                    .evaluate("ssg.register_command('user.rebind', function()\n"
+                    .evaluate("ssg.register('user.rebind', 'Test Command', function()\n"
                               "  ssg.command('keymap.bind', "
                               "{sequence = 'Mod+KeyY', command = 'file.save'})\n"
                               "  ssg.command('keymap.unbind', "
@@ -312,7 +324,7 @@ TEST(aFailureAmongQueuedCommandsIsReportedAndNamesTheCommand) {
     ssg::ScriptHost scripts{*runtime};
 
     ASSERT_TRUE(scripts
-                    .evaluate("ssg.register_command('user.bad', function()\n"
+                    .evaluate("ssg.register('user.bad', 'Test Command', function()\n"
                               "  ssg.command('keymap.bind', "
                               "{sequence = 'not a key', command = 'file.save'})\n"
                               "end)")
@@ -333,7 +345,7 @@ TEST(aScriptThatQueuesWithoutBoundIsRefusedRatherThanSpinning) {
     ssg::ScriptHost scripts{*runtime};
 
     ASSERT_TRUE(scripts
-                    .evaluate("ssg.register_command('user.flood', function()\n"
+                    .evaluate("ssg.register('user.flood', 'Test Command', function()\n"
                               "  for _ = 1, 500 do\n"
                               "    ssg.command('keymap.unbind', "
                               "{sequence = 'Escape KeyY'})\n"
@@ -359,7 +371,7 @@ TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
 
     ASSERT_TRUE(scripts
                     .evaluate("calls = 0\n"
-                              "ssg.register_command('user.owned', function()\n"
+                              "ssg.register('user.owned', 'Test Command', function()\n"
                               "  calls = calls + 1\n"
                               "end)")
                     .accepted());
@@ -401,7 +413,7 @@ TEST(aScriptCommandRunFromThePaletteAlsoRunsWhatItAsksFor) {
     // The queued command fails, which is what makes running it observable:
     // an unrun queue would leave the palette reporting success.
     ASSERT_TRUE(scripts
-                    .evaluate("ssg.register_command('user.viapalette', "
+                    .evaluate("ssg.register('user.viapalette', 'Test Command', "
                               "function()\n"
                               "  ssg.command('keymap.bind', "
                               "{sequence = 'not a key', command = 'file.save'})\n"

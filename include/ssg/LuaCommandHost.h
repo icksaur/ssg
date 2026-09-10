@@ -34,6 +34,7 @@ struct LuaResult {
 
 struct LuaCommand {
     std::string id;
+    std::string label;
 };
 
 struct LuaInvocation {
@@ -63,7 +64,7 @@ using LuaDispatcher = std::function<LuaResult(LuaInvocation const&)>;
 // generation's Lua functions already released, with nothing able to restore
 // them.
 using LuaGenerationGate =
-    std::function<LuaResult(std::vector<std::string> const& commandIds)>;
+    std::function<LuaResult(std::vector<LuaCommand> const& commands)>;
 
 struct LuaCommandHostOptions {
     std::vector<LuaCommand> commands;
@@ -79,7 +80,7 @@ public:
     // installing the API and checking that it is documented read the same list
     // rather than two hand-maintained ones.
     static constexpr std::string_view kApiFunctions[]{"command",
-                                                      "register_command"};
+                                                      "register"};
 
     LuaCommandHost(LuaCommandHostOptions options, LuaDispatcher dispatcher);
     ~LuaCommandHost();

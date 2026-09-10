@@ -213,13 +213,13 @@ tree. `init.lua` configures the glyphs and sizes above, not UI structure.
 
 ### Your own commands
 
-`ssg.register_command` defines a command in your own words and gives it a
-name. It becomes a real ssg command: it shows up in the command palette, you
-can bind it to a key with `keymap.bind`, and it runs the same way every
+`ssg.register` defines a command with an ID, a label shown to people, and a
+function. It becomes a real ssg command: it shows up in the command palette,
+you can bind it to a key with `keymap.bind`, and it runs the same way every
 built-in does.
 
 ```lua
-ssg.register_command("my.hotpink", function()
+ssg.register("my.hotpink", "Hot Pink", function()
     ssg.command("theme.set", { keyword = "#ff00ff", selection = "#402038" })
 end)
 
@@ -235,15 +235,13 @@ twice in one file, the whole script is rejected and your previous commands keep
 working.
 
 Your commands live exactly as long as the lines that define them. Every reload
-replaces the whole set: delete a `register_command` line and save, and that
+replaces the whole set: delete a `register` line and save, and that
 command stops existing. A key still bound to it does nothing. A reload that
 fails leaves your previous commands in place and working.
 
-**Your function may only call the commands listed on this page.** These are the
-same ones `init.lua` can call directly -- `theme.set`,
-`style.define`, `keymap.bind` and `keymap.unbind`. Anything else, including
-things like `file.save`, is refused. That list is deliberately small and will
-grow deliberately.
+Your function may call any no-argument command available in the command palette,
+plus the table-based configuration operations `theme.set`, `style.define`,
+`keymap.bind`, and `keymap.unbind`.
 
 Two things about `ssg.command` inside a registered function are worth knowing,
 because neither is obvious:
