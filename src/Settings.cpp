@@ -202,13 +202,6 @@ std::string encodeString(std::string_view value) {
     return encoded;
 }
 
-int hexValue(char value) noexcept {
-    if (value >= '0' && value <= '9') return value - '0';
-    if (value >= 'A' && value <= 'F') return value - 'A' + 10;
-    if (value >= 'a' && value <= 'f') return value - 'a' + 10;
-    return -1;
-}
-
 std::optional<std::string> decodeString(std::string_view value) {
     std::string decoded;
     for (std::size_t i = 0; i < value.size(); ++i) {
@@ -217,10 +210,11 @@ std::optional<std::string> decodeString(std::string_view value) {
             continue;
         }
         if (i + 2 >= value.size()) return std::nullopt;
-        const int high = hexValue(value[i + 1]);
-        const int low = hexValue(value[i + 2]);
-        if (high < 0 || low < 0) return std::nullopt;
-        decoded.push_back(static_cast<char>((high << 4) | low));
+        unsigned int byte{};
+        const auto first = value.data() + i + 1;
+        const auto [end, error] = std::from_chars(first, first + 2, byte, 16);
+        if (error != std::errc{} || end != first + 2) return std::nullopt;
+        decoded.push_back(static_cast<char>(byte));
         i += 2;
     }
     return decoded;
@@ -336,21 +330,6 @@ EffectiveSetting SettingsModel::resolve(SettingKey key) const {
     throw std::logic_error("setting defaults are incomplete");
 }
 
-std::optional<SettingValue> SettingsModel::scopedValue(
-    SettingScope scope, SettingKey key) const {
-    if (!valid(scope)) throw std::invalid_argument("setting scope is not recognized");
-    if (!valid(key)) throw std::invalid_argument("setting key is not recognized");
-    return scopes_[index(scope)].values[index(key)];
-}
-
-SettingsViewState SettingsModel::viewState() const {
-    SettingsViewState state;
-    for (const auto key : kAllKeys) {
-        state.entries[index(key)] = {key, resolve(key)};
-    }
-    return state;
-}
-
 SettingMutation SettingsModel::set(
     SettingScope scope, SettingKey key, SettingValue value) {
     if (!valid(key)) {
@@ -374,30 +353,6 @@ SettingMutation SettingsModel::set(
     auto& slot = data.values[index(key)];
     const auto before = resolve(key);
     slot = std::move(value);
-    const auto after = resolve(key);
-    return {std::nullopt, SettingsDelta{key, before, after}};
-}
-
-SettingMutation SettingsModel::reset(SettingScope scope, SettingKey key) {
-    if (!valid(key)) {
-        return {{SettingError{SettingErrorCode::UnknownKey, key,
-                              "setting key is not recognized"}},
-                std::nullopt};
-    }
-    if (!valid(scope)) {
-        return {{SettingError{SettingErrorCode::ImmutableScope, key,
-                              "setting scope is not recognized"}},
-                std::nullopt};
-    }
-    if (scope == SettingScope::Defaults) {
-        return {{SettingError{SettingErrorCode::ImmutableScope, key,
-                              "default settings are immutable"}},
-                std::nullopt};
-    }
-    auto& data = scopes_[index(scope)];
-    auto& slot = data.values[index(key)];
-    const auto before = resolve(key);
-    slot.reset();
     const auto after = resolve(key);
     return {std::nullopt, SettingsDelta{key, before, after}};
 }

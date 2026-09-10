@@ -167,7 +167,6 @@ public:
         std::string_view suggestedLabel, std::string_view initialText,
         DocumentMode mode);
     [[nodiscard]] WorkspaceResult openFile(std::string_view path);
-    [[nodiscard]] WorkspaceResult openRecent(std::size_t index);
     [[nodiscard]] WorkspaceResult openDroppedContent(
         std::span<const std::uint8_t> bytes,
         std::string_view suggestedLabel);
@@ -194,14 +193,6 @@ public:
                                                       std::string_view newPath,
                                                       std::string content,
                                                       bool replaceBuffer);
-    [[nodiscard]] WorkspaceResult reopenWithEncoding(
-        FileDocumentId document, TextEncoding encoding);
-    [[nodiscard]] WorkspaceResult setEncoding(
-        FileDocumentId document, TextEncoding encoding);
-    [[nodiscard]] WorkspaceResult setLineEnding(
-        FileDocumentId document, LineEnding lineEnding);
-    [[nodiscard]] WorkspaceResult setFinalNewline(
-        FileDocumentId document, bool finalNewline);
     [[nodiscard]] WorkspaceResult renameFile(FileDocumentId document,
                                               std::string_view path);
     [[nodiscard]] WorkspaceResult deleteFile(FileDocumentId document);

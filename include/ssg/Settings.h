@@ -89,19 +89,6 @@ struct EffectiveSetting {
     friend bool operator==(const EffectiveSetting&, const EffectiveSetting&) = default;
 };
 
-struct SettingViewEntry {
-    SettingKey key = SettingKey::IndentWidth;
-    EffectiveSetting effective{std::uint32_t{4}, SettingScope::Defaults};
-
-    friend bool operator==(const SettingViewEntry&, const SettingViewEntry&) = default;
-};
-
-struct SettingsViewState {
-    std::array<SettingViewEntry, kSettingKeyCount> entries{};
-
-    friend bool operator==(const SettingsViewState&, const SettingsViewState&) = default;
-};
-
 struct SettingsDelta {
     SettingKey key = SettingKey::IndentWidth;
     EffectiveSetting before{std::uint32_t{4}, SettingScope::Defaults};
@@ -149,31 +136,13 @@ struct SettingSetArguments {
     bool operator==(const SettingSetArguments&) const = default;
 };
 
-struct SettingResetArguments {
-    SettingScope scope = SettingScope::User;
-    SettingKey key = SettingKey::IndentWidth;
-
-    bool operator==(const SettingResetArguments&) const = default;
-};
-
-struct SettingResetScopeArguments {
-    SettingScope scope = SettingScope::User;
-
-    bool operator==(const SettingResetScopeArguments&) const = default;
-};
-
 class SettingsModel {
 public:
     SettingsModel();
 
     [[nodiscard]] EffectiveSetting resolve(SettingKey key) const;
-    [[nodiscard]] std::optional<SettingValue> scopedValue(
-        SettingScope scope, SettingKey key) const;
-    [[nodiscard]] SettingsViewState viewState() const;
-
     [[nodiscard]] SettingMutation set(
         SettingScope scope, SettingKey key, SettingValue value);
-    [[nodiscard]] SettingMutation reset(SettingScope scope, SettingKey key);
     [[nodiscard]] std::string exportScope(SettingScope scope) const;
     [[nodiscard]] SettingsIoResult importScope(
         SettingScope scope, std::string_view document);

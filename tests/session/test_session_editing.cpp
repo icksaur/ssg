@@ -37,24 +37,6 @@ std::filesystem::path uniqueRoot() {
     return root;
 }
 
-std::string readText(const std::filesystem::path& path) {
-    std::ifstream input{path, std::ios::binary};
-    return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
-}
-
-ssg::WorkspaceSnapshot diskSnapshot(
-    const std::filesystem::path& root, std::uint64_t revision) {
-    ssg::WorkspaceSnapshot snapshot;
-    snapshot.revision = revision;
-    for (auto const& entry :
-         std::filesystem::recursive_directory_iterator{root}) {
-        if (!entry.is_regular_file()) continue;
-        auto relative = entry.path().lexically_relative(root).generic_string();
-        snapshot.files.push_back({relative, readText(entry.path())});
-    }
-    return snapshot;
-}
-
 TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
     auto root = uniqueRoot();
     auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
@@ -106,161 +88,6 @@ TEST(typingUndoBreaksOnWordAndLineBoundaries) {
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcx\ny"});
     ASSERT_TRUE(runtime.dispatch("edit.undo").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abcx\n"});
-}
-
-TEST(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply) {
-    auto root = uniqueRoot();
-    std::ofstream{root / "workspace" / "other.txt"} << "cat";
-    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"edit.txt"}).accepted());
-
-    ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
-    auto oracle = ssg::previewWorkspaceReplace(
-        diskSnapshot(root / "workspace", 1), request, "dog");
-    ASSERT_TRUE(oracle.accepted());
-    ASSERT_EQ(oracle.preview->changes.size(), std::size_t{1});
-
-    auto preview = runtime.workspacePreview(ssg::WorkspaceReplaceArguments{request, "dog"});
-    ASSERT_TRUE(preview.accepted());
-    auto apply = runtime.workspaceApply();
-    ASSERT_TRUE(apply.accepted());
-    ASSERT_EQ(readText(root / "workspace" / "other.txt"), std::string{"dog"});
-    ASSERT_EQ(readText(root / "workspace" / "edit.txt"), std::string{"abc"});
-    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"abc"});
-}
-
-TEST(workspaceReplaceRejectsStaleAndOutOfBoundsPreview) {
-    auto root = uniqueRoot();
-    auto workspace = root / "workspace";
-    std::filesystem::create_directories(workspace / ".ssg" / "scratch");
-    std::filesystem::create_directories(workspace / ".ssg" / "recovery");
-    std::ofstream{workspace / "other.txt"} << "cat";
-    auto created = ssg::createEditor({
-        workspace, workspace / ".ssg" / "scratch",
-        workspace / ".ssg" / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-
-    ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
-    auto oracle = ssg::previewWorkspaceReplace(
-        diskSnapshot(workspace, 1), request, "dog");
-    ASSERT_TRUE(oracle.accepted());
-    ASSERT_TRUE(runtime.workspacePreview(ssg::WorkspaceReplaceArguments{request, "dog"}).accepted());
-
-    auto escaped = *oracle.preview;
-    escaped.changes.front().path = "../outside.txt";
-    auto rejectedPath = runtime.workspaceApply(escaped);
-    ASSERT_FALSE(rejectedPath.accepted());
-    ASSERT_FALSE(std::filesystem::exists(root / "outside.txt"));
-
-    std::ofstream{workspace / ".ssg" / "scratch" / "hidden.txt"} << "cat";
-    auto runtimeState = *oracle.preview;
-    runtimeState.changes.front().path = ".ssg/scratch/hidden.txt";
-    runtimeState.changes.front().before = "cat";
-    runtimeState.changes.front().after = "dog";
-    auto rejectedState = runtime.workspaceApply(runtimeState);
-    ASSERT_FALSE(rejectedState.accepted());
-    ASSERT_EQ(readText(workspace / ".ssg" / "scratch" / "hidden.txt"), std::string{"cat"});
-
-    std::ofstream{workspace / "other.txt", std::ios::binary | std::ios::trunc} << "fresh";
-    auto rejectedStale = runtime.workspaceApply();
-    ASSERT_FALSE(rejectedStale.accepted());
-    ASSERT_EQ(readText(workspace / "other.txt"), std::string{"fresh"});
-}
-
-TEST(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk) {
-    auto root = uniqueRoot();
-    std::ofstream{root / "workspace" / "edit.txt"} << "cat cat";
-    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"edit.txt"}).accepted());
-
-    ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
-    auto oracle = ssg::previewWorkspaceReplace(
-        diskSnapshot(root / "workspace", 1), request, "dog");
-    ASSERT_TRUE(oracle.accepted());
-    ASSERT_TRUE(runtime.workspacePreview(ssg::WorkspaceReplaceArguments{request, "dog"}).accepted());
-    ASSERT_TRUE(runtime.workspaceApply().accepted());
-    ASSERT_EQ(readText(root / "workspace" / "edit.txt"), std::string{"dog dog"});
-    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"dog dog"});
-    auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
-    ASSERT_TRUE(snapshot.has_value());
-    ASSERT_EQ(snapshot->documentText, std::string{"dog dog"});
-}
-
-TEST(workspaceSearchAndReplaceExcludeRuntimeStateRoots) {
-    auto root = uniqueRoot();
-    auto workspace = root / "workspace";
-    std::filesystem::create_directories(workspace / ".ssg" / "scratch");
-    std::filesystem::create_directories(workspace / ".ssg" / "recovery");
-    std::ofstream{workspace / "visible.txt"} << "secret";
-    std::ofstream{workspace / ".ssg" / "scratch" / "hidden.txt"} << "secret";
-    std::ofstream{workspace / ".ssg" / "recovery" / "journal.txt"} << "secret";
-
-    auto created = ssg::createEditor({
-        workspace, workspace / ".ssg" / "scratch",
-        workspace / ".ssg" / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-
-    (void)runtime.workspaceSearch("#secret");
-    ssg::FindRequest request{"secret", {}, std::nullopt, 100000, nullptr};
-    ASSERT_TRUE(runtime.workspacePreview(ssg::WorkspaceReplaceArguments{request, "public"}).accepted());
-    ASSERT_TRUE(runtime.workspaceApply().accepted());
-    ASSERT_EQ(readText(workspace / "visible.txt"), std::string{"public"});
-    ASSERT_EQ(readText(workspace / ".ssg" / "scratch" / "hidden.txt"), std::string{"secret"});
-    ASSERT_EQ(readText(workspace / ".ssg" / "recovery" / "journal.txt"), std::string{"secret"});
-}
-
-TEST(workspaceSearchAndReplaceHonorIgnoreWithOpenBufferPrecedence) {
-    auto root = uniqueRoot();
-    auto workspace = root / "workspace";
-    std::ofstream{workspace / ".gitignore"} << "ignored-*.txt\n";
-    std::ofstream{workspace / "visible.txt"} << "secret";
-    std::ofstream{workspace / "ignored-closed.txt"} << "secret";
-    std::ofstream{workspace / "ignored-open.txt"} << "secret";
-    const auto init =
-        "git -C \"" + workspace.string() + "\" init -q";
-    ASSERT_EQ(std::system(init.c_str()), 0);
-
-    auto created = ssg::createEditor(
-        {workspace, root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"ignored-open.txt"}).accepted());
-    ASSERT_TRUE(ssg::test::typeText(runtime, "unsaved ").accepted());
-
-    (void)runtime.workspaceSearch("#secret");
-    while (runtime.workspaceSearchPending()) {
-        runtime.advanceWorkspaceSearch();
-    }
-    std::vector<std::string> paths;
-    for (const auto& result : runtime.search.viewState().results) {
-        paths.push_back(result.path);
-    }
-    ASSERT_EQ(paths, (std::vector<std::string>{
-                         "ignored-open.txt", "visible.txt"}));
-
-    ssg::FindRequest request{"secret", {}, std::nullopt,
-                             100000, nullptr};
-    ASSERT_TRUE(runtime.workspacePreview(
-        ssg::WorkspaceReplaceArguments{request, "public"}).accepted());
-    ASSERT_TRUE(runtime.workspaceApply().accepted());
-    ASSERT_EQ(readText(workspace / "visible.txt"),
-              std::string{"public"});
-    ASSERT_EQ(readText(workspace / "ignored-closed.txt"),
-              std::string{"secret"});
-    ASSERT_EQ(readText(workspace / "ignored-open.txt"),
-              std::string{"unsaved public"});
-    std::filesystem::remove_all(root);
 }
 
 TEST(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork) {
@@ -1470,11 +1297,6 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
 SSG_TEST_SUITE(test_session_editing) {
     RUN(runtimeTextSelectionAndHistoryMatchFeatureOperations);
     RUN(typingUndoBreaksOnWordAndLineBoundaries);
-    RUN(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply);
-    RUN(workspaceReplaceRejectsStaleAndOutOfBoundsPreview);
-    RUN(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk);
-    RUN(workspaceSearchAndReplaceExcludeRuntimeStateRoots);
-    RUN(workspaceSearchAndReplaceHonorIgnoreWithOpenBufferPrecedence);
     RUN(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork);
     RUN(searchPanelActivatesTheSelectedResultAtItsMatchColumn);
     RUN(searchPanelPointerActivationRevealsTheMatch);

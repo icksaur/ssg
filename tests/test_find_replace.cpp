@@ -187,18 +187,6 @@ TEST(currentReplaceIsAtomicOneUndoUnitAndStaleSafe) {
     ASSERT_EQ(document.snapshot(), before);
 }
 
-TEST(workspacePreviewProducesReplacements) {
-    WorkspaceSnapshot workspace{
-        1,
-        {{"a.txt", "cat cat"}, {"b.txt", "dog cat"}, {"c.txt", "none"}},
-    };
-    FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
-    auto preview = previewWorkspaceReplace(workspace, request, "x");
-    ASSERT_TRUE(preview.accepted());
-    ASSERT_EQ(preview.preview->changes.size(), std::size_t{2});
-    ASSERT_EQ(preview.preview->changes[0].after, std::string{"x x"});
-}
-
 TEST(viewStateTransitionsAreExact) {
     Document document{"alpha alpha"};
     FindReplaceController controller;
@@ -225,7 +213,6 @@ SSG_TEST_SUITE(test_find_replace) {
     RUN(ssg::regexOracleCoversGrammarCaseWordAndInvalidPattern);
     RUN(ssg::zeroWidthAdvancesOneUnicodeScalarAndBudgetCancels);
     RUN(ssg::currentReplaceIsAtomicOneUndoUnitAndStaleSafe);
-    RUN(ssg::workspacePreviewProducesReplacements);
     RUN(ssg::viewStateTransitionsAreExact);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

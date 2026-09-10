@@ -208,7 +208,9 @@ public:
     Editor& operator=(Editor&&) = delete;
 
     [[nodiscard]] PumpResult pump();
+    // CMD-5: no command handler runs while another handler is executing.
     [[nodiscard]] CommandResult dispatch(std::string_view commandId);
+    // CMD-6: payload-bearing client operations remain typed through application.
     [[nodiscard]] ClientInputResult input(ClientInput const& input);
     [[nodiscard]] bool deferDispatch(std::string commandId);
     [[nodiscard]] bool dispatchInProgress() const noexcept;
@@ -226,10 +228,6 @@ public:
     [[nodiscard]] CompiledKeymap const& resolveInputKeymap();
     void focusEditor();
 
-    [[nodiscard]] WorkspacePreviewResult workspacePreview(
-        WorkspaceReplaceArguments args);
-    [[nodiscard]] WorkspaceApplyResult workspaceApply(
-        std::optional<WorkspaceReplacePreview> expected = std::nullopt);
     [[nodiscard]] WorkspaceSearchState workspaceSearch(std::string query);
     [[nodiscard]] FindReplaceOperationResult updateFindQuery(std::string query);
     [[nodiscard]] FindReplaceOperationResult updateReplacement(
@@ -316,8 +314,6 @@ public:
     Style style{};
     // The init.lua-composed header/footer,
     // pushed by the host after each init.lua evaluation via
-    std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
-    std::uint64_t workspaceReplaceGeneration = 0;
     mutable std::mutex operationMutex;
     Commands commands;
     // Commands a running handler asked to dispatch, run in order once the
@@ -383,9 +379,10 @@ public:
         std::vector<DeferredCommand> commands_;
     };
 
+    // Nested requests queue by ID and drain after the current handler,
+    // stopping at the first failure.
     DeferredCommandQueue deferredCommands;
 
-    CommandResult dispatchById(std::string_view commandId);
     CommandResult dispatchLocked(std::string_view commandId);
     // The open file picker's candidate set, built when the picker opens and
     // rebuilt on filesystem refresh only while that picker remains open.
@@ -413,10 +410,7 @@ public:
     [[nodiscard]] TabLifecycleResult reopenTab(
         const TabState& tab, const RecoveryRecordId& compensation);
 
-    [[nodiscard]] WorkspaceSnapshot snapshot(std::uint64_t revision) const;
     [[nodiscard]] WorkspaceCorpus workspaceCorpus() const;
-    [[nodiscard]] WorkspaceApplyResult applyWorkspaceReplace(
-        const WorkspaceReplacePreview& preview);
     [[nodiscard]] std::optional<FileDocumentId> activeDocumentId() const;
     [[nodiscard]] const TabState* activeTabState() const;
     // Whether the active tab shows a live diff. A guard several command
@@ -531,8 +525,6 @@ public:
                                              std::string_view content);
     [[nodiscard]] bool
     openOrRevealFollowTargetProgrammatic(const FollowTarget& target);
-    [[nodiscard]] bool revealDiffTarget(const FollowTarget& target,
-                                        NavigationClass classification);
     void recordNavigation(NavigationClass classification);
     [[nodiscard]] OperationResult splitPane(SplitAxis axis);
     [[nodiscard]] OperationResult closePane();
@@ -592,19 +584,9 @@ public:
 [[nodiscard]] std::string tabMessage(TabResult const& result);
 [[nodiscard]] OperationResult createFileByPath(Editor& runtime,
                                                 std::string_view path);
-[[nodiscard]] OperationResult openRecentFile(Editor& runtime,
-                                              std::size_t index);
 [[nodiscard]] OperationResult openDroppedContent(
     Editor& runtime, std::span<const std::uint8_t> bytes,
     std::string_view label);
-[[nodiscard]] OperationResult reopenWithEncoding(Editor& runtime,
-                                                  TextEncoding encoding);
-[[nodiscard]] OperationResult setFileEncoding(Editor& runtime,
-                                               TextEncoding encoding);
-[[nodiscard]] OperationResult setFileLineEnding(Editor& runtime,
-                                                 LineEnding lineEnding);
-[[nodiscard]] OperationResult setFileFinalNewline(Editor& runtime,
-                                                   bool finalNewline);
 [[nodiscard]] OperationResult applyFilePathCompletion(
     Editor& runtime, PromptCompletion completion, std::string_view path);
 [[nodiscard]] OperationResult applyGotoLine(Editor& runtime,
@@ -612,19 +594,4 @@ public:
 [[nodiscard]] OperationResult navigateTo(
     Editor& runtime, NavigationTarget target,
     NavigationOrigin origin = NavigationOrigin::User);
-[[nodiscard]] OperationResult selectTreeNode(Editor& runtime,
-                                              TreeNodeId nodeId);
-[[nodiscard]] OperationResult invokeTreeNodeCommand(
-    Editor& runtime, TreeCommandInvocation invocation);
-
-enum class DiffNavigation : std::uint8_t {
-    NextHunk,
-    PreviousHunk,
-    OpenFile,
-};
-
-[[nodiscard]] OperationResult navigateDiff(Editor& runtime,
-                                           DiffFileId fileId,
-                                           DiffNavigation navigation);
-
 } // namespace ssg

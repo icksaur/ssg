@@ -322,24 +322,6 @@ TEST(aGenuineExternalEditAfterASelfSaveIsNotSuppressed) {
     ASSERT_EQ(externalFiles(*session.runtime).size(), 1U);
 }
 
-TEST(aCleanExternalReloadDecodesNonUtf8BytesThroughTheDocumentsEncoding) {
-    auto session = Session::open("nonutf8_reload", std::string{"\xe9\n"}, false);
-    ASSERT_TRUE(
-        ssg::reopenWithEncoding(*session.runtime,
-                                ssg::TextEncoding::Iso88591).accepted);
-    // An external writer replaces the file with more Latin-1 bytes.
-    writeFile(session.workspacePath("note.txt"), std::string{"\xe9\xe9\n"});
-    session.runtime->external.ingest(
-        {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
-
-    // The clean auto-reload decoded the raw disk bytes through the document's
-    // encoding (each 0xE9 -> U+00E9 -> UTF-8 "\xC3\xA9"), never assuming UTF-8, so
-    // the buffer is neither corrupted nor emptied.
-    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime),
-              std::string{"\xC3\xA9\xC3\xA9\n"});
-    ASSERT_TRUE(externalFiles(*session.runtime).empty());
-}
-
 TEST(aFailedDirtyRenameAdoptionDoesNotPublishAnUnresolvableNewPathEntry) {
     // note.txt is dirty AND other.txt is open, so adopting note.txt's rename onto
     // other.txt's path must fail (the destination is already open).
@@ -425,31 +407,6 @@ TEST(aSecondExternalChangeWhileActionsArePendingUpdatesNotDuplicates) {
     const auto files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
     ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyModified);
-}
-
-TEST(aCleanExternalReloadDecodesUtf16BytesWithNulThroughTheDocumentsEncoding) {
-    // Establish a clean UTF-16LE document. The initial bytes are a valid UTF-16LE
-    // unit with no NUL, so reopen-with-encoding adopts them cleanly (updating the
-    // persisted status, unlike set-encoding which would leave the buffer dirty).
-    auto session = Session::open("utf16_reload", std::string{'\x41', '\x42'}, false);
-    ASSERT_TRUE(
-        ssg::reopenWithEncoding(*session.runtime,
-                                ssg::TextEncoding::Utf16le).accepted);
-    // An external writer replaces the file with real UTF-16LE bytes. Each ASCII
-    // code unit carries a trailing NUL, which the raw-bytes binary guard would
-    // wrongly reject -- the reload must decode through the document's UTF-16
-    // encoding and reject only on a genuine decode failure.
-    writeFile(session.workspacePath("note.txt"),
-              std::string{'\x68', '\x00', '\x69', '\x00', '\x21', '\x00',
-                          '\x0a', '\x00'});
-    session.runtime->external.ingest(
-        {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
-
-    // The clean auto-reload decoded the UTF-16LE disk bytes through the document's
-    // encoding ("hi!\n"), never treating the legitimate NUL bytes as binary, so
-    // the buffer is neither corrupted nor emptied.
-    ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime), std::string{"hi!\n"});
-    ASSERT_TRUE(externalFiles(*session.runtime).empty());
 }
 
 TEST(anOverflowResyncsOpenDocumentsSoAChangeDuringTheOverflowRaisesItsConflict) {
@@ -874,8 +831,6 @@ SSG_TEST_SUITE(test_session_external_modification) {
     RUN(exmdOnAnAlreadySelectedPresentIdStillActsOnIt);
     RUN(anSsgSaveIsCorrelatedAndRaisesNoExternalNotice);
     RUN(aGenuineExternalEditAfterASelfSaveIsNotSuppressed);
-    RUN(aCleanExternalReloadDecodesNonUtf8BytesThroughTheDocumentsEncoding);
-    RUN(aCleanExternalReloadDecodesUtf16BytesWithNulThroughTheDocumentsEncoding);
     RUN(aRenameRetiresThePendingEntryKeyedByThePreviousPath);
     RUN(aFailedDirtyRenameAdoptionDoesNotPublishAnUnresolvableNewPathEntry);
     RUN(aFailedRenameLeavesNoOrphanDiffEntry);

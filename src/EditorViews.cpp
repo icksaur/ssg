@@ -350,8 +350,7 @@ PaletteViewState Editor::paletteView() const {
             view.activePicker = screen.openPickerActivation();
         }
     }
-    // The registry is live so script replacements appear without a separate
-    // revision coupling this projection to key routing.
+    // CMD-8: palette user commands project the same live registry as Lua.
     for (auto const& [id, command] : commands.all()) {
         std::string detail;
         if (auto sequence = KeymapMatcher{keymap}.preferredBinding(id)) {

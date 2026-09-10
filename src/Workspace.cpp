@@ -114,19 +114,6 @@ LineTerminator defaultTerminator(const TextEncodingStatus& status) {
     return LineTerminator::Lf;
 }
 
-LineTerminator lineEndingTerminator(LineEnding lineEnding) {
-    switch (lineEnding) {
-        case LineEnding::Crlf:
-            return LineTerminator::Crlf;
-        case LineEnding::Cr:
-            return LineTerminator::Cr;
-        case LineEnding::Lf:
-        case LineEnding::Mixed:
-            return LineTerminator::Lf;
-    }
-    return LineTerminator::Lf;
-}
-
 DecodedText textForSave(const DecodedText& original,
                           std::string currentText) {
     if (currentText == original.utf8) {
@@ -772,22 +759,6 @@ WorkspaceResult Workspace::openFile(std::string_view rawPath) {
     }
 }
 
-WorkspaceResult Workspace::openRecent(std::size_t index) {
-    if (index >= impl_->recent.size()) {
-        return failure(WorkspaceError::NotFound,
-                       "recent-file index does not exist");
-    }
-    const auto path = impl_->recent[index];
-    const auto result = openFile(path);
-    if (result.error == WorkspaceError::NotFound ||
-        result.error == WorkspaceError::IoFailed) {
-        impl_->recent.erase(
-            std::remove(impl_->recent.begin(), impl_->recent.end(), path),
-            impl_->recent.end());
-    }
-    return result;
-}
-
 WorkspaceResult Workspace::openDroppedContent(
     std::span<const std::uint8_t> bytes,
     std::string_view suggestedLabel) {
@@ -1002,123 +973,6 @@ WorkspaceResult Workspace::adoptExternalRename(FileDocumentId id,
     entry->persistedStatus = decoded.text->status;
     entry->baseline = captureDiskBaseline(*destination, entry->rawBytes);
     impl_->touchRecent(path);
-    WorkspaceResult result;
-    result.document = id;
-    return result;
-}
-
-WorkspaceResult Workspace::reopenWithEncoding(FileDocumentId id,
-                                               TextEncoding encoding) {
-    auto* entry = impl_->find(id);
-    if (!entry) {
-        return failure(WorkspaceError::NotFound,
-                       "workspace document does not exist");
-    }
-    if (state(id)->dirty) {
-        return failure(WorkspaceError::ReadOnly,
-                       "dirty document cannot be reopened with encoding");
-    }
-    if (containsBinaryNul(asUnsignedBytes(entry->rawBytes))) {
-        return failure(WorkspaceError::DecodeFailed,
-                       "binary file cannot be reopened with encoding");
-    }
-    auto decoded = decodeText(asUnsignedBytes(entry->rawBytes), encoding);
-    if (!decoded.accepted()) {
-        return failure(WorkspaceError::DecodeFailed, decoded.error->message);
-    }
-    entry->contentKind = FileContentKind::Text;
-    entry->decoded = std::move(*decoded.text);
-    entry->document = Document{entry->decoded.utf8};
-    entry->persistedStatus = entry->decoded.status;
-    WorkspaceResult result;
-    result.document = id;
-    return result;
-}
-
-WorkspaceResult Workspace::setEncoding(FileDocumentId id,
-                                       TextEncoding encoding) {
-    auto* entry = impl_->find(id);
-    if (!entry) {
-        return failure(WorkspaceError::NotFound,
-                       "workspace document does not exist");
-    }
-    if (entry->contentKind != FileContentKind::Text) {
-        return failure(WorkspaceError::ReadOnly,
-                       "read-only content cannot change encoding");
-    }
-    if (static_cast<std::uint8_t>(encoding) >
-        static_cast<std::uint8_t>(TextEncoding::Iso88591)) {
-        return failure(WorkspaceError::DecodeFailed,
-                       "text encoding is not recognized");
-    }
-    entry->decoded.status.encoding = encoding;
-    entry->decoded.status.hadBom =
-        encoding == TextEncoding::Utf8Bom ||
-        encoding == TextEncoding::Utf16le ||
-        encoding == TextEncoding::Utf16be;
-    WorkspaceResult result;
-    result.document = id;
-    return result;
-}
-
-WorkspaceResult Workspace::setLineEnding(FileDocumentId id,
-                                          LineEnding lineEnding) {
-    auto* entry = impl_->find(id);
-    if (!entry) {
-        return failure(WorkspaceError::NotFound,
-                       "workspace document does not exist");
-    }
-    if (entry->contentKind != FileContentKind::Text) {
-        return failure(WorkspaceError::ReadOnly,
-                       "read-only content cannot change line endings");
-    }
-    if (lineEnding == LineEnding::Mixed) {
-        return failure(WorkspaceError::DecodeFailed,
-                       "line ending must be lf, crlf, or cr");
-    }
-    const auto terminator = lineEndingTerminator(lineEnding);
-    for (auto& stored : entry->decoded.lineTerminators) {
-        if (stored != LineTerminator::None) stored = terminator;
-    }
-    entry->decoded.status.lineEnding = lineEnding;
-    WorkspaceResult result;
-    result.document = id;
-    return result;
-}
-
-WorkspaceResult Workspace::setFinalNewline(FileDocumentId id,
-                                            bool finalNewline) {
-    auto* entry = impl_->find(id);
-    if (!entry) {
-        return failure(WorkspaceError::NotFound,
-                       "workspace document does not exist");
-    }
-    if (entry->contentKind != FileContentKind::Text) {
-        return failure(WorkspaceError::ReadOnly,
-                       "read-only content cannot change final newline");
-    }
-    auto snapshot = entry->document.snapshot();
-    const bool hasFinalNewline =
-        !snapshot.text.empty() && snapshot.text.back() == '\n';
-    if (hasFinalNewline == finalNewline) {
-        entry->decoded.status.finalNewline = finalNewline;
-        WorkspaceResult result;
-        result.document = id;
-        return result;
-    }
-    EditTransaction transaction{snapshot.revision, {}};
-    if (finalNewline) {
-        transaction.edits.push_back(
-            {ByteOffset{snapshot.text.size()}, 0, "\n"});
-    } else {
-        transaction.edits.push_back(
-            {ByteOffset{snapshot.text.size() - 1}, 1, ""});
-    }
-    auto applied = apply(id, transaction);
-    if (!applied.accepted()) {
-        return failure(WorkspaceError::IoFailed, applied.message);
-    }
-    entry->decoded.status.finalNewline = finalNewline;
     WorkspaceResult result;
     result.document = id;
     return result;

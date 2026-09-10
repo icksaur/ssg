@@ -860,58 +860,6 @@ TEST(droppedContentOpensAsANewDocument) {
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"a"});
 }
 
-TEST(encodingDispatchMatchesEncodeOracleAndSavedBytes) {
-    auto root = uniqueRoot("encoding_save");
-    {
-        std::ofstream output{root / "workspace" / "note.txt", std::ios::binary};
-        output << "one\ntwo";
-    }
-
-    auto original = readBytes(root / "workspace" / "note.txt");
-    auto decoded = ssg::decodeText(original);
-    ASSERT_TRUE(decoded.accepted());
-    decoded.text->utf8 = "one\ntwo\n";
-    decoded.text->lineTerminators = {ssg::LineTerminator::Crlf, ssg::LineTerminator::Crlf};
-    decoded.text->status.encoding = ssg::TextEncoding::Utf8Bom;
-    decoded.text->status.hadBom = true;
-    decoded.text->status.lineEnding = ssg::LineEnding::Crlf;
-    decoded.text->status.finalNewline = true;
-    auto expected = ssg::encodeText(*decoded.text);
-    ASSERT_TRUE(expected.accepted());
-
-    auto created = ssg::createEditor(configFor(root));
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "note.txt").accepted);
-
-    ASSERT_TRUE(ssg::setFileEncoding(runtime, ssg::TextEncoding::Utf8Bom).accepted);
-    ASSERT_TRUE(ssg::setFileLineEnding(runtime, ssg::LineEnding::Crlf).accepted);
-    ASSERT_TRUE(ssg::setFileFinalNewline(runtime, true).accepted);
-    auto snapshot = ssg::test::projectGridFrame(runtime);
-    ASSERT_TRUE(snapshot.has_value());
-
-    ASSERT_TRUE(runtime.dispatch("file.save").accepted());
-    ASSERT_EQ(readBytes(root / "workspace" / "note.txt"), expected.bytes);
-}
-
-TEST(reopenWithEncodingDispatchRedecodesRealFileBytes) {
-    auto root = uniqueRoot("reopen_encoding");
-    writeBytes(root / "workspace" / "latin.txt", {0xe9, 0x0d});
-
-    auto created = ssg::createEditor(configFor(root));
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(ssg::applyFilePathCompletion(runtime, ssg::PromptCompletion::FileOpen, "latin.txt").accepted);
-
-    auto reopened = ssg::reopenWithEncoding(runtime, ssg::TextEncoding::Iso88591);
-    ASSERT_TRUE(reopened.accepted);
-    ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"\xC3\xA9\n"});
-    auto snapshot = ssg::test::projectGridFrame(runtime);
-    ASSERT_TRUE(snapshot.has_value());
-}
-
 TEST(closingTheLastTabClearsTheEditorDocument) {
     auto root = uniqueRoot("close_last_tab");
     std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << "alpha";
@@ -1128,8 +1076,6 @@ SSG_TEST_SUITE(test_session_files) {
     RUN(openEditSaveRoundTripsRealDiskBytes);
     RUN(openingAFileRevealsTheCaretResettingAStaleScroll);
     RUN(droppedContentOpensAsANewDocument);
-    RUN(encodingDispatchMatchesEncodeOracleAndSavedBytes);
-    RUN(reopenWithEncodingDispatchRedecodesRealFileBytes);
     RUN(closingTheLastTabClearsTheEditorDocument);
     RUN(tabActivateFocusesTheEditor);
     RUN(switchingTabsRevealsTheNewDocumentsCaret);

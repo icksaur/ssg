@@ -19,14 +19,8 @@ std::string readFile(const char* path) {
     return contents.str();
 }
 
-// Every command granted to init.lua (surfaces.initScript in the command
-// catalog, which src/main.cpp's initScriptCommandCatalog builds from)
-// must appear backticked in doc/config.md, so a newly Lua-exposed command
-// can't ship without a user-facing mention. One-directional (unlike
-// test_required_commands.cpp's bidirectional feature-doc check): doc/
-// config.md's keymap.bind section also backtick-mentions ordinary P0
-// command ids (file.save, edit.undo, ...) purely as bind-target examples,
-// which are not themselves init-script commands.
+// Every table-based configuration operation must appear in doc/config.md so a
+// newly exposed operation cannot ship without a user-facing mention.
 TEST(configDocMentionsEveryInitScriptCommand) {
     const auto doc = readFile(SSG_CONFIG_DOC_PATH);
     ASSERT_FALSE(doc.empty());

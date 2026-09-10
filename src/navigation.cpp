@@ -283,49 +283,6 @@ OperationResult navigateTo(Editor& runtime, NavigationTarget target,
     return applied;
 }
 
-OperationResult selectTreeNode(Editor& runtime, TreeNodeId nodeId) {
-    if (!runtime.tree.select(nodeId)) {
-        return failure("tree node is not selectable");
-    }
-    (void)runtime.screen.focusPanel();
-    return success();
-}
-
-OperationResult invokeTreeNodeCommand(
-    Editor& runtime, TreeCommandInvocation invocation) {
-    auto command = runtime.tree.invokeNodeCommand(
-        invocation.providerId, invocation.nodeId, invocation.commandId);
-    return command ? success() : failure("tree node command does not exist");
-}
-
-OperationResult navigateDiff(Editor& runtime, DiffFileId fileId,
-                             DiffNavigation navigation) {
-    auto file = runtime.diff.file(fileId);
-    if (!file) return failure("diff file does not exist");
-    std::optional<std::size_t> hunk;
-    const auto currentLine = runtime.activeDocument()
-                                 ? std::optional<std::size_t>{
-                                       runtime.selection.selections.primary()
-                                           .active.line.value()}
-                                 : std::nullopt;
-    if (navigation == DiffNavigation::NextHunk) {
-        hunk = nextDiffHunk(file->get(), currentLine);
-    } else if (navigation == DiffNavigation::PreviousHunk) {
-        hunk = previousDiffHunk(file->get(), currentLine);
-    } else if (!file->get().hunks.empty()) {
-        hunk = 0;
-    }
-    if (!hunk) return failure("diff file has no hunks");
-    const auto opened = diffOpenFile(file->get());
-    const FollowTarget target{file->get().id, opened.path, opened.deleted,
-                              file->get().hunks[*hunk].targetStart,
-                              runtime.diff.viewState().revision};
-    if (!runtime.revealDiffTarget(target, NavigationClass::Programmatic)) {
-        return failure("diff target could not be revealed");
-    }
-    return success();
-}
-
 OperationResult applyGotoLine(Editor& runtime, std::string_view lineText) {
     if (!runtime.activeDocumentId()) return failure("goto.line requires an active document");
     std::string_view digits{lineText};

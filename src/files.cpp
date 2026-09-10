@@ -91,62 +91,11 @@ OperationResult createFileByPath(Editor& runtime, std::string_view path) {
     return openDocumentResult(runtime, result);
 }
 
-OperationResult openRecentFile(Editor& runtime, std::size_t index) {
-    auto result = runtime.workspace.openRecent(index);
-    return openDocumentResult(runtime, result);
-}
-
 OperationResult openDroppedContent(Editor& runtime,
                                    std::span<const std::uint8_t> bytes,
                                    std::string_view label) {
     auto result = runtime.workspace.openDroppedContent(bytes, label);
     return openDocumentResult(runtime, result);
-}
-
-OperationResult reopenWithEncoding(Editor& runtime, TextEncoding encoding) {
-    if (runtime.activeTabIsLiveDiff())
-        return failure(
-            "file.reopen_with_encoding is unavailable in live diff tabs");
-    auto document = runtime.activeDocumentId();
-    if (!document) return failure("no active document");
-    auto result = runtime.workspace.reopenWithEncoding(*document, encoding);
-    if (!result.accepted()) return failure(workspaceMessage(result));
-    runtime.refreshSyntax();
-    return runtime.updateTabsFor(*document);
-}
-
-OperationResult setFileEncoding(Editor& runtime, TextEncoding encoding) {
-    if (runtime.activeTabIsLiveDiff())
-        return failure("file.set_encoding is unavailable in live diff tabs");
-    auto document = runtime.activeDocumentId();
-    if (!document) return failure("no active document");
-    auto result = runtime.workspace.setEncoding(*document, encoding);
-    if (!result.accepted()) return failure(workspaceMessage(result));
-    runtime.refreshSyntax();
-    return runtime.updateTabsFor(*document);
-}
-
-OperationResult setFileLineEnding(Editor& runtime, LineEnding lineEnding) {
-    if (runtime.activeTabIsLiveDiff())
-        return failure("file.set_line_ending is unavailable in live diff tabs");
-    auto document = runtime.activeDocumentId();
-    if (!document) return failure("no active document");
-    auto result = runtime.workspace.setLineEnding(*document, lineEnding);
-    if (!result.accepted()) return failure(workspaceMessage(result));
-    runtime.refreshSyntax();
-    return runtime.updateTabsFor(*document);
-}
-
-OperationResult setFileFinalNewline(Editor& runtime, bool finalNewline) {
-    if (runtime.activeTabIsLiveDiff())
-        return failure(
-            "file.set_final_newline is unavailable in live diff tabs");
-    auto document = runtime.activeDocumentId();
-    if (!document) return failure("no active document");
-    auto result = runtime.workspace.setFinalNewline(*document, finalNewline);
-    if (!result.accepted()) return failure(workspaceMessage(result));
-    runtime.refreshSyntax();
-    return runtime.updateTabsFor(*document);
 }
 
 OperationResult activateTab(Editor& runtime, TabId tabId) {

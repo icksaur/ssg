@@ -2016,123 +2016,6 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
     std::filesystem::remove_all(root);
 }
 
-TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
-    auto root = testRuntimePath("runtime_nav_treeselect");
-    std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
-    std::filesystem::create_directories(root / "recovery");
-    for (int i = 0; i < 6; ++i) {
-        char name[32];
-        std::snprintf(name, sizeof name, "file-%02d.txt", i);
-        std::ofstream{root / "workspace" / name} << "x";
-    }
-    auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch("panel.toggle").accepted());
-    // Expand the workspace root so its files become visible/selectable nodes.
-    ASSERT_TRUE(runtime.dispatch("tree.select_next").accepted());
-    ASSERT_TRUE(runtime.dispatch("tree.activate").accepted());
-
-    const ssg::ViewportDimensions dims{80, 24};
-    auto snap = projectFrame(runtime, dims);
-    ASSERT_TRUE(snap.has_value());
-    if (!snap) return;
-    ASSERT_TRUE(snap->panel.has_value());
-    if (!snap->panel) return;
-    auto const& nodes = snap->panel->rows;
-    ASSERT_TRUE(nodes.size() >= 4);
-    if (nodes.size() < 4) return;
-    // Pick a node that is NOT already selected (the third visible node).
-    auto const target = nodes[2].nodeId;
-
-    ASSERT_TRUE(ssg::selectTreeNode(runtime, target).accepted);
-    auto after = projectFrame(runtime, dims);
-    ASSERT_TRUE(after.has_value());
-    if (!after) return;
-    ASSERT_TRUE(after->panel.has_value());
-    if (!after->panel) return;
-    ASSERT_TRUE(std::ranges::any_of(
-        after->panel->rows, [&](const ssg::SolvedPanelRow& row) {
-            return row.nodeId == target && row.selected;
-        }));
-
-    ASSERT_FALSE(
-        ssg::selectTreeNode(runtime, ssg::TreeNodeId{"nope"}).accepted);
-    // The selection is unchanged after the rejected attempts.
-    auto again = projectFrame(runtime, dims);
-    ASSERT_TRUE(again.has_value());
-    if (!again) return;
-    ASSERT_TRUE(again->panel.has_value());
-    if (!again->panel) return;
-    ASSERT_TRUE(std::ranges::any_of(
-        again->panel->rows, [&](const ssg::SolvedPanelRow& row) {
-            return row.nodeId == target && row.selected;
-        }));
-    std::filesystem::remove_all(root);
-}
-
-TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
-    auto root = testRuntimePath("runtime_nav_treefocus");
-    std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root / "workspace" / "dir");
-    std::filesystem::create_directories(root / "scratch");
-    std::filesystem::create_directories(root / "recovery");
-    std::ofstream{root / "workspace" / "dir" / "inner.txt"} << "x";
-    std::ofstream{root / "workspace" / "top.txt"} << "hello";
-    auto created = ssg::createEditor(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    const ssg::ViewportDimensions dims{80, 24};
-    auto focus = [&] {
-        auto snap = projectFrame(runtime, dims);
-        return snap ? ssg::effectiveUiFocus(snap->uiTree)
-                    : ssg::FocusTarget::Editor;
-    };
-    // Showing the panel now focuses it (QOL); the CWD's entries are top-level, so
-    // "dir" and "top.txt" are both immediately visible/selectable.
-    ASSERT_TRUE(runtime.dispatch("panel.toggle").accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
-
-    auto snap = projectFrame(runtime, dims);
-    ASSERT_TRUE(snap.has_value());
-    if (!snap) return;
-    std::optional<ssg::TreeNodeId> dirId;
-    std::optional<ssg::TreeNodeId> fileId;
-    ASSERT_TRUE(snap->panel.has_value());
-    if (!snap->panel) return;
-    for (auto const& row : snap->panel->rows) {
-        if (row.text.find("dir") != std::string::npos) dirId = row.nodeId;
-        if (row.text.find("top.txt") != std::string::npos) fileId = row.nodeId;
-    }
-    ASSERT_TRUE(dirId.has_value());
-    ASSERT_TRUE(fileId.has_value());
-    if (!dirId || !fileId) return;
-
-    // The file click pair [tree.select, tree.activate] ends on the editor (the
-    // file opens, so tree.activate's focus_editor wins over tree.select's panel).
-    ASSERT_TRUE(ssg::test::dispatchInput(
-        runtime,
-        ssg::TreePointerInput{*fileId}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
-
-    // From editor focus, tree.select alone moves keyboard focus to the panel.
-    ASSERT_TRUE(ssg::selectTreeNode(runtime, *fileId).accepted);
-    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
-
-    // The directory click pair ends on the panel (tree.select focuses the panel,
-    // tree.activate toggles the directory and leaves focus alone).
-    ASSERT_TRUE(ssg::selectTreeNode(runtime, *dirId).accepted);
-    ASSERT_TRUE(runtime.dispatch("tree.activate").accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
-    std::filesystem::remove_all(root);
-}
-
 TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     auto root = testRuntimePath("runtime_nav_treescroll_wheel");
     std::filesystem::remove_all(root);
@@ -2690,9 +2573,7 @@ SSG_TEST_SUITE(test_session_layout) {
     RUN(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation);
     RUN(paletteCandidatesCarryLabelsAndKeyDetail);
     RUN(treeScrollsToKeepSelectionVisibleInAShortPanel);
-    RUN(treeSelectSetsSelectionToANodeAndRejectsUnknownIds);
     RUN(treeScrollMovesTheViewportWithoutMovingTheSelection);
-    RUN(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus);
     RUN(wordWrapOffRevealsCaretHorizontally);
     RUN(wordWrapOnWrapsLongLinesOffClipsThem);
     RUN(gotoLineClampsToTheOneBasedLineRange);

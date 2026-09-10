@@ -500,22 +500,6 @@ FindReplaceOperationResult operationFailure(FindReplaceError error,
     return {error, revision, std::move(message)};
 }
 
-std::string replacedText(std::string_view original,
-                          const std::vector<FindMatch>& matches,
-                          std::string_view replacement) {
-    std::string result;
-    std::size_t copied = 0;
-    for (const auto& match : matches) {
-        const auto begin = static_cast<std::size_t>(match.begin.value());
-        const auto end = static_cast<std::size_t>(match.end.value());
-        result.append(original.substr(copied, begin - copied));
-        result.append(replacement);
-        copied = end;
-    }
-    result.append(original.substr(copied));
-    return result;
-}
-
 }  // namespace
 
 FindResult findTextMatches(std::string_view text, const FindRequest& request) {
@@ -799,41 +783,6 @@ FindReplaceOperationResult FindReplaceController::replaceAll(
 
 const FindReplaceViewState& FindReplaceController::viewState() const noexcept {
     return state_;
-}
-
-WorkspacePreviewResult previewWorkspaceReplace(
-    const WorkspaceSnapshot& snapshot, const FindRequest& request,
-    std::string replacement) {
-    if (request.options.selectionOnly) {
-        return {FindReplaceError::InvalidSelection, std::nullopt,
-                "workspace replace cannot use a document selection"};
-    }
-    WorkspaceReplacePreview preview{snapshot.revision,
-                                    request.query,
-                                    std::move(replacement),
-                                    request.options,
-                                    {}};
-    const auto perFileBudget =
-        snapshot.files.empty()
-            ? request.workBudget
-            : request.workBudget /
-                  static_cast<std::uint64_t>(snapshot.files.size());
-    for (const auto& file : snapshot.files) {
-        auto fileRequest = request;
-        fileRequest.workBudget = perFileBudget;
-        auto result = findTextMatches(file.text, fileRequest);
-        if (!result.accepted()) {
-            return {result.error, std::nullopt, std::move(result.message)};
-        }
-        if (!result.matches.empty()) {
-            preview.changes.push_back(
-                {file.path, file.text,
-                 replacedText(file.text, result.matches,
-                               preview.replacement),
-                 std::move(result.matches)});
-        }
-    }
-    return {FindReplaceError::None, std::move(preview), {}};
 }
 
 }  // namespace ssg

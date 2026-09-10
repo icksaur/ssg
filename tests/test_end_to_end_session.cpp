@@ -5,7 +5,6 @@
 #include <ssg/Editor.h>
 #include <ssg/TextInputCommands.h>
 
-#include <any>
 #include <filesystem>
 #include <fstream>
 #include <optional>

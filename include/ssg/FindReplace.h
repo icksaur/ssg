@@ -61,9 +61,6 @@ struct FindResult {
     FindReplaceError error = FindReplaceError::None;
     std::vector<FindMatch> matches;
     std::string message;
-    [[nodiscard]] bool accepted() const noexcept {
-        return error == FindReplaceError::None;
-    }
 };
 
 [[nodiscard]] FindResult findTextMatches(std::string_view text,
@@ -144,51 +141,5 @@ private:
     FindRequest request_;
     FindReplaceViewState state_;
 };
-
-struct WorkspaceFileReplacement {
-    std::string path;
-    std::string before;
-    std::string after;
-    std::vector<FindMatch> matches;
-    bool operator==(const WorkspaceFileReplacement&) const = default;
-};
-
-struct WorkspaceReplacePreview {
-    std::uint64_t sourceRevision{0};
-    std::string query;
-    std::string replacement;
-    FindOptions options;
-    std::vector<WorkspaceFileReplacement> changes;
-    bool operator==(const WorkspaceReplacePreview&) const = default;
-};
-
-struct WorkspaceReplaceArguments {
-    FindRequest request;
-    std::string replacement;
-
-    bool operator==(const WorkspaceReplaceArguments&) const = default;
-};
-
-struct WorkspaceApplyResult {
-    FindReplaceError error = FindReplaceError::None;
-    std::uint64_t revision{0};
-    std::string message;
-    [[nodiscard]] bool accepted() const noexcept {
-        return error == FindReplaceError::None;
-    }
-};
-
-struct WorkspacePreviewResult {
-    FindReplaceError error = FindReplaceError::None;
-    std::optional<WorkspaceReplacePreview> preview;
-    std::string message;
-    [[nodiscard]] bool accepted() const noexcept {
-        return error == FindReplaceError::None;
-    }
-};
-
-[[nodiscard]] WorkspacePreviewResult previewWorkspaceReplace(
-    const WorkspaceSnapshot& snapshot, const FindRequest& request,
-    std::string replacement);
 
 }  // namespace ssg

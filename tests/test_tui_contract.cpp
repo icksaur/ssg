@@ -5,7 +5,6 @@
 #include "test_helpers.h"
 #include "grid_test_frame.h"
 
-#include <any>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>

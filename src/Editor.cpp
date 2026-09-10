@@ -181,17 +181,6 @@ std::filesystem::path canonicalDirectory(std::filesystem::path const& path) {
     return canonical;
 }
 
-std::span<const std::byte> asByteSpan(std::string_view text) noexcept {
-    return {reinterpret_cast<const std::byte*>(text.data()), text.size()};
-}
-
-std::optional<std::string> readFileText(std::filesystem::path const& path) {
-    auto result = readFile(path);
-    if (!result.ok()) return std::nullopt;
-    return std::string{reinterpret_cast<const char*>(result.bytes.data()),
-                       result.bytes.size()};
-}
-
 std::unordered_map<std::uint64_t, std::uint64_t>
 documentRevisions(const Workspace& workspace) {
     std::unordered_map<std::uint64_t, std::uint64_t> revisions;
@@ -229,45 +218,6 @@ void reconcileAfterOperation(
         existingDocumentMutated(revisionsBefore, editor.workspace)) {
         (void)editor.follow.notifyLocalEdit();
     }
-}
-
-bool pathContains(std::filesystem::path const& root,
-                   std::filesystem::path const& candidate) {
-    auto rootIt = root.begin();
-    auto candidateIt = candidate.begin();
-    for (; rootIt != root.end(); ++rootIt, ++candidateIt) {
-        if (candidateIt == candidate.end() || *rootIt != *candidateIt) {
-            return false;
-        }
-    }
-    return true;
-}
-
-std::optional<std::filesystem::path> workspaceChangePath(
-    std::filesystem::path const& root, std::string_view rawPath,
-    std::string& message) {
-    auto supplied = std::filesystem::path{rawPath};
-    if (rawPath.empty() || supplied.is_absolute()) {
-        message = "workspace replacement path must be relative";
-        return std::nullopt;
-    }
-    for (auto const& part : supplied) {
-        if (part == "..") {
-            message = "workspace replacement path must not traverse";
-            return std::nullopt;
-        }
-    }
-    std::error_code code;
-    auto candidate = weaklyCanonicalPath(root / supplied, code);
-    if (code) {
-        message = code.message();
-        return std::nullopt;
-    }
-    if (!pathContains(root, candidate)) {
-        message = "workspace replacement path resolves outside the workspace";
-        return std::nullopt;
-    }
-    return candidate;
 }
 
 PromptRoutingState inputPromptState(Editor const& editor) {
@@ -982,20 +932,6 @@ WorkspaceCorpus Editor::workspaceCorpus() const {
                            std::move(options)};
 }
 
-WorkspaceSnapshot Editor::snapshot(std::uint64_t revision) const {
-    WorkspaceSnapshot result;
-    result.revision = revision;
-    auto corpus = workspaceCorpus();
-    result.files.reserve(corpus.paths().size());
-    for (std::size_t index = 0; index < corpus.paths().size(); ++index) {
-        auto file = corpus.read(index);
-        if (!file) continue;
-        result.files.push_back(
-            {std::move(file->path), std::move(file->text)});
-    }
-    return result;
-}
-
 void Editor::startWorkspaceSearch(std::string query,
                                   std::uint64_t sourceRevision) {
     panelWorkspaceSearchGeneration.reset();
@@ -1061,82 +997,6 @@ void Editor::advanceWorkspaceSearch() {
     workspaceSearchState.reset();
     workspaceSearchCorpus.reset();
     panelWorkspaceSearchGeneration.reset();
-}
-
-WorkspaceApplyResult Editor::applyWorkspaceReplace(
-    const WorkspaceReplacePreview& preview) {
-    std::vector<std::filesystem::path> paths;
-    std::vector<std::string> normalizedPaths;
-    paths.reserve(preview.changes.size());
-    normalizedPaths.reserve(preview.changes.size());
-    for (auto const& change : preview.changes) {
-        std::string message;
-        auto path = workspaceChangePath(root, change.path, message);
-        if (!path) {
-            return {FindReplaceError::WorkspaceRejected,
-                    preview.sourceRevision, std::move(message)};
-        }
-        if (pathContains(scratchRoot, *path) ||
-            pathContains(recoveryRoot, *path) ||
-            pathContains(archiveRoot, *path)) {
-            return {FindReplaceError::WorkspaceRejected,
-                    preview.sourceRevision,
-                    "workspace replacement path targets runtime state"};
-        }
-        auto normalized =
-            std::filesystem::path{change.path}.lexically_normal().generic_string();
-        std::string current;
-        bool foundOpenDocument = false;
-        for (auto const id : workspace.documents()) {
-            auto state = workspace.state(id);
-            if (!state || state->key.kind() != JournalDocumentKeyKind::Saved ||
-                state->key.savedPath() != normalized) {
-                continue;
-            }
-            current = workspace.document(id).snapshot().text;
-            foundOpenDocument = true;
-            break;
-        }
-        if (!foundOpenDocument) {
-            auto content = readFileText(*path);
-            if (!content) {
-                return {FindReplaceError::StaleRevision, preview.sourceRevision,
-                        "workspace replacement target cannot be read"};
-            }
-            current = std::move(*content);
-        }
-        if (current != change.before) {
-            return {FindReplaceError::StaleRevision, preview.sourceRevision,
-                    "workspace replacement preview is stale"};
-        }
-        paths.push_back(std::move(*path));
-        normalizedPaths.push_back(std::move(normalized));
-    }
-    for (std::size_t index = 0; index < preview.changes.size(); ++index) {
-        auto const& change = preview.changes[index];
-        try {
-            replaceFileAtomically(paths[index], asByteSpan(change.after));
-        } catch (const std::exception&) {
-            return {FindReplaceError::WorkspaceRejected, preview.sourceRevision, "failed to write workspace file"};
-        }
-    }
-    for (std::size_t index = 0; index < preview.changes.size(); ++index) {
-        for (auto const id : workspace.documents()) {
-            auto state = workspace.state(id);
-            if (!state || state->key.kind() != JournalDocumentKeyKind::Saved ||
-                state->key.savedPath() != normalizedPaths[index]) {
-                continue;
-            }
-            auto reloaded = workspace.reload(id);
-            if (!reloaded.accepted()) {
-                return {FindReplaceError::WorkspaceRejected,
-                        preview.sourceRevision, workspaceMessage(reloaded)};
-            }
-            (void)updateTabsFor(id);
-        }
-    }
-    return {FindReplaceError::None,
-            std::uint64_t{preview.sourceRevision + 1}, {}};
 }
 
 std::optional<FileDocumentId> Editor::activeDocumentId() const {
@@ -1743,19 +1603,6 @@ DiffIngressResult Editor::applyExternalDiffBurst(
     return {};
 }
 
-bool Editor::revealDiffTarget(const FollowTarget& target,
-                              NavigationClass classification) {
-    if (target.deleted) {
-        return false;
-    }
-    const auto opened = workspace.openFile(target.path.generic_string());
-    if (!opened.accepted() || !opened.document ||
-        !activateDocument(*opened.document).accepted) {
-        return false;
-    }
-    return gitDiffIngress.revealCurrentDiffTarget(target, classification);
-}
-
 void Editor::recordNavigation(NavigationClass classification) {
     (void)follow.applyNavigation({.classification = classification});
 }
@@ -1803,59 +1650,6 @@ CompiledKeymap const& Editor::resolveInputKeymap() {
 void Editor::focusEditor() {
     std::lock_guard operationLock{operationMutex};
     screen.focusEditor();
-}
-
-WorkspacePreviewResult Editor::workspacePreview(WorkspaceReplaceArguments args) {
-    std::lock_guard g{operationMutex};
-    const auto revisionsBefore = documentRevisions(workspace);
-    screen.refreshExternalModificationPresence(externalModificationPresent());
-    auto r = previewWorkspaceReplace(
-        snapshot(++workspaceReplaceGeneration), args.request, args.replacement);
-    if (r.accepted()) workspaceReplacePreview = r.preview;
-    reconcileFindDocument();
-    screen.refreshNoticePresence(noticePresent());
-    screen.refreshExternalModificationPresence(externalModificationPresent());
-    screen.refreshStatusActions(status.actionNodes());
-    if (r.accepted() && existingDocumentMutated(revisionsBefore, workspace)) {
-        (void)follow.notifyLocalEdit();
-    }
-    return r;
-}
-
-WorkspaceApplyResult Editor::workspaceApply(
-    std::optional<WorkspaceReplacePreview> expected) {
-    std::lock_guard g{operationMutex};
-    const auto revisionsBefore = documentRevisions(workspace);
-    screen.refreshExternalModificationPresence(externalModificationPresent());
-    WorkspaceApplyResult result = [&] {
-        auto const* preview = workspaceReplacePreview
-            ? &*workspaceReplacePreview : nullptr;
-        if (preview == nullptr) {
-            return WorkspaceApplyResult{FindReplaceError::WorkspaceRejected, 0,
-                "workspace apply requires a workspace replace preview",
-                };
-        }
-        if (expected && *expected != *preview) {
-            return WorkspaceApplyResult{FindReplaceError::WorkspaceRejected, 0,
-                "workspace apply input does not match the current preview",
-                };
-        }
-        auto r = applyWorkspaceReplace(*preview);
-        if (!r.accepted()) {
-            return r;
-        }
-        workspaceReplacePreview.reset();
-        (void)refreshTree();
-        return r;
-    }();
-    reconcileFindDocument();
-    screen.refreshNoticePresence(noticePresent());
-    screen.refreshExternalModificationPresence(externalModificationPresent());
-    screen.refreshStatusActions(status.actionNodes());
-    if (result.accepted() && existingDocumentMutated(revisionsBefore, workspace)) {
-        (void)follow.notifyLocalEdit();
-    }
-    return result;
 }
 
 WorkspaceSearchState Editor::workspaceSearch(std::string query) {
@@ -2004,7 +1798,7 @@ ClientInputResult Editor::input(ClientInput const& input) {
         std::move(routed.action));
 }
 
-CommandResult Editor::dispatchById(std::string_view commandId) {
+CommandResult Editor::dispatch(std::string_view commandId) {
     // A handler must be refused before taking the non-recursive aggregate lock.
     if (commands.dispatchInProgress()) {
         return {CommandError::HandlerFailed,
@@ -2012,10 +1806,6 @@ CommandResult Editor::dispatchById(std::string_view commandId) {
     }
     std::lock_guard operationLock{operationMutex};
     return dispatchLocked(commandId);
-}
-
-CommandResult Editor::dispatch(std::string_view commandId) {
-    return dispatchById(commandId);
 }
 
 Commands const& Editor::commandRegistry() const {

@@ -298,7 +298,7 @@ def main() -> int:
         who = sorted(users.get(usr, ()))
         if options.max_users is not None and len(who) > options.max_users:
             continue
-        rows.append((len(who), header, kind, name, ",".join(who)))
+        rows.append((len(who), header, kind, name, ",".join(who) or "-"))
 
     report = "".join(
         "\t".join(str(field) for field in row) + "\n"

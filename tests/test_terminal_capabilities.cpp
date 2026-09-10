@@ -18,7 +18,6 @@
 #include "grid_test_frame.h"
 
 #include <algorithm>
-#include <any>
 #include <atomic>
 #include <csignal>
 #include <filesystem>

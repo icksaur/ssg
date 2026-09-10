@@ -17,7 +17,9 @@ namespace ssg {
 
 namespace {
 
-std::vector<LuaCommand> scriptCommandCatalog(Commands const& commands) {
+// CMD-8: Lua user commands project the same live registry as the palette.
+// Configuration operations are appended because they are not commands.
+std::vector<LuaCommand> luaCommands(Commands const& commands) {
     std::vector<LuaCommand> result;
     result.reserve(commands.all().size() + 4);
     for (auto const& [id, command] : commands.all()) {
@@ -182,7 +184,7 @@ ScriptHost::ScriptHost(Editor& runtime) : ScriptHost(runtime, {}) {}
 
 ScriptHost::ScriptHost(Editor& runtime, ViewActionSink viewActionSink) {
     LuaCommandHostOptions options;
-    options.commands = scriptCommandCatalog(runtime.commandRegistry());
+    options.commands = luaCommands(runtime.commandRegistry());
     options.commandAvailable = [editor = &runtime](std::string_view id) {
         return editor->commandRegistry().find(id) != nullptr;
     };

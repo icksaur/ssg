@@ -11,6 +11,16 @@ using ssg::SettingKey;
 using ssg::SettingScope;
 using ssg::SettingValue;
 
+std::array<std::string, 4> settingsSnapshot(
+    ssg::SettingsModel const& settings) {
+    return {
+        settings.exportScope(SettingScope::User),
+        settings.exportScope(SettingScope::Workspace),
+        settings.exportScope(SettingScope::Language),
+        settings.exportScope(SettingScope::Document),
+    };
+}
+
 TEST(fiveScopeResolutionUsesMostSpecificPresentValue) {
     ssg::SettingsModel settings;
     struct Case {
@@ -36,82 +46,64 @@ TEST(fiveScopeResolutionUsesMostSpecificPresentValue) {
         ASSERT_EQ(effective.source, entry.scope);
     }
 
-    for (auto it = cases.rbegin(); it != cases.rend(); ++it) {
-        ASSERT_TRUE(settings.reset(it->scope, SettingKey::IndentWidth).accepted());
-        const auto expectedScope =
-            it + 1 == cases.rend() ? SettingScope::Defaults : (it + 1)->scope;
-        const auto expectedWidth = it + 1 == cases.rend() ? 4u : (it + 1)->width;
-        effective = settings.resolve(SettingKey::IndentWidth);
-        ASSERT_EQ(std::get<std::uint32_t>(effective.value), expectedWidth);
-        ASSERT_EQ(effective.source, expectedScope);
-    }
 }
 
 TEST(invalidValuesAndKeysAreFailureAtomic) {
     ssg::SettingsModel settings;
-    const auto before = settings.viewState();
+    const auto before = settingsSnapshot(settings);
 
     const auto wrongType =
         settings.set(SettingScope::User, SettingKey::IndentWidth, SettingValue{true});
     ASSERT_FALSE(wrongType.accepted());
     ASSERT_EQ(wrongType.error->code, ssg::SettingErrorCode::WrongValueType);
-    ASSERT_EQ(settings.viewState(), before);
+    ASSERT_EQ(settingsSnapshot(settings), before);
 
     const auto unknown = settings.set(
         SettingScope::User, static_cast<SettingKey>(255), SettingValue{true});
     ASSERT_FALSE(unknown.accepted());
     ASSERT_EQ(unknown.error->code, ssg::SettingErrorCode::UnknownKey);
-    ASSERT_EQ(settings.viewState(), before);
+    ASSERT_EQ(settingsSnapshot(settings), before);
 
     const auto outOfRange = settings.set(
         SettingScope::User, SettingKey::IndentWidth, SettingValue{std::uint32_t{17}});
     ASSERT_FALSE(outOfRange.accepted());
     ASSERT_EQ(outOfRange.error->code, ssg::SettingErrorCode::OutOfRange);
-    ASSERT_EQ(settings.viewState(), before);
+    ASSERT_EQ(settingsSnapshot(settings), before);
 
     const auto emptyIdentity =
         settings.set(SettingScope::Workspace, SettingKey::Theme, SettingValue{std::string{}});
     ASSERT_FALSE(emptyIdentity.accepted());
-    ASSERT_EQ(settings.viewState(), before);
+    ASSERT_EQ(settingsSnapshot(settings), before);
 
     const auto mixed = settings.set(
         SettingScope::Document, SettingKey::LineEnding,
         SettingValue{ssg::LineEnding::Mixed});
     ASSERT_FALSE(mixed.accepted());
-    ASSERT_EQ(settings.viewState(), before);
+    ASSERT_EQ(settingsSnapshot(settings), before);
 
     const auto unknownEnding = settings.set(
         SettingScope::Document, SettingKey::LineEnding,
         SettingValue{static_cast<ssg::LineEnding>(255)});
     ASSERT_FALSE(unknownEnding.accepted());
-    ASSERT_EQ(settings.viewState(), before);
+    ASSERT_EQ(settingsSnapshot(settings), before);
 
     const auto immutableDefault =
         settings.set(SettingScope::Defaults, SettingKey::WordWrap, SettingValue{true});
     ASSERT_FALSE(immutableDefault.accepted());
     ASSERT_EQ(immutableDefault.error->code, ssg::SettingErrorCode::ImmutableScope);
-    ASSERT_EQ(settings.viewState(), before);
+    ASSERT_EQ(settingsSnapshot(settings), before);
 }
 
-  TEST(viewStateDeltaAndCommandSetCoverAllOwnedSettingsIds) {
+TEST(setDeltaCarriesTheChangedSetting) {
     ssg::SettingsModel settings;
-    const auto before = settings.viewState();
+    const auto before = settings.resolve(SettingKey::AutoIndent);
     const auto changed =
         settings.set(SettingScope::Language, SettingKey::AutoIndent, SettingValue{false});
     ASSERT_TRUE(changed.accepted());
     ASSERT_EQ(changed.delta->key, SettingKey::AutoIndent);
-    const auto beforeEntry =
-        std::ranges::find(before.entries, SettingKey::AutoIndent,
-                          &ssg::SettingViewEntry::key);
-    ASSERT_NE(beforeEntry, before.entries.end());
-    ASSERT_EQ(changed.delta->before, beforeEntry->effective);
-    const auto after = settings.viewState();
-    const auto afterEntry =
-        std::ranges::find(after.entries, SettingKey::AutoIndent,
-                          &ssg::SettingViewEntry::key);
-    ASSERT_NE(afterEntry, after.entries.end());
-    ASSERT_EQ(changed.delta->after, afterEntry->effective);
-
+    ASSERT_EQ(changed.delta->before, before);
+    ASSERT_EQ(changed.delta->after,
+              settings.resolve(SettingKey::AutoIndent));
 }
 
 } // namespace
@@ -119,7 +111,7 @@ TEST(invalidValuesAndKeysAreFailureAtomic) {
 SSG_TEST_SUITE(test_settings) {
     RUN(fiveScopeResolutionUsesMostSpecificPresentValue);
     RUN(invalidValuesAndKeysAreFailureAtomic);
-    RUN(viewStateDeltaAndCommandSetCoverAllOwnedSettingsIds);
+    RUN(setDeltaCarriesTheChangedSetting);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
