@@ -2,7 +2,6 @@
 // lowering (src/UiRegionProjection).
 
 #include <ssg/UiRegionProjection.h>
-#include <ssg/ShellViewState.h>
 
 #include <ssg/Style.h>
 #include <ssg/UiTree.h>
@@ -42,14 +41,25 @@ UiComposition composeFooter(std::vector<UiNode> leaves) {
                std::move(root)}};
 }
 
+// A projected item's fields, without the production accessibility-tree
+// vocabulary these tests do not otherwise exercise.
+struct ProjectedItem {
+    std::string id;
+    std::string label;
+    Rect rect;
+    SemanticRole role = SemanticRole::Canvas;
+    std::string content;
+    std::optional<std::string> commandId;
+};
+
 UiRegionProjectionResult projectRegion(
-    const UiNode& region, Rect rect, ShellNodeKind kind,
+    const UiNode& region, Rect rect,
     SemanticRole role, const Style& style,
-    std::vector<AccessibilityNode>& out) {
+    std::vector<ProjectedItem>& out) {
     SolvedUiRegion solved;
     auto result = ssg::projectUiRegion(region, rect, role, style, solved);
     for (const auto& item : solved.items) {
-        out.push_back({kind, item.id, item.label, item.rect, item.role,
+        out.push_back({item.id, item.label, item.rect, item.role,
                        item.content, item.command});
     }
     return result;
@@ -76,8 +86,8 @@ const UiNode& footerArea(const UiSchema& schema) {
     return std::get<UiContainer>(schema.root.content).children.front();
 }
 
-const AccessibilityNode* nodeFor(const std::vector<AccessibilityNode>& nodes,
-                                 const std::string& id) {
+const ProjectedItem* nodeFor(const std::vector<ProjectedItem>& nodes,
+                              const std::string& id) {
     for (const auto& node : nodes)
         if (node.id == id) return &node;
     return nullptr;
@@ -85,7 +95,7 @@ const AccessibilityNode* nodeFor(const std::vector<AccessibilityNode>& nodes,
 
 // --- Grid lowering: consumes UiNode::resolved directly --------------------
 
-// Label/Field: an already-resolved leaf lowers to a matching AccessibilityNode
+// Label/Field: an already-resolved leaf lowers to a matching projected item
 // verbatim; an unresolved leaf (dropped at publication, EMPTY-DROP) emits none.
 TEST(fieldWithResolvedValueLowersVerbatimAndDropsWhenUnresolved) {
     const auto comp = composeFooter({
@@ -99,9 +109,9 @@ TEST(fieldWithResolvedValueLowersVerbatimAndDropsWhenUnresolved) {
         leaf("f.empty", WidgetKind::Field, std::nullopt),
     });
     const UiSchema schema{comp.root};
-    std::vector<AccessibilityNode> nodes;
+    std::vector<ProjectedItem> nodes;
     const auto lowered = projectRegion(
-        footerArea(schema), {0, 0, kWideWidth, 1}, ShellNodeKind::FooterField,
+        footerArea(schema), {0, 0, kWideWidth, 1},
         SemanticRole::Footer, Style{}, nodes);
     ASSERT_TRUE(lowered.ok());
 
@@ -129,9 +139,9 @@ TEST(fieldRoleIsReadDirectlyFromTheResolvedStateNotRederived) {
                         SemanticRole::StatusInfo}),
     });
     const UiSchema schema{comp.root};
-    std::vector<AccessibilityNode> nodes;
+    std::vector<ProjectedItem> nodes;
     const auto lowered = projectRegion(
-        footerArea(schema), {0, 0, kWideWidth, 1}, ShellNodeKind::FooterField,
+        footerArea(schema), {0, 0, kWideWidth, 1},
         SemanticRole::Footer, Style{}, nodes);
     ASSERT_TRUE(lowered.ok());
     const auto* warn = nodeFor(nodes, "f.warn");
@@ -153,9 +163,9 @@ TEST(checkboxComposesItsGlyphFromResolvedCheckedAndValue) {
                         SemanticRole::Footer}),
     });
     const UiSchema schema{comp.root};
-    std::vector<AccessibilityNode> nodes;
+    std::vector<ProjectedItem> nodes;
     const auto lowered = projectRegion(
-        footerArea(schema), {0, 0, kWideWidth, 1}, ShellNodeKind::FooterField,
+        footerArea(schema), {0, 0, kWideWidth, 1},
         SemanticRole::Footer, Style{}, nodes);
     ASSERT_TRUE(lowered.ok());
     const auto* checked = nodeFor(nodes, "c.checked");
@@ -185,9 +195,9 @@ TEST(spacerNeverEmitsALeafNode) {
         std::move(spacerNode),
     });
     const UiSchema schema{comp.root};
-    std::vector<AccessibilityNode> nodes;
+    std::vector<ProjectedItem> nodes;
     const auto lowered = projectRegion(
-        footerArea(schema), {0, 0, kWideWidth, 1}, ShellNodeKind::FooterField,
+        footerArea(schema), {0, 0, kWideWidth, 1},
         SemanticRole::Footer, Style{}, nodes);
     ASSERT_TRUE(lowered.ok());
     ASSERT_TRUE(nodeFor(nodes, "f") != nullptr);

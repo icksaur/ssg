@@ -22,7 +22,6 @@
 #include <atomic>
 #include <csignal>
 #include <filesystem>
-#include <fstream>
 #include <map>
 #include <set>
 #include <sstream>
@@ -195,56 +194,6 @@ TEST(everyEnteredModeIsLeftInReverseOrder) {
     ASSERT_TRUE(mousePos < altPos);
 }
 
-TEST(theCrashUndoLeavesEveryDeclaredModeInReverseOrder) {
-    // What a fatal-signal handler writes. A constant rather than a record of
-    // what is currently entered: see allModesUndoSequence for why precision
-    // there cannot be published safely, and why over-approximating is the safe
-    // direction.
-    //
-    // Assembled from the one list, reversed, rather than by asking the function
-    // how it built itself.
-    std::string expected;
-    for (std::size_t i = std::size(ssg::kAllModes); i-- > 0;) {
-        expected.append(ssg::kAllModes[i].leave);
-    }
-    auto const undo = std::string{ssg::allModesUndoSequence()};
-    ASSERT_EQ(undo, expected);
-
-    // And the list itself must hold every mode DECLARED, or a mode could be
-    // declared, entered, and left out of the crash undo. Counted from the
-    // header, so this does not just re-read the list it is checking.
-    std::ifstream header{std::string{SSG_TEST_SOURCE_DIR} +
-                         "/include/ssg/Terminal.h"};
-    std::string const source{std::istreambuf_iterator<char>{header},
-                             std::istreambuf_iterator<char>{}};
-    ASSERT_FALSE(source.empty());
-    std::size_t declared = 0;
-    for (std::size_t at = source.find("inline constexpr TerminalMode k");
-         at != std::string::npos;
-         at = source.find("inline constexpr TerminalMode k", at + 1)) {
-        // kAllModes is the list, not a mode.
-        std::string_view const listMarker{"inline constexpr TerminalMode kAllModes"};
-        if (source.compare(at, listMarker.size(), listMarker) == 0) continue;
-        // kKeyboardProtocol is the ONE sanctioned exclusion from the constant
-        // crash-undo superset: its leave `CSI < u` is a stack pop, not idempotent,
-        // so it must never be written when it was not entered.  It is torn down by
-        // its Guard on the normal paths instead.
-        std::string_view const kittyMarker{
-            "inline constexpr TerminalMode kKeyboardProtocol"};
-        if (source.compare(at, kittyMarker.size(), kittyMarker) == 0) continue;
-        ++declared;
-    }
-    ASSERT_EQ(declared, std::size(ssg::kAllModes));
-
-    // The non-idempotent Kitty pop must NOT appear in the constant crash-undo.
-    ASSERT_TRUE(undo.find(std::string{ssg::kKeyboardProtocol.leave}) ==
-                std::string::npos);
-
-    // Mouse reporting must be disabled BEFORE the alternate screen is left, or
-    // reporting stays on in the primary screen.
-    ASSERT_TRUE(undo.find("\x1b[?1000l") < undo.find("\x1b[?1049l"));
-}
-
 TEST(kittyKeyboardModeRoundTripsThroughAGuard) {
     // Entering the mode writes the flag-1 push; the Guard's destruction writes the
     // matching pop.  Routing through TerminalModes (not a hand-written pair) is
@@ -332,7 +281,6 @@ SSG_TEST_SUITE(test_terminal) {
     RUN(everyDeclaredModeLeavesExactlyWhatItEnters);
     RUN(modeStackReproducesTheCuratedSetupAndRestoreSequences);
     RUN(everyEnteredModeIsLeftInReverseOrder);
-    RUN(theCrashUndoLeavesEveryDeclaredModeInReverseOrder);
     RUN(kittyKeyboardModeRoundTripsThroughAGuard);
     RUN(aFrameWithNoCaretLeavesTheCursorVisible);
     RUN(classifySignalTagsMapsSignalNumbers);

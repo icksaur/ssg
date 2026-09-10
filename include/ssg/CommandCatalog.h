@@ -174,7 +174,7 @@ namespace detail {
 // Refuses a payload of the wrong type, and a missing one: the command said it
 // needs an argument.
 template <typename Arguments, typename Fn>
-CommandHandler makeTypedHandler(Fn&& fn) {
+static CommandHandler typedHandler(Fn&& fn) {
     return [call = std::forward<Fn>(fn)](
                CommandContext& context,
                std::any const& payload) -> CommandHandlerResult {
@@ -193,7 +193,7 @@ CommandHandler makeTypedHandler(Fn&& fn) {
 // that sent the wrong type would be served the default instead of being told.
 // The presence of ANY payload is what separates them.
 template <typename Arguments, typename Fn>
-CommandHandler makeOptionalTypedHandler(Fn&& fn) {
+static CommandHandler optionalTypedHandler(Fn&& fn) {
     return [call = std::forward<Fn>(fn)](
                CommandContext& context,
                std::any const& payload) -> CommandHandlerResult {
@@ -219,7 +219,7 @@ CommandHandler makeOptionalTypedHandler(Fn&& fn) {
 template <typename Arguments, typename Fn>
 CommandHandlerBinding bindWireHandler(Fn&& fn) {
     return {{std::type_index{typeid(Arguments)}, true, true},
-            detail::makeTypedHandler<Arguments>(std::forward<Fn>(fn))};
+            detail::typedHandler<Arguments>(std::forward<Fn>(fn))};
 }
 
 // The implementation, taking a typed argument that does NOT cross the wire.
@@ -233,7 +233,7 @@ CommandHandlerBinding bindWireHandler(Fn&& fn) {
 template <typename Arguments, typename Fn>
 CommandHandlerBinding bindInProcessHandler(Fn&& fn) {
     return {{std::type_index{typeid(Arguments)}, false, true},
-            detail::makeTypedHandler<Arguments>(std::forward<Fn>(fn))};
+            detail::typedHandler<Arguments>(std::forward<Fn>(fn))};
 }
 
 // The implementation, taking a typed argument that crosses the wire and may be
@@ -246,7 +246,7 @@ CommandHandlerBinding bindInProcessHandler(Fn&& fn) {
 template <typename Arguments, typename Fn>
 CommandHandlerBinding bindOptionalWireHandler(Fn&& fn) {
     return {{std::type_index{typeid(Arguments)}, true, false},
-            detail::makeOptionalTypedHandler<Arguments>(std::forward<Fn>(fn))};
+            detail::optionalTypedHandler<Arguments>(std::forward<Fn>(fn))};
 }
 
 // The implementation, taking a typed argument that may be absent and never
@@ -260,7 +260,7 @@ CommandHandlerBinding bindOptionalWireHandler(Fn&& fn) {
 template <typename Arguments, typename Fn>
 CommandHandlerBinding bindOptionalInProcessHandler(Fn&& fn) {
     return {{std::type_index{typeid(Arguments)}, false, false},
-            detail::makeOptionalTypedHandler<Arguments>(std::forward<Fn>(fn))};
+            detail::optionalTypedHandler<Arguments>(std::forward<Fn>(fn))};
 }
 
 // The implementation of a command that takes no arguments.

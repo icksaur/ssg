@@ -162,6 +162,10 @@ def references(entry: dict, root: pathlib.Path) -> tuple[str, set[str]]:
     ]
     # Drop the compiler driver and the source path; libclang wants flags only.
     args = [a for a in args[1:] if not a.endswith(".cpp") and not a.endswith(".o")]
+    # libclang does not ship the driver's own resource headers on its default
+    # search path, so without these every translation unit fails on <stddef.h>
+    # and clang discards the function bodies that hold most references.
+    args += system_include_args()
     index = ci.Index.create()
     try:
         unit = index.parse(entry["file"], args=args)

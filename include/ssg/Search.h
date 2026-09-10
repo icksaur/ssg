@@ -51,21 +51,11 @@ struct WorkspaceFile {
     friend bool operator==(const WorkspaceFile&, const WorkspaceFile&) = default;
 };
 
-struct WorkspaceSymbol {
-    std::string path;
-    std::string name;
-    std::size_t line = 1;
-    std::size_t column = 1;
-    friend bool operator==(const WorkspaceSymbol&,
-                           const WorkspaceSymbol&) = default;
-};
-
 struct WorkspaceSnapshot {
     // Replace preview is intentionally the sole eager consumer. Interactive
     // workspace search reads through WorkspaceCorpus instead.
     std::uint64_t revision{0};
     std::vector<WorkspaceFile> files;
-    std::vector<WorkspaceSymbol> symbols;
     friend bool operator==(const WorkspaceSnapshot&,
                            const WorkspaceSnapshot&) = default;
 };

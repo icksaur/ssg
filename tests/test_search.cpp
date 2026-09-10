@@ -37,20 +37,6 @@ WorkspaceSnapshot fixtureWorkspace(std::uint64_t revision) {
          .text = "search ranking\nworker\ncancel token\n"},
         {.path = "src/session.cpp", .text = "session state\n"},
         },
-        .symbols = {
-        {.path = "include/ssg/search.h",
-         .name = "SearchResult",
-         .line = 1,
-         .column = 8},
-        {.path = "src/search.cpp",
-         .name = "SearchController",
-         .line = 1,
-         .column = 1},
-        {.path = "src/session.cpp",
-         .name = "Editor",
-         .line = 1,
-         .column = 1},
-        },
     };
 }
 

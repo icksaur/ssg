@@ -1,5 +1,4 @@
 #include <ssg/UiRegionProjection.h>
-#include <ssg/ShellViewState.h>
 #include <ssg/UiTree.h>
 #include <ssg/Widget.h>
 #include "test_helpers.h"
@@ -12,15 +11,25 @@
 
 namespace {
 
+// A projected item's fields, without the production accessibility-tree
+// vocabulary these tests do not otherwise exercise.
+struct ProjectedItem {
+    std::string id;
+    std::string label;
+    ssg::Rect rect;
+    ssg::SemanticRole role = ssg::SemanticRole::Canvas;
+    std::string content;
+    std::optional<std::string> commandId;
+};
+
 ssg::UiRegionProjectionResult projectRegionForTest(
     const ssg::UiNode& region, ssg::Rect rect,
-    ssg::ShellNodeKind kind, ssg::SemanticRole role,
-    const ssg::Style& style,
-    std::vector<ssg::AccessibilityNode>& out) {
+    ssg::SemanticRole role, const ssg::Style& style,
+    std::vector<ProjectedItem>& out) {
     ssg::SolvedUiRegion solved;
     auto result = ssg::projectUiRegion(region, rect, role, style, solved);
     for (const auto& item : solved.items) {
-        out.push_back({kind, item.id, item.label, item.rect, item.role,
+        out.push_back({item.id, item.label, item.rect, item.role,
                        item.content, item.command});
     }
     return result;
@@ -70,9 +79,9 @@ TEST(gridUiRegionProjectionRefusesAViewCenter) {
          UiNode{UiNodeId{"footer.right"}, Size::autoSize(), std::move(right)}}};
     UiNode regionRoot{UiNodeId{"footer"}, Size::flex(), std::move(root)};
 
-    std::vector<ssg::AccessibilityNode> out;
+    std::vector<ProjectedItem> out;
     const auto result = projectRegionForTest(
-        regionRoot, {0, 0, 100, 1}, ssg::ShellNodeKind::FooterField,
+        regionRoot, {0, 0, 100, 1},
         ssg::SemanticRole::Footer, ssg::Style{}, out);
     ASSERT_TRUE(!result.ok());
 }
@@ -80,9 +89,9 @@ TEST(gridUiRegionProjectionRefusesAViewCenter) {
 TEST(gridUiRegionProjectionRefusesMalformedShape) {
     UiContainer root{Axis::Column, {}, {}, {}};
     UiNode malformed{UiNodeId{"footer"}, Size::flex(), std::move(root)};
-    std::vector<ssg::AccessibilityNode> out;
+    std::vector<ProjectedItem> out;
     const auto result = projectRegionForTest(
-        malformed, {0, 0, 100, 1}, ssg::ShellNodeKind::FooterField,
+        malformed, {0, 0, 100, 1},
         ssg::SemanticRole::Footer, ssg::Style{}, out);
     ASSERT_TRUE(!result.ok());
     ASSERT_EQ(result.error, std::string{"UI region root must be a Row container"});

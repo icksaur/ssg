@@ -101,27 +101,4 @@ class TerminalSession {
 void writeAll(std::string_view bytes);
 [[nodiscard]] ViewportDimensions terminalSize();
 
-namespace detail {
-
-inline constexpr std::size_t kUndoLength = [] {
-    std::size_t total = 0;
-    for (const auto& mode : kAllModes) total += mode.leave.size();
-    return total;
-}();
-
-inline constexpr std::array<char, kUndoLength> kUndoStorage = [] {
-    std::array<char, kUndoLength> bytes{};
-    std::size_t at = 0;
-    for (std::size_t i = std::size(kAllModes); i-- > 0;) {
-        for (char byte : kAllModes[i].leave) bytes[at++] = byte;
-    }
-    return bytes;
-}();
-
-} // namespace detail
-
-[[nodiscard]] constexpr std::string_view allModesUndoSequence() noexcept {
-    return {detail::kUndoStorage.data(), detail::kUndoStorage.size()};
-}
-
 } // namespace ssg

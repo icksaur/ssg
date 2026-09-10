@@ -191,7 +191,6 @@ TEST(workspacePreviewProducesReplacements) {
     WorkspaceSnapshot workspace{
         1,
         {{"a.txt", "cat cat"}, {"b.txt", "dog cat"}, {"c.txt", "none"}},
-        {},
     };
     FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     auto preview = previewWorkspaceReplace(workspace, request, "x");

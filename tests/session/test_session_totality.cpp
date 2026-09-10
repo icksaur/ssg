@@ -3,7 +3,6 @@
 
 #include <ssg/Editor.h>
 #include <ssg/Renderer.h>
-#include <ssg/ShellViewState.h>
 #include <ssg/Viewport.h>
 
 #include <filesystem>
@@ -42,32 +41,6 @@ const std::vector<ssg::ViewportDimensions>& sweep() {
         {20, 4},  {21, 5},  {8, 3},   {80, 24}, {200, 60}, {132, 43},
     };
     return dims;
-}
-
-bool within(const ssg::Rect& rect, int cols, int rows) {
-    return rect.x >= 0 && rect.y >= 0 && rect.width >= 0 && rect.height >= 0 &&
-           rect.right() <= cols && rect.bottom() <= rows;
-}
-
-// Assert every published region rectangle lies inside the viewport.
-void assertRegionsInBounds(const ssg::ShellViewState& shell) {
-    int const cols = shell.viewport.columns;
-    int const rows = shell.viewport.rows;
-    if (shell.header) ASSERT_TRUE(within(*shell.header, cols, rows));
-    if (shell.footer) ASSERT_TRUE(within(*shell.footer, cols, rows));
-    if (shell.tabBar) ASSERT_TRUE(within(*shell.tabBar, cols, rows));
-    if (shell.panel) ASSERT_TRUE(within(*shell.panel, cols, rows));
-    if (shell.panelScrollbar) ASSERT_TRUE(within(*shell.panelScrollbar, cols, rows));
-    if (shell.prompt) ASSERT_TRUE(within(*shell.prompt, cols, rows));
-    for (auto const& pane : shell.panes) {
-        ASSERT_TRUE(within(pane.frame, cols, rows));
-        ASSERT_TRUE(within(pane.content, cols, rows));
-        ASSERT_TRUE(within(pane.scrollbar, cols, rows));
-    }
-    for (auto const& hit : shell.tabHits) ASSERT_TRUE(within(hit.rect, cols, rows));
-    for (auto const& node : shell.accessibilityNodes) {
-        ASSERT_TRUE(within(node.rect, cols, rows));
-    }
 }
 
 // One UI-state configuration, applied to a fresh runtime by dispatching a command

@@ -6,7 +6,6 @@
 #include <ssg/GridPresenter.h>
 #include <ssg/Style.h>
 #include <ssg/Theme.h>
-#include <ssg/ShellViewState.h>
 #include <ssg/LineLayoutCache.h>
 
 #include <array>

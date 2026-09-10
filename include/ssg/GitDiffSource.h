@@ -13,8 +13,6 @@
 
 namespace ssg {
 
-enum class GitBaselineKind : std::uint8_t { Head };
-
 // How the git-diff worker decides when to refresh. Poll re-scans on a fixed
 // cadence; Event refreshes on filesystem watch events (with a long-interval
 // backstop). The distinction is the worker's; it lives here so the mode resolver
@@ -29,7 +27,6 @@ enum class GitDiffMode : std::uint8_t { Poll, Event };
                                              bool watcherAvailable) noexcept;
 
 struct GitDiffConfig {
-    GitBaselineKind baseline = GitBaselineKind::Head;
     std::size_t maxFiles = 10'000;
     std::size_t maxBytesPerFile = 4 * 1024 * 1024;
 };
