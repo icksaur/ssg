@@ -14,20 +14,6 @@
 
 namespace ssg::tui {
 
-class TerminalInputCapture {
-public:
-    [[nodiscard]] std::optional<SemanticCommand> capture(
-        CommittedText const& text, KeymapViewState const& keymap,
-        std::string_view context);
-    [[nodiscard]] std::optional<SemanticCommand> capture(
-        KeyStroke const& stroke, KeymapViewState const& keymap,
-        std::string_view context);
-    void reset() noexcept;
-
-private:
-    KeySequence pending_;
-};
-
 class TuiClient {
 public:
     TuiClient(Editor& runtime, ViewportDimensions dimensions);
@@ -38,7 +24,6 @@ public:
     TuiClient(TuiClient&&) = delete;
     TuiClient& operator=(TuiClient&&) = delete;
 
-    [[nodiscard]] CommandResult submit(SemanticCommand const& command);
     [[nodiscard]] CommandResult submit(std::string command_id,
                                        std::any payload = {});
     [[nodiscard]] GridPresentation const& snapshot() const noexcept {

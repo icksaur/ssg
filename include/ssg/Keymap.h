@@ -13,7 +13,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <variant>
 #include <vector>
 
 namespace ssg {
@@ -181,18 +180,6 @@ struct KeymapMutationResult {
 
 enum class TextRouting : std::uint8_t { Insert, PromptQuery, Ignore };
 
-class CommittedText {
-public:
-    [[nodiscard]] static std::optional<CommittedText> fromUtf8(
-        std::string text);
-    [[nodiscard]] const std::string& utf8() const noexcept { return text_; }
-    bool operator==(const CommittedText&) const = default;
-
-private:
-    explicit CommittedText(std::string text) : text_{std::move(text)} {}
-    std::string text_;
-};
-
 struct ScrollLinesArguments {
     std::int64_t rows;
     bool operator==(const ScrollLinesArguments&) const = default;
@@ -212,19 +199,6 @@ struct ScrollFractionArguments {
     bool operator==(const ScrollFractionArguments&) const = default;
 };
 
-using SemanticInputArguments =
-    std::variant<std::monostate, TextInputArguments, SelectionCommandArguments,
-                 ScrollLinesArguments, ScrollPagesArguments,
-                 ScrollFractionArguments>;
-
-struct SemanticCommand {
-    std::string commandId;
-    SemanticInputArguments arguments;
-
-    bool operator==(const SemanticCommand& other) const;
-};
-
 [[nodiscard]] TextRouting textRoutingForContext(std::string_view context) noexcept;
-[[nodiscard]] SemanticCommand semanticInputForText(const CommittedText& committed);
 
 } // namespace ssg

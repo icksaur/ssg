@@ -67,8 +67,7 @@ TEST(realRuntimeSnapshotRendersDeterministicallyWithinTheme) {
         ASSERT_TRUE(cell.foreground < ssg::kThemeColorSlotCount);
         ASSERT_TRUE(cell.background < ssg::kThemeColorSlotCount);
     }
-    ASSERT_EQ(ssg::renderFrame(client.snapshot(), lineCache).canonical(),
-              screen.canonical());
+    ASSERT_EQ(ssg::renderFrame(client.snapshot(), lineCache), screen);
 }
 
 }  // namespace

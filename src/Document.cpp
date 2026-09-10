@@ -116,10 +116,6 @@ DocumentMode Document::mode() const noexcept {
     return impl_->mode;
 }
 
-bool Document::dirty() const noexcept {
-    return impl_->dirty;
-}
-
 DocumentSnapshot Document::snapshot() const {
     return DocumentSnapshot{
         impl_->tree.text(), impl_->revision, impl_->mode, impl_->dirty};

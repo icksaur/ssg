@@ -4,7 +4,7 @@
 // uiSchema. Publishing the authority's screen schema + real presence (a
 // web-facing change) must leave that grid byte-for-byte unchanged. This golden captures the
 // rendered grid across representative interaction states; if the publish alters TUI output,
-// canonical() diverges and this fails. Regenerate (only after an intended TUI change) with
+// the serialized grid diverges and this fails. Regenerate (only after an intended TUI change) with
 // SSG_REGEN_GOLDEN=1.
 
 #include "../test_helpers.h"
@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <string>
 
@@ -31,6 +32,54 @@ std::filesystem::path uniqueRoot() {
     for (int line = 0; line < 40; ++line) out << "alpha line " << line << "\n";
     std::ofstream{root / "workspace" / "beta.txt"} << "beta content\n";
     return root;
+}
+
+std::string escaped(std::string_view text) {
+    std::string result;
+    for (unsigned char byte : text) {
+        switch (byte) {
+        case '\\': result += "\\\\"; break;
+        case '"': result += "\\\""; break;
+        case '\n': result += "\\n"; break;
+        case '\r': result += "\\r"; break;
+        case '\t': result += "\\t"; break;
+        default:
+            if (byte < 0x20 || byte == 0x7f) {
+                std::ostringstream encoded;
+                encoded << "\\x" << std::hex << std::setw(2)
+                        << std::setfill('0') << static_cast<unsigned>(byte);
+                result += encoded.str();
+            } else {
+                result.push_back(static_cast<char>(byte));
+            }
+        }
+    }
+    return result;
+}
+
+std::string serializeGrid(const ssg::CellGrid& grid) {
+    std::ostringstream output;
+    output << "size " << grid.size.columns << ' ' << grid.size.rows << '\n';
+    for (int row = 0; row < grid.size.rows; ++row) {
+        for (int column = 0; column < grid.size.columns; ++column) {
+            auto const& cell = grid.at(column, row);
+            if (cell.text == " " && cell.role == ssg::SemanticRole::Canvas &&
+                !cell.continuation && cell.tint == ssg::DiffTint::None) {
+                continue;
+            }
+            output << "cell " << column << ' ' << row << ' '
+                   << static_cast<unsigned>(cell.foreground) << ' '
+                   << static_cast<unsigned>(cell.background) << ' '
+                   << static_cast<unsigned>(cell.role) << ' '
+                   << (cell.continuation ? "~" : '"' + escaped(cell.text) + '"')
+                   << (cell.tint == ssg::DiffTint::None
+                           ? ""
+                           : " tint " +
+                                 std::to_string(static_cast<unsigned>(cell.tint)))
+                   << '\n';
+        }
+    }
+    return output.str();
 }
 
 std::string readGolden(const std::string& path) {
@@ -65,7 +114,7 @@ std::string captureGridMatrix() {
             return;
         }
         std::istringstream lines{
-            ssg::renderFrame(*frame, lineCache).canonical()};
+            serializeGrid(ssg::renderFrame(*frame, lineCache))};
         std::string line;
         while (std::getline(lines, line)) {
             // Drop "cell <col> 0 ..." (row 0 = header); keep sizes and every other row.

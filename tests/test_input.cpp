@@ -255,23 +255,6 @@ TEST(resolverAndHasGlobalBindingAgreeOnDuplicateGlobals) {
     }
 }
 
-TEST(imeAcceptsOnlyCommittedUtf8Text) {
-    const auto committed =
-        ssg::CommittedText::fromUtf8("e\xCC\x81 \xF0\x9F\x98\x80");
-    ASSERT_TRUE(committed.has_value());
-    if (committed) {
-        const auto semantic = ssg::semanticInputForText(*committed);
-        ASSERT_EQ(semantic.commandId, std::string{"text.insert"});
-        ASSERT_EQ(std::get<ssg::TextInputArguments>(semantic.arguments).text,
-                  committed->utf8());
-    }
-    ASSERT_FALSE(ssg::CommittedText::fromUtf8(std::string{"\xC0\xAF", 2})
-                     .has_value());
-    ASSERT_FALSE(ssg::CommittedText::fromUtf8(std::string{"a\0b", 3})
-                     .has_value());
-    ASSERT_FALSE(ssg::CommittedText::fromUtf8("").has_value());
-}
-
 TEST(applyKeymapBindAddsRebindsAndRejectsInvalidRequests) {
     const auto settingsSeq = *ssg::parseKeySequence({"Mod+KeyS"});
     ssg::KeymapViewState base{"m", {{settingsSeq, "settings.open", "*"}}};
@@ -479,7 +462,6 @@ SSG_TEST_SUITE(test_input) {
     RUN(hasGlobalBindingRequiresUnshadowedStar);
     RUN(validateKeymapFlagsGlobalShadowRegardlessOfOrder);
     RUN(resolverAndHasGlobalBindingAgreeOnDuplicateGlobals);
-    RUN(imeAcceptsOnlyCommittedUtf8Text);
     RUN(applyKeymapBindAddsRebindsAndRejectsInvalidRequests);
     RUN(applyKeymapUnbindRemovesOrNoOpsAndRejectsBadSequence);
     RUN(backendHasNoPlatformInputCaptureDependency);

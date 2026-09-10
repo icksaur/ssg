@@ -36,10 +36,6 @@ constexpr bool valid(SemanticRole role) noexcept {
     return position(role) < kSemanticRoleCount;
 }
 
-constexpr bool valid(SyntaxScope scope) noexcept {
-    return position(scope) < kSyntaxScopeCount;
-}
-
 // Parses a "#rrggbb" literal (exactly '#' followed by 6 hex digits; no short
 // form, no alpha channel -- the one shape theme.set accepts).
 std::optional<SrgbColor> parseHexColor(std::string_view text) noexcept {
@@ -72,10 +68,6 @@ std::optional<SrgbColor> parseHexColor(std::string_view text) noexcept {
 SrgbColor ThemeSnapshot::color(SemanticRole role) const {
     if (!valid(role)) throw std::invalid_argument("semantic role is not recognized");
     return roleColors[position(role)];
-}
-SrgbColor ThemeSnapshot::color(SyntaxScope scope) const {
-    if (!valid(scope)) throw std::invalid_argument("syntax scope is not recognized");
-    return syntaxColors[position(scope)];
 }
 
 ThemeSetResult ThemeSnapshot::withOverrides(
@@ -112,11 +104,6 @@ std::optional<SemanticRole> semanticRoleFromName(std::string_view name) {
         if (kSemanticNames[index] == name) return kAllSemanticRoles[index];
     }
     return std::nullopt;
-}
-
-std::string_view syntaxScopeName(SyntaxScope scope) {
-    if (!valid(scope)) throw std::invalid_argument("syntax scope is not recognized");
-    return kSyntaxNames[position(scope)];
 }
 
 std::optional<SyntaxScope> syntaxScopeFromName(std::string_view name) {

@@ -23,7 +23,7 @@ private:
 };
 
 CatalogDispatchResult rejected(CommandError error, std::string message) {
-    return {error, std::move(message), std::nullopt, std::nullopt};
+    return {error, std::move(message), std::nullopt};
 }
 
 // Title-case a lowercase segment: "line_down" -> "Line Down". Underscores become
@@ -75,11 +75,6 @@ void requireField(bool present, std::string_view id, std::string_view field) {
 
 std::string CommandEntry::displayLabel() const {
     return label.empty() ? humanize(id) : label;
-}
-
-void CommandContext::setActiveWorkspace(WorkspaceId workspace) noexcept {
-    workspaceChanged_ = true;
-    activeWorkspace_ = workspace;
 }
 
 CommandHandlerResult CommandHandlerResult::success() {
@@ -272,13 +267,7 @@ CatalogDispatchResult CommandCatalog::dispatch(ClientCommand const& command) {
                         "a view-action command did not return a view action");
     }
 
-    const auto activeWorkspace =
-        registered->effect == CommandEffect::Mutation &&
-                context.workspaceChanged_
-            ? std::optional{context.activeWorkspace_}
-            : std::nullopt;
-    return {CommandError::None, {}, std::move(handlerResult.viewAction),
-            activeWorkspace};
+    return {CommandError::None, {}, std::move(handlerResult.viewAction)};
 }
 
 CommandEntry const* CommandCatalog::find(std::string_view id) const {
@@ -318,14 +307,6 @@ std::vector<CommandEntry const*> CommandCatalog::ownedBy(
         if (!entry.retired && entry.owner == owner) owned.push_back(&entry);
     }
     return owned;
-}
-
-std::size_t CommandCatalog::size() const {
-    std::size_t live = 0;
-    for (auto const& entry : entries_) {
-        if (!entry.retired) ++live;
-    }
-    return live;
 }
 
 }  // namespace ssg

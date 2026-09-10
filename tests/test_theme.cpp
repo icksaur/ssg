@@ -24,6 +24,19 @@ using ssg::SemanticRole;
 using ssg::SrgbColor;
 using ssg::SyntaxScope;
 
+constexpr std::array<std::string_view, ssg::kSyntaxScopeCount> kSyntaxNames{
+    "plain_text", "comment", "keyword", "string", "number", "type",
+    "function", "variable", "operator", "punctuation", "invalid",
+};
+
+std::string_view syntaxName(SyntaxScope scope) {
+    return kSyntaxNames[static_cast<std::size_t>(scope)];
+}
+
+SrgbColor syntaxColor(ssg::ThemeSnapshot const& theme, SyntaxScope scope) {
+    return theme.syntaxColors[static_cast<std::size_t>(scope)];
+}
+
 std::string hexOf(SrgbColor color) {
     char buffer[8];
     std::snprintf(buffer, sizeof(buffer), "#%02x%02x%02x", color.red,
@@ -40,8 +53,8 @@ ssg::ThemeSetArguments fullIdentityTable(ssg::ThemeSnapshot const& theme) {
                                  hexOf(theme.color(role)));
     }
     for (const auto scope : ssg::kAllSyntaxScopes) {
-        arguments.colors.emplace(std::string{ssg::syntaxScopeName(scope)},
-                                 hexOf(theme.color(scope)));
+        arguments.colors.emplace(std::string{syntaxName(scope)},
+                                 hexOf(syntaxColor(theme, scope)));
     }
     return arguments;
 }
@@ -59,7 +72,7 @@ TEST(themeColorAccessorsReturnTheDirectRoleAndScopeColors) {
                   theme.roleColors[static_cast<std::size_t>(role)]);
     }
     for (const auto scope : ssg::kAllSyntaxScopes) {
-        ASSERT_EQ(theme.color(scope),
+        ASSERT_EQ(syntaxColor(theme, scope),
                   theme.syntaxColors[static_cast<std::size_t>(scope)]);
     }
     ASSERT_EQ(theme.roleColors.size(), ssg::kSemanticRoleCount);
@@ -95,8 +108,8 @@ TEST(themeSetPartialTableChangesOnlyTheNamedColorsExactly) {
     for (const auto scope : ssg::kAllSyntaxScopes) {
         const auto expected = scope == SyntaxScope::Comment
                                   ? replacement
-                                  : current.color(scope);
-        ASSERT_EQ(result.snapshot.color(scope), expected);
+                                  : syntaxColor(current, scope);
+        ASSERT_EQ(syntaxColor(result.snapshot, scope), expected);
     }
 }
 

@@ -70,7 +70,7 @@ TEST(referenceEditorTransactionScript) {
     ASSERT_TRUE(result.accepted());
     ASSERT_EQ(document.snapshot().text, std::string(ref::snapshot_text(oracle)));
     ASSERT_EQ(result.revision, std::uint64_t{2});
-    ASSERT_TRUE(document.dirty());
+    ASSERT_TRUE(document.snapshot().dirty);
 }
 
 class Random {
@@ -130,7 +130,7 @@ TEST(randomizedMultiEditSnapshotsMatchReferenceEditor) {
     }
 
     ASSERT_EQ(document.revision(), std::uint64_t{501});
-    ASSERT_TRUE(document.dirty());
+    ASSERT_TRUE(document.snapshot().dirty);
 }
 
 TEST(readOnlyAndDiffModesRejectWithoutStateChange) {

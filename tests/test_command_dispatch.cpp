@@ -347,29 +347,6 @@ TEST(aHandlerCannotMutateTheCommandCatalogReentrantly) {
     fs::remove_all(root);
 }
 
-TEST(editorSessionAbsorbsSuccessfulWorkspaceChanges) {
-    auto root = uniqueRoot();
-    auto runtime = makeRuntime(root);
-    ASSERT_TRUE(runtime != nullptr);
-    if (!runtime) return;
-
-    (void)runtime->registerCommand(ssg::CommandSpec{
-        .id = "oracle.workspace",
-        .owner = "test-oracle",
-        .summary = "changes the active workspace",
-        .effect = ssg::CommandEffect::Mutation,
-        .binding = ssg::bindNoArgumentHandler([](ssg::CommandContext& context) {
-            context.setActiveWorkspace(ssg::WorkspaceId{7});
-            return ssg::CommandHandlerResult::success();
-        }),
-    });
-
-    ASSERT_TRUE(runtime->dispatch({"oracle.workspace", {}}).accepted());
-    ASSERT_EQ(runtime->activeWorkspace(),
-              std::optional<ssg::WorkspaceId>{ssg::WorkspaceId{7}});
-    fs::remove_all(root);
-}
-
 }  // namespace
 
 SSG_TEST_SUITE(test_command_dispatch) {
@@ -378,7 +355,6 @@ SSG_TEST_SUITE(test_command_dispatch) {
     RUN(aHandlerThatDispatchesIsToldToDeferInstead);
     RUN(routingCommandsQueueExactlyOneDirectOrdinaryTarget);
     RUN(aHandlerCannotMutateTheCommandCatalogReentrantly);
-    RUN(editorSessionAbsorbsSuccessfulWorkspaceChanges);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

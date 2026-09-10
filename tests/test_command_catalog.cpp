@@ -64,7 +64,7 @@ TEST(addRejectsADuplicateIdAndNamesBothOwners) {
     // claimants -- knowing only the id leaves the author hunting for the other.
     ASSERT_TRUE(message.find("first-owner") != std::string::npos);
     ASSERT_TRUE(message.find("second-owner") != std::string::npos);
-    ASSERT_EQ(catalog.size(), std::size_t{1});
+    ASSERT_EQ(catalog.commands().size(), std::size_t{1});
 }
 
 // Every required field is checked at add, because a spec passed to add is
@@ -319,7 +319,7 @@ TEST(retiringACommandFreesItsNameButNeverItsHandle) {
     auto const* live = catalog.find("lua.hello");
     ASSERT_TRUE(live != nullptr);
     ASSERT_TRUE(catalog.find(replaced[0]) == live);
-    ASSERT_EQ(catalog.size(), std::size_t{1});
+    ASSERT_EQ(catalog.commands().size(), std::size_t{1});
 }
 
 TEST(retiringWithoutReplacementMakesTheCommandUnknown) {
@@ -328,7 +328,7 @@ TEST(retiringWithoutReplacementMakesTheCommandUnknown) {
     catalog.replaceGeneration(std::array{handle}, {});
     ASSERT_TRUE(catalog.find("lua.gone") == nullptr);
     ASSERT_TRUE(catalog.find(handle) == nullptr);
-    ASSERT_EQ(catalog.size(), std::size_t{0});
+    ASSERT_EQ(catalog.commands().size(), std::size_t{0});
 }
 
 TEST(aBatchWithOneBadSpecChangesNothing) {
@@ -352,7 +352,7 @@ TEST(aBatchWithOneBadSpecChangesNothing) {
     ASSERT_TRUE(threw);
     ASSERT_TRUE(catalog.find(previous) != nullptr);
     ASSERT_TRUE(catalog.find("lua.fine") == nullptr);
-    ASSERT_EQ(catalog.size(), std::size_t{1});
+    ASSERT_EQ(catalog.commands().size(), std::size_t{1});
 }
 
 TEST(aBatchRepeatingAnIdIsRefusedWholesale) {
@@ -367,7 +367,7 @@ TEST(aBatchRepeatingAnIdIsRefusedWholesale) {
         threw = true;
     }
     ASSERT_TRUE(threw);
-    ASSERT_EQ(catalog.size(), std::size_t{0});
+    ASSERT_EQ(catalog.commands().size(), std::size_t{0});
 }
 
 TEST(aBatchMayReuseAnIdItIsItselfRetiring) {
@@ -384,7 +384,7 @@ TEST(aBatchMayReuseAnIdItIsItselfRetiring) {
     ASSERT_TRUE(catalog.find("lua.a") != nullptr);
     ASSERT_TRUE(catalog.find("lua.b") == nullptr);
     ASSERT_TRUE(catalog.find("lua.c") != nullptr);
-    ASSERT_EQ(catalog.size(), std::size_t{2});
+    ASSERT_EQ(catalog.commands().size(), std::size_t{2});
 }
 
 SSG_TEST_SUITE(test_command_catalog) {

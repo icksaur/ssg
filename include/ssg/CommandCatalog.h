@@ -45,33 +45,10 @@
 
 namespace ssg {
 
-struct WorkspaceId {
-    explicit constexpr WorkspaceId(std::uint64_t value = 0) noexcept
-        : value_{value} {}
-    [[nodiscard]] constexpr std::uint64_t value() const noexcept {
-        return value_;
-    }
-    constexpr auto operator<=>(WorkspaceId const&) const noexcept = default;
-
-private:
-    std::uint64_t value_;
-};
-
 class CommandCatalog;
 struct CommandHandlerResult;
 
-class CommandContext {
-public:
-    void setActiveWorkspace(WorkspaceId workspace) noexcept;
-
-private:
-    friend class CommandCatalog;
-
-    CommandContext() = default;
-
-    bool workspaceChanged_{false};
-    WorkspaceId activeWorkspace_;
-};
+struct CommandContext {};
 
 enum class CommandEffect : std::uint8_t {
     Observation,
@@ -124,7 +101,6 @@ struct CatalogDispatchResult {
     CommandError error;
     std::string message;
     std::optional<ViewAction> viewAction;
-    std::optional<WorkspaceId> activeWorkspace;
 
     [[nodiscard]] bool accepted() const noexcept {
         return error == CommandError::None;
@@ -396,7 +372,6 @@ public:
     [[nodiscard]] std::vector<CommandEntry const*> commands() const;
     [[nodiscard]] std::vector<CommandEntry const*> ownedBy(
         std::string_view owner) const;
-    [[nodiscard]] std::size_t size() const;
 
 private:
     struct ValidatedSpec;

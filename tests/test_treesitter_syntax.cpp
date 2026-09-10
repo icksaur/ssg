@@ -3,6 +3,7 @@
 
 #include <ssg/Theme.h>
 
+#include <array>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -33,6 +34,11 @@ struct FixtureCase {
     bool overlapUseLast = false;
 };
 
+constexpr std::array<std::string_view, kSyntaxScopeCount> kSyntaxNames{
+    "plain_text", "comment", "keyword", "string", "number", "type",
+    "function", "variable", "operator", "punctuation", "invalid",
+};
+
 std::string readFile(const fs::path& path) {
     std::ifstream input{path, std::ios::binary};
     return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
@@ -59,7 +65,7 @@ std::string serializeSpans(const std::vector<SyntaxSpan>& spans) {
     std::ostringstream output;
     for (const auto& span : spans) {
         output << span.begin.value() << ' ' << span.end.value() << ' '
-               << syntaxScopeName(span.scope) << '\n';
+               << kSyntaxNames[static_cast<std::size_t>(span.scope)] << '\n';
     }
     return output.str();
 }

@@ -327,9 +327,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     unidentifiedSections.diff = overlay.diff;
     auto unidentified = snapshotWith(
         noDiff, std::move(unidentifiedSections), noDiff);
-    ASSERT_EQ(ssg::renderFrame(unidentified, lineCache)
-                 .canonical(),
-              noDiffGrid.canonical());
+    ASSERT_EQ(ssg::renderFrame(unidentified, lineCache), noDiffGrid);
 }
 
 SSG_TEST_SUITE(test_renderer_diff_overlay) {

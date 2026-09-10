@@ -233,7 +233,7 @@ TEST(productionRuntimeNormalScreenSatisfiesTheScreenContract) {
     ASSERT_TRUE(screenContains(grid, "first line"));
     ASSERT_TRUE(screenContains(grid, "alpha.txt"));
     // The screen is a pure function of the snapshot: a second render is identical.
-    ASSERT_EQ(ssg::renderFrame(*frame, lineCache).canonical(), grid.canonical());
+    ASSERT_EQ(ssg::renderFrame(*frame, lineCache), grid);
     fs::remove_all(root);
 }
 
@@ -265,7 +265,7 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     ASSERT_TRUE(screenContains(grid, "sa"));
     ASSERT_TRUE(screenContains(grid, "Save File"));
     ASSERT_TRUE(screenContains(grid, "Save As"));
-    ASSERT_EQ(ssg::renderFrame(*frame, lineCache).canonical(), grid.canonical());
+    ASSERT_EQ(ssg::renderFrame(*frame, lineCache), grid);
     fs::remove_all(root);
 }
 

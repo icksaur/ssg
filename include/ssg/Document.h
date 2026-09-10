@@ -78,7 +78,6 @@ public:
 
     [[nodiscard]] std::uint64_t revision() const noexcept;
     [[nodiscard]] DocumentMode mode() const noexcept;
-    [[nodiscard]] bool dirty() const noexcept;
     [[nodiscard]] DocumentSnapshot snapshot() const;
 
     [[nodiscard]] TransactionResult apply(EditTransaction const& transaction);

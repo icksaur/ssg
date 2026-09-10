@@ -6,8 +6,6 @@
 #include <ssg/WidgetLayout.h>
 
 #include <algorithm>
-#include <iomanip>
-#include <sstream>
 #include <stdexcept>
 
 namespace ssg {
@@ -101,29 +99,6 @@ DiffTints themeDiffTints(ThemeSnapshot const& theme) {
             .addedWord = added,
             .removedWord = removed,
             .modifiedWord = added};
-}
-
-std::string escaped(std::string_view text) {
-    std::string result;
-    for (unsigned char byte : text) {
-        switch (byte) {
-        case '\\': result += "\\\\"; break;
-        case '"': result += "\\\""; break;
-        case '\n': result += "\\n"; break;
-        case '\r': result += "\\r"; break;
-        case '\t': result += "\\t"; break;
-        default:
-            if (byte < 0x20 || byte == 0x7f) {
-                std::ostringstream encoded;
-                encoded << "\\x" << std::hex << std::setw(2) << std::setfill('0')
-                        << static_cast<unsigned>(byte);
-                result += encoded.str();
-            } else {
-                result.push_back(static_cast<char>(byte));
-            }
-        }
-    }
-    return result;
 }
 
 } // namespace
@@ -246,38 +221,6 @@ CellGridCell const& CellGrid::at(int column, int row) const {
         throw std::out_of_range{"cell is outside the grid"};
     }
     return cells[static_cast<std::size_t>(row * size.columns + column)];
-}
-
-// Deliberately omits literal palette/diffTints/selectionFill RGB values: those
-// are theme tuning, which changes often and independently of layout/content
-// correctness, and per-cell lines already reference palette INDEX + symbolic
-// tint kind (not resolved colors) -- coupling this golden to exact color
-// bytes would break every legitimate color tweak for no structural reason.
-// Theme color values are tested directly in test_theme.cpp instead.
-// seam-exempt: CellGrid serialization, not filesystem path resolution
-std::string CellGrid::canonical() const {
-    std::ostringstream output;
-    output << "size " << size.columns << ' ' << size.rows << '\n';
-    for (int row = 0; row < size.rows; ++row) {
-        for (int column = 0; column < size.columns; ++column) {
-            auto const& cell = at(column, row);
-            if (cell.text == " " && cell.role == SemanticRole::Canvas &&
-                !cell.continuation && cell.tint == DiffTint::None) {
-                continue;
-            }
-            output << "cell " << column << ' ' << row << ' '
-                   << static_cast<unsigned>(cell.foreground) << ' '
-                   << static_cast<unsigned>(cell.background) << ' '
-                   << static_cast<unsigned>(cell.role) << ' '
-                   << (cell.continuation ? "~" : '"' + escaped(cell.text) + '"')
-                   << (cell.tint == DiffTint::None
-                           ? ""
-                           : " tint " +
-                                 std::to_string(static_cast<unsigned>(cell.tint)))
-                   << '\n';
-        }
-    }
-    return output.str();
 }
 
 CellGrid renderFrame(const GridPresentation& snapshot,

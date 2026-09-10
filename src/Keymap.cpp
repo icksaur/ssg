@@ -2,59 +2,8 @@
 
 #include <algorithm>
 #include <stdexcept>
-#include <type_traits>
-
 namespace ssg {
 namespace {
-
-bool validUtf8WithoutNul(std::string_view text) {
-    for (std::size_t i = 0; i < text.size();) {
-        const auto lead = static_cast<unsigned char>(text[i]);
-        if (lead == 0) {
-            return false;
-        }
-        if (lead < 0x80) {
-            ++i;
-            continue;
-        }
-
-        std::size_t count = 0;
-        std::uint32_t value = 0;
-        std::uint32_t minimum = 0;
-        if ((lead & 0xE0) == 0xC0) {
-            count = 2;
-            value = lead & 0x1F;
-            minimum = 0x80;
-        } else if ((lead & 0xF0) == 0xE0) {
-            count = 3;
-            value = lead & 0x0F;
-            minimum = 0x800;
-        } else if ((lead & 0xF8) == 0xF0) {
-            count = 4;
-            value = lead & 0x07;
-            minimum = 0x10000;
-        } else {
-            return false;
-        }
-        if (i + count > text.size()) {
-            return false;
-        }
-        for (std::size_t j = 1; j < count; ++j) {
-            const auto continuation =
-                static_cast<unsigned char>(text[i + j]);
-            if ((continuation & 0xC0) != 0x80) {
-                return false;
-            }
-            value = (value << 6) | (continuation & 0x3F);
-        }
-        if (value < minimum || value > 0x10FFFF ||
-            (value >= 0xD800 && value <= 0xDFFF)) {
-            return false;
-        }
-        i += count;
-    }
-    return true;
-}
 
 bool validStroke(const KeyStroke& stroke) {
     return stroke.code != KeyCode::None;
@@ -63,12 +12,6 @@ bool validStroke(const KeyStroke& stroke) {
 bool knownContext(std::string_view context) {
     const auto contexts = keymapContexts();
     return std::ranges::find(contexts, context) != contexts.end();
-}
-
-bool selectionArgumentsEqual(const SelectionCommandArguments& left,
-                               const SelectionCommandArguments& right) {
-    return left.position == right.position &&
-           left.selection == right.selection;
 }
 
 } // namespace
@@ -446,13 +389,6 @@ KeymapMutationResult applyKeymapUnbind(
     return {std::nullopt, std::move(proposed)};
 }
 
-std::optional<CommittedText> CommittedText::fromUtf8(std::string text) {
-    if (text.empty() || !validUtf8WithoutNul(text)) {
-        return std::nullopt;
-    }
-    return CommittedText{std::move(text)};
-}
-
 ScrollFractionArguments::ScrollFractionArguments(
     std::uint32_t numeratorValue, std::uint32_t denominatorValue)
     : numerator{numeratorValue}, denominator{denominatorValue} {
@@ -460,31 +396,6 @@ ScrollFractionArguments::ScrollFractionArguments(
         throw std::invalid_argument(
             "scroll fraction requires 0 <= numerator <= denominator");
     }
-}
-
-bool SemanticCommand::operator==(const SemanticCommand& other) const {
-    if (commandId != other.commandId ||
-        arguments.index() != other.arguments.index()) {
-        return false;
-    }
-    return std::visit(
-        [](const auto& left, const auto& right) {
-            using Left = std::decay_t<decltype(left)>;
-            using Right = std::decay_t<decltype(right)>;
-            if constexpr (!std::is_same_v<Left, Right>) {
-                return false;
-            } else if constexpr (
-                std::is_same_v<Left, SelectionCommandArguments>) {
-                return selectionArgumentsEqual(left, right);
-            } else {
-                return left == right;
-            }
-        },
-        arguments, other.arguments);
-}
-
-SemanticCommand semanticInputForText(const CommittedText& committed) {
-    return {"text.insert", TextInputArguments{committed.utf8()}};
 }
 
 } // namespace ssg

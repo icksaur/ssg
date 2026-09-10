@@ -1,19 +1,8 @@
-ssg::(anonymous namespace)::selectionArgumentsEqual(ssg::SelectionCommandArguments const&, ssg::SelectionCommandArguments const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
-ssg::(anonymous namespace)::valid(ssg::SyntaxScope)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
-ssg::CellGrid::canonical[abi:cxx11]() const	CMakeFiles/ssg_tui_objects.dir/src/Renderer.cpp.o
-ssg::ClipboardRegister::writeGeneration() const	CMakeFiles/ssg_core.dir/src/ClipboardRegister.cpp.o
-ssg::CommandCatalog::size() const	CMakeFiles/ssg_core.dir/src/CommandCatalog.cpp.o
-ssg::CommandContext::setActiveWorkspace(ssg::WorkspaceId)	CMakeFiles/ssg_core.dir/src/CommandCatalog.cpp.o
-ssg::CommittedText::utf8[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
-ssg::Document::dirty() const	CMakeFiles/ssg_core.dir/src/Document.cpp.o
-ssg::DocumentHistory::canRedo() const	CMakeFiles/ssg_core.dir/src/DocumentHistory.cpp.o
-ssg::DocumentHistory::canUndo() const	CMakeFiles/ssg_core.dir/src/DocumentHistory.cpp.o
 ssg::DocumentHistory::retainedBytes() const	CMakeFiles/ssg_core.dir/src/DocumentHistory.cpp.o
 ssg::DocumentHistory::viewState() const	CMakeFiles/ssg_core.dir/src/DocumentHistory.cpp.o
 ssg::DocumentRuntimeState::liveInstances()	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
 ssg::Editor::activeDocumentText[abi:cxx11]() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
 ssg::Editor::activeDraftReopenNotice() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
-ssg::Editor::activeWorkspace() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
 ssg::Editor::applyGitDiffScan(ssg::GitDiffScan)	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
 ssg::Editor::deferredWorkCounts() const	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
 ssg::Editor::liveDocumentRuntimeStateCountForTests()	CMakeFiles/ssg_core.dir/src/Editor.cpp.o
@@ -52,7 +41,6 @@ ssg::Style::defineKeys[abi:cxx11]()	CMakeFiles/ssg_core.dir/src/Style.cpp.o
 ssg::TabManager::recentlyClosedCount() const	CMakeFiles/ssg_core.dir/src/TabManager.cpp.o
 ssg::TerminalCapabilities::probing() const	CMakeFiles/ssg_terminal_objects.dir/src/TerminalCapabilities.cpp.o
 ssg::TerminalModes::depth() const	CMakeFiles/ssg_terminal_objects.dir/src/Terminal.cpp.o
-ssg::ThemeSnapshot::color(ssg::SyntaxScope) const	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
 ssg::TreeModel::activeVisibleNodeCount() const	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
 ssg::TreeModel::resetVisibleNodesRecomputeCount()	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
 ssg::TreeModel::toggleSelected()	CMakeFiles/ssg_core.dir/src/TreeModel.cpp.o
@@ -86,9 +74,7 @@ ssg::resetOptionalConstructionAudit()	CMakeFiles/ssg_platform.dir/src/OptionalSu
 ssg::resetRenderSegmentationCalls()	CMakeFiles/ssg_tui_objects.dir/src/Renderer.cpp.o
 ssg::resetUtf8ValidationCalls()	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o
 ssg::scrollable_regions()	CMakeFiles/ssg_terminal_objects.dir/src/pointer_routing.cpp.o
-ssg::semanticInputForText(ssg::CommittedText const&)	CMakeFiles/ssg_core.dir/src/Keymap.cpp.o
 ssg::semanticRoleName(ssg::SemanticRole)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
-ssg::syntaxScopeName(ssg::SyntaxScope)	CMakeFiles/ssg_core.dir/src/Theme.cpp.o
 ssg::textEncodingViewState(ssg::DecodedText const&)	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o
 ssg::utf8ValidationCalls()	CMakeFiles/ssg_core.dir/src/TextCodec.cpp.o
 ssg::viewSurfaceName(ssg::ViewSurface)	CMakeFiles/ssg_core.dir/src/Widget.cpp.o

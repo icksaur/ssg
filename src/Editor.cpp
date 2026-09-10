@@ -1662,9 +1662,6 @@ CommandResult Editor::dispatchLocked(ClientCommand const& command) {
         screen.refreshExternalModificationPresence(
             externalModificationPresent());
         auto result = catalog.dispatch(dispatched);
-        if (result.activeWorkspace) {
-            activeWorkspace_ = result.activeWorkspace;
-        }
         reconcileFindDocument();
         screen.refreshNoticePresence(noticePresent());
         screen.refreshExternalModificationPresence(
@@ -1776,11 +1773,6 @@ CommandResult Editor::dispatch(ClientCommand const& command) {
     }
     std::lock_guard operationLock{operationMutex};
     return dispatchLocked(command);
-}
-
-std::optional<WorkspaceId> Editor::activeWorkspace() const {
-    std::lock_guard operationLock{operationMutex};
-    return activeWorkspace_;
 }
 
 CommandCatalog const& Editor::commandCatalog() const {

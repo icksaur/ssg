@@ -85,7 +85,7 @@ struct CellGrid {
     SrgbColor selectionFill{};
 
     [[nodiscard]] CellGridCell const& at(int column, int row) const;
-    [[nodiscard]] std::string canonical() const;
+    bool operator==(CellGrid const&) const = default;
 };
 
 [[nodiscard]] CellGrid renderFrame(const GridPresentation& snapshot,

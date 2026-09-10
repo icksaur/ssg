@@ -403,8 +403,4 @@ std::string_view ClipboardRegister::plainText() const noexcept {
     return impl_->registerData.plainText;
 }
 
-std::uint64_t ClipboardRegister::writeGeneration() const noexcept {
-    return impl_->nextRequestId;
-}
-
 }  // namespace ssg

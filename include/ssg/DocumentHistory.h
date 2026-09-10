@@ -84,8 +84,6 @@ public:
 
     void breakCoalescing() noexcept;
 
-    [[nodiscard]] bool canUndo() const noexcept;
-    [[nodiscard]] bool canRedo() const noexcept;
     [[nodiscard]] std::uint64_t retainedBytes() const noexcept;
     [[nodiscard]] HistoryViewState viewState() const noexcept;
 

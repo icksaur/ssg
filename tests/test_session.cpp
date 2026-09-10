@@ -109,44 +109,6 @@ TEST(viewActionsRemainExplicit) {
               ssg::CommandError::HandlerFailed);
 }
 
-TEST(workspaceChangeIsReportedOnlyAfterSuccess) {
-    auto catalog = catalogOf({
-        command("topology.fail", ssg::CommandEffect::Mutation,
-                [](ssg::CommandContext& context, std::any const&) {
-                    context.setActiveWorkspace(ssg::WorkspaceId{5});
-                    return ssg::CommandHandlerResult::failure("injected");
-                }),
-        command("topology.throw", ssg::CommandEffect::Mutation,
-                [](ssg::CommandContext& context, std::any const&)
-                    -> ssg::CommandHandlerResult {
-                    context.setActiveWorkspace(ssg::WorkspaceId{8});
-                    throw std::runtime_error{"injected"};
-                }),
-        command("topology.commit", ssg::CommandEffect::Mutation,
-                [](ssg::CommandContext& context, std::any const&) {
-                    context.setActiveWorkspace(ssg::WorkspaceId{2});
-                    return ssg::CommandHandlerResult::success();
-                }),
-    });
-    auto& session = *catalog;
-
-    auto rejectedResult =
-        session.dispatch(request("topology.fail"));
-    ASSERT_EQ(rejectedResult.error, ssg::CommandError::HandlerFailed);
-    ASSERT_FALSE(rejectedResult.activeWorkspace.has_value());
-
-    auto threw =
-        session.dispatch(request("topology.throw"));
-    ASSERT_EQ(threw.error, ssg::CommandError::HandlerFailed);
-    ASSERT_FALSE(threw.activeWorkspace.has_value());
-
-    auto committed =
-        session.dispatch(request("topology.commit"));
-    ASSERT_TRUE(committed.accepted());
-    ASSERT_EQ(committed.activeWorkspace,
-              std::optional<ssg::WorkspaceId>{ssg::WorkspaceId{2}});
-}
-
 // A duplicate id is rejected by the catalog, where registration happens, and
 // that rule is covered by test_command_catalog.  It used to be checked twice
 // here -- once per command set, once across sets -- because commands were
@@ -158,7 +120,6 @@ TEST(workspaceChangeIsReportedOnlyAfterSuccess) {
 SSG_TEST_SUITE(test_session) {
     RUN(registeredDispatchRunsInOrder);
     RUN(viewActionsRemainExplicit);
-    RUN(workspaceChangeIsReportedOnlyAfterSuccess);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

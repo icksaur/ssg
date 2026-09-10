@@ -133,10 +133,9 @@ struct ThemeSnapshot {
     std::array<SrgbColor, kSemanticRoleCount> roleColors;
     std::array<SrgbColor, kSyntaxScopeCount> syntaxColors;
 
-    // The color for a role/scope. Throws std::invalid_argument on an unrecognized
+    // The color for a role. Throws std::invalid_argument on an unrecognized
     // enumerator (a corrupt/uninitialized value), never a silent wrong slot.
     [[nodiscard]] SrgbColor color(SemanticRole role) const;
-    [[nodiscard]] SrgbColor color(SyntaxScope scope) const;
 
     // A copy with theme.set's table applied: replaces ONLY the named role/scope
     // colors (an omitted name keeps its current color) with no derivation -- the
@@ -156,7 +155,7 @@ struct ThemeSetError {
 };
 
 // theme.set's argument: a table of semantic-role and syntax-scope snake_case
-// names (the `semanticRoleName`/`syntaxScopeName` strings, e.g.
+// names (e.g.
 // "header_background", "tab_active", "comment"), each mapped to a "#rrggbb" hex
 // string. An omitted name keeps its current color -- the table may be partial.
 // Role and scope names share one namespace here (they are disjoint sets); an
@@ -186,7 +185,6 @@ struct ThemeSetResult {
 
 [[nodiscard]] std::string_view semanticRoleName(SemanticRole role);
 [[nodiscard]] std::optional<SemanticRole> semanticRoleFromName(std::string_view name);
-[[nodiscard]] std::string_view syntaxScopeName(SyntaxScope scope);
 [[nodiscard]] std::optional<SyntaxScope> syntaxScopeFromName(std::string_view name);
 
 } // namespace ssg

@@ -568,8 +568,8 @@ TEST(renderIsDeterministic) {
     ssg::LineLayoutCache lineCache;
     auto snapshot =
         ssg::test::GridPresentationBuilder{}.document("content\n").viewport(80, 24).build();
-    ASSERT_EQ(ssg::renderFrame(snapshot, lineCache).canonical(),
-              ssg::renderFrame(snapshot, lineCache).canonical());
+    ASSERT_EQ(ssg::renderFrame(snapshot, lineCache),
+              ssg::renderFrame(snapshot, lineCache));
 }
 
 TEST(renderProjectsPaletteResultsIntoActivePane) {
@@ -1287,9 +1287,7 @@ TEST(renderTooSmallMatchesHandAuthoredGolden) {
               std::string("   terminal too small   "));
     ASSERT_EQ(rowText(grid, 2), std::string(24, ' '));
     // Determinism.
-    ASSERT_EQ(ssg::renderFrame(*snapshot, lineCache)
-                  .canonical(),
-              grid.canonical());
+    ASSERT_EQ(ssg::renderFrame(*snapshot, lineCache), grid);
     std::filesystem::remove_all(root);
 }
 
@@ -2131,8 +2129,8 @@ TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
     // The cache reused the visible document lines: strictly fewer segmentations.
     ASSERT_TRUE(cachedCalls < uncachedCalls);
     // Byte-identical output whether or not the cache served the lines.
-    ASSERT_TRUE(cached.canonical() == uncached.canonical());
-    ASSERT_TRUE(warm.canonical() == uncached.canonical());
+    ASSERT_EQ(cached, uncached);
+    ASSERT_EQ(warm, uncached);
     fs::remove_all(root);
 }
 
