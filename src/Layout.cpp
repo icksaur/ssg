@@ -10,6 +10,7 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <string_view>
 
 namespace ssg {
 namespace {
@@ -307,8 +308,12 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
     if (provider->search) {
         solved.query = {panel.rect.x, panel.rect.y + 1, panel.rect.width,
                         queryRows};
-        solved.queryText = "> " + provider->search->query;
+        static constexpr std::string_view kQueryPrefix = "> ";
+        solved.queryText =
+            std::string{kQueryPrefix} + provider->search->query.text();
         solved.queryEditing = provider->search->editing;
+        solved.queryCursor =
+            kQueryPrefix.size() + provider->search->query.cursor();
     }
     const auto contentRows =
         static_cast<std::uint32_t>(

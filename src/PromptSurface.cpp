@@ -119,7 +119,7 @@ PromptCommandResult PromptSurface::focusNextInput() {
 }
 
 PromptCommandResult PromptSurface::updateValue(std::size_t index,
-                                               std::string value) {
+                                               PromptEditState value) {
     if (!request_) {
         return failure(PromptErrorCode::NoActivePrompt,
                        "no active prompt to update");
@@ -141,7 +141,7 @@ PromptCommandResult PromptSurface::submit() {
     submission.kind = request_->kind;
     submission.completion = request_->completion;
     for (const auto& input : request_->inputs) {
-        submission.values.push_back(input.value);
+        submission.values.push_back(input.value.text());
     }
     for (const auto& toggle : request_->toggles) {
         submission.toggles.push_back(toggle.value);
@@ -169,17 +169,19 @@ std::vector<PromptControl> resolvePromptControls(const PromptRequest& request) {
     controls.reserve(request.inputs.size() + request.toggles.size() + 1);
     for (const auto& input : request.inputs) {
         controls.push_back({PromptControlKind::Input, input.id,
-                            input.accessibleLabel, input.value, false, {}});
+                            input.accessibleLabel,
+                            input.value.text(), input.value.cursor(), false, {}});
     }
     if (request.matchCount) {
         for (const auto& toggle : request.toggles) {
             controls.push_back({PromptControlKind::Toggle, toggle.id,
-                                toggle.accessibleLabel, {}, toggle.value,
+                                toggle.accessibleLabel, {}, std::nullopt,
+                                toggle.value,
                                 toggle.id});
         }
         controls.push_back({PromptControlKind::Count, request.matchCount->id,
                             request.matchCount->accessibleLabel,
-                            request.matchCount->value, false, {}});
+                            request.matchCount->value, std::nullopt, false, {}});
     }
     return controls;
 }

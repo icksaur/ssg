@@ -184,6 +184,13 @@ TEST(layoutTextInputReservesCaretAndScrollsTail) {
     ASSERT_EQ(tiny.width, 0);
 }
 
+TEST(layoutTextInputKeepsAMidStringCursorVisible) {
+    const auto input = layoutTextInput("> ", "abcdef", 6, 2);
+    ASSERT_EQ(input.text, std::string{"> abc"});
+    ASSERT_EQ(input.width, 5);
+    ASSERT_EQ(input.cursorColumn, 4);
+}
+
 // layoutInputLine bundles the query (via layoutTextInput) and the ghost that
 // fills the remaining cells. Hand-computed with sigil "> " (2 cells), available
 // 20: query "hi" -> text "> hi" width 4; remaining 20-4=16; ghost "story" (5
@@ -414,6 +421,7 @@ SSG_TEST_SUITE(test_widget_layout) {
     RUN(textInputTextConcatenatesPrefixSeparatorValue);
     RUN(visibleTailKeepsTheEndWithinTheCellBudget);
     RUN(layoutTextInputReservesCaretAndScrollsTail);
+    RUN(layoutTextInputKeepsAMidStringCursorVisible);
     RUN(layoutInputLineBundlesQueryAndGhost);
     RUN(layoutInputLineClampsGhostToRemainingCells);
     RUN(layoutInputLineDropsGhostWithNoRoomOrNoGhost);

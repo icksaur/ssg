@@ -159,7 +159,8 @@ void populatePromptControls(UiSchema& schema,
             }
             node.resolved = UiLeafState{control.value, control.accessibleLabel,
                                         command, std::nullopt, role,
-                                        std::optional<bool>{active}};
+                                        std::optional<bool>{active},
+                                        control.cursor};
             break;
         }
         case PromptControlKind::Toggle:
@@ -209,11 +210,6 @@ Editor::resolvedPromptControls() const {
     for (auto& control : resolved.controls) {
         switch (control.kind) {
         case PromptControlKind::Input:
-            if (control.id == "find.query") {
-                control.value = findState.query;
-            } else if (control.id == "replace.replacement") {
-                control.value = findState.replacement;
-            }
             break;
         case PromptControlKind::Count: {
             const auto position =

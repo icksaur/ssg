@@ -605,6 +605,7 @@ void FindReplaceController::openReplace(const DocumentSnapshot& document,
     state_.replaceMode = true;
     ++state_.generation;
     evaluate(document);
+    state_.replacement.clear();
 }
 
 void FindReplaceController::close() {
@@ -628,9 +629,6 @@ void FindReplaceController::updateQuery(
 }
 
 void FindReplaceController::updateReplacement(std::string replacement) {
-    // The replacement does not affect matching, so this never re-evaluates; it
-    // only updates the published replacement text (the single source of truth
-    // that replace_current/replace_all read).
     state_.replacement = std::move(replacement);
     ++state_.generation;
 }

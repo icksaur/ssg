@@ -846,7 +846,7 @@ TEST(renderPaintsFindMatchesAndActiveMatch) {
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"find.txt"});
     (void)runtime->dispatch("find.open");
-    (void)runtime->updateFindQuery("cat");
+    (void)runtime->updateFindQuery(ssg::test::promptText("cat"));
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -891,7 +891,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"stale.txt"});
     (void)runtime->dispatch("find.open");
-    (void)runtime->updateFindQuery("cat");
+    (void)runtime->updateFindQuery(ssg::test::promptText("cat"));
 
     // Editing the document advances its revision without re-evaluating find, so
     // the controller is stale: reconcile closes it and no matches are painted.
@@ -921,8 +921,8 @@ TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"rep.txt"});
     (void)runtime->dispatch("replace.open");
-    (void)runtime->updateFindQuery("cat");
-    (void)runtime->updateReplacement("dog");
+    (void)runtime->updateFindQuery(ssg::test::promptText("cat"));
+    (void)runtime->updateReplacement(ssg::test::promptText("dog"));
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -947,7 +947,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
     if (!runtime) return;
     (void)ssg::test::openFile(*runtime, std::string{"opt.txt"});
     (void)runtime->dispatch("find.open");
-    (void)runtime->updateFindQuery("cat");
+    (void)runtime->updateFindQuery(ssg::test::promptText("cat"));
 
     // Default options: all three indicators render unchecked.
     {
@@ -1274,6 +1274,7 @@ TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
     // exactly as the app does.
     ssg::PaletteReport report;
     report.query = "save";
+    report.cursor = report.query.size();
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1309,6 +1310,7 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
 
     ssg::PaletteReport report;
     report.query = "\u00e9\u00e9\u00e9";  // 3 characters, 6 bytes, 3 columns.
+    report.cursor = report.query.size();
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1327,6 +1329,32 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
     }
 }
 
+TEST(theInputLineCaretFollowsAMidStringCursor) {
+    ssg::LineLayoutCache lineCache;
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime->dispatch("palette.open").accepted());
+
+    ssg::PaletteReport report;
+    report.query = "save";
+    report.cursor = 2;
+    auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::renderFrame(*snapshot, lineCache);
+    ASSERT_TRUE(grid.caret.has_value());
+    const auto* query = snapshot->header && snapshot->header->input
+                            ? &*snapshot->header->input
+                            : nullptr;
+    ASSERT_TRUE(query != nullptr);
+    if (grid.caret && query) {
+        ASSERT_EQ(grid.caret->column,
+                  static_cast<std::uint32_t>(query->query.x + 4));
+    }
+}
+
 // With a scrolled query the caret must sit at the end of the VISIBLE text --
 // still inside the header, still marking where the next keystroke lands.
 TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
@@ -1340,6 +1368,7 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
 
     ssg::PaletteReport report;
     report.query = std::string(300, 'x');
+    report.cursor = report.query.size();
     auto snapshot = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;

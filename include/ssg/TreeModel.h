@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ssg/DiffModel.h>
+#include <ssg/PromptEditState.h>
 #include <ssg/Theme.h>
 
 #include <cstddef>
@@ -179,7 +180,7 @@ struct TreeNodeView {
 };
 
 struct SearchTreeState {
-    std::string query;
+    PromptEditState query;
     bool editing = true;
     std::optional<std::string> submittedQuery;
     bool searching = false;

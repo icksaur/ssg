@@ -2,6 +2,7 @@
 
 #include <ssg/Search.h>
 #include <ssg/Picker.h>
+#include <ssg/PromptEditState.h>
 #include <ssg/UiTree.h>
 #include <ssg/Scrollbar.h>
 #include <cstddef>
@@ -125,12 +126,13 @@ struct PaletteReport {
     std::optional<std::uint32_t> selected;
     std::uint32_t firstVisible = 0;
     ScrollbarMetrics scrollbar{};
+    std::size_t cursor = 0;
 
     friend bool operator==(const PaletteReport&, const PaletteReport&) = default;
 };
 
 struct PaletteWindowState {
-    std::string query;
+    PromptEditState query;
     std::size_t selected = 0;
     std::uint32_t firstVisible = 0;
     std::uint32_t paneRows = 1;

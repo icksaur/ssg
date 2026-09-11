@@ -1,40 +1,8 @@
 #include <ssg/PromptSurface.h>
 
-#include <ssg/GraphemeLayout.h>
 #include <ssg/Keymap.h>
-#include <ssg/TextInputCommands.h>
 
 namespace ssg {
-
-std::string applyPromptTextEdit(std::string_view value,
-                                const PromptTextEdit& change) {
-    switch (change.kind) {
-    case PromptTextEdit::Kind::Append:
-        return std::string(value) + change.text;
-    case PromptTextEdit::Kind::DeleteGraphemeBack: {
-        if (value.empty()) return std::string(value);
-        // The last cluster's start byte is where the trailing grapheme (with any
-        // absorbed combining marks) begins, so truncating there deletes exactly
-        // one user-perceived character.
-        CellRun run = computeCellRun(value);
-        if (run.spans.empty()) return std::string(value);
-        return std::string(value.substr(0, run.spans.back().byteOffset));
-    }
-    case PromptTextEdit::Kind::DeleteWordBack: {
-        std::size_t end = value.size();
-        while (end > 0 &&
-               !isWordByte(static_cast<unsigned char>(value[end - 1]))) {
-            --end;
-        }
-        while (end > 0 &&
-               isWordByte(static_cast<unsigned char>(value[end - 1]))) {
-            --end;
-        }
-        return std::string(value.substr(0, end));
-    }
-    }
-    return std::string(value);
-}
 
 namespace {
 
@@ -43,21 +11,17 @@ namespace {
 // Find to UpdateFindQuery; a generic TextPrompt to prompt.update_value at the
 // active index.
 PromptTextRoute dispatchActiveInput(ActivePrompt prompt, std::size_t activeInput,
-                                    std::string value) {
+                                    PromptEditState edited) {
     switch (prompt) {
     case ActivePrompt::Replace:
         if (activeInput == 0) {
-            return {PromptTextRoute::Kind::UpdateFindQuery, std::move(value)};
+            return {PromptTextRoute::Kind::UpdateFindQuery, edited};
         }
-        return {PromptTextRoute::Kind::UpdateReplacement, std::move(value)};
+        return {PromptTextRoute::Kind::UpdateReplacement, edited};
     case ActivePrompt::Find:
-        return {PromptTextRoute::Kind::UpdateFindQuery, std::move(value)};
-    case ActivePrompt::TextPrompt: {
-        PromptTextRoute route;
-        route.kind = PromptTextRoute::Kind::UpdatePromptValue;
-        route.promptValue = PromptValueArguments{activeInput, std::move(value)};
-        return route;
-    }
+        return {PromptTextRoute::Kind::UpdateFindQuery, edited};
+    case ActivePrompt::TextPrompt:
+        return {PromptTextRoute::Kind::UpdatePromptValue, edited, activeInput};
     case ActivePrompt::Palette:
     case ActivePrompt::None:
         return {};
@@ -76,15 +40,12 @@ PromptTextRoute routePromptTextEdit(const PromptRoutingState& state,
         return {};
     case TextRouting::PromptQuery:
         if (state.prompt == ActivePrompt::Palette) {
-            // The palette query is the one client-owned derived view; the client
-            // appends its own text and pops its own graphemes. Deletion is not
-            // routed here.
-            if (change.kind != PromptTextEdit::Kind::Append) return {};
-            return {PromptTextRoute::Kind::AppendPaletteQuery, {}, change.text, {}};
+            // The palette query is client-owned end to end (see main.cpp's
+            // PaletteView), so no edit of it is routed through this seam.
+            return {};
         }
         return dispatchActiveInput(state.prompt, state.activeInput,
-                                   applyPromptTextEdit(state.currentValue,
-                                                       change));
+                                   applyPromptTextEdit(state.current, change));
     case TextRouting::Ignore:
         return {};
     }

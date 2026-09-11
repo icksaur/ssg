@@ -154,9 +154,9 @@ void registerAllCommands(Commands& commands, Editor& runtime);
 [[nodiscard]] OperationResult executeFindReplaceCommand(
     Editor& runtime, FindReplaceCommand command);
 [[nodiscard]] FindReplaceOperationResult applyFindQuery(
-    Editor& runtime, std::string query);
+    Editor& runtime, PromptEditState query);
 [[nodiscard]] FindReplaceOperationResult applyReplacement(
-    Editor& runtime, std::string replacement);
+    Editor& runtime, PromptEditState replacement);
 [[nodiscard]] OperationResult activateTab(Editor& runtime, TabId tabId);
 [[nodiscard]] OperationResult closeTabById(Editor& runtime, TabId tabId);
 [[nodiscard]] OperationResult activateTreeNode(Editor& runtime,
@@ -216,9 +216,10 @@ public:
     void focusEditor();
 
     [[nodiscard]] WorkspaceSearchState workspaceSearch(std::string query);
-    [[nodiscard]] FindReplaceOperationResult updateFindQuery(std::string query);
+    [[nodiscard]] FindReplaceOperationResult updateFindQuery(
+        PromptEditState query);
     [[nodiscard]] FindReplaceOperationResult updateReplacement(
-        std::string replacement);
+        PromptEditState replacement);
     [[nodiscard]] OperationResult saveSession();
 
     struct ResolvedPromptControls {

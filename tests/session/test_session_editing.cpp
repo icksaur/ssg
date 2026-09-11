@@ -120,7 +120,7 @@ TEST(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork) {
     ASSERT_EQ(key(ssg::KeyCode::Backspace).outcome,
               ssg::ClientInputOutcome::Dispatched);
     auto state = runtime.tree.searchState(ssg::TreeProviderId{"search"});
-    ASSERT_EQ(state->query, std::string{"a"});
+    ASSERT_EQ(state->query.text(), std::string{"a"});
     ASSERT_TRUE(state->editing);
     ASSERT_FALSE(runtime.workspaceSearchPending());
 
@@ -159,6 +159,14 @@ TEST(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork) {
     ASSERT_FALSE(state->editing);
     ASSERT_EQ(runtime.tree.selectedNode()->workspacePath,
               std::optional<std::string>{"other.txt"});
+    const auto browsingQuery = state->query;
+    ASSERT_EQ(key(ssg::KeyCode::Home).outcome,
+              ssg::ClientInputOutcome::Unhandled);
+    ASSERT_EQ(key(ssg::KeyCode::Delete).outcome,
+              ssg::ClientInputOutcome::Unhandled);
+    state = runtime.tree.searchState(ssg::TreeProviderId{"search"});
+    ASSERT_FALSE(state->editing);
+    ASSERT_EQ(state->query, browsingQuery);
 
     runtime.screen.focusEditor();
     ASSERT_EQ(runtime.input(ssg::SearchQueryPointerInput{}).outcome,
@@ -181,7 +189,7 @@ TEST(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork) {
     ASSERT_FALSE(state->searching);
 
     ASSERT_TRUE(runtime.dispatch("panel.show_search").accepted());
-    state->query.clear();
+    state->query = ssg::PromptEditState{};
     state->editing = true;
     ASSERT_TRUE(runtime.tree.setSearchState(
         ssg::TreeProviderId{"search"}, *state));
@@ -282,7 +290,7 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"hits.txt"}).accepted());
 
     ASSERT_TRUE(runtime.dispatch("find.open").accepted());
-    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
+    ASSERT_TRUE(runtime.updateFindQuery(ssg::test::promptText("cat")).accepted());
 
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
@@ -377,7 +385,7 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"a.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch("find.open").accepted());
-    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
+    ASSERT_TRUE(runtime.updateFindQuery(ssg::test::promptText("cat")).accepted());
     {
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
@@ -420,7 +428,7 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
     }
 
     ASSERT_TRUE(runtime.dispatch("find.open").accepted());
-    ASSERT_TRUE(runtime.updateFindQuery("target").accepted());
+    ASSERT_TRUE(runtime.updateFindQuery(ssg::test::promptText("target")).accepted());
 
     // The match on line 40 lies below the initial 24-row viewport, so revealing
     // it must scroll down and the match's logical line must be visible.
@@ -448,8 +456,8 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"r.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch("replace.open").accepted());
-    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
-    ASSERT_TRUE(runtime.updateReplacement("dog").accepted());
+    ASSERT_TRUE(runtime.updateFindQuery(ssg::test::promptText("cat")).accepted());
+    ASSERT_TRUE(runtime.updateReplacement(ssg::test::promptText("dog")).accepted());
 
     {
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -491,8 +499,8 @@ TEST(replaceAllReplacesEveryMatch) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"r.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch("replace.open").accepted());
-    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
-    ASSERT_TRUE(runtime.updateReplacement("dog").accepted());
+    ASSERT_TRUE(runtime.updateFindQuery(ssg::test::promptText("cat")).accepted());
+    ASSERT_TRUE(runtime.updateReplacement(ssg::test::promptText("dog")).accepted());
     ASSERT_TRUE(runtime.dispatch("replace.all").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"dog dog dog"});
     auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -518,8 +526,8 @@ TEST(replaceCommandsAreBenignNoOpsWithoutAReplacePrompt) {
     // A find prompt (not replace) is open: replace commands must be benign
     // success no-ops that do not mutate the document or controller state.
     ASSERT_TRUE(runtime.dispatch("find.open").accepted());
-    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
-    ASSERT_TRUE(runtime.updateReplacement("dog").accepted());
+    ASSERT_TRUE(runtime.updateFindQuery(ssg::test::promptText("cat")).accepted());
+    ASSERT_TRUE(runtime.updateReplacement(ssg::test::promptText("dog")).accepted());
     ASSERT_TRUE(runtime.dispatch("replace.current").accepted());
     ASSERT_TRUE(runtime.dispatch("replace.all").accepted());
     ASSERT_EQ(ssg::test::activeDocumentText(runtime), std::string{"cat cat cat"});
@@ -550,7 +558,7 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
     }
 
     ASSERT_TRUE(runtime.dispatch("find.open").accepted());
-    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
+    ASSERT_TRUE(runtime.updateFindQuery(ssg::test::promptText("cat")).accepted());
     {
         // Case-insensitive (default): all three "cat"s match.
         auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -580,7 +588,7 @@ TEST(replaceOpenPreservesFindOptions) {
     auto& runtime = *created.session;
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"m.txt"}).accepted());
     ASSERT_TRUE(runtime.dispatch("find.open").accepted());
-    ASSERT_TRUE(runtime.updateFindQuery("cat").accepted());
+    ASSERT_TRUE(runtime.updateFindQuery(ssg::test::promptText("cat")).accepted());
     ASSERT_TRUE(runtime.dispatch("find.toggle_case").accepted());
     // Case-sensitive find matched only the lowercase "cat".
     {
@@ -1012,8 +1020,8 @@ TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
     ASSERT_EQ(firstRow(), 0U);  // caret at top; the match is off-screen far below
 
     ASSERT_TRUE(runtime.dispatch("replace.open").accepted());
-    ASSERT_TRUE(runtime.updateFindQuery("needle").accepted());
-    ASSERT_TRUE(runtime.updateReplacement("pin").accepted());
+    ASSERT_TRUE(runtime.updateFindQuery(ssg::test::promptText("needle")).accepted());
+    ASSERT_TRUE(runtime.updateReplacement(ssg::test::promptText("pin")).accepted());
     ASSERT_TRUE(runtime.dispatch("replace.all").accepted());
     // No match remains, but the caret (now at the replaced text near the bottom)
     // is revealed rather than left off-screen.
@@ -1037,7 +1045,7 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
 
     ASSERT_TRUE(runtime.dispatch("find.open")
                     .accepted());
-    ASSERT_TRUE(runtime.updateFindQuery("cat")
+    ASSERT_TRUE(runtime.updateFindQuery(ssg::test::promptText("cat"))
                     .accepted());
     ASSERT_TRUE(runtime.dispatch("prompt.submit")
                     .accepted());
@@ -1065,7 +1073,7 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
 
     ASSERT_TRUE(runtime.dispatch("replace.open")
                     .accepted());
-    ASSERT_TRUE(runtime.updateReplacement("dog")
+    ASSERT_TRUE(runtime.updateReplacement(ssg::test::promptText("dog"))
                     .accepted());
     ASSERT_TRUE(runtime.dispatch("prompt.submit")
                     .accepted());

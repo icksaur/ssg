@@ -22,6 +22,7 @@
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
 
+#include <cstddef>
 #include <map>
 #include <optional>
 #include <string>
@@ -183,6 +184,7 @@ struct SolvedPanelSurface {
     std::uint32_t firstVisible = 0;
     ScrollbarMetrics scrollbar;
     std::vector<SolvedPanelRow> rows;
+    std::size_t queryCursor = 0;  // byte offset into queryText, "> " prefix included
 
     friend bool operator==(const SolvedPanelSurface&,
                            const SolvedPanelSurface&) = default;

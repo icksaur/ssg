@@ -275,7 +275,7 @@ TEST(searchPanelKeepsItsQueryOutsideTheScrolledResultWindow) {
         TreeProviderKind::Search,
         {},
         TreeNodeId{"search:file.cpp:00000000000000000005"},
-        SearchTreeState{.query = "needle", .editing = true}};
+        SearchTreeState{.query = PromptEditState{"needle"}, .editing = true}};
     for (std::uint64_t line = 0; line < 6; ++line) {
         auto key = std::to_string(line);
         key.insert(0, 20 - key.size(), '0');
@@ -328,16 +328,17 @@ TEST(searchPanelStatusDistinguishesRunningEmptyAndCleared) {
             0, false, Style{});
     };
     const auto running = solve(SearchTreeState{
-        .query = "needle",
+        .query = PromptEditState{"needle"},
         .submittedQuery = std::string{"needle"},
         .searching = true});
     ASSERT_EQ(running.statusText, std::string{"searching..."});
     ASSERT_EQ(running.status, (Rect{0, 2, 20, 1}));
     const auto empty = solve(SearchTreeState{
-        .query = "needle",
+        .query = PromptEditState{"needle"},
         .submittedQuery = std::string{"needle"}});
     ASSERT_EQ(empty.statusText, std::string{"no matches"});
-    const auto cleared = solve(SearchTreeState{.query = "needle"});
+    const auto cleared =
+        solve(SearchTreeState{.query = PromptEditState{"needle"}});
     ASSERT_TRUE(cleared.statusText.empty());
     ASSERT_EQ(cleared.status.height, 0);
 }

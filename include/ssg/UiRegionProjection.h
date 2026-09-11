@@ -7,6 +7,7 @@
 #include <ssg/Style.h>
 #include <ssg/UiTree.h>      // UiRegion
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
@@ -69,6 +70,7 @@ struct PromptInputProjection {
     bool visible = false;
     std::string query;
     std::string ghost;
+    std::size_t cursor = 0;
 };
 
 // Project a medium-agnostic header/footer region directly into solved items

@@ -263,7 +263,7 @@ bool ScreenState::openFinder(PickerKind kind) {
     PromptSurface prompt = state.prompt_;
     const PromptCommandResult opened = prompt.open(PromptRequest{
         PromptKind::Palette, std::string{descriptor->promptTitle},
-        {{"query", "command palette query", ""}}, {}, std::nullopt});
+        {{"query", "command palette query", {}}}, {}, std::nullopt});
     if (!opened.accepted()) return false;
     state.openPicker_ = kind;
     state.prompt_ = std::move(prompt);

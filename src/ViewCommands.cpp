@@ -170,7 +170,7 @@ OperationResult settingsCommand(Editor& runtime, std::string_view id) {
     if (id == "settings.open") {
         auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
             PromptKind::Settings, "settings",
-            {{"settings.query", "settings query", ""}}, {}, std::nullopt});
+            {{"settings.query", "settings query", {}}}, {}, std::nullopt});
         if (!opened.accepted()) return failure(opened.error->message);
         return success();
     }

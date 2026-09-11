@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ssg/PromptEditState.h>
 #include <ssg/focus.h>
 
 #include <array>
@@ -46,7 +47,7 @@ enum class PromptRegion : std::uint8_t { Header, Footer };
 struct PromptInput {
     std::string id;
     std::string accessibleLabel;
-    std::string value;
+    PromptEditState value;
     friend bool operator==(const PromptInput&, const PromptInput&) = default;
 };
 
@@ -97,7 +98,7 @@ struct PromptSubmission {
 
 struct PromptValueArguments {
     std::size_t index = 0;
-    std::string value;
+    PromptEditState value;
     friend bool operator==(const PromptValueArguments&,
                            const PromptValueArguments&) = default;
 };
@@ -131,6 +132,7 @@ struct PromptControl {
     std::string id;
     std::string accessibleLabel;
     std::string value;
+    std::optional<std::size_t> cursor;
     bool checked = false;
     std::string command;
     friend bool operator==(const PromptControl&, const PromptControl&) = default;
@@ -153,34 +155,21 @@ enum class ActivePrompt : std::uint8_t {
 struct PromptRoutingState {
     FocusTarget focus = FocusTarget::Editor;
     ActivePrompt prompt = ActivePrompt::None;
-    std::string currentValue;
+    PromptEditState current;
     std::size_t activeInput = 0;
-};
-
-struct PromptTextEdit {
-    enum class Kind : std::uint8_t {
-        Append,
-        DeleteGraphemeBack,
-        DeleteWordBack,
-    } kind = Kind::Append;
-    std::string text;
 };
 
 struct PromptTextRoute {
     enum class Kind : std::uint8_t {
         UpdateFindQuery,
         UpdateReplacement,
-        AppendPaletteQuery,
         UpdatePromptValue,
         Ignore,
     } kind = Kind::Ignore;
-    std::string query;
-    std::string appendText;
-    PromptValueArguments promptValue;
+    PromptEditState edited;
+    std::size_t index = 0;  // meaningful only for UpdatePromptValue
 };
 
-[[nodiscard]] std::string applyPromptTextEdit(
-    std::string_view value, const PromptTextEdit& edit);
 [[nodiscard]] PromptTextRoute routePromptTextEdit(
     const PromptRoutingState& state, const PromptTextEdit& edit);
 
@@ -188,7 +177,7 @@ class PromptSurface {
 public:
     [[nodiscard]] PromptCommandResult open(PromptRequest request);
     [[nodiscard]] PromptCommandResult updateValue(std::size_t index,
-                                                  std::string value);
+                                                  PromptEditState value);
     // Focus the input named by `controlId`. Rejected with UnknownInput when the
     // id does not address an input, so a toggle or
     // the match count can never own the keyboard.

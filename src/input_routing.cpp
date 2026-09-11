@@ -43,7 +43,14 @@ RoutedInput dispatch(std::string commandId,
             std::move(gesture), clearGestureOnRejection};
 }
 RoutedInput clientOwned(ClientOwnedInputKind kind, std::string text = {}) {
-    return {RouteClientOwned{ClientOwnedInput{kind, std::move(text)}},
+    return {RouteClientOwned{ClientOwnedInput{kind, {}, std::move(text)}},
+            std::nullopt, false};
+}
+
+RoutedInput clientOwned(PromptTextEdit edit) {
+    return {RouteClientOwned{
+                ClientOwnedInput{ClientOwnedInputKind::TextEdit,
+                                 std::move(edit), {}}},
             std::nullopt, false};
 }
 
@@ -94,6 +101,31 @@ bool isPrimaryPress(InputPointerPhase phase, InputPointerButton button) {
            button == InputPointerButton::Primary;
 }
 
+// Maps a key code (plus the Mod chord) to the PromptTextEdit it performs,
+// mirroring the main editor's own Left/Right/Home/End/Delete/word-deletion
+// bindings so a prompt and the editor describe the same keys the same way.
+std::optional<PromptTextEdit::Kind> promptEditKindForKey(KeyCode code,
+                                                         bool mod) {
+    switch (code) {
+    case KeyCode::Backspace:
+        return mod ? PromptTextEdit::Kind::DeleteWordBackward
+                   : PromptTextEdit::Kind::DeleteBackward;
+    case KeyCode::Delete:
+        return mod ? PromptTextEdit::Kind::DeleteWordForward
+                   : PromptTextEdit::Kind::DeleteForward;
+    case KeyCode::ArrowLeft:
+        return PromptTextEdit::Kind::MoveLeft;
+    case KeyCode::ArrowRight:
+        return PromptTextEdit::Kind::MoveRight;
+    case KeyCode::Home:
+        return PromptTextEdit::Kind::MoveToStart;
+    case KeyCode::End:
+        return PromptTextEdit::Kind::MoveToEnd;
+    default:
+        return std::nullopt;
+    }
+}
+
 RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
                        ClientKeyInput const& input) {
     auto const& routing = snapshot.prompt;
@@ -103,30 +135,23 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
         snapshot.activeTreeProvider == TreeProviderKind::Search;
     if (searchPanel && !input.committedText.empty()) {
         return accepted(SearchQueryChange{
-            SearchQueryChange::Kind::Append, input.committedText});
+            SearchQueryChange::Kind::Edit,
+            {PromptTextEdit::Kind::Insert, input.committedText}});
     }
     auto routeTextEdit = [&](PromptTextEdit edit) -> RoutedInput {
         auto const route = routePromptTextEdit(routing, edit);
         if (route.kind == PromptTextRoute::Kind::UpdateFindQuery) {
-            return accepted(UpdateFindQuery{route.query});
+            return accepted(UpdateFindQuery{route.edited});
         }
         if (route.kind == PromptTextRoute::Kind::UpdateReplacement) {
-            return accepted(UpdateReplacement{route.query});
+            return accepted(UpdateReplacement{route.edited});
         }
         if (route.kind == PromptTextRoute::Kind::UpdatePromptValue) {
-            return accepted(EditorMutation{route.promptValue});
+            return accepted(EditorMutation{
+                PromptValueArguments{route.index, route.edited}});
         }
         if (routing.prompt == ActivePrompt::Palette) {
-            switch (edit.kind) {
-            case PromptTextEdit::Kind::Append:
-                return clientOwned(ClientOwnedInputKind::AppendText,
-                                   route.appendText);
-            case PromptTextEdit::Kind::DeleteGraphemeBack:
-                return clientOwned(
-                    ClientOwnedInputKind::DeleteGraphemeBackward);
-            case PromptTextEdit::Kind::DeleteWordBack:
-                return clientOwned(ClientOwnedInputKind::DeleteWordBackward);
-            }
+            return clientOwned(std::move(edit));
         }
         return unhandled();
     };
@@ -186,21 +211,20 @@ RoutedInput routeInput(InputRoutingSnapshot const& snapshot,
                 return dispatch(command);
             }
         }
-        if (input.stroke.code == KeyCode::Backspace) {
-            if (searchPanel) {
+        if (auto const editKind =
+                promptEditKindForKey(input.stroke.code, input.stroke.mod)) {
+            if (searchPanel && snapshot.searchEditing) {
                 return accepted(SearchQueryChange{
-                    SearchQueryChange::Kind::DeleteGraphemeBack, {}});
+                    SearchQueryChange::Kind::Edit, {*editKind, {}}});
             }
-            return routeTextEdit(
-                {input.stroke.mod ? PromptTextEdit::Kind::DeleteWordBack
-                                  : PromptTextEdit::Kind::DeleteGraphemeBack,
-                 {}});
+            if (searchPanel) return unhandled();
+            return routeTextEdit({*editKind, {}});
         }
     }
     if (!input.committedText.empty()) {
         if (routing.prompt != ActivePrompt::None) {
             return routeTextEdit(
-                {PromptTextEdit::Kind::Append, input.committedText});
+                {PromptTextEdit::Kind::Insert, input.committedText});
         }
         if (routing.focus == FocusTarget::Editor) {
             return accepted(ApplyTextInput{
@@ -460,7 +484,8 @@ RoutedInput routeInput(InputRoutingSnapshot const&,
 
 RoutedInput routeInput(InputRoutingSnapshot const&,
                        UpdatePromptValueInput const& input) {
-    return accepted(EditorMutation{PromptValueArguments{input.index, input.value}});
+    return accepted(EditorMutation{PromptValueArguments{
+        input.index, {input.value, input.value.size()}}});
 }
 
 }  // namespace

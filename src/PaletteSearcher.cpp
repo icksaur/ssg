@@ -160,11 +160,12 @@ std::string paletteGhost(std::string_view topLabel,
 PaletteReport buildPaletteReport(
     std::vector<PaletteCandidate> const& candidates, PaletteWindowState& window) {
     PaletteReport report;
-    auto const order = rankPaletteCandidates(candidates, window.query);
-    report.query = window.query;
+    auto const order = rankPaletteCandidates(candidates, window.query.text());
+    report.query = window.query.text();
+    report.cursor = window.query.cursor();
     if (!order.empty()) {
         report.ghost =
-            paletteGhost(candidates[order.front()].label, window.query);
+            paletteGhost(candidates[order.front()].label, window.query.text());
     }
     bool selectionClamped = false;
     if (window.selected >= order.size()) {

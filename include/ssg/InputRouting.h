@@ -57,14 +57,13 @@ struct FocusPane {
 
 struct SearchQueryChange {
     enum class Kind : std::uint8_t {
-        Append,
-        DeleteGraphemeBack,
+        Edit,
         MoveFirst,
         MoveLast,
         Submit,
         Focus,
-    } kind = Kind::Append;
-    std::string text;
+    } kind = Kind::Edit;
+    PromptTextEdit edit;  // meaningful only when kind == Edit
 };
 
 struct ActivateTab {
@@ -85,11 +84,11 @@ struct SubmitPicker {
 };
 
 struct UpdateFindQuery {
-    std::string query;
+    PromptEditState query;
 };
 
 struct UpdateReplacement {
-    std::string replacement;
+    PromptEditState replacement;
 };
 
 using EditorMutation =

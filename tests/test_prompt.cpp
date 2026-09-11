@@ -15,9 +15,11 @@ PromptRequest request(PromptKind kind) {
         kind == PromptKind::Replace ? "Replace" : "Find";
     value.inputs.push_back(
         {kind == PromptKind::Path ? "path" : "find",
-         kind == PromptKind::Path ? "Path" : "Find text", "needle"});
+         kind == PromptKind::Path ? "Path" : "Find text",
+         PromptEditState{"needle"}});
     if (kind == PromptKind::Replace) {
-        value.inputs.push_back({"replace", "Replacement text", "value"});
+        value.inputs.push_back(
+            {"replace", "Replacement text", PromptEditState{"value"}});
     }
     if (kind == PromptKind::Find || kind == PromptKind::Replace) {
         value.toggles.push_back({"case", "Case sensitive", false, 6});
@@ -75,15 +77,17 @@ TEST(promptControlsCarryTheirOperatingCommands) {
     PromptRequest find;
     find.kind = PromptKind::Find;
     find.accessibleLabel = "Find";
-    find.inputs.push_back({"find.query", "Find text", "needle"});
+    find.inputs.push_back(
+        {"find.query", "Find text", PromptEditState{"needle"}});
     ASSERT_TRUE(resolvePromptControls(find).front().command.empty());
 
     PromptRequest replace;
     replace.kind = PromptKind::Replace;
     replace.accessibleLabel = "Replace";
-    replace.inputs.push_back({"find.query", "Find text", "needle"});
     replace.inputs.push_back(
-        {"replace.replacement", "Replacement text", "value"});
+        {"find.query", "Find text", PromptEditState{"needle"}});
+    replace.inputs.push_back(
+        {"replace.replacement", "Replacement text", PromptEditState{"value"}});
     const auto replaceControls = resolvePromptControls(replace);
     ASSERT_TRUE(replaceControls.at(0).command.empty());
     ASSERT_TRUE(replaceControls.at(1).command.empty());
@@ -91,7 +95,7 @@ TEST(promptControlsCarryTheirOperatingCommands) {
     PromptRequest path;
     path.kind = PromptKind::Path;
     path.accessibleLabel = "Path";
-    path.inputs.push_back({"path", "Path", "/tmp"});
+    path.inputs.push_back({"path", "Path", PromptEditState{"/tmp"}});
     ASSERT_TRUE(resolvePromptControls(path).front().command.empty());
 }
 

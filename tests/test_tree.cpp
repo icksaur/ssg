@@ -295,10 +295,10 @@ TEST(searchProviderStateIsInitializedProjectedAndPersists) {
     auto state = model.searchState(TreeProviderId{"search"});
     ASSERT_TRUE(state.has_value());
     ASSERT_TRUE(state->editing);
-    ASSERT_TRUE(state->query.empty());
+    ASSERT_TRUE(state->query.text().empty());
     ASSERT_FALSE(state->submittedQuery.has_value());
     ASSERT_FALSE(state->searching);
-    state->query = "needle";
+    state->query = PromptEditState{"needle"};
     state->editing = false;
     state->submittedQuery = "needle";
     state->searching = true;

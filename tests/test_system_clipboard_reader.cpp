@@ -110,9 +110,11 @@ TEST(readerReportsUnavailableWithoutAUsableDisplayHelper) {
 
 TEST(pastePlanPreservesContextSpecificFallbacks) {
     const auto editor = ssg::ClientOwnedInput{
-        ssg::ClientOwnedInputKind::SystemClipboardPasteIntoEditor, "internal"};
+        ssg::ClientOwnedInputKind::SystemClipboardPasteIntoEditor, {},
+        "internal"};
     const auto text = ssg::ClientOwnedInput{
-        ssg::ClientOwnedInputKind::SystemClipboardPasteIntoText, "internal"};
+        ssg::ClientOwnedInputKind::SystemClipboardPasteIntoText, {},
+        "internal"};
 
     auto plan = ssg::planSystemClipboardPaste(
         editor, {ssg::SystemClipboardReadStatus::Success, "desktop"});

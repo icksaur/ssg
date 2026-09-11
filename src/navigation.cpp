@@ -172,7 +172,7 @@ OperationResult searchCommand(Editor& runtime, std::string_view id) {
     } else if (id == "goto.line") {
         auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
             PromptKind::CommandArgument, "go to line",
-            {{"line", "line number", ""}}, {}, std::nullopt,
+            {{"line", "line number", {}}}, {}, std::nullopt,
             PromptCompletion::GotoLine});
         if (!opened.accepted()) return failure(opened.error->message);
         return success();

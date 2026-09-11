@@ -27,7 +27,7 @@ std::vector<PaletteCandidate> candidates() {
 TEST(theHostRanksAQueryThroughTheLibrarySearcherNotItsOwnOrder) {
     auto const cands = candidates();
     PaletteWindowState window;
-    window.query = "save";
+    window.query = PromptEditState{"save"};
     window.paneRows = 12;
     auto const report = buildPaletteReport(cands, window);
 

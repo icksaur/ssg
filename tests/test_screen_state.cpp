@@ -37,7 +37,7 @@ bool present(const ScreenState& a, std::string_view id) {
 
 PromptRequest footerPrompt() {
     return PromptRequest{PromptKind::CommandArgument, "save as",
-                         {{"path", "path", ""}}, {}, std::nullopt};
+                         {{"path", "path", {}}}, {}, std::nullopt};
 }
 
 // The revision of a present provider by id, via the node-free identity enumeration.
@@ -184,7 +184,7 @@ TEST(openPromptRejectsAPalettePromptSoOnlyAFinderMakesAPicker) {
     TreeModel tree = seededTree();
     ScreenState authority{assemble(StyleDimensions{}), tree};
     const auto result = openGenericPrompt(authority.prompt(), PromptRequest{
-        PromptKind::Palette, "cmd", {{"query", "q", ""}}, {}, std::nullopt});
+        PromptKind::Palette, "cmd", {{"query", "q", {}}}, {}, std::nullopt});
     ASSERT_FALSE(result.accepted());
     ASSERT_FALSE(authority.prompt().active());
     ASSERT_FALSE(authority.openPicker().has_value());
@@ -194,10 +194,11 @@ TEST(valueEditKeepsPromptFocusAndUpdatesTheInput) {
     TreeModel tree = seededTree();
     ScreenState authority{assemble(StyleDimensions{}), tree};
     ASSERT_TRUE(openGenericPrompt(authority.prompt(), footerPrompt()).accepted());
-    ASSERT_TRUE(authority.prompt().updateValue(0, "src/main.cpp").accepted());
+    ASSERT_TRUE(
+        authority.prompt().updateValue(0, {"src/main.cpp", 12}).accepted());
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
     ASSERT_TRUE(authority.prompt().active());
-    ASSERT_EQ(authority.prompt().request()->inputs[0].value,
+    ASSERT_EQ(authority.prompt().request()->inputs[0].value.text(),
               std::string{"src/main.cpp"});
 }
 
@@ -207,7 +208,7 @@ TEST(promptFocusUsesControlIdentityAndRejectsNonInputs) {
     PromptRequest find{
         PromptKind::Find,
         "Find",
-        {{"find.query", "Find", ""}},
+        {{"find.query", "Find", {}}},
         {{"find.case", "Case", false, 8}},
         PromptMatchCount{"find.count", "Matches", "0"}};
     ASSERT_TRUE(openGenericPrompt(authority.prompt(), std::move(find)).accepted());

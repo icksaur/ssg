@@ -197,7 +197,7 @@ bool solveUiRegions(
     const PromptInputProjection* inputPtr = nullptr;
     if (paletteView.activePicker &&
         layout.find(UiNodeId{std::string{kHeaderPromptInputNodeId}})) {
-        input = {true, palette.query, palette.ghost};
+        input = {true, palette.query, palette.ghost, palette.cursor};
         inputPtr = &input;
     }
     return solve(kHeaderNodeId, SemanticRole::Header, header, inputPtr) &&

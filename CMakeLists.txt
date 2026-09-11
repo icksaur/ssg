@@ -685,6 +685,14 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
 
+    ssg_add_test_suite(
+        NAME test_prompt_edit_state
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_prompt_edit_state.cpp
+        SYMBOL test_prompt_edit_state)
+    ssg_test_link_libraries(test_prompt_edit_state PRIVATE ssg_core)
+    ssg_test_include_directories(test_prompt_edit_state PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
 
 endif()
 
@@ -832,6 +840,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_core PRIVATE
+    ${SSG_SOURCE_DIR}/src/PromptEditState.cpp
     ${SSG_SOURCE_DIR}/src/PromptSurface.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

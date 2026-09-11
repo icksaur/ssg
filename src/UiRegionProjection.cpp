@@ -385,14 +385,15 @@ UiRegionProjectionResult projectUiRegion(
         int inputX = rightEdge;
         if (inputX > rect.x) ++inputX;  // a space between the fields and the input
         const int available = std::max(0, rect.x + rect.width - inputX);
-        const auto line =
-            layoutInputLine(promptInput->sigil, input->query, input->ghost, available);
+        const auto line = layoutInputLine(promptInput->sigil, input->query,
+                                          input->ghost, available,
+                                          input->cursor);
         SolvedUiInput solvedInput;
         solvedInput.nodeId =
             UiNodeId{std::string{kHeaderPromptInputNodeId}};
         solvedInput.query = {inputX, rect.y, line.width, 1};
         solvedInput.queryText = line.text;
-        solvedInput.caret = {inputX + line.width, rect.y, 1, 1};
+        solvedInput.caret = {inputX + line.cursorColumn, rect.y, 1, 1};
         inputX += line.width;
         if (line.ghostWidth > 0) {
             solvedInput.ghost =

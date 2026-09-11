@@ -21,6 +21,7 @@
 #include <ssg/UiWidget.h>           // WidgetDescriptor
 #include <ssg/focus.h>              // FocusTarget
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <set>
@@ -117,6 +118,9 @@ struct UiLeafState {
     std::optional<bool> checked;
     SemanticRole role = SemanticRole::Text;
     std::optional<bool> active;
+    // The caret's byte offset into `value`. Present only alongside `active`
+    // (a stateful TextInput); a client renders its own caret at this offset.
+    std::optional<std::size_t> cursor;
 
     friend bool operator==(const UiLeafState&, const UiLeafState&) = default;
 };

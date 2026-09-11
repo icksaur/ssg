@@ -25,7 +25,11 @@ void paintPanelTree(CellGrid& grid, SolvedPanelSurface const& panel,
                   semanticIndex(theme, SemanticRole::Prompt), background,
                   SemanticRole::Prompt, style);
         if (focused && panel.queryEditing && panel.query.width > 0) {
-            const auto cells = computeCellRun(panel.queryText).totalCells;
+            auto const cursorOffset =
+                std::min(panel.queryCursor, panel.queryText.size());
+            auto const cells = computeCellRun(
+                                    panel.queryText.substr(0, cursorOffset))
+                                    .totalCells;
             grid.caret = GridPosition{
                 std::min(panel.query.x + static_cast<int>(cells),
                          panel.query.right() - 1),
@@ -164,11 +168,13 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
                 computeCellRun(textInputText(
                                    leaf.label, style.promptLabelSeparator, {}))
                     .totalCells);
-            auto const valueWidth =
-                static_cast<int>(
-                    computeCellRun(leaf.value).totalCells);
-            auto const cursorColumn =
-                std::min(rect.x + labelWidth + valueWidth, rect.right() - 1);
+            auto const cursorOffset =
+                std::min(leaf.cursor.value_or(leaf.value.size()),
+                        leaf.value.size());
+            auto const beforeCursorWidth = static_cast<int>(
+                computeCellRun(leaf.value.substr(0, cursorOffset)).totalCells);
+            auto const cursorColumn = std::min(
+                rect.x + labelWidth + beforeCursorWidth, rect.right() - 1);
             caret = GridPosition{cursorColumn, rect.y};
         }
     };

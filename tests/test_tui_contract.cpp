@@ -95,7 +95,8 @@ ssg::PaletteReport projectReport(
     std::vector<ssg::PaletteCandidate> const& candidates, std::string const& query,
     std::uint32_t paneRows, std::uint32_t firstVisible,
     std::size_t selectedIndex) {
-    ssg::PaletteWindowState window{query, selectedIndex, firstVisible, paneRows};
+    ssg::PaletteWindowState window{
+        ssg::PromptEditState{query}, selectedIndex, firstVisible, paneRows};
     return ssg::buildPaletteReport(candidates, window);
 }
 

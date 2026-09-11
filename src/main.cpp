@@ -12,8 +12,8 @@
 #include <ssg/ScriptHost.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Picker.h>
+#include <ssg/PromptEditState.h>
 #include <ssg/platform_files.h>
-#include <ssg/TextInputCommands.h>
 #include <ssg/SystemClipboardReader.h>
 
 #include <ssg/InitScriptWatcher.h>
@@ -130,21 +130,6 @@ void installSignalTagHandler(int signo) {
     sigaction(signo, &action, nullptr);
 }
 
-void popGrapheme(std::string& text) {
-    if (text.empty()) return;
-    const auto run = ssg::computeCellRun(text);
-    if (!run.spans.empty()) text.resize(run.spans.back().byteOffset);
-}
-
-void popWord(std::string& text) {
-    while (!text.empty() && !ssg::isWordByte(static_cast<unsigned char>(text.back()))) {
-        text.pop_back();
-    }
-    while (!text.empty() && ssg::isWordByte(static_cast<unsigned char>(text.back()))) {
-        text.pop_back();
-    }
-}
-
 } // namespace
 
 ViewActionResult applyScriptViewAction(Editor& runtime, GridPresenter& presenter, const ViewAction& request) {
@@ -223,20 +208,16 @@ class PaletteView {
 
     void apply(const ClientOwnedInput& input) {
         switch (input.kind) {
-        case ClientOwnedInputKind::AppendText:
-            window_.query += input.text;
-            window_.selected = 0;
-            revealSelection();
-            break;
-        case ClientOwnedInputKind::DeleteGraphemeBackward:
-            popGrapheme(window_.query);
-            window_.selected = 0;
-            revealSelection();
-            break;
-        case ClientOwnedInputKind::DeleteWordBackward:
-            popWord(window_.query);
-            window_.selected = 0;
-            revealSelection();
+        case ClientOwnedInputKind::TextEdit:
+            window_.query = applyPromptTextEdit(window_.query, input.edit);
+            if (input.edit.kind == PromptTextEdit::Kind::Insert ||
+                input.edit.kind == PromptTextEdit::Kind::DeleteBackward ||
+                input.edit.kind == PromptTextEdit::Kind::DeleteForward ||
+                input.edit.kind == PromptTextEdit::Kind::DeleteWordBackward ||
+                input.edit.kind == PromptTextEdit::Kind::DeleteWordForward) {
+                window_.selected = 0;
+                revealSelection();
+            }
             break;
         case ClientOwnedInputKind::SelectNext:
             ++window_.selected;
@@ -271,7 +252,7 @@ class PaletteView {
         const bool wasOpen = open_;
         open_ = snapshot.prompt.activeKind == PromptKind::Palette;
         if (open_ && !wasOpen) {
-            window_.query.clear();
+            window_.query = PromptEditState{};
             window_.selected = 0;
             window_.firstVisible = 0;
         }
@@ -286,7 +267,9 @@ class PaletteView {
     [[nodiscard]] std::optional<PickerActivation> activation() const { return activation_; }
 
   private:
-    [[nodiscard]] std::vector<std::size_t> ranked() const { return rankPaletteCandidates(candidates_, window_.query); }
+    [[nodiscard]] std::vector<std::size_t> ranked() const {
+        return rankPaletteCandidates(candidates_, window_.query.text());
+    }
 
     [[nodiscard]] std::uint32_t candidateCount() const { return static_cast<std::uint32_t>(ranked().size()); }
 

@@ -5,6 +5,7 @@
 #include <ssg/Keymap.h>
 #include <ssg/PaneNavigation.h>
 #include <ssg/Picker.h>
+#include <ssg/PromptEditState.h>
 #include <ssg/Selection.h>
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
@@ -178,19 +179,18 @@ using ClientInput =
                  ScrollFractionInput, ViewTransitionInput, UpdatePromptValueInput>;
 
 enum class ClientOwnedInputKind : std::uint8_t {
-    AppendText = 0,
-    DeleteGraphemeBackward = 1,
-    DeleteWordBackward = 2,
-    SelectNext = 3,
-    SelectPrevious = 4,
-    Submit = 5,
+    TextEdit = 0,
+    SelectNext = 1,
+    SelectPrevious = 2,
+    Submit = 3,
     // The TUI services these only after a resolved clipboard.paste gesture.
-    SystemClipboardPasteIntoEditor = 6,
-    SystemClipboardPasteIntoText = 7,
+    SystemClipboardPasteIntoEditor = 4,
+    SystemClipboardPasteIntoText = 5,
 };
 
 struct ClientOwnedInput {
     ClientOwnedInputKind kind;
+    PromptTextEdit edit;
     std::string text;
 
     friend bool operator==(const ClientOwnedInput&,

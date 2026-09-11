@@ -115,8 +115,37 @@ std::string visibleTail(std::string_view value, int cells) {
     return std::string{value.substr(begin)};
 }
 
+VisibleWindow visibleWindow(std::string_view value, std::size_t cursor,
+                            int cells) {
+    if (cells <= 0) return {};
+    cursor = std::min(cursor, value.size());
+    auto const before = value.substr(0, cursor);
+    auto const after = value.substr(cursor);
+    std::string beforeTail = visibleTail(before, cells);
+    auto const beforeCells =
+        static_cast<int>(computeCellRun(beforeTail).totalCells);
+    auto const remaining = std::max(0, cells - beforeCells);
+    // Take as much of `after` as still fits, grapheme-sliced from its front,
+    // so the window shows a little of what follows the cursor too.
+    std::string afterHead;
+    if (remaining > 0 && !after.empty()) {
+        auto const run = computeCellRun(after);
+        int used = 0;
+        std::size_t end = 0;
+        for (auto const& span : run.spans) {
+            auto const width =
+                static_cast<int>(std::max<std::uint32_t>(span.cellWidth, 1));
+            if (used + width > remaining) break;
+            used += width;
+            end = span.byteOffset + span.byteLen;
+        }
+        afterHead = std::string{after.substr(0, end)};
+    }
+    return {beforeTail + afterHead, beforeCells};
+}
+
 TextInputLayout layoutTextInput(std::string_view sigil, std::string_view value,
-                                int available) {
+                                int available, std::optional<std::size_t> cursor) {
     // One column is held back for the caret: text filling the field to its last
     // column would leave the terminal cursor nowhere to sit.
     const int drawable = std::max(0, available - 1);
@@ -124,15 +153,19 @@ TextInputLayout layoutTextInput(std::string_view sigil, std::string_view value,
         static_cast<int>(computeCellRun(sigil).totalCells);
     // The value scrolls against the room AFTER the pinned sigil.
     const int textRoom = std::max(0, drawable - sigilCells);
-    std::string text = textInputText(sigil, {}, visibleTail(value, textRoom));
+    const auto window =
+        visibleWindow(value, cursor.value_or(value.size()), textRoom);
+    std::string text = textInputText(sigil, {}, window.text);
     const int cells = static_cast<int>(computeCellRun(text).totalCells);
-    return {std::move(text), std::min(drawable, cells)};
+    return {std::move(text), std::min(drawable, cells),
+            std::min(drawable, sigilCells + window.cursorColumn)};
 }
 
 InputLineLayout layoutInputLine(std::string_view sigil, std::string_view query,
-                                std::string_view ghost, int available) {
-    const auto input = layoutTextInput(sigil, query, available);
-    InputLineLayout line{input.text, input.width, {}, 0};
+                                std::string_view ghost, int available,
+                                std::optional<std::size_t> cursor) {
+    const auto input = layoutTextInput(sigil, query, available, cursor);
+    InputLineLayout line{input.text, input.width, {}, 0, input.cursorColumn};
     // The ghost fills the cells the query left, clamped to its own display width;
     // it is dropped when the query consumed the row. The renderer clips the whole
     // ghost string to this width (the text is not truncated here).

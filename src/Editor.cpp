@@ -232,7 +232,8 @@ PromptRoutingState inputPromptState(Editor const& editor) {
     for (auto const& control : controls->controls) {
         if (control.kind != PromptControlKind::Input) continue;
         if (inputIndex++ == controls->activeInput) {
-            routing.currentValue = control.value;
+            routing.current = PromptEditState{
+                control.value, control.cursor.value_or(control.value.size())};
             break;
         }
     }
@@ -312,12 +313,12 @@ std::optional<std::string> applyInputMutation(
         return std::nullopt;
     }
     if (auto* update = std::get_if<UpdateFindQuery>(&*mutation)) {
-        auto result = applyFindQuery(editor, std::move(update->query));
+        auto result = applyFindQuery(editor, update->query);
         if (!result.accepted()) return result.message;
         return std::nullopt;
     }
     if (auto* update = std::get_if<UpdateReplacement>(&*mutation)) {
-        auto result = applyReplacement(editor, std::move(update->replacement));
+        auto result = applyReplacement(editor, update->replacement);
         if (!result.accepted()) return result.message;
         return std::nullopt;
     }
@@ -330,16 +331,11 @@ std::optional<std::string> applyInputMutation(
     auto state = editor.tree.searchState(binding->id);
     if (!state) return "search provider state is unavailable";
     switch (change.kind) {
-    case SearchQueryChange::Kind::Append:
-        state->query += change.text;
+    case SearchQueryChange::Kind::Edit: {
+        state->query = applyPromptTextEdit(state->query, change.edit);
         state->editing = true;
         break;
-    case SearchQueryChange::Kind::DeleteGraphemeBack:
-        state->query = applyPromptTextEdit(
-            state->query,
-            {PromptTextEdit::Kind::DeleteGraphemeBack, {}});
-        state->editing = true;
-        break;
+    }
     case SearchQueryChange::Kind::MoveFirst:
     case SearchQueryChange::Kind::MoveLast: {
         const auto view = editor.tree.viewState();
@@ -366,13 +362,13 @@ std::optional<std::string> applyInputMutation(
             binding->id, TreeProviderKind::Search, {}});
         state->submittedQuery.reset();
         state->searching = false;
-        if (!state->query.empty()) {
-            state->submittedQuery = state->query;
+        if (!state->query.text().empty()) {
+            state->submittedQuery = state->query.text();
             state->searching = true;
             const auto sourceGeneration = ++editor.workspaceSearchGeneration;
             editor.startWorkspaceSearch(
                 ParsedSearchQuery{.mode = SearchMode::Text,
-                                  .text = state->query},
+                                  .text = state->query.text()},
                 sourceGeneration);
         }
         break;
@@ -1466,16 +1462,15 @@ WorkspaceSearchState Editor::workspaceSearch(std::string query) {
     return *workspaceSearchState;
 }
 
-FindReplaceOperationResult Editor::updateFindQuery(std::string query) {
+FindReplaceOperationResult Editor::updateFindQuery(PromptEditState query) {
     std::lock_guard g{operationMutex};
-    auto r = applyFindQuery(*this, std::move(query));
-    return r;
+    return applyFindQuery(*this, std::move(query));
 }
 
-FindReplaceOperationResult Editor::updateReplacement(std::string replacement) {
+FindReplaceOperationResult Editor::updateReplacement(
+    PromptEditState replacement) {
     std::lock_guard g{operationMutex};
-    auto r = applyReplacement(*this, std::move(replacement));
-    return r;
+    return applyReplacement(*this, std::move(replacement));
 }
 
 OperationResult Editor::saveSession() {

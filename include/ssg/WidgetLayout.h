@@ -116,19 +116,37 @@ struct RowFit {
 struct TextInputLayout {
     std::string text;  // sigil followed by the visible tail of value
     int width;         // cells the field occupies (<= available), caret-safe
+    // The caret's column, counted from the field's own start (sigil
+    // included). Tracks `cursor` when given; defaults to the field's width
+    // (the caret trails the text), matching every caller that has no cursor.
+    int cursorColumn = 0;
 };
 
 // Lay out a TextInput in `available` cells: reserve one column for the caret,
-// keep the `sigil` pinned, and scroll `value` to its visible tail. `width` is
-// clamped so the caret column stays inside `available`.
-[[nodiscard]] TextInputLayout layoutTextInput(std::string_view sigil,
-                                              std::string_view value,
-                                              int available);
+// keep the `sigil` pinned, and scroll `value` to keep `cursor` (a byte offset
+// into `value`, defaulting to its end) visible. `width` is clamped so the
+// caret column stays inside `available`.
+[[nodiscard]] TextInputLayout layoutTextInput(
+    std::string_view sigil, std::string_view value, int available,
+    std::optional<std::size_t> cursor = std::nullopt);
 
 // The tail of `value` that fits in `cells` display columns, grapheme-sliced (so
 // a multi-byte or wide cluster is never cut in half) -- the END of a growing
 // value stays visible. Exposed for reuse/testing; `layoutTextInput` uses it.
 [[nodiscard]] std::string visibleTail(std::string_view value, int cells);
+
+struct VisibleWindow {
+    std::string text;
+    int cursorColumn = 0;  // cells before the cursor, within `text`
+};
+
+// The minimal window of `value` (grapheme-sliced) that fits `cells` columns
+// while keeping the grapheme boundary at byte offset `cursor` visible: the
+// tail of `value[0:cursor]` that fits, followed by as much of `value[cursor:]`
+// as the remaining cells allow. Degenerates to `visibleTail(value, cells)`
+// (cursor trailing the shown text) when `cursor >= value.size()`.
+[[nodiscard]] VisibleWindow visibleWindow(std::string_view value,
+                                          std::size_t cursor, int cells);
 
 // The full picker input line: a scrolling `TextInput` (sigil + query tail) plus
 // a trailing completion `ghost` that fills whatever room the query left, up to
@@ -144,15 +162,15 @@ struct InputLineLayout {
     int width;              // query field cells (caret-safe, <= available)
     std::string ghostText;  // the completion ghost (empty when none)
     int ghostWidth;         // ghost cells after the query (0 when none/no room)
+    int cursorColumn = 0;   // the query caret's column, field start included
 };
 
 // Lay out a picker input line in `available` cells: the query via
-// `layoutTextInput` (caret reservation + tail scroll), then the ghost in the
-// cells that remain, clamped to the ghost's display width.
-[[nodiscard]] InputLineLayout layoutInputLine(std::string_view sigil,
-                                              std::string_view query,
-                                              std::string_view ghost,
-                                              int available);
+// `layoutTextInput` (caret reservation + cursor-visible scroll), then the
+// ghost in the cells that remain, clamped to the ghost's display width.
+[[nodiscard]] InputLineLayout layoutInputLine(
+    std::string_view sigil, std::string_view query, std::string_view ghost,
+    int available, std::optional<std::size_t> cursor = std::nullopt);
 
 // --- WidgetStack: one composable row (packLeft/packRight/center) -------------
 //

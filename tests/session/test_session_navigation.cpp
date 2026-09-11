@@ -811,10 +811,10 @@ TEST(followPauseOnEditTransitionTable) {
                         ->dispatch("replace.open")
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->updateFindQuery("needle")
+                        ->updateFindQuery(ssg::test::promptText("needle"))
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->updateReplacement("pin")
+                        ->updateReplacement(ssg::test::promptText("pin"))
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
         ASSERT_TRUE(runtime
@@ -1480,12 +1480,10 @@ TEST(keyInputRoutingBranchesByPromptMode) {
     for (auto const test : {
              PaletteCase{ssg::KeyCode::Enter,
                          ssg::ClientOwnedInputKind::Submit},
-             PaletteCase{ssg::KeyCode::ArrowDown,
+            PaletteCase{ssg::KeyCode::ArrowDown,
                          ssg::ClientOwnedInputKind::SelectNext},
-             PaletteCase{ssg::KeyCode::ArrowUp,
+            PaletteCase{ssg::KeyCode::ArrowUp,
                          ssg::ClientOwnedInputKind::SelectPrevious},
-             PaletteCase{ssg::KeyCode::Backspace,
-                         ssg::ClientOwnedInputKind::DeleteGraphemeBackward},
          }) {
         auto result = key(test.code);
         ASSERT_EQ(result.outcome, ssg::ClientInputOutcome::ClientOwned);
@@ -1494,20 +1492,47 @@ TEST(keyInputRoutingBranchesByPromptMode) {
             ASSERT_EQ(result.clientOwned->kind, test.expected);
         }
     }
-    auto deleteWord = key(ssg::KeyCode::Backspace, true);
-    ASSERT_EQ(deleteWord.outcome, ssg::ClientInputOutcome::ClientOwned);
-    ASSERT_TRUE(deleteWord.clientOwned.has_value());
-    if (deleteWord.clientOwned) {
-        ASSERT_EQ(deleteWord.clientOwned->kind,
-                  ssg::ClientOwnedInputKind::DeleteWordBackward);
+    struct PaletteEditCase {
+        ssg::KeyCode code;
+        bool mod;
+        ssg::PromptTextEdit::Kind expected;
+    };
+    for (auto const test : {
+             PaletteEditCase{ssg::KeyCode::Backspace, false,
+                             ssg::PromptTextEdit::Kind::DeleteBackward},
+             PaletteEditCase{ssg::KeyCode::Delete, false,
+                             ssg::PromptTextEdit::Kind::DeleteForward},
+             PaletteEditCase{ssg::KeyCode::ArrowLeft, false,
+                             ssg::PromptTextEdit::Kind::MoveLeft},
+             PaletteEditCase{ssg::KeyCode::ArrowRight, false,
+                             ssg::PromptTextEdit::Kind::MoveRight},
+             PaletteEditCase{ssg::KeyCode::Home, false,
+                             ssg::PromptTextEdit::Kind::MoveToStart},
+             PaletteEditCase{ssg::KeyCode::End, false,
+                             ssg::PromptTextEdit::Kind::MoveToEnd},
+             PaletteEditCase{ssg::KeyCode::Backspace, true,
+                             ssg::PromptTextEdit::Kind::DeleteWordBackward},
+             PaletteEditCase{ssg::KeyCode::Delete, true,
+                             ssg::PromptTextEdit::Kind::DeleteWordForward},
+         }) {
+        auto result = key(test.code, test.mod);
+        ASSERT_EQ(result.outcome, ssg::ClientInputOutcome::ClientOwned);
+        ASSERT_TRUE(result.clientOwned.has_value());
+        if (result.clientOwned) {
+            ASSERT_EQ(result.clientOwned->kind,
+                      ssg::ClientOwnedInputKind::TextEdit);
+            ASSERT_EQ(result.clientOwned->edit.kind, test.expected);
+        }
     }
     auto append = runtime.input(ssg::ClientKeyInput{{}, "query"});
     ASSERT_EQ(append.outcome, ssg::ClientInputOutcome::ClientOwned);
     ASSERT_TRUE(append.clientOwned.has_value());
     if (append.clientOwned) {
         ASSERT_EQ(append.clientOwned->kind,
-                  ssg::ClientOwnedInputKind::AppendText);
-        ASSERT_EQ(append.clientOwned->text, std::string{"query"});
+                  ssg::ClientOwnedInputKind::TextEdit);
+        ASSERT_EQ(append.clientOwned->edit,
+                  (ssg::PromptTextEdit{
+                      ssg::PromptTextEdit::Kind::Insert, "query"}));
     }
     ASSERT_EQ(key(ssg::KeyCode::Escape).outcome,
               ssg::ClientInputOutcome::Dispatched);

@@ -290,7 +290,8 @@ OperationResult executeFindReplaceCommand(Editor& runtime,
             // Open the find prompt so focus moves to it and the reserved rows
             // display the controller query (projected at snapshot time).
             if (auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
-                    PromptKind::Find, "find", {{"find.query", "find query", query}},
+                    PromptKind::Find, "find",
+                    {{"find.query", "find query", PromptEditState{query}}},
                     findOptionToggles(runtime),
                     PromptMatchCount{"find.count", "match count", ""}});
                 !opened.accepted()) {
@@ -314,7 +315,8 @@ OperationResult executeFindReplaceCommand(Editor& runtime,
             runtime.findDocumentId = runtime.activeDocumentId();
             revealActiveFindMatch(runtime);
             if (auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
-                    PromptKind::Find, "find", {{"find.query", "find query", needle}},
+                    PromptKind::Find, "find",
+                    {{"find.query", "find query", PromptEditState{needle}}},
                     findOptionToggles(runtime),
                     PromptMatchCount{"find.count", "match count", ""}});
                 !opened.accepted()) {
@@ -331,9 +333,10 @@ OperationResult executeFindReplaceCommand(Editor& runtime,
             // option/match-count row.  The client edits only the replacement.
             if (auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
                     PromptKind::Replace, "replace",
-                    {{"find.query", "find query", query},
+                    {{"find.query", "find query", PromptEditState{query}},
                      {"replace.replacement", "replace with",
-                      runtime.findReplace.viewState().replacement}},
+                      PromptEditState{
+                          runtime.findReplace.viewState().replacement}}},
                     findOptionToggles(runtime),
                     PromptMatchCount{"find.count", "match count", ""}});
                 !opened.accepted()) {
@@ -412,7 +415,8 @@ OperationResult executeFindReplaceCommand(Editor& runtime,
     return failure("unknown find/replace command");
 }
 
-FindReplaceOperationResult applyFindQuery(Editor& runtime, std::string query) {
+FindReplaceOperationResult applyFindQuery(Editor& runtime,
+                                          PromptEditState query) {
     auto* document = runtime.activeDocument();
     if (document == nullptr) {
         return {FindReplaceError::DocumentRejected, 0, "no active document"};
@@ -425,16 +429,26 @@ FindReplaceOperationResult applyFindQuery(Editor& runtime, std::string query) {
         range = ByteRange{selected.lower().byteOffset,
                           selected.upper().byteOffset};
     }
-    runtime.findReplace.updateQuery(snapshot, query, range);
+    runtime.findReplace.updateQuery(snapshot, query.text(), range);
+    auto promptResult = runtime.screen.prompt().updateValue(0, std::move(query));
+    if (!promptResult.accepted()) {
+        return {FindReplaceError::DocumentRejected, snapshot.revision,
+                promptResult.error->message};
+    }
     runtime.findDocumentId = runtime.activeDocumentId();
     revealActiveFindMatch(runtime);
     return {};
 }
 
 FindReplaceOperationResult applyReplacement(Editor& runtime,
-                                            std::string replacement) {
+                                            PromptEditState replacement) {
     if (!replacePromptActive(runtime)) return {};
-    runtime.findReplace.updateReplacement(std::move(replacement));
+    runtime.findReplace.updateReplacement(replacement.text());
+    auto promptResult = runtime.screen.prompt().updateValue(1, std::move(replacement));
+    if (!promptResult.accepted()) {
+        return {FindReplaceError::DocumentRejected, 0,
+                promptResult.error->message};
+    }
     runtime.findDocumentId = runtime.activeDocumentId();
     return {};
 }

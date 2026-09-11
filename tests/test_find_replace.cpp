@@ -197,7 +197,7 @@ TEST(viewStateTransitionsAreExact) {
     ASSERT_FALSE(open.replaceMode);
     controller.toggleCase(document.snapshot());
     ASSERT_TRUE(controller.viewState().options.caseSensitive);
-    controller.updateQuery(document.snapshot(), "ALPHA", std::nullopt);
+    controller.updateQuery(document.snapshot(), {"ALPHA", 5}, std::nullopt);
     ASSERT_EQ(controller.viewState().matches.size(), std::size_t{0});
     controller.openReplace(
         document.snapshot(),

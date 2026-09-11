@@ -59,6 +59,10 @@ inline CommandResult requireCommand(ClientInputResult result) {
     return std::move(*result.command);
 }
 
+inline PromptEditState promptText(std::string text) {
+    return PromptEditState{std::move(text)};
+}
+
 inline CommandResult dispatchInput(Editor& editor, ClientInput input) {
     return requireCommand(editor.input(std::move(input)));
 }
