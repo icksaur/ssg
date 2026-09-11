@@ -9,6 +9,7 @@
 #include <ssg/PromptSurface.h>
 #include <ssg/TextInputCommands.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -1293,6 +1294,83 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
     }
 }
 
+TEST(liveInlineDiffPointerSelectionCopiesOnlyCurrentContent) {
+    auto root = uniqueRoot();
+    auto created = ssg::createEditor(
+        {root / "workspace", root / "recovery", root / "archive"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(
+                    runtime,
+                    {.revision = std::uint64_t{90},
+                     .baselineIdentity = "head-copy:index-1",
+                     .files = {
+                         {.id = ssg::DiffFileId{"inline-copy"},
+                          .path = "inline.txt",
+                          .baselineContent =
+                              std::string{"gamma original line two\n"},
+                          .workingContent =
+                              std::string{"gamma modified line two\n"}}}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch("panel.show_git_status").accepted());
+    ASSERT_TRUE(runtime.dispatch("tree.select_next").accepted());
+    ASSERT_TRUE(runtime.dispatch("tree.activate").accepted());
+
+    auto frame = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    const auto projected = frame->viewport.projectedRow(0);
+    const auto* row = std::get_if<ssg::RealRow>(&projected);
+    ASSERT_TRUE(row != nullptr);
+    if (!row) return;
+    ASSERT_FALSE(row->mergedSegments.empty());
+
+    const auto targetAt = [&](std::uint32_t byteOffset) {
+        return std::find_if(
+            frame->viewport.hitTargets.begin(), frame->viewport.hitTargets.end(),
+            [&](const ssg::CellHitTarget& target) {
+                return !target.ghost && target.byteOffset == byteOffset;
+            });
+    };
+    const auto start = targetAt(6);
+    const auto end = targetAt(14);
+    ASSERT_TRUE(start != frame->viewport.hitTargets.end());
+    ASSERT_TRUE(end != frame->viewport.hitTargets.end());
+    if (start == frame->viewport.hitTargets.end() ||
+        end == frame->viewport.hitTargets.end()) {
+        return;
+    }
+    ASSERT_TRUE(start->viewportColumn > start->byteOffset);
+    ASSERT_TRUE(std::any_of(
+        frame->viewport.hitTargets.begin(), frame->viewport.hitTargets.end(),
+        [&](const ssg::CellHitTarget& target) {
+            return target.ghost &&
+                   target.viewportColumn < start->viewportColumn;
+        }));
+
+    auto press =
+        runtime.input(ssg::DocumentPointerInput{ssg::ByteOffset{start->byteOffset}});
+    ASSERT_TRUE(press.command && press.command->accepted());
+    auto move = runtime.input(ssg::DocumentPointerInput{
+        ssg::ByteOffset{end->byteOffset}, false, false,
+        ssg::InputPointerButton::Primary, ssg::InputPointerPhase::Move});
+    ASSERT_TRUE(move.command && move.command->accepted());
+    frame = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    ASSERT_EQ(frame->selections.primary().anchor.byteOffset,
+              ssg::ByteOffset{6});
+    ASSERT_EQ(frame->selections.primary().active.byteOffset,
+              ssg::ByteOffset{14});
+
+    ASSERT_TRUE(runtime.dispatch("clipboard.copy").accepted());
+    ASSERT_EQ(runtime.clipboard.plainText(), std::string{"modified"});
+    ASSERT_TRUE(runtime.clipboard.plainText().find("original") ==
+                std::string::npos);
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 SSG_TEST_SUITE(test_session_editing) {
@@ -1316,6 +1394,7 @@ SSG_TEST_SUITE(test_session_editing) {
     RUN(findWordUnderCursorPrefersTheSelectionAndSearchesItLiterally);
     RUN(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret);
     RUN(promptFocusIsSingleAndResolvesToItsRegion);
+    RUN(liveInlineDiffPointerSelectionCopiesOnlyCurrentContent);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

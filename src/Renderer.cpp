@@ -408,7 +408,8 @@ CellGrid renderFrame(const GridPresentation& snapshot,
                 auto const& primary = selections.primary();
                 if (auto cell = screenCellFor(viewport, content,
                                                 primary.active.line.value(),
-                                                primary.active.cell.value())) {
+                                                primary.active.cell.value(),
+                                                primary.active.byteOffset)) {
                     grid.caret = *cell;
                 }
                 // The secondary caret is a block cursor that INVERTS the cell it
@@ -426,7 +427,8 @@ CellGrid renderFrame(const GridPresentation& snapshot,
                     // primary uses the single hardware cursor.
                     auto cell = screenCellFor(viewport, content,
                                                 item.active.line.value(),
-                                                item.active.cell.value());
+                                                item.active.cell.value(),
+                                                item.active.byteOffset);
                     if (!cell) continue;
                     auto const& existing = grid.at(cell->column, cell->row);
                     put(grid, cell->column, cell->row,

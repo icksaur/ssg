@@ -276,6 +276,7 @@ TEST(unwrappedMergedInlineRowGhostSpansResolveHitTestsToRealBytesAroundThem) {
         ASSERT_TRUE(hit != nullptr);
         ASSERT_EQ(hit->byteOffset, std::uint32_t{6});  // "gamma " is 6 bytes
         ASSERT_EQ(hit->byteLen, std::uint32_t{0});
+        ASSERT_TRUE(hit->ghost);
     }
     const ssg::CellHitTarget* afterGhost = nullptr;
     for (const auto& candidate : state.hitTargets) {
@@ -289,6 +290,26 @@ TEST(unwrappedMergedInlineRowGhostSpansResolveHitTestsToRealBytesAroundThem) {
     ASSERT_EQ(afterGhost->byteOffset,
               static_cast<std::uint32_t>(realAfterGhost));
     ASSERT_TRUE(afterGhost->byteLen > 0);
+    ASSERT_FALSE(afterGhost->ghost);
+}
+
+TEST(unwrappedMergedInlineRowKeepsZeroWidthSpansAlignedWithPainting) {
+    using ssg::InlineWordSegment;
+    auto diff = modifiedLineWithInlineSegments();
+    diff.currentContent = "\xE2\x80\x8D" "a";
+    diff.changedLines.front().inlineWordSegments = {
+        {InlineWordSegment::Kind::Unchanged, "\xE2\x80\x8D"},
+        {InlineWordSegment::Kind::Added, "a"},
+    };
+    auto state = ssg::computeUnwrappedViewport(
+        diff.currentContent, ViewportDimensions{10, 1}, 0, 0, 4, &diff);
+
+    ASSERT_EQ(state.hitTargets.size(), std::size_t{2});
+    ASSERT_EQ(state.hitTargets[0].viewportColumn, std::uint32_t{0});
+    ASSERT_EQ(state.hitTargets[0].byteOffset, std::uint32_t{0});
+    ASSERT_EQ(state.hitTargets[1].viewportColumn, std::uint32_t{1});
+    ASSERT_EQ(state.hitTargets[1].byteOffset, std::uint32_t{3});
+    ASSERT_EQ(state.visibleRows.front().contentCells, std::uint32_t{2});
 }
 
 TEST(wrappedModifiedLineNeverMergesEvenWhenTheLineFitsOnOneRow) {
@@ -793,6 +814,9 @@ TEST(cachedLineLayoutEqualsFreshComputeRun) {
     RUN(removedRowsAreProjectedAtTargetAndCountedByScrollbar);
     RUN(leadingTrailingAndWrappedPhantomBlocksUseTheSameProjection);
     RUN(unwrappedProjectionStaysAlignedAcrossEmptyAndScrolledOffRows);
+    RUN(unwrappedMergedInlineRowGhostSpansResolveHitTestsToRealBytesAroundThem);
+    RUN(unwrappedMergedInlineRowKeepsZeroWidthSpansAlignedWithPainting);
+    RUN(wrappedModifiedLineNeverMergesEvenWhenTheLineFitsOnOneRow);
     RUN(scrollSaturatesAndDeltaSuppressesEqualPayload);
     RUN(unwrappedMatchesFullPathForFittingLines);
     RUN(unwrappedClipsLongLinesToOneRow);

@@ -325,7 +325,8 @@ TEST(mergedInlineModifiedRowNavigatesByRealBytesUnaffectedByGhostSpans) {
     // ONE merged row with the ghost "original " text visually spliced in.
     // Caret navigation must be entirely unaffected by that ghost text: it
     // does not exist in the document, so CursorLeft/CursorRight/vertical
-    // movement need no special ghost-span handling.
+    // movement need no special ghost-span handling in the selection model.
+    // Viewport separately projects these logical positions onto display cells.
     const std::string text = "one\ngamma modified line two\nthree";
     ssg::DiffFileView diff{ssg::DiffFileId{"doc.txt"}};
     diff.currentContent = text;
@@ -348,8 +349,8 @@ TEST(mergedInlineModifiedRowNavigatesByRealBytesUnaffectedByGhostSpans) {
 
     // Caret at the end of line 0 ("one", byte 3, cell 3); moving down lands
     // on the merged row at the SAME real cell 3 ('m' in "gamma"), byte 7 --
-    // desiredCell is real-cell-space throughout, so the ghost-widened
-    // merged row needs no translation.
+    // desiredCell is real-cell-space throughout. Displaying that logical
+    // position on the ghost-widened merged row requires Viewport projection.
     auto view = state(text, {{3, 3}});
     view = resultingState(
         view, ssg::navigateSelection(

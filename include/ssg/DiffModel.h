@@ -56,8 +56,10 @@ struct DiffWordRange {
 // the two colored words don't visually run together -- both Removed and
 // Separator are GHOST: they contribute display-only text with no
 // corresponding real document byte. Viewport turns this sequence into ghost
-// spans (see RealRow::mergedSegments) for hit-testing/caret/selection;
-// renderFrame paints it without recomputing the segmentation.
+// spans (see RealRow::mergedSegments) for hit-testing and caret projection.
+// Selection endpoints and clipboard copies always address currentContent:
+// ghost text is neither independently selectable nor copied. renderFrame
+// paints the segments without recomputing the segmentation.
 struct InlineWordSegment {
     enum class Kind { Unchanged, Removed, Added, Separator };
     Kind kind = Kind::Unchanged;

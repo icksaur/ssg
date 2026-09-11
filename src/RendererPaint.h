@@ -77,6 +77,7 @@ void paintLineNumbers(CellGrid& grid, const GridPresentation& snapshot,
                       const ThemeSnapshot& theme);
 [[nodiscard]] std::optional<GridPosition>
 screenCellFor(const ViewportViewState& viewport, const Rect& content,
-              std::uint32_t caretLine, std::uint32_t caretCell);
+              std::uint32_t caretLine, std::uint32_t caretCell,
+              ByteOffset caretByteOffset);
 
 } // namespace ssg

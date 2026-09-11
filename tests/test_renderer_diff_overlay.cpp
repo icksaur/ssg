@@ -95,6 +95,35 @@ ssg::GridPresentation snapshotWith(
     return ssg::test::copyGridFrame(base, std::move(sections), std::move(projection), base.palette);
 }
 
+ssg::DiffFileView inlineDiff(std::string currentContent,
+                             std::vector<ssg::InlineWordSegment> segments) {
+    ssg::DiffFileView file{
+        .id = ssg::DiffFileId{"overlay.cpp"},
+        .path = "overlay.cpp",
+        .baselineIdentity = "baseline",
+        .currentContent = std::move(currentContent),
+    };
+    file.changedLines.push_back(
+        {.kind = ssg::DiffLineKind::Modified,
+         .baselineLine = std::size_t{0},
+         .targetLine = std::size_t{0},
+         .inlineWordSegments = std::move(segments)});
+    return file;
+}
+
+ssg::GridPresentation inlinePresentation(
+    const ssg::GridPresentation& base, const ssg::DiffFileView& diff,
+    ssg::Selection selection) {
+    auto sections = base;
+    sections.diffFileIdentity = diff.id.value();
+    sections.diff = ssg::DiffViewState{sections.documentRevision, {diff}};
+    sections.selections = ssg::SelectionSet{{selection}};
+    auto projection = sections;
+    projection.viewport = ssg::computeUnwrappedViewport(
+        sections.documentText, projection.viewport.dimensions, 0, 0, 4, &diff);
+    return snapshotWith(base, std::move(sections), std::move(projection));
+}
+
 }
 
 TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
@@ -328,8 +357,80 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_EQ(ssg::renderFrame(unidentified, lineCache), noDiffGrid);
 }
 
+TEST(mergedInlineDiffPlacesCaretAndSelectionInCurrentTextCells) {
+    ssg::LineLayoutCache lineCache;
+    const std::string text = "gamma modified line two";
+    auto fixture = makeFixture(text);
+    ASSERT_TRUE(fixture.runtime != nullptr);
+    if (!fixture.runtime) return;
+    auto base = ssg::test::projectGridFrame(*fixture.runtime, {40, 10});
+    ASSERT_TRUE(base.has_value() && base->document.has_value());
+    if (!base || !base->document) return;
+    auto diff = inlineDiff(
+        text,
+        {{ssg::InlineWordSegment::Kind::Unchanged, "gamma "},
+         {ssg::InlineWordSegment::Kind::Removed, "original"},
+         {ssg::InlineWordSegment::Kind::Separator, " "},
+         {ssg::InlineWordSegment::Kind::Added, "modified"},
+         {ssg::InlineWordSegment::Kind::Unchanged, " line two"}});
+    const auto start = *ssg::resolveSelectionPosition(text, ssg::ByteOffset{6});
+    const auto end = *ssg::resolveSelectionPosition(text, ssg::ByteOffset{14});
+    auto presentation =
+        inlinePresentation(*base, diff, ssg::Selection{end, start});
+    presentation.findReplace.open = true;
+    presentation.findReplace.sourceRevision = presentation.documentRevision;
+    presentation.findReplace.matches = {
+        {ssg::ByteOffset{8}, ssg::ByteOffset{10}}};
+    const auto grid = ssg::renderFrame(presentation, lineCache);
+    const auto row = base->document->content.y;
+    const auto first = base->document->content.x;
+
+    ASSERT_TRUE(grid.caret.has_value());
+    if (grid.caret) {
+        ASSERT_EQ(grid.caret->column, first + 15);
+        ASSERT_EQ(grid.caret->row, row);
+    }
+    for (int column = first + 6; column < first + 15; ++column) {
+        ASSERT_EQ(grid.at(column, row).role, ssg::SemanticRole::Text);
+    }
+    for (int column = first + 15; column < first + 23; ++column) {
+        const auto expectedRole =
+            column >= first + 17 && column < first + 19
+                ? ssg::SemanticRole::SearchMatch
+                : ssg::SemanticRole::Selection;
+        ASSERT_EQ(grid.at(column, row).role, expectedRole);
+        ASSERT_EQ(grid.at(column, row).tint, ssg::DiffTint::None);
+    }
+}
+
+TEST(mergedInlineDiffPlacesEndCaretAfterTrailingRemoval) {
+    ssg::LineLayoutCache lineCache;
+    const std::string text = "gamma ";
+    auto fixture = makeFixture(text);
+    ASSERT_TRUE(fixture.runtime != nullptr);
+    if (!fixture.runtime) return;
+    auto base = ssg::test::projectGridFrame(*fixture.runtime, {40, 10});
+    ASSERT_TRUE(base.has_value() && base->document.has_value());
+    if (!base || !base->document) return;
+    auto diff = inlineDiff(
+        text,
+        {{ssg::InlineWordSegment::Kind::Unchanged, "gamma "},
+         {ssg::InlineWordSegment::Kind::Removed, "original"}});
+    const auto end = *ssg::resolveSelectionPosition(text, ssg::ByteOffset{6});
+    const auto presentation =
+        inlinePresentation(*base, diff, ssg::Selection{end, end});
+    const auto grid = ssg::renderFrame(presentation, lineCache);
+
+    ASSERT_TRUE(grid.caret.has_value());
+    if (grid.caret) {
+        ASSERT_EQ(grid.caret->column, base->document->content.x + 14);
+    }
+}
+
 SSG_TEST_SUITE(test_renderer_diff_overlay) {
     RUN(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab);
     RUN(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence);
+    RUN(mergedInlineDiffPlacesCaretAndSelectionInCurrentTextCells);
+    RUN(mergedInlineDiffPlacesEndCaretAfterTrailingRemoval);
     return failed == 0 ? 0 : 1;
 }

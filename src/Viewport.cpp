@@ -821,8 +821,8 @@ ViewportViewState computeUnwrappedViewport(
             // reconstruct the target line's bytes exactly, so their byte
             // offsets accumulate from `documentStart` as the merged text is
             // assembled. Removed/Separator segments are GHOST: every cell
-            // inside one resolves to the real byte offset immediately
-            // before it with byteLen 0 -- the same "phantom content has no
+            // inside one resolves to its insertion boundary in the current
+            // document with byteLen 0 -- the same "phantom content has no
             // bytes of its own" convention already used for whole
             // PhantomRows, generalized to span granularity.
             struct SegmentBound {
@@ -862,17 +862,24 @@ ViewportViewState computeUnwrappedViewport(
                 return bounds.back();
             };
             const auto run = computeCellRun(mergedText, tabWidth);
+            const auto paintedWidth = [](const CellSpan& span) {
+                return std::max(span.cellWidth, 1u);
+            };
+            uint32_t mergedTotalCells = 0;
+            for (const auto& span : run.spans) {
+                mergedTotalCells += paintedWidth(span);
+            }
 
             uint32_t firstSpan = 0;
             uint32_t startCell = 0;
             for (; firstSpan < run.spans.size(); ++firstSpan) {
                 if (startCell >= requestedFirstVisualColumn) break;
-                startCell += run.spans[firstSpan].cellWidth;
+                startCell += paintedWidth(run.spans[firstSpan]);
             }
             if (firstSpan >= run.spans.size()) {
                 visibleRows.push_back(
                     VisualRow{logicalLine, firstSpan, 0, CellIndex{startCell},
-                              run.totalCells, 0, endByteOffset});
+                              mergedTotalCells, 0, endByteOffset});
                 if (projection) rowProjection.push_back(projected);
                 continue;
             }
@@ -884,7 +891,8 @@ ViewportViewState computeUnwrappedViewport(
                 const auto& span = run.spans[spanIndex];
                 const auto available = dimensions.columns - viewportColumn;
                 if (available == 0) break;
-                const auto visibleWidth = std::min(span.cellWidth, available);
+                const auto width = paintedWidth(span);
+                const auto visibleWidth = std::min(width, available);
                 const auto bound = boundFor(span.byteOffset);
                 const auto byteOffset =
                     bound.ghost ? bound.byteOffsetBase
@@ -899,17 +907,18 @@ ViewportViewState computeUnwrappedViewport(
                         CellIndex{logicalCell},
                         byteOffset,
                         byteLen,
+                        bound.ghost,
                     });
                 }
                 viewportColumn += visibleWidth;
-                logicalCell += span.cellWidth;
+                logicalCell += width;
                 ++spanCount;
             }
             const uint32_t contentFromOffset =
-                run.totalCells > startCell ? run.totalCells - startCell : 0;
+                mergedTotalCells > startCell ? mergedTotalCells - startCell : 0;
             visibleRows.push_back(
                 VisualRow{logicalLine, firstSpan, spanCount, CellIndex{startCell},
-                          run.totalCells,
+                          mergedTotalCells,
                           std::min(contentFromOffset, dimensions.columns),
                           endByteOffset});
             if (projection) rowProjection.push_back(projected);

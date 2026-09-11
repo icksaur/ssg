@@ -50,6 +50,7 @@ struct CellHitTarget {
     CellIndex cell;
     uint32_t byteOffset;
     uint32_t byteLen;
+    bool ghost = false;
 
     bool operator==(const CellHitTarget&) const noexcept = default;
 };

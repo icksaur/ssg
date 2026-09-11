@@ -258,11 +258,51 @@ std::optional<SemanticRole> findMatchRole(FindReplaceViewState const& find,
 std::optional<GridPosition> screenCellFor(ViewportViewState const& viewport,
                                             Rect const& content,
                                             std::uint32_t caretLine,
-                                            std::uint32_t caretCell) {
+                                            std::uint32_t caretCell,
+                                            ByteOffset caretByteOffset) {
     std::optional<GridPosition> boundary;  // A match landing at the row's edge.
     for (std::size_t index = 0; index < viewport.visibleRows.size(); ++index) {
         auto const& row = viewport.visibleRows[index];
         if (row.logicalLine != caretLine) continue;
+        auto const& projected =
+            viewport.projectedRow(static_cast<std::uint32_t>(index));
+        auto const* real = std::get_if<RealRow>(&projected);
+        if (real != nullptr && !real->mergedSegments.empty()) {
+            const auto offset = caretByteOffset.value();
+            const auto target = std::find_if(
+                viewport.hitTargets.begin(), viewport.hitTargets.end(),
+                [&](const CellHitTarget& hit) {
+                    return hit.viewportRow == index && !hit.ghost &&
+                           hit.byteOffset == offset;
+                });
+            if (target != viewport.hitTargets.end()) {
+                return GridPosition{
+                    content.x + static_cast<int>(target->viewportColumn),
+                    content.y + static_cast<int>(index)};
+            }
+            if (offset != row.endByteOffset) continue;
+
+            std::optional<std::uint32_t> lastRealCell;
+            std::optional<std::uint32_t> lastTrailingGhostCell;
+            for (const auto& hit : viewport.hitTargets) {
+                if (hit.viewportRow != index) continue;
+                if (!hit.ghost && hit.byteOffset + hit.byteLen == offset) {
+                    lastRealCell =
+                        std::max(lastRealCell.value_or(0), hit.viewportColumn);
+                } else if (hit.ghost && hit.byteOffset == offset) {
+                    lastTrailingGhostCell = std::max(
+                        lastTrailingGhostCell.value_or(0), hit.viewportColumn);
+                }
+            }
+            if (!lastRealCell) continue;
+            const auto column =
+                lastTrailingGhostCell.value_or(*lastRealCell) + 1;
+            if (column < static_cast<std::uint32_t>(content.width)) {
+                return GridPosition{content.x + static_cast<int>(column),
+                                    content.y + static_cast<int>(index)};
+            }
+            continue;
+        }
         auto const start = row.startCell.value();
         auto const end = start + row.contentCells;
         if (caretCell < start || caretCell > end) continue;
@@ -416,11 +456,6 @@ void paintDocument(CellGrid& grid, GridPresentation const& snapshot,
         // the segments Viewport already computed, recomputing a
         // computeCellRun over the SAME merged text purely to know where
         // to draw each cell -- not to decide layout or byte offsets.
-        // Word wrap, selection, and find-match highlighting are not painted
-        // on a merged row (selection/find BYTE ranges still resolve
-        // correctly via Viewport's hit targets; only the visual highlight
-        // wash is not drawn here yet) -- a non-goal for this increment,
-        // matching the spec's explicit unwrapped-only scope.
         if (!real.mergedSegments.empty()) {
             std::string mergedText;
             struct SegmentBounds {
@@ -437,12 +472,18 @@ void paintDocument(CellGrid& grid, GridPresentation const& snapshot,
             }
             auto const foreground = semanticIndex(theme, SemanticRole::Text);
             auto const cells = computeCellRun(mergedText);
+            auto hit = std::lower_bound(
+                viewport.hitTargets.begin(), viewport.hitTargets.end(), rowIndex,
+                [](const CellHitTarget& target, std::size_t wantedRow) {
+                    return target.viewportRow < wantedRow;
+                });
             int column = content.x;
             std::size_t firstSpan = 0;
             std::uint32_t startCell = 0;
             for (; firstSpan < cells.spans.size(); ++firstSpan) {
                 if (startCell >= viewport.firstVisualColumn) break;
-                startCell += cells.spans[firstSpan].cellWidth;
+                startCell +=
+                    std::max<std::uint32_t>(cells.spans[firstSpan].cellWidth, 1);
             }
             for (std::size_t spanIndex = firstSpan;
                  spanIndex < cells.spans.size(); ++spanIndex) {
@@ -471,16 +512,45 @@ void paintDocument(CellGrid& grid, GridPresentation const& snapshot,
                         ? DiffTint::AddedWord
                         : DiffTint::ModifiedRow;
                 auto const width = std::max<std::uint32_t>(span.cellWidth, 1);
+                auto const viewportColumn =
+                    static_cast<std::uint32_t>(column - content.x);
+                while (hit != viewport.hitTargets.end() &&
+                       hit->viewportRow == rowIndex &&
+                       hit->viewportColumn < viewportColumn) {
+                    ++hit;
+                }
+                auto cellRole = SemanticRole::Text;
+                auto cellBg = background;
+                auto paintedTint = cellTint;
+                if (hit != viewport.hitTargets.end() &&
+                    hit->viewportRow == rowIndex &&
+                    hit->viewportColumn == viewportColumn && !hit->ghost) {
+                    const auto selected =
+                        offsetInSelection(selection, hit->byteOffset);
+                    if (selected) {
+                        cellRole = SemanticRole::Selection;
+                        cellBg = selectionBg;
+                        paintedTint = DiffTint::None;
+                    }
+                    if (auto const matchRole =
+                            matchRoleAt(hit->byteOffset)) {
+                        cellRole = *matchRole;
+                        cellBg = *matchRole == SemanticRole::Selection
+                                     ? selectionBg
+                                     : searchMatchBg;
+                        paintedTint = DiffTint::None;
+                    }
+                }
                 put(grid, column, content.y + static_cast<int>(rowIndex),
-                    std::move(text), foreground, background,
-                    SemanticRole::Text, false, cellTint);
+                    std::move(text), foreground, cellBg, cellRole, false,
+                    paintedTint);
                 for (std::uint32_t offset = 1;
                      offset < width &&
                      column + static_cast<int>(offset) < content.right();
                      ++offset) {
                     put(grid, column + static_cast<int>(offset),
                         content.y + static_cast<int>(rowIndex), "", foreground,
-                        background, SemanticRole::Text, true, cellTint);
+                        cellBg, cellRole, true, paintedTint);
                 }
                 column += static_cast<int>(width);
             }
