@@ -1,6 +1,6 @@
 # SSG
 
-A fast, modern **terminal text editor** — multiple cursors, a command palette, a
+A **terminal text editor** — multiple cursors, a command palette, a
 fuzzy file finder, find-and-replace, syntax highlighting, mouse support, and
 themes — with the editing conveniences you expect from Sublime Text or VS Code,
 in your terminal.
@@ -16,9 +16,6 @@ scripts/install.sh
 
 The script runs `makepkg --syncdeps --install --force` against the repository's
 `PKGBUILD`, so pacman owns upgrades and removal.
-
-If an earlier version of the script installed `/usr/local/bin/ssg`, remove that
-unmanaged binary first so it does not shadow pacman's `/usr/bin/ssg`.
 
 ## Run from source
 
@@ -36,8 +33,8 @@ use no CPU while idle.
 
 **One modifier: `Mod` is `Ctrl` or `Alt`.** Press whichever your terminal passes
 through — both do the same thing. `Ctrl+Alt` together is never an SSG chord; that
-combination belongs to your window manager. Every binding is **remappable** — see
-Configuration.
+combination is reserved for your terminal or window manager. Every binding is
+remappable — see Configuration.
 
 The things you reach for in a modern editor, in the terminal:
 

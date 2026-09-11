@@ -7,12 +7,12 @@ Human-readable code.
 All actions available via keyboard.
 
 ## Code architecture
-The main() function should instantiate components and start threads or do simple loops.
+The main() function should instantiate components and start threads and do simple loops.
 The architecture is as simple and flat as possible.  Prefer broad and "leafy" composition.
-Avoid deep ownership hierarchies.
-Prefer composition to inheritance.  Inherit from pure C++ interfaces when required.
+Avoid deep ownership hierarchies.  Prefer minimal layering.
+Prefer composition to inheritance.  Inherit from pure C++ interfaces when required for polymorphism.
 Minimize unique data structures and give them more functionality that can be tested.
-Deleting a concept beats generalizing it.  Nothing exists to serve a second client or a future GUI.
+Deleting a concept beats generalizing it.
 
 ## process
 Read the code you are changing, then change it.  Git makes the change itself low-risk.
