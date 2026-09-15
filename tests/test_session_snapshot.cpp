@@ -31,7 +31,7 @@ ssg::EditorConfig editorConfig(const fs::path& root) {
     config.cwd = root / "workspace";
     config.recoveryRoot = root / "recovery";
     config.archiveRoot = root / "archive";
-    config.snapshotPath = root / "ssg" / "session.snapshot";
+    config.snapshotPath = root / ".ssg" / "session.snapshot";
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
     return config;
@@ -123,7 +123,7 @@ TEST(codecRejectsInvalidUtf8AndBackingCombinations) {
 TEST(fileReadDoesNotConsumeAndEmptyWriteClearsStaleState) {
     const auto root = testRuntimePath("session_snapshot_codec");
     fs::remove_all(root);
-    const auto path = root / "ssg" / "session.snapshot";
+    const auto path = root / ".ssg" / "session.snapshot";
     ASSERT_TRUE(ssg::writeSessionSnapshot(path, exampleSnapshot()).accepted());
 
     const auto first = ssg::readSessionSnapshot(path);
@@ -413,8 +413,8 @@ TEST(corruptSnapshotAndNonDirectorySessionPathStopStartup) {
     root = testRuntimePath("session_snapshot_nondirectory");
     fs::remove_all(root);
     config = editorConfig(root);
-    fs::remove_all(root / "ssg");
-    writeBytes(root / "ssg", "not a directory");
+    fs::remove_all(root / ".ssg");
+    writeBytes(root / ".ssg", "not a directory");
     auto blocked = ssg::createEditor(config);
     ASSERT_FALSE(blocked.accepted());
     ASSERT_TRUE(blocked.message.find(config.snapshotPath.string()) !=
@@ -454,8 +454,8 @@ TEST(saveFailureIsReportedAndStartingDirectoryOwnsTheSnapshot) {
     ASSERT_TRUE(created.session->dispatch("file.new").accepted());
     ASSERT_TRUE(ssg::test::typeText(*created.session, "cwd draft").accepted());
     ASSERT_TRUE(created.session->saveSession().accepted);
-    ASSERT_TRUE(fs::exists(start / "ssg" / "session.snapshot"));
-    ASSERT_FALSE(fs::exists(openedWorkspace / "ssg" / "session.snapshot"));
+    ASSERT_TRUE(fs::exists(start / ".ssg" / "session.snapshot"));
+    ASSERT_FALSE(fs::exists(openedWorkspace / ".ssg" / "session.snapshot"));
     fs::remove_all(root);
 }
 

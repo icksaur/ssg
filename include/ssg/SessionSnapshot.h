@@ -12,7 +12,7 @@
 
 namespace ssg {
 
-inline constexpr std::string_view kSessionDirectoryName = "ssg";
+inline constexpr std::string_view kSessionDirectoryName = ".ssg";
 inline constexpr std::string_view kSessionSnapshotFilename = "session.snapshot";
 
 enum class SessionBackingKind : std::uint8_t {
