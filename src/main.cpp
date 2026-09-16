@@ -14,12 +14,12 @@
 #include <ssg/Picker.h>
 #include <ssg/PlatformRuntime.h>
 #include <ssg/PromptEditState.h>
+#include <ssg/RuntimeTiming.h>
 #include <ssg/platform_files.h>
 #include <ssg/SystemClipboardReader.h>
 
 #include <ssg/InitScriptWatcher.h>
 
-#include <unistd.h>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -45,12 +45,11 @@ namespace fs = std::filesystem;
 void recordStartupMark(char const* phase) {
     static char const* const path = std::getenv("SSG_STARTUP_TRACE");
     if (path == nullptr) return;
-    timespec now{};
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    long long const ns = static_cast<long long>(now.tv_sec) * 1'000'000'000LL + now.tv_nsec;
+    const auto ns = monotonicTime().count();
     // seam-exempt: append-only diagnostic trace, not file content access
     if (std::FILE* file = std::fopen(path, "a"); file != nullptr) {
-        std::fprintf(file, "%s %lld\n", phase, ns);
+        std::fprintf(file, "%s %lld\n", phase,
+                     static_cast<long long>(ns));
         std::fclose(file);
     }
 }
@@ -60,8 +59,6 @@ void recordStartupMark(char const*) {}
 
 namespace {
 
-constexpr int kEscapeTimeoutMs = 30;
-constexpr int kEdgeScrollIntervalMs = 40;
 constexpr int kDragFrameIntervalMs = 16;
 
 struct LaunchTarget {
@@ -446,12 +443,12 @@ void dispatchBufferedInput(SsgContext& context, std::string& buffer, PointerStat
         auto decoded = decodeInput(buffer, false, consumed);
         if (decoded.status == DecodeStatus::incomplete) {
             const auto ready = context.eventLoop.wait(
-                std::chrono::milliseconds{kEscapeTimeoutMs}, {});
+                selectRuntimeWaitTimeout({.escapeSequencePending = true}), {});
             handlePlatformControl(context, ready);
             if (ready.input) {
-                auto more = ::read(STDIN_FILENO, bytes, sizeof bytes);
+                const auto more = context.eventLoop.readInput(bytes);
                 if (more > 0) {
-                    buffer.append(bytes, static_cast<std::size_t>(more));
+                    buffer.append(bytes, more);
                     continue;
                 }
             }
@@ -522,9 +519,11 @@ int main(int argc, char** argv) {
         }
     }
 
-    auto recoveryBase = fs::temp_directory_path() / ("ssg-" + std::to_string(::getpid()));
+    auto recoveryBase =
+        fs::temp_directory_path() / ("ssg-" + std::to_string(processId()));
     (void)ssg::createDirectoriesDurably(recoveryBase / "recovery");
 
+    PlatformEventLoop eventLoop;
     ssg::EditorConfig config;
     config.cwd = target.cwd;
     config.recoveryRoot = recoveryBase / "recovery";
@@ -573,7 +572,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    PlatformEventLoop eventLoop;
     SsgContext context{runtime, presenter, scripts, terminal, eventLoop,
                        initScriptWatcher ? &*initScriptWatcher : nullptr};
     context.palette = std::make_unique<PaletteView>(context);
@@ -635,7 +633,7 @@ int main(int argc, char** argv) {
             }
             if (dragEdge) {
                 const auto ready = eventLoop.wait(
-                    std::chrono::milliseconds{kEdgeScrollIntervalMs}, {});
+                    selectRuntimeWaitTimeout({.edgeScrollActive = true}), {});
                 if (ready.resize || ready.termination) {
                     handlePlatformControl(context, ready);
                     continue;
@@ -657,11 +655,8 @@ int main(int argc, char** argv) {
                 initScriptWakeIndex = wakes.size();
                 wakes.push_back(&initScriptWatcher->wake());
             }
-            const auto timeout =
-                runtime.workspaceSearchPending()
-                    ? std::optional<std::chrono::milliseconds>{
-                          std::chrono::milliseconds{0}}
-                    : std::nullopt;
+            const auto timeout = selectRuntimeWaitTimeout(
+                {.workspaceSearchPending = runtime.workspaceSearchPending()});
             const auto wait = eventLoop.wait(timeout, wakes);
             handlePlatformControl(context, wait);
             const auto wakeReady = [&](std::optional<std::size_t> index) {
@@ -683,9 +678,9 @@ int main(int argc, char** argv) {
                 if (!wait.input && !runtime.workspaceSearchPending()) continue;
             }
             if (wait.input) {
-                auto readBytes = ::read(STDIN_FILENO, bytes, sizeof bytes);
-                if (readBytes <= 0) break;
-                buffer.append(bytes, static_cast<std::size_t>(readBytes));
+                const auto readBytes = eventLoop.readInput(bytes);
+                if (readBytes == 0) break;
+                buffer.append(bytes, readBytes);
                 dispatchBufferedInput(context, buffer, pointer, quit);
             }
             runtime.advanceWorkspaceSearch();

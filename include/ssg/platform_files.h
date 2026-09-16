@@ -60,6 +60,9 @@ struct PathValidation {
     const std::filesystem::path& path);
 [[nodiscard]] std::filesystem::path weaklyCanonicalPath(
     const std::filesystem::path& path, std::error_code& error);
+[[nodiscard]] bool pathComponentsEqual(
+    const std::filesystem::path& left,
+    const std::filesystem::path& right) noexcept;
 
 struct FileIdentity {
     std::uint64_t volume = 0;

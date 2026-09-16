@@ -327,26 +327,6 @@ void protectTree(const std::filesystem::path& root) {
     }
 }
 
-bool pathComponentEqual(const std::filesystem::path& left,
-                          const std::filesystem::path& right) {
-#ifdef _WIN32
-    const auto& left_text = left.native();
-    const auto& right_text = right.native();
-    if (left_text.size() >
-            static_cast<std::size_t>(std::numeric_limits<int>::max()) ||
-        right_text.size() >
-            static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-        return false;
-    }
-    return CompareStringOrdinal(
-               left_text.data(), static_cast<int>(left_text.size()),
-               right_text.data(), static_cast<int>(right_text.size()), TRUE) ==
-           CSTR_EQUAL;
-#else
-    return left == right;
-#endif
-}
-
 bool pathContains(const std::filesystem::path& parent,
                    const std::filesystem::path& child) {
     const auto normalizedParent =
@@ -358,7 +338,7 @@ bool pathContains(const std::filesystem::path& parent,
     for (; parentPart != normalizedParent.end();
          ++parentPart, ++childPart) {
         if (childPart == normalizedChild.end() ||
-            !pathComponentEqual(*parentPart, *childPart)) {
+            !pathComponentsEqual(*parentPart, *childPart)) {
             return false;
         }
     }

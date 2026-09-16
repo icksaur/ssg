@@ -36,6 +36,8 @@ static_assert(std::same_as<
               decltype(static_cast<CanonicalPathWithError>(
                   &ssg::weaklyCanonicalPath)),
               CanonicalPathWithError>);
+static_assert(std::same_as<decltype(&ssg::pathComponentsEqual),
+                           bool (*)(const Path&, const Path&) noexcept>);
 static_assert(std::same_as<decltype(&ssg::statFile),
                            std::optional<ssg::FileStat> (*)(
                                const Path&, ssg::SymlinkMode)>);
@@ -101,6 +103,7 @@ SSG_TEST_SUITE(test_platform_interface) {
         static_cast<CanonicalPath>(&ssg::weaklyCanonicalPath);
     [[maybe_unused]] auto weaklyCanonicalPathWithError =
         static_cast<CanonicalPathWithError>(&ssg::weaklyCanonicalPath);
+    [[maybe_unused]] auto pathComponentsEqual = &ssg::pathComponentsEqual;
     [[maybe_unused]] auto statFile = &ssg::statFile;
     [[maybe_unused]] auto tryLockFile = &ssg::tryLockFile;
     [[maybe_unused]] auto setOwnerOnlyPermissions = &ssg::setOwnerOnlyPermissions;
@@ -125,6 +128,9 @@ SSG_TEST_SUITE(test_platform_interface) {
     [[maybe_unused]] auto notify = &ssg::PlatformWake::notify;
     [[maybe_unused]] auto consume = &ssg::PlatformWake::consume;
     [[maybe_unused]] auto wait = &ssg::PlatformEventLoop::wait;
+    [[maybe_unused]] auto readInput = &ssg::PlatformEventLoop::readInput;
+    [[maybe_unused]] auto processId = &ssg::processId;
+    [[maybe_unused]] auto monotonicTime = &ssg::monotonicTime;
     [[maybe_unused]] auto terminate = &ssg::terminateProcess;
     return 0;
 }

@@ -105,7 +105,7 @@ bool isBeneath(const std::filesystem::path& root,
 
 PathSyntax nativeSyntax() noexcept {
 #ifdef _WIN32
-    return PathSyntax::windows;
+    return PathSyntax::Windows;
 #else
     return PathSyntax::Linux;
 #endif

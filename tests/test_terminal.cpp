@@ -19,7 +19,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <csignal>
 #include <filesystem>
 #include <map>
 #include <set>
@@ -233,53 +232,12 @@ TEST(aFrameWithNoCaretLeavesTheCursorVisible) {
     ASSERT_TRUE(frame.find("\x1b[?25l") == 0);
 }
 
-TEST(classifySignalTagsMapsSignalNumbers) {
-    // Empty drain: no events.
-    auto none = ssg::classifySignalTags({});
-    ASSERT_FALSE(none.resize);
-    ASSERT_FALSE(none.terminate.has_value());
-
-    // A single SIGWINCH byte sets resize only.
-    std::string winch(1, static_cast<char>(SIGWINCH));
-    auto resize = ssg::classifySignalTags(winch);
-    ASSERT_TRUE(resize.resize);
-    ASSERT_FALSE(resize.terminate.has_value());
-
-    // Duplicate resize tags coalesce to a single resize event.
-    std::string winches(5, static_cast<char>(SIGWINCH));
-    auto coalesced = ssg::classifySignalTags(winches);
-    ASSERT_TRUE(coalesced.resize);
-
-    // SIGTERM sets terminate carrying the exact signal for a correct re-raise.
-    std::string term(1, static_cast<char>(SIGTERM));
-    auto terminate = ssg::classifySignalTags(term);
-    ASSERT_TRUE(terminate.terminate.has_value());
-    ASSERT_EQ(*terminate.terminate, SIGTERM);
-
-    // Mixed drain: resize is set and the last terminating signal wins.
-    std::string mixed;
-    mixed.push_back(static_cast<char>(SIGWINCH));
-    mixed.push_back(static_cast<char>(SIGTERM));
-    mixed.push_back(static_cast<char>(SIGHUP));
-    auto both = ssg::classifySignalTags(mixed);
-    ASSERT_TRUE(both.resize);
-    ASSERT_TRUE(both.terminate.has_value());
-    ASSERT_EQ(*both.terminate, SIGHUP);
-
-    // Unknown bytes are ignored (total function).
-    std::string junk(1, static_cast<char>(7));
-    auto ignored = ssg::classifySignalTags(junk);
-    ASSERT_FALSE(ignored.resize);
-    ASSERT_FALSE(ignored.terminate.has_value());
-}
-
 SSG_TEST_SUITE(test_terminal) {
     RUN(everyDeclaredModeLeavesExactlyWhatItEnters);
     RUN(modeStackReproducesTheCuratedSetupAndRestoreSequences);
     RUN(everyEnteredModeIsLeftInReverseOrder);
     RUN(kittyKeyboardModeRoundTripsThroughAGuard);
     RUN(aFrameWithNoCaretLeavesTheCursorVisible);
-    RUN(classifySignalTagsMapsSignalNumbers);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

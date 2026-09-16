@@ -69,6 +69,30 @@ TEST(readyIndicesIdentifyIndependentSources) {
     second.consume();
 }
 
+TEST(simultaneouslyReadySourcesAreAllReported) {
+    ssg::PlatformWake first;
+    ssg::PlatformWake second;
+    ssg::PlatformEventLoop loop{{false, false}};
+    const std::array<const ssg::PlatformWake*, 2> wakes{&first, &second};
+
+    first.notify();
+    second.notify();
+    const auto readiness = loop.wait(100ms, wakes);
+    ASSERT_TRUE(woke(readiness, 0));
+    ASSERT_TRUE(woke(readiness, 1));
+    first.consume();
+    second.consume();
+}
+
+TEST(timedWaitWithNoSourcesReturnsEmptyReadiness) {
+    ssg::PlatformEventLoop loop{{false, false}};
+    const auto readiness = loop.wait(1ms, {});
+    ASSERT_FALSE(readiness.input);
+    ASSERT_FALSE(readiness.resize);
+    ASSERT_FALSE(readiness.termination.has_value());
+    ASSERT_TRUE(readiness.wakes.empty());
+}
+
 } // namespace
 
 SSG_TEST_SUITE(test_platform_runtime) {
@@ -76,5 +100,7 @@ SSG_TEST_SUITE(test_platform_runtime) {
     RUN(coalescedNotificationsClearWithOneConsume);
     RUN(concurrentNotificationWakesBlockingWait);
     RUN(readyIndicesIdentifyIndependentSources);
+    RUN(simultaneouslyReadySourcesAreAllReported);
+    RUN(timedWaitWithNoSourcesReturnsEmptyReadiness);
     return failed == 0 ? 0 : 1;
 }

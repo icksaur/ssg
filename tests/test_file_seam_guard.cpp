@@ -206,7 +206,6 @@ constexpr PlatformHeaderOwner kPlatformHeaderOwners[] = {
 };
 
 constexpr std::string_view kTemporaryNativeFiles[] = {
-    "src/main.cpp",
     "src/Terminal.cpp",
     "src/SystemClipboardReader.cpp",
 };
@@ -227,6 +226,9 @@ constexpr std::string_view kNativeSpellings[] = {
     " ::sigaction(",
     " ::waitpid(",
     " ::write(",
+    "clock_gettime(",
+    "CLOCK_MONOTONIC",
+    "CompareStringOrdinal(",
 };
 
 bool startsWith(std::string_view value, std::string_view prefix) {

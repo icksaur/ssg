@@ -5,17 +5,9 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <string_view>
 
 namespace ssg {
-
-struct SignalEvents {
-    bool resize = false;
-    std::optional<int> terminate;
-};
-
-[[nodiscard]] SignalEvents classifySignalTags(std::string_view drained);
 
 struct TerminalMode {
     std::string_view enter;

@@ -117,6 +117,7 @@ endif()
 
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/ClipboardRegister.cpp
+    ${SSG_SOURCE_DIR}/src/RuntimeTiming.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -521,6 +522,24 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_test_link_libraries(test_platform_runtime PRIVATE ssg_platform)
 
     ssg_add_test_suite(
+        NAME test_runtime_timing
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_runtime_timing.cpp
+        SYMBOL test_runtime_timing)
+    ssg_test_include_directories(test_runtime_timing PRIVATE
+        ${SSG_SOURCE_DIR}/tests)
+    ssg_test_link_libraries(test_runtime_timing PRIVATE ssg_core)
+
+    if(NOT WIN32)
+        ssg_add_test_suite(
+            NAME test_linux_platform_runtime
+            ENTRY ${SSG_SOURCE_DIR}/tests/platform/linux/test_linux_platform_runtime.cpp
+            SYMBOL test_linux_platform_runtime)
+        ssg_test_include_directories(test_linux_platform_runtime PRIVATE
+            ${SSG_SOURCE_DIR}/tests)
+        ssg_test_link_libraries(test_linux_platform_runtime PRIVATE ssg_platform)
+    endif()
+
+    ssg_add_test_suite(
         NAME test_git_diff_worker
         ENTRY ${SSG_SOURCE_DIR}/tests/test_git_diff_worker.cpp
         SYMBOL test_git_diff_worker)
@@ -635,6 +654,8 @@ if(EXISTS "${SSG_SOURCE_DIR}/vendor/libgit2/CMakeLists.txt")
         unset(CMAKE_C_EXTENSIONS CACHE)
     endif()
     target_link_libraries(ssg_core PUBLIC libgit2package)
+    target_include_directories(ssg_core PRIVATE
+        ${SSG_SOURCE_DIR}/vendor/libgit2/include)
     if(DEFINED LIBGIT2_SYSTEM_LIBS)
         target_link_libraries(ssg_core PUBLIC ${LIBGIT2_SYSTEM_LIBS})
     endif()
@@ -1363,6 +1384,7 @@ target_sources(ssg_core PRIVATE
 
 target_include_directories(ssg_core PRIVATE
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter/lib/include
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter/lib/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/src

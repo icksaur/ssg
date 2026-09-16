@@ -86,6 +86,28 @@ PlatformReadiness PlatformEventLoop::wait(
     return readiness;
 }
 
+std::size_t PlatformEventLoop::readInput(std::span<char>) {
+    throw std::logic_error{"Windows console input is not implemented"};
+}
+
+std::uint64_t processId() noexcept {
+    return static_cast<std::uint64_t>(::GetCurrentProcessId());
+}
+
+std::chrono::nanoseconds monotonicTime() {
+    LARGE_INTEGER frequency{};
+    LARGE_INTEGER counter{};
+    if (::QueryPerformanceFrequency(&frequency) == 0 ||
+        ::QueryPerformanceCounter(&counter) == 0) {
+        throwLastError("failed to read monotonic clock");
+    }
+    const auto seconds = counter.QuadPart / frequency.QuadPart;
+    const auto remainder = counter.QuadPart % frequency.QuadPart;
+    return std::chrono::seconds{seconds} +
+           std::chrono::nanoseconds{
+               remainder * 1'000'000'000LL / frequency.QuadPart};
+}
+
 [[noreturn]] void terminateProcess(TerminationRequest) {
     ::ExitProcess(1);
 }

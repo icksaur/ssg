@@ -1,6 +1,5 @@
 #include <ssg/Terminal.h>
 
-#include <csignal>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -28,20 +27,6 @@ ssg::ViewportDimensions terminalSize() {
     }
     return {80, 24};
 }
-
-SignalEvents classifySignalTags(std::string_view drained) {
-    SignalEvents events;
-    for (unsigned char byte : drained) {
-        int const signo = static_cast<int>(byte);
-        if (signo == SIGWINCH) {
-            events.resize = true;
-        } else if (signo == SIGTERM || signo == SIGHUP) {
-            events.terminate = signo;
-        }
-    }
-    return events;
-}
-
 
 struct TerminalModes::Impl {
     explicit Impl(Writer configuredWriter) : writer{std::move(configuredWriter)} {}

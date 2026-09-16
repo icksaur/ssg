@@ -10,6 +10,8 @@
 
 namespace ssg {
 
+// Product operating-system calls and types belong only to the selected
+// implementation below src/platform/linux or src/platform/windows.
 class PlatformWake {
 public:
     PlatformWake();
@@ -64,15 +66,19 @@ public:
     PlatformEventLoop& operator=(const PlatformEventLoop&) = delete;
 
     // Registered wakes are borrowed only for this call and must outlive it.
+    // A missing timeout blocks until readiness without periodic polling.
     [[nodiscard]] PlatformReadiness wait(
         std::optional<std::chrono::milliseconds> timeout,
         std::span<const PlatformWake* const> wakes);
+    [[nodiscard]] std::size_t readInput(std::span<char> destination);
 
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
 
+[[nodiscard]] std::uint64_t processId() noexcept;
+[[nodiscard]] std::chrono::nanoseconds monotonicTime();
 [[noreturn]] void terminateProcess(TerminationRequest request);
 
 } // namespace ssg

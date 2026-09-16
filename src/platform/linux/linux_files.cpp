@@ -677,4 +677,9 @@ FileIoResult copyFileDurably(const std::filesystem::path& source,
             contents.bytes.size()});
 }
 
+bool pathComponentsEqual(const std::filesystem::path& left,
+                         const std::filesystem::path& right) noexcept {
+    return left == right;
+}
+
 } // namespace ssg

@@ -33,6 +33,11 @@ std::string readWorktreeText(const std::filesystem::path& path) {
 
 #ifdef SSG_LIBGIT2
 
+std::string pathUtf8(const std::filesystem::path& path) {
+    const auto encoded = path.generic_u8string();
+    return {reinterpret_cast<const char*>(encoded.data()), encoded.size()};
+}
+
 std::string oidHex(const git_oid* oid) {
     if (oid == nullptr || git_oid_is_zero(oid)) {
         return "0";
@@ -117,10 +122,10 @@ bool collectDiffFiles(git_repository* repository, git_diff* diff,
 class Libgit2Repository final : public GitRepository {
 public:
     explicit Libgit2Repository(std::filesystem::path root)
-        : root_(std::move(root)) {
+        : root_(std::move(root)), rootUtf8_{pathUtf8(root_)} {
         git_repository* repository = nullptr;
         const int openResult =
-            git_repository_open_ext(&repository, root_.c_str(), 0, nullptr);
+            git_repository_open_ext(&repository, rootUtf8_.c_str(), 0, nullptr);
         if (openResult == 0) {
             available_ = true;
             git_repository_free(repository);
@@ -136,7 +141,7 @@ public:
         }
         git_repository* repository = nullptr;
         const int openResult =
-            git_repository_open_ext(&repository, root_.c_str(), 0, nullptr);
+            git_repository_open_ext(&repository, rootUtf8_.c_str(), 0, nullptr);
         if (openResult != 0) {
             if (openResult != GIT_ENOTFOUND) {
                 result.complete = false;
@@ -195,7 +200,7 @@ public:
         }
         git_repository* repository = nullptr;
         const int openResult =
-            git_repository_open_ext(&repository, root_.c_str(), 0, nullptr);
+            git_repository_open_ext(&repository, rootUtf8_.c_str(), 0, nullptr);
         if (openResult != 0) {
             if (openResult != GIT_ENOTFOUND) {
                 result.complete = false;
@@ -264,7 +269,7 @@ public:
         }
         git_repository* repository = nullptr;
         const int openResult =
-            git_repository_open_ext(&repository, root_.c_str(), 0, nullptr);
+            git_repository_open_ext(&repository, rootUtf8_.c_str(), 0, nullptr);
         if (openResult != 0) {
             return std::nullopt;
         }
@@ -301,7 +306,8 @@ public:
             return directories;
         }
         git_repository* repository = nullptr;
-        if (git_repository_open_ext(&repository, root_.c_str(), 0, nullptr) != 0) {
+        if (git_repository_open_ext(&repository, rootUtf8_.c_str(), 0,
+                                    nullptr) != 0) {
             return directories;
         }
         auto repositoryGuard =
@@ -327,6 +333,7 @@ public:
 
 private:
     std::filesystem::path root_;
+    std::string rootUtf8_;
     bool available_ = false;
 };
 
@@ -340,10 +347,11 @@ class Libgit2IgnoreMatcher final : public GitIgnoreMatcher {
 public:
     explicit Libgit2IgnoreMatcher(const std::filesystem::path& workspaceRoot) {
         git_repository* repository = nullptr;
+        const auto workspaceRootUtf8 = pathUtf8(workspaceRoot);
         // Flags 0 searches upward, so a workspace nested inside a repository
         // still finds it -- which is exactly the case that makes rebasing
         // necessary below.
-        if (git_repository_open_ext(&repository, workspaceRoot.c_str(), 0,
+        if (git_repository_open_ext(&repository, workspaceRootUtf8.c_str(), 0,
                                     nullptr) != 0) {
             return;
         }

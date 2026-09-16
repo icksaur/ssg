@@ -699,4 +699,20 @@ FileIoResult copyFileDurably(const std::filesystem::path& source,
             contents.bytes.size()});
 }
 
+bool pathComponentsEqual(const std::filesystem::path& left,
+                         const std::filesystem::path& right) noexcept {
+    const auto& leftText = left.native();
+    const auto& rightText = right.native();
+    if (leftText.size() >
+            static_cast<std::size_t>(std::numeric_limits<int>::max()) ||
+        rightText.size() >
+            static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return false;
+    }
+    return ::CompareStringOrdinal(
+               leftText.data(), static_cast<int>(leftText.size()),
+               rightText.data(), static_cast<int>(rightText.size()), TRUE) ==
+           CSTR_EQUAL;
+}
+
 } // namespace ssg

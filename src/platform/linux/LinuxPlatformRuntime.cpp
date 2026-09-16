@@ -3,57 +3,62 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <climits>
 #include <csignal>
+#include <cstdlib>
 #include <fcntl.h>
+#include <poll.h>
+#include <pthread.h>
 #include <stdexcept>
 #include <system_error>
-#include <sys/select.h>
+#include <sys/signalfd.h>
+#include <time.h>
 #include <unistd.h>
 #include <utility>
+#include <vector>
 
 namespace ssg {
 namespace {
 
-volatile std::sig_atomic_t signalWriteDescriptor = -1;
-
-void setNonBlocking(int descriptor) {
-    const int flags = ::fcntl(descriptor, F_GETFL, 0);
-    if (flags == -1 ||
-        ::fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) != 0) {
-        throw std::system_error{errno, std::generic_category(),
-                                "failed to configure platform wake"};
-    }
-}
-
 std::array<int, 2> makePipe() {
     std::array<int, 2> descriptors{-1, -1};
-    if (::pipe(descriptors.data()) != 0) {
+    if (::pipe2(descriptors.data(), O_NONBLOCK | O_CLOEXEC) != 0) {
         throw std::system_error{errno, std::generic_category(),
                                 "failed to create platform wake"};
-    }
-    try {
-        setNonBlocking(descriptors[0]);
-        setNonBlocking(descriptors[1]);
-    } catch (...) {
-        (void)::close(descriptors[0]);
-        (void)::close(descriptors[1]);
-        throw;
     }
     return descriptors;
 }
 
-extern "C" void signalHandler(int signal) {
-    const int descriptor = signalWriteDescriptor;
-    if (descriptor < 0) return;
-    const unsigned char tag = static_cast<unsigned char>(signal);
-    const auto ignored = ::write(descriptor, &tag, 1);
-    (void)ignored;
+sigset_t processControlSignals() {
+    sigset_t signals;
+    if (::sigemptyset(&signals) != 0 ||
+        ::sigaddset(&signals, SIGWINCH) != 0 ||
+        ::sigaddset(&signals, SIGTERM) != 0 ||
+        ::sigaddset(&signals, SIGHUP) != 0 ||
+        ::sigaddset(&signals, SIGINT) != 0) {
+        throw std::system_error{errno, std::generic_category(),
+                                "failed to configure process-control signals"};
+    }
+    return signals;
 }
 
-struct InstalledSignal {
-    int number;
-    struct sigaction previous {};
-};
+TerminationRequest terminationRequest(std::uint32_t signal) {
+    if (signal == SIGHUP) return {TerminationKind::Hangup};
+    if (signal == SIGINT) return {TerminationKind::Interrupt};
+    return {TerminationKind::Terminate};
+}
+
+int terminationSignal(TerminationKind kind) {
+    if (kind == TerminationKind::Hangup) return SIGHUP;
+    if (kind == TerminationKind::Interrupt) return SIGINT;
+    return SIGTERM;
+}
+
+int pollTimeout(std::optional<std::chrono::milliseconds> timeout) {
+    if (!timeout) return -1;
+    return static_cast<int>(
+        std::clamp<std::int64_t>(timeout->count(), 0, INT_MAX));
+}
 
 } // namespace
 
@@ -74,8 +79,11 @@ PlatformWake& PlatformWake::operator=(PlatformWake&&) noexcept = default;
 
 void PlatformWake::notify() noexcept {
     const unsigned char tag = 1;
-    const auto ignored = ::write(impl_->descriptors[1], &tag, 1);
-    (void)ignored;
+    ssize_t result;
+    do {
+        result = ::write(impl_->descriptors[1], &tag, 1);
+    } while (result < 0 && errno == EINTR);
+    (void)result;
 }
 
 void PlatformWake::consume() noexcept {
@@ -88,59 +96,41 @@ struct PlatformEventLoop::Impl {
     explicit Impl(PlatformEventLoopOptions configuredOptions)
         : options{configuredOptions} {
         if (!options.monitorProcessControl) return;
-        if (signalWriteDescriptor != -1) {
-            throw std::logic_error{"only one process-control event loop may exist"};
+
+        signals = processControlSignals();
+        const int maskResult =
+            ::pthread_sigmask(SIG_BLOCK, &signals, &previousSignals);
+        if (maskResult != 0) {
+            throw std::system_error{maskResult, std::generic_category(),
+                                    "failed to block process-control signals"};
         }
-        signalDescriptors = makePipe();
-        signalWriteDescriptor = signalDescriptors[1];
-        try {
-            for (auto& installed : signals) {
-                struct sigaction action {};
-                action.sa_handler = signalHandler;
-                sigemptyset(&action.sa_mask);
-                action.sa_flags = SA_RESTART;
-                if (::sigaction(installed.number, &action,
-                                &installed.previous) != 0) {
-                    throw std::system_error{
-                        errno, std::generic_category(),
-                        "failed to install process-control handler"};
-                }
-                ++installedCount;
-            }
-        } catch (...) {
-            restoreSignals();
-            (void)::close(signalDescriptors[0]);
-            (void)::close(signalDescriptors[1]);
-            signalDescriptors = {-1, -1};
-            throw;
+        signalMaskInstalled = true;
+        signalDescriptor =
+            ::signalfd(-1, &signals, SFD_NONBLOCK | SFD_CLOEXEC);
+        if (signalDescriptor < 0) {
+            const int error = errno;
+            restoreSignalMask();
+            throw std::system_error{error, std::generic_category(),
+                                    "failed to create process-control input"};
         }
     }
 
     ~Impl() {
-        restoreSignals();
-        if (signalDescriptors[0] != -1) {
-            (void)::close(signalDescriptors[0]);
-            (void)::close(signalDescriptors[1]);
-        }
+        if (signalDescriptor >= 0) (void)::close(signalDescriptor);
+        restoreSignalMask();
     }
 
-    void restoreSignals() noexcept {
-        signalWriteDescriptor = -1;
-        while (installedCount > 0) {
-            --installedCount;
-            auto& installed = signals[installedCount];
-            (void)::sigaction(installed.number, &installed.previous, nullptr);
-        }
+    void restoreSignalMask() noexcept {
+        if (!signalMaskInstalled) return;
+        signalMaskInstalled = false;
+        (void)::pthread_sigmask(SIG_SETMASK, &previousSignals, nullptr);
     }
 
     PlatformEventLoopOptions options;
-    std::array<int, 2> signalDescriptors{-1, -1};
-    std::array<InstalledSignal, 3> signals{{
-        {SIGWINCH, {}},
-        {SIGTERM, {}},
-        {SIGHUP, {}},
-    }};
-    std::size_t installedCount = 0;
+    sigset_t signals{};
+    sigset_t previousSignals{};
+    int signalDescriptor = -1;
+    bool signalMaskInstalled = false;
 };
 
 PlatformEventLoop::PlatformEventLoop(PlatformEventLoopOptions options)
@@ -151,62 +141,81 @@ PlatformEventLoop::~PlatformEventLoop() = default;
 PlatformReadiness PlatformEventLoop::wait(
     std::optional<std::chrono::milliseconds> timeout,
     std::span<const PlatformWake* const> wakes) {
-    fd_set descriptors;
-    FD_ZERO(&descriptors);
-    int maximum = -1;
+    std::vector<pollfd> descriptors;
+    std::optional<std::size_t> inputIndex;
+    std::optional<std::size_t> signalIndex;
+    std::vector<std::optional<std::size_t>> wakeIndices(wakes.size());
+
     const auto add = [&](int descriptor) {
-        if (descriptor < 0) return;
-        FD_SET(descriptor, &descriptors);
-        maximum = std::max(maximum, descriptor);
+        descriptors.push_back({descriptor, POLLIN, 0});
+        return descriptors.size() - 1;
     };
-
-    if (impl_->options.monitorInput) add(STDIN_FILENO);
-    add(impl_->signalDescriptors[0]);
-    for (const auto* wake : wakes) {
-        if (wake != nullptr) add(wake->impl_->descriptors[0]);
+    if (impl_->options.monitorInput) inputIndex = add(STDIN_FILENO);
+    if (impl_->signalDescriptor >= 0) {
+        signalIndex = add(impl_->signalDescriptor);
     }
-
-    timeval value{};
-    timeval* timeoutPointer = nullptr;
-    if (timeout) {
-        const auto bounded = std::max(*timeout, std::chrono::milliseconds{0});
-        value.tv_sec = static_cast<decltype(value.tv_sec)>(bounded.count() / 1000);
-        value.tv_usec =
-            static_cast<decltype(value.tv_usec)>((bounded.count() % 1000) * 1000);
-        timeoutPointer = &value;
-    }
-
-    const int ready =
-        ::select(maximum + 1, &descriptors, nullptr, nullptr, timeoutPointer);
-    if (ready <= 0) return {};
-
-    PlatformReadiness result;
-    result.input = impl_->options.monitorInput &&
-                   FD_ISSET(STDIN_FILENO, &descriptors) != 0;
     for (std::size_t index = 0; index < wakes.size(); ++index) {
-        if (wakes[index] != nullptr &&
-            FD_ISSET(wakes[index]->impl_->descriptors[0], &descriptors) != 0) {
-            result.wakes.push_back(index);
+        if (wakes[index] != nullptr) {
+            wakeIndices[index] = add(wakes[index]->impl_->descriptors[0]);
         }
     }
 
-    if (impl_->signalDescriptors[0] >= 0 &&
-        FD_ISSET(impl_->signalDescriptors[0], &descriptors) != 0) {
-        std::array<unsigned char, 64> tags{};
-        for (;;) {
-            const auto count = ::read(impl_->signalDescriptors[0], tags.data(),
-                                      tags.size());
-            if (count <= 0) break;
-            for (std::size_t index = 0;
-                 index < static_cast<std::size_t>(count); ++index) {
-                if (tags[index] == SIGWINCH) {
+    const int ready =
+        ::poll(descriptors.data(), descriptors.size(), pollTimeout(timeout));
+    if (ready < 0) {
+        if (errno == EINTR) return {};
+        throw std::system_error{errno, std::generic_category(),
+                                "platform wait failed"};
+    }
+    if (ready == 0) return {};
+
+    PlatformReadiness result;
+    if (inputIndex) {
+        const auto events = descriptors[*inputIndex].revents;
+        result.input = (events & (POLLIN | POLLHUP)) != 0;
+        if ((events & (POLLERR | POLLNVAL)) != 0) {
+            throw std::runtime_error{"standard input wait failed"};
+        }
+    }
+    for (std::size_t index = 0; index < wakes.size(); ++index) {
+        if (!wakeIndices[index]) continue;
+        const auto events = descriptors[*wakeIndices[index]].revents;
+        if ((events & POLLIN) != 0) result.wakes.push_back(index);
+        if ((events & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+            throw std::runtime_error{"platform wake wait failed"};
+        }
+    }
+
+    if (signalIndex) {
+        const auto events = descriptors[*signalIndex].revents;
+        if ((events & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+            throw std::runtime_error{"process-control wait failed"};
+        }
+        if ((events & POLLIN) != 0) {
+            signalfd_siginfo information{};
+            for (;;) {
+                const auto count =
+                    ::read(impl_->signalDescriptor, &information,
+                           sizeof(information));
+                if (count < 0 && errno == EINTR) continue;
+                if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                    break;
+                }
+                if (count < 0) {
+                    throw std::system_error{
+                        errno, std::generic_category(),
+                        "failed to read process-control input"};
+                }
+                if (count == 0) break;
+                if (count != static_cast<ssize_t>(sizeof(information))) {
+                    throw std::runtime_error{
+                        "incomplete process-control input"};
+                }
+                if (information.ssi_signo == SIGWINCH) {
                     result.resize = true;
-                } else if (tags[index] == SIGTERM) {
+                } else {
                     result.termination =
-                        TerminationRequest{TerminationKind::Terminate};
-                } else if (tags[index] == SIGHUP) {
-                    result.termination =
-                        TerminationRequest{TerminationKind::Hangup};
+                        terminationRequest(information.ssi_signo);
                 }
             }
         }
@@ -214,11 +223,50 @@ PlatformReadiness PlatformEventLoop::wait(
     return result;
 }
 
+std::size_t PlatformEventLoop::readInput(std::span<char> destination) {
+    if (!impl_->options.monitorInput) {
+        throw std::logic_error{"standard input monitoring is disabled"};
+    }
+    if (destination.empty()) {
+        throw std::invalid_argument{"standard input destination is empty"};
+    }
+    for (;;) {
+        const auto count =
+            ::read(STDIN_FILENO, destination.data(), destination.size());
+        if (count >= 0) return static_cast<std::size_t>(count);
+        if (errno == EINTR) continue;
+        throw std::system_error{errno, std::generic_category(),
+                                "failed to read standard input"};
+    }
+}
+
+std::uint64_t processId() noexcept {
+    return static_cast<std::uint64_t>(::getpid());
+}
+
+std::chrono::nanoseconds monotonicTime() {
+    timespec now{};
+    if (::clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+        throw std::system_error{errno, std::generic_category(),
+                                "failed to read monotonic clock"};
+    }
+    return std::chrono::seconds{now.tv_sec} +
+           std::chrono::nanoseconds{now.tv_nsec};
+}
+
 [[noreturn]] void terminateProcess(TerminationRequest request) {
-    const int signal = request.kind == TerminationKind::Hangup ? SIGHUP : SIGTERM;
-    (void)::signal(signal, SIG_DFL);
-    (void)::raise(signal);
-    std::terminate();
+    const int signal = terminationSignal(request.kind);
+    struct sigaction action {};
+    action.sa_handler = SIG_DFL;
+    (void)::sigemptyset(&action.sa_mask);
+    (void)::sigaction(signal, &action, nullptr);
+
+    sigset_t unblocked;
+    (void)::sigemptyset(&unblocked);
+    (void)::sigaddset(&unblocked, signal);
+    (void)::pthread_sigmask(SIG_UNBLOCK, &unblocked, nullptr);
+    (void)::kill(::getpid(), signal);
+    std::_Exit(128 + signal);
 }
 
 } // namespace ssg
