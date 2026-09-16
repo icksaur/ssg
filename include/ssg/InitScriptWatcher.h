@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/PlatformRuntime.h>
+
 #include <filesystem>
 #include <condition_variable>
 #include <mutex>
@@ -9,7 +11,6 @@
 
 namespace ssg {
 class ScriptHost;
-class Editor;
 }  // namespace ssg
 
 namespace ssg {
@@ -24,13 +25,12 @@ namespace ssg {
 // MUST NEVER be called with an empty/whitespace-only `script`: an empty Lua
 // chunk is trivially valid and would look like a silent successful "reload" of
 // nothing; callers only invoke this when there is real content to run.
-void evaluateInitScript(ScriptHost& scripts, Editor& runtime,
+void evaluateInitScript(ScriptHost& scripts,
                         std::filesystem::path const& scriptPath,
                         std::string const& script);
 
 [[nodiscard]] std::optional<std::filesystem::path> resolveInitScriptPath();
-[[nodiscard]] std::optional<std::string> loadInitScript(
-    ScriptHost& scripts, Editor& runtime);
+[[nodiscard]] std::optional<std::string> loadInitScript(ScriptHost& scripts);
 
 class InitScriptWatcher {
 public:
@@ -41,14 +41,14 @@ public:
     InitScriptWatcher(InitScriptWatcher const&) = delete;
     InitScriptWatcher& operator=(InitScriptWatcher const&) = delete;
 
-    [[nodiscard]] int wakeDescriptor() const noexcept;
-    void drainAndEvaluate(ScriptHost& scripts, Editor& runtime);
+    [[nodiscard]] const PlatformWake& wake() const noexcept { return readiness_; }
+    void drainAndEvaluate(ScriptHost& scripts);
 
 private:
     void run();
 
     std::filesystem::path scriptPath_;
-    int wakePipe_[2] = {-1, -1};
+    PlatformWake readiness_;
     std::thread thread_;
     std::mutex mutex_;
     std::condition_variable wake_;

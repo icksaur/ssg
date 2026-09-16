@@ -3,6 +3,7 @@
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GitDiffSource.h>
 #include <ssg/GitMetadataWatcher.h>
+#include <ssg/PlatformRuntime.h>
 
 #include <atomic>
 #include <chrono>
@@ -34,17 +35,17 @@ struct GitDiffWorkerDrain {
 
 // Owns the background thread that refreshes git-diff state (Poll or Event
 // mode, per SSG_GIT_DIFF_MODE) and observes filesystem changes for external-
-// modification detection: the wake pipe, the watcher and metadata-watcher and
+// modification detection: the platform wake, the watcher and metadata-watcher and
 // their construction, mode/env resolution, the pending scan/watch/save
 // queues, and the durable watcher-availability fact. Construction never blocks
 // on the recursive watch setup -- the watcher is built on the worker thread --
 // so it is safe to construct eagerly at session startup.
 //
-// A no-op (wakeDescriptor() == -1, no thread, fullRefreshCount() == 0) when
-// both git and watching are disabled, or if wake-pipe setup fails.
+// A no-op (wake() == nullptr, no thread, fullRefreshCount() == 0) when
+// both git and watching are disabled.
 //
 // Editor sees only this narrow surface: it never reaches the mutex,
-// queues, fds, or thread directly.
+// queues or thread directly.
 class GitDiffWorker {
 public:
     GitDiffWorker(const std::filesystem::path& root, bool enableGit,
@@ -54,9 +55,9 @@ public:
     GitDiffWorker(const GitDiffWorker&) = delete;
     GitDiffWorker& operator=(const GitDiffWorker&) = delete;
 
-    // The read end of the wake pipe the runtime thread polls; -1 when the
-    // worker never started (both disabled, or pipe setup failed).
-    [[nodiscard]] int wakeDescriptor() const noexcept { return wakeReadFd_; }
+    [[nodiscard]] const PlatformWake* wake() const noexcept {
+        return readiness_ ? &*readiness_ : nullptr;
+    }
 
     // Drains the wake pipe and every scan/watch-event/reconcile/availability
     // change queued since the last call. Runtime-thread only.
@@ -69,6 +70,7 @@ public:
 private:
     void run(bool gitUsable, bool enableWatcher,
              std::filesystem::path watcherRoot);
+    void notifyRuntime() noexcept;
 
     std::unique_ptr<GitRepository> repository_;
     DiffModel sourceModel_;
@@ -108,8 +110,7 @@ private:
     std::thread thread_;
     std::atomic<std::uint64_t> fullRefreshCount_{0};
 
-    int wakeReadFd_ = -1;
-    int wakeWriteFd_ = -1;
+    std::optional<PlatformWake> readiness_;
 
     // Runtime-thread-only bookkeeping (never touched by the worker thread): the
     // last availability value drain() published, compared against

@@ -191,6 +191,8 @@ constexpr PlatformHeaderOwner kPlatformHeaderOwners[] = {
      "implements the Windows filesystem watcher"},
     {"<windows.h>", "src/WindowsGitMetadataWatcher.cpp",
      "implements the Windows Git metadata watcher"},
+    {"<windows.h>", "src/platform/windows/WindowsPlatformRuntime.cpp",
+     "implements Windows process runtime services"},
     {"<sys/inotify.h>", "src/LinuxFilesystemWatcher.cpp",
      "implements the Linux filesystem watcher"},
     {"<sys/inotify.h>", "src/LinuxGitMetadataWatcher.cpp",

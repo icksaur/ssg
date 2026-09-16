@@ -8,9 +8,6 @@
 #include <stdexcept>
 #include <system_error>
 
-#include <fcntl.h>
-#include <unistd.h>
-
 namespace ssg {
 namespace {
 
@@ -23,14 +20,6 @@ constexpr auto kGitDiffRetryDelay = std::chrono::milliseconds{1000};
 // a network filesystem -- without re-scanning at the Poll cadence. Much larger than
 // kGitDiffPollInterval so idle CPU is a small fraction of Poll's.
 constexpr auto kGitDiffEventRecoveryInterval = std::chrono::minutes{1};
-
-bool setNonBlocking(int descriptor) {
-    const int flags = ::fcntl(descriptor, F_GETFL, 0);
-    if (flags == -1) {
-        return false;
-    }
-    return ::fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) == 0;
-}
 
 }  // namespace
 
@@ -64,22 +53,9 @@ GitDiffWorker::GitDiffWorker(const std::filesystem::path& root, bool enableGit,
         // The thread clears this if construction fails. False when watching is
         // disabled -- no watcher, so unavailable.
         watcherAvailable_.store(enableWatcher, std::memory_order_relaxed);
-        int wakePipe[2] = {-1, -1};
-        if (::pipe(wakePipe) == 0 && setNonBlocking(wakePipe[0]) &&
-            setNonBlocking(wakePipe[1])) {
-            wakeReadFd_ = wakePipe[0];
-            wakeWriteFd_ = wakePipe[1];
-            thread_ = std::thread(&GitDiffWorker::run, this, gitUsable,
-                                  enableWatcher, root);
-        } else {
-            if (wakePipe[0] != -1) {
-                (void)::close(wakePipe[0]);
-            }
-            if (wakePipe[1] != -1) {
-                (void)::close(wakePipe[1]);
-            }
-            watcherAvailable_.store(false, std::memory_order_relaxed);
-        }
+        readiness_.emplace();
+        thread_ = std::thread(&GitDiffWorker::run, this, gitUsable,
+                              enableWatcher, root);
     }
     lastPublishedWatcherAvailable_ =
         watcherAvailable_.load(std::memory_order_relaxed);
@@ -94,14 +70,10 @@ GitDiffWorker::~GitDiffWorker() {
     if (thread_.joinable()) {
         thread_.join();
     }
-    if (wakeReadFd_ != -1) {
-        (void)::close(wakeReadFd_);
-        wakeReadFd_ = -1;
-    }
-    if (wakeWriteFd_ != -1) {
-        (void)::close(wakeWriteFd_);
-        wakeWriteFd_ = -1;
-    }
+}
+
+void GitDiffWorker::notifyRuntime() noexcept {
+    if (readiness_) readiness_->notify();
 }
 
 void GitDiffWorker::run(bool gitUsable, bool enableWatcher,
@@ -129,8 +101,7 @@ void GitDiffWorker::run(bool gitUsable, bool enableWatcher,
         // advances the revision, exactly like the mid-session watcher-death
         // edge (Decision 13). Without this a client that saw the optimistic
         // `true` would never learn watching is off.
-        const char byte = 'g';
-        (void)::write(wakeWriteFd_, &byte, 1);
+        notifyRuntime();
     }
     if (gitUsable && watcher_) {
         try {
@@ -217,8 +188,7 @@ void GitDiffWorker::run(bool gitUsable, bool enableWatcher,
             pendingScans_.push_back(std::move(*scan));
         }
         if (signal) {
-            const char byte = 'g';
-            (void)::write(wakeWriteFd_, &byte, 1);
+            notifyRuntime();
         }
     };
     // The branch is published independently of the diff so an incomplete
@@ -235,8 +205,7 @@ void GitDiffWorker::run(bool gitUsable, bool enableWatcher,
             pendingScans_.push_back(std::move(*scan));
         }
         if (signal) {
-            const char byte = 'g';
-            (void)::write(wakeWriteFd_, &byte, 1);
+            notifyRuntime();
         }
     };
 
@@ -274,8 +243,7 @@ void GitDiffWorker::run(bool gitUsable, bool enableWatcher,
             }
         }
         if (signal) {
-            const char byte = 'g';
-            (void)::write(wakeWriteFd_, &byte, 1);
+            notifyRuntime();
         }
     };
 
@@ -330,8 +298,7 @@ void GitDiffWorker::run(bool gitUsable, bool enableWatcher,
                 watcherAvailable_.store(false, std::memory_order_relaxed);
                 mode_ = GitDiffMode::Poll;
                 {
-                    const char byte = 'g';
-                    (void)::write(wakeWriteFd_, &byte, 1);
+                    notifyRuntime();
                 }
                 if (gitUsable) {
                     auto full = maybeRefreshAll();
@@ -382,8 +349,7 @@ void GitDiffWorker::run(bool gitUsable, bool enableWatcher,
                     pendingExternalFullReconcile_ = true;
                 }
                 if (signal) {
-                    const char byte = 'g';
-                    (void)::write(wakeWriteFd_, &byte, 1);
+                    notifyRuntime();
                 }
             }
             if (gitUsable && mode_ == GitDiffMode::Event) {
@@ -468,18 +434,12 @@ void GitDiffWorker::run(bool gitUsable, bool enableWatcher,
 
 GitDiffWorkerDrain GitDiffWorker::drain() {
     GitDiffWorkerDrain result;
+    if (!readiness_) return result;
+    readiness_->consume();
     const bool current = watcherAvailable_.load(std::memory_order_relaxed);
     if (current != lastPublishedWatcherAvailable_) {
         lastPublishedWatcherAvailable_ = current;
         result.watcherAvailabilityChanged = true;
-    }
-    if (wakeReadFd_ == -1) {
-        return result;
-    }
-    char wakeBytes[64];
-    while (::read(wakeReadFd_, wakeBytes, sizeof wakeBytes) > 0) {
-        // Drain every queued wake byte so a subsequent poll() never wakes on a
-        // stale signal.
     }
     {
         std::lock_guard lock(mutex_);

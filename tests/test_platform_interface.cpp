@@ -1,6 +1,7 @@
 #include "test_helpers.h"
 
 #include <ssg/FilesystemWatcher.h>
+#include <ssg/PlatformRuntime.h>
 #include <ssg/platform_files.h>
 
 #include <concepts>
@@ -81,6 +82,9 @@ static_assert(std::same_as<decltype(&ssg::makePlatformFilesystemWatcher),
 
 static_assert(std::movable<ssg::ExclusiveFileLock>);
 static_assert(!std::copyable<ssg::ExclusiveFileLock>);
+static_assert(std::movable<ssg::PlatformWake>);
+static_assert(!std::copyable<ssg::PlatformWake>);
+static_assert(!std::copyable<ssg::PlatformEventLoop>);
 
 }  // namespace
 
@@ -118,5 +122,9 @@ SSG_TEST_SUITE(test_platform_interface) {
     [[maybe_unused]] auto syncDirectory = &ssg::syncDirectory;
     [[maybe_unused]] auto copyFileDurably = &ssg::copyFileDurably;
     [[maybe_unused]] auto watcher = &ssg::makePlatformFilesystemWatcher;
+    [[maybe_unused]] auto notify = &ssg::PlatformWake::notify;
+    [[maybe_unused]] auto consume = &ssg::PlatformWake::consume;
+    [[maybe_unused]] auto wait = &ssg::PlatformEventLoop::wait;
+    [[maybe_unused]] auto terminate = &ssg::terminateProcess;
     return 0;
 }

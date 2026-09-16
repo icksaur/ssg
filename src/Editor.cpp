@@ -682,8 +682,8 @@ Editor::Editor(std::filesystem::path canonicalCwd,
 
 Editor::~Editor() = default;
 
-int Editor::gitDiffWakeDescriptor() const {
-    return gitDiffIngress.worker.wakeDescriptor();
+const PlatformWake* Editor::gitDiffWake() const noexcept {
+    return gitDiffIngress.worker.wake();
 }
 
 

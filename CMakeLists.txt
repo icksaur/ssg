@@ -499,17 +499,35 @@ target_sources(ssg_platform PRIVATE
 
 if(WIN32)
     target_sources(ssg_platform PRIVATE
+        ${SSG_SOURCE_DIR}/src/platform/windows/WindowsPlatformRuntime.cpp
         ${SSG_SOURCE_DIR}/src/WindowsFilesystemWatcher.cpp
         ${SSG_SOURCE_DIR}/src/WindowsGitMetadataWatcher.cpp
     )
 else()
     target_sources(ssg_platform PRIVATE
+        ${SSG_SOURCE_DIR}/src/platform/linux/LinuxPlatformRuntime.cpp
         ${SSG_SOURCE_DIR}/src/LinuxFilesystemWatcher.cpp
         ${SSG_SOURCE_DIR}/src/LinuxGitMetadataWatcher.cpp
     )
 endif()
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    ssg_add_test_suite(
+        NAME test_platform_runtime
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_platform_runtime.cpp
+        SYMBOL test_platform_runtime)
+    ssg_test_include_directories(test_platform_runtime PRIVATE
+        ${SSG_SOURCE_DIR}/tests)
+    ssg_test_link_libraries(test_platform_runtime PRIVATE ssg_platform)
+
+    ssg_add_test_suite(
+        NAME test_git_diff_worker
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_git_diff_worker.cpp
+        SYMBOL test_git_diff_worker)
+    ssg_test_include_directories(test_git_diff_worker PRIVATE
+        ${SSG_SOURCE_DIR}/tests)
+    ssg_test_link_libraries(test_git_diff_worker PRIVATE ssg_core)
+
     ssg_add_test_suite(
         NAME ssg_watcher_tests
         ENTRY ${SSG_SOURCE_DIR}/tests/test_watcher.cpp
@@ -1112,6 +1130,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/src/TerminalInput.cpp
         ${SSG_SOURCE_DIR}/src/TerminalOutput.cpp
         ${SSG_SOURCE_DIR}/src/SystemClipboardReader.cpp
+        ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp
         ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
     )
     target_include_directories(ssg_terminal_objects PUBLIC
@@ -1119,10 +1138,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(ssg_terminal_objects PUBLIC ssg_core)
     ssg_configure_component(ssg_terminal_objects)
 
-    add_executable(ssg_app
-        ${SSG_SOURCE_DIR}/src/main.cpp
-        ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp
-    )
+    add_executable(ssg_app ${SSG_SOURCE_DIR}/src/main.cpp)
     set_target_properties(ssg_app PROPERTIES OUTPUT_NAME ssg)
     target_link_libraries(ssg_app PRIVATE
         ssg_terminal_objects
@@ -1138,6 +1154,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         NAME test_terminal
         ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal.cpp
         SYMBOL test_terminal)
+    ssg_add_test_suite(
+        NAME test_init_script_watcher
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_init_script_watcher.cpp
+        SYMBOL test_init_script_watcher)
     ssg_add_test_suite(
         NAME test_terminal_capabilities
         ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_capabilities.cpp

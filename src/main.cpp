@@ -12,6 +12,7 @@
 #include <ssg/ScriptHost.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Picker.h>
+#include <ssg/PlatformRuntime.h>
 #include <ssg/PromptEditState.h>
 #include <ssg/platform_files.h>
 #include <ssg/SystemClipboardReader.h>
@@ -19,10 +20,6 @@
 #include <ssg/InitScriptWatcher.h>
 
 #include <unistd.h>
-#include <fcntl.h>
-#include <sys/select.h>
-
-#include <csignal>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -66,7 +63,6 @@ namespace {
 constexpr int kEscapeTimeoutMs = 30;
 constexpr int kEdgeScrollIntervalMs = 40;
 constexpr int kDragFrameIntervalMs = 16;
-volatile std::sig_atomic_t gSignalPipeWrite = -1;
 
 struct LaunchTarget {
     fs::path cwd;
@@ -84,50 +80,6 @@ LaunchTarget resolveLaunch(const fs::path& argument) {
     const auto parent =
         absolute.has_parent_path() ? absolute.parent_path() : fs::current_path();
     return {parent, absolute.filename().string()};
-}
-
-struct FdReadiness {
-    bool input = false;
-    bool signal = false;
-    bool gitDiff = false;
-    bool initScript = false;
-};
-
-FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd, int initScriptFd = -1) {
-    fd_set set;
-    FD_ZERO(&set);
-    FD_SET(STDIN_FILENO, &set);
-    if (signalFd >= 0) FD_SET(signalFd, &set);
-    int maxFd = std::max(STDIN_FILENO, signalFd);
-    if (gitDiffFd >= 0) {
-        FD_SET(gitDiffFd, &set);
-        maxFd = std::max(maxFd, gitDiffFd);
-    }
-    if (initScriptFd >= 0) {
-        FD_SET(initScriptFd, &set);
-        maxFd = std::max(maxFd, initScriptFd);
-    }
-    timeval timeout{timeoutMs / 1000, (timeoutMs % 1000) * 1000};
-    int const ready = ::select(maxFd + 1, &set, nullptr, nullptr, timeoutMs < 0 ? nullptr : &timeout);
-    if (ready <= 0) return {};
-    return {FD_ISSET(STDIN_FILENO, &set) != 0, signalFd >= 0 ? FD_ISSET(signalFd, &set) != 0 : false, gitDiffFd >= 0 ? FD_ISSET(gitDiffFd, &set) != 0 : false,
-            initScriptFd >= 0 ? FD_ISSET(initScriptFd, &set) != 0 : false};
-}
-
-extern "C" void signalTagHandler(int signo) {
-    int const fd = gSignalPipeWrite;
-    if (fd < 0) return;
-    unsigned char const tag = static_cast<unsigned char>(signo);
-    ssize_t const written = ::write(fd, &tag, 1);
-    (void)written;
-}
-
-void installSignalTagHandler(int signo) {
-    struct sigaction action{};
-    action.sa_handler = signalTagHandler;
-    sigemptyset(&action.sa_mask);
-    action.sa_flags = SA_RESTART;
-    sigaction(signo, &action, nullptr);
 }
 
 } // namespace
@@ -149,9 +101,8 @@ struct SsgContext {
     GridPresenter& presenter;
     ScriptHost& scripts;
     TerminalSession& terminal;
+    PlatformEventLoop& eventLoop;
     InitScriptWatcher* initScript;
-    int gitDiffWakeFd;
-    int signalReadFd;
     std::unique_ptr<PaletteView> palette;
     std::optional<GridPresentation> activeSnapshot;
     FocusTarget focus = FocusTarget::Editor;
@@ -177,7 +128,8 @@ struct PointerState {
     int lastRow = 0;
 };
 
-void drainSignals(SsgContext& context);
+void handlePlatformControl(SsgContext& context,
+                           const PlatformReadiness& readiness);
 std::optional<GridPresentation> projectFrame(SsgContext& context);
 ClientInputOutcome handleInputResult(SsgContext& context, ClientInputResult result);
 ClientInputOutcome routeInput(SsgContext& context, KeyStroke stroke, std::string text);
@@ -299,20 +251,11 @@ class PaletteView {
     std::vector<PaletteCandidate> candidates_;
 };
 
-void drainSignals(SsgContext& context) {
-    char signalBytes[64];
-    std::string tags;
-    for (;;) {
-        auto const n = ::read(context.signalReadFd, signalBytes, sizeof signalBytes);
-        if (n <= 0) break;
-        tags.append(signalBytes, static_cast<std::size_t>(n));
-    }
-    auto const events = classifySignalTags(tags);
-    if (events.terminate) {
-        int const signo = *events.terminate;
+void handlePlatformControl(SsgContext& context,
+                           const PlatformReadiness& readiness) {
+    if (readiness.termination) {
         context.terminal.restore();
-        ::signal(signo, SIG_DFL);
-        ::raise(signo);
+        terminateProcess(*readiness.termination);
     }
 }
 
@@ -502,8 +445,9 @@ void dispatchBufferedInput(SsgContext& context, std::string& buffer, PointerStat
         std::size_t consumed = 0;
         auto decoded = decodeInput(buffer, false, consumed);
         if (decoded.status == DecodeStatus::incomplete) {
-            auto const ready = waitReadiness(kEscapeTimeoutMs, context.signalReadFd, -1);
-            if (ready.signal) drainSignals(context);
+            const auto ready = context.eventLoop.wait(
+                std::chrono::milliseconds{kEscapeTimeoutMs}, {});
+            handlePlatformControl(context, ready);
             if (ready.input) {
                 auto more = ::read(STDIN_FILENO, bytes, sizeof bytes);
                 if (more > 0) {
@@ -595,13 +539,13 @@ int main(int argc, char** argv) {
     }
     auto runtimeOwner = std::move(created.session);
     auto& runtime = *runtimeOwner;
-    const int gitDiffWakeFd = runtime.gitDiffWakeDescriptor();
+    const PlatformWake* gitDiffWake = runtime.gitDiffWake();
     recordStartupMark("post_create");
 
     ssg::GridPresenter presenter;
     recordStartupMark("post_presenter_init");
     ssg::ScriptHost scripts{runtime, std::bind_front(applyScriptViewAction, std::ref(runtime), std::ref(presenter))};
-    auto const appliedInitScript = loadInitScript(scripts, runtime);
+    auto const appliedInitScript = loadInitScript(scripts);
     std::optional<InitScriptWatcher> initScriptWatcher;
     if (auto scriptPath = resolveInitScriptPath()) {
         initScriptWatcher.emplace(*scriptPath, appliedInitScript);
@@ -629,19 +573,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    int signalPipe[2] = {-1, -1};
-    if (::pipe(signalPipe) != 0) {
-        std::fprintf(stderr, "ssg: failed to create signal pipe\n");
-        return 1;
-    }
-    ::fcntl(signalPipe[0], F_SETFL, ::fcntl(signalPipe[0], F_GETFL, 0) | O_NONBLOCK);
-    ::fcntl(signalPipe[1], F_SETFL, ::fcntl(signalPipe[1], F_GETFL, 0) | O_NONBLOCK);
-    gSignalPipeWrite = signalPipe[1];
-    installSignalTagHandler(SIGWINCH);
-    installSignalTagHandler(SIGTERM);
-    installSignalTagHandler(SIGHUP);
-
-    SsgContext context{runtime, presenter, scripts, terminal, initScriptWatcher ? &*initScriptWatcher : nullptr, gitDiffWakeFd, signalPipe[0]};
+    PlatformEventLoop eventLoop;
+    SsgContext context{runtime, presenter, scripts, terminal, eventLoop,
+                       initScriptWatcher ? &*initScriptWatcher : nullptr};
     context.palette = std::make_unique<PaletteView>(context);
     auto& mode = context.terminal;
     ssg::ColorDepth const colorDepth = context.capabilities.colorDepth();
@@ -700,10 +634,10 @@ int main(int argc, char** argv) {
                 dragEdge = ssg::edge_scroll(pointer.dragging, pointer.lastRow, snapshot->document->content);
             }
             if (dragEdge) {
-                auto const ready = waitReadiness(kEdgeScrollIntervalMs, context.signalReadFd, -1);
-                if (ready.signal) {
-                    // A held drag must not defer resize or termination.
-                    drainSignals(context);
+                const auto ready = eventLoop.wait(
+                    std::chrono::milliseconds{kEdgeScrollIntervalMs}, {});
+                if (ready.resize || ready.termination) {
+                    handlePlatformControl(context, ready);
                     continue;
                 }
                 if (!ready.input) {
@@ -712,20 +646,39 @@ int main(int argc, char** argv) {
                     continue;
                 }
             }
-            const auto timeout = runtime.workspaceSearchPending() ? 0 : -1;
-            auto wait = waitReadiness(
-                timeout, context.signalReadFd, context.gitDiffWakeFd,
-                initScriptWatcher ? initScriptWatcher->wakeDescriptor() : -1);
-            if (wait.signal) {
-                drainSignals(context);
-                if (!wait.input && !runtime.workspaceSearchPending()) continue;
+            std::vector<const PlatformWake*> wakes;
+            std::optional<std::size_t> gitDiffWakeIndex;
+            std::optional<std::size_t> initScriptWakeIndex;
+            if (gitDiffWake != nullptr) {
+                gitDiffWakeIndex = wakes.size();
+                wakes.push_back(gitDiffWake);
             }
-            if (wait.initScript) {
+            if (initScriptWatcher) {
+                initScriptWakeIndex = wakes.size();
+                wakes.push_back(&initScriptWatcher->wake());
+            }
+            const auto timeout =
+                runtime.workspaceSearchPending()
+                    ? std::optional<std::chrono::milliseconds>{
+                          std::chrono::milliseconds{0}}
+                    : std::nullopt;
+            const auto wait = eventLoop.wait(timeout, wakes);
+            handlePlatformControl(context, wait);
+            const auto wakeReady = [&](std::optional<std::size_t> index) {
+                return index &&
+                       std::find(wait.wakes.begin(), wait.wakes.end(), *index) !=
+                           wait.wakes.end();
+            };
+            if (wait.resize && !wait.input &&
+                !runtime.workspaceSearchPending()) {
+                continue;
+            }
+            if (wakeReady(initScriptWakeIndex)) {
                 // ScriptHost belongs to the main thread.
-                initScriptWatcher->drainAndEvaluate(scripts, runtime);
+                initScriptWatcher->drainAndEvaluate(scripts);
                 if (!wait.input && !runtime.workspaceSearchPending()) continue;
             }
-            if (wait.gitDiff) {
+            if (wakeReady(gitDiffWakeIndex)) {
                 (void)runtime.pump();
                 if (!wait.input && !runtime.workspaceSearchPending()) continue;
             }

@@ -1,6 +1,5 @@
 #include <ssg/InitScriptWatcher.h>
 
-#include <ssg/Editor.h>
 #include <ssg/ScriptHost.h>
 #include <ssg/platform_files.h>
 
@@ -8,11 +7,9 @@
 #include <cctype>
 #include <condition_variable>
 #include <cstdio>
-#include <fcntl.h>
 #include <mutex>
 #include <optional>
 #include <thread>
-#include <unistd.h>
 
 namespace ssg {
 
@@ -45,7 +42,7 @@ constexpr std::chrono::milliseconds kInitScriptPollInterval{500};
 
 }  // namespace
 
-void evaluateInitScript(ScriptHost& scripts, Editor& runtime,
+void evaluateInitScript(ScriptHost& scripts,
                         std::filesystem::path const& scriptPath,
                         std::string const& script) {
     auto const result = scripts.evaluate(script);
@@ -65,13 +62,12 @@ std::optional<std::filesystem::path> resolveInitScriptPath() {
     }
 }
 
-std::optional<std::string> loadInitScript(ScriptHost& scripts,
-                                          Editor& runtime) {
+std::optional<std::string> loadInitScript(ScriptHost& scripts) {
     auto const scriptPath = resolveInitScriptPath();
     if (!scriptPath) return std::nullopt;
     auto script = readInitScriptIfPresent(*scriptPath, true);
     if (!script) return std::nullopt;
-    evaluateInitScript(scripts, runtime, *scriptPath, *script);
+    evaluateInitScript(scripts, *scriptPath, *script);
     return script;
 }
 
@@ -79,19 +75,6 @@ InitScriptWatcher::InitScriptWatcher(
     std::filesystem::path scriptPath, std::optional<std::string> alreadyApplied)
     : scriptPath_{std::move(scriptPath)},
       lastApplied_{std::move(alreadyApplied).value_or(std::string{})} {
-    if (::pipe(wakePipe_) != 0) {
-        wakePipe_[0] = wakePipe_[1] = -1;
-        return;
-    }
-    for (int fd : wakePipe_) {
-        int const flags = ::fcntl(fd, F_GETFL, 0);
-        if (flags == -1 || ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) {
-            (void)::close(wakePipe_[0]);
-            (void)::close(wakePipe_[1]);
-            wakePipe_[0] = wakePipe_[1] = -1;
-            return;
-        }
-    }
     thread_ = std::thread([this] { run(); });
 }
 
@@ -104,17 +87,10 @@ InitScriptWatcher::~InitScriptWatcher() {
         wake_.notify_all();
         thread_.join();
     }
-    if (wakePipe_[0] != -1) (void)::close(wakePipe_[0]);
-    if (wakePipe_[1] != -1) (void)::close(wakePipe_[1]);
 }
 
-int InitScriptWatcher::wakeDescriptor() const noexcept { return wakePipe_[0]; }
-
-void InitScriptWatcher::drainAndEvaluate(ScriptHost& scripts,
-                                         Editor& runtime) {
-    char buffer[64];
-    while (::read(wakePipe_[0], buffer, sizeof buffer) > 0) {
-    }
+void InitScriptWatcher::drainAndEvaluate(ScriptHost& scripts) {
+    readiness_.consume();
     std::optional<std::string> pending;
     {
         std::lock_guard lock{mutex_};
@@ -122,7 +98,7 @@ void InitScriptWatcher::drainAndEvaluate(ScriptHost& scripts,
         pendingScript_.reset();
     }
     if (pending) {
-        evaluateInitScript(scripts, runtime, scriptPath_, *pending);
+        evaluateInitScript(scripts, scriptPath_, *pending);
     }
 }
 
@@ -139,8 +115,7 @@ void InitScriptWatcher::run() {
             bool const wasEmpty = !pendingScript_.has_value();
             pendingScript_ = *current;
             if (wasEmpty) {
-                char const tag = 'i';
-                (void)::write(wakePipe_[1], &tag, 1);
+                readiness_.notify();
             }
         } else if (!current) {
             lastApplied_.clear();

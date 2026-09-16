@@ -477,7 +477,7 @@ public:
     GitDiffIngress gitDiffIngress;
 
     void showStatus(std::string text);
-    [[nodiscard]] int gitDiffWakeDescriptor() const;
+    [[nodiscard]] const PlatformWake* gitDiffWake() const noexcept;
 };
 
 [[nodiscard]] OperationResult success();
