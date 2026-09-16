@@ -32,9 +32,9 @@ struct Exemption {
 
 constexpr Exemption kExemptions[] = {
     // The seam's own implementations ARE the filesystem access.
-    {"src/platform_files.cpp", "implements shared seam operations"},
-    {"src/linux_files.cpp", "implements the seam"},
-    {"src/windows_files.cpp", "implements the seam"},
+    {"src/platform/platform_files.cpp", "implements shared seam operations"},
+    {"src/platform/linux/linux_files.cpp", "implements the Linux seam"},
+    {"src/platform/windows/windows_files.cpp", "implements the Windows seam"},
     // Tests read and write files out-of-band on purpose: a test that used the
     // seam to check the seam would be its own oracle.
     {"tests/", "test fixtures read out-of-band by design"},
@@ -185,17 +185,17 @@ struct PlatformHeaderOwner {
 };
 
 constexpr PlatformHeaderOwner kPlatformHeaderOwners[] = {
-    {"<windows.h>", "src/windows_files.cpp",
+    {"<windows.h>", "src/platform/windows/windows_files.cpp",
      "implements Windows file services"},
-    {"<windows.h>", "src/WindowsFilesystemWatcher.cpp",
+    {"<windows.h>", "src/platform/windows/WindowsFilesystemWatcher.cpp",
      "implements the Windows filesystem watcher"},
-    {"<windows.h>", "src/WindowsGitMetadataWatcher.cpp",
+    {"<windows.h>", "src/platform/windows/WindowsGitMetadataWatcher.cpp",
      "implements the Windows Git metadata watcher"},
     {"<windows.h>", "src/platform/windows/WindowsPlatformRuntime.cpp",
      "implements Windows process runtime services"},
-    {"<sys/inotify.h>", "src/LinuxFilesystemWatcher.cpp",
+    {"<sys/inotify.h>", "src/platform/linux/LinuxFilesystemWatcher.cpp",
      "implements the Linux filesystem watcher"},
-    {"<sys/inotify.h>", "src/LinuxGitMetadataWatcher.cpp",
+    {"<sys/inotify.h>", "src/platform/linux/LinuxGitMetadataWatcher.cpp",
      "implements the Linux Git metadata watcher"},
     {"<termios.h>", "src/Terminal.cpp",
      "implements Linux terminal state"},
@@ -204,6 +204,40 @@ constexpr PlatformHeaderOwner kPlatformHeaderOwners[] = {
     {"<lua.h>", "src/LuaCommandHost.cpp",
      "implements the Lua adapter"},
 };
+
+constexpr std::string_view kTemporaryNativeFiles[] = {
+    "src/main.cpp",
+    "src/Terminal.cpp",
+    "src/SystemClipboardReader.cpp",
+};
+
+constexpr std::string_view kNativeSpellings[] = {
+    "#include <fcntl.h>",
+    "#include <poll.h>",
+    "#include <signal.h>",
+    "#include <sys/",
+    "#include <termios.h>",
+    "#include <unistd.h>",
+    "#include <windows.h>",
+    " ::execv(",
+    " ::fork(",
+    " ::getpid(",
+    " ::pipe(",
+    " ::read(",
+    " ::sigaction(",
+    " ::waitpid(",
+    " ::write(",
+};
+
+bool startsWith(std::string_view value, std::string_view prefix) {
+    return value.substr(0, prefix.size()) == prefix;
+}
+
+bool temporaryNativeFile(std::string_view path) {
+    return std::find(std::begin(kTemporaryNativeFiles),
+                     std::end(kTemporaryNativeFiles),
+                     path) != std::end(kTemporaryNativeFiles);
+}
 
 void platformHeadersStayInTheirAdapters() {
     const auto root = repositoryRoot();
@@ -249,6 +283,45 @@ void platformHeadersStayInTheirAdapters() {
     check(offenders.empty(), "platform headers stay in named adapters");
 }
 
+void nativeCallsStayInPlatformFamilies() {
+    const auto root = repositoryRoot();
+    if (root.empty()) return;
+
+    std::vector<std::string> offenders;
+    for (const auto& directory : {"src", "include", "apps"}) {
+        const auto base = root / directory;
+        if (!fs::exists(base)) continue;
+        for (fs::recursive_directory_iterator it{base}, end; it != end; ++it) {
+            if (!it->is_regular_file()) continue;
+            const auto extension = it->path().extension().string();
+            if (extension != ".cpp" && extension != ".h" &&
+                extension != ".hpp") {
+                continue;
+            }
+            const auto relative =
+                fs::relative(it->path(), root).generic_string();
+            if (startsWith(relative, "src/platform/linux/") ||
+                startsWith(relative, "src/platform/windows/") ||
+                temporaryNativeFile(relative)) {
+                continue;
+            }
+            const auto source = readSource(it->path());
+            for (const auto spelling : kNativeSpellings) {
+                if (source.find(spelling) != std::string::npos) {
+                    offenders.push_back(relative + " uses " +
+                                        std::string{spelling});
+                }
+            }
+        }
+    }
+
+    for (const auto& offender : offenders) {
+        std::fprintf(stderr, "FAIL: native call outside platform family: %s\n",
+                     offender.c_str());
+    }
+    check(offenders.empty(), "native calls stay in platform families");
+}
+
 void portableTestsAvoidPosixCalls() {
     const auto root = repositoryRoot();
     if (root.empty()) return;
@@ -276,6 +349,7 @@ void portableTestsAvoidPosixCalls() {
 SSG_TEST_SUITE(test_file_seam_guard) {
     libraryAndApplicationCodeUseTheFileSeam();
     platformHeadersStayInTheirAdapters();
+    nativeCallsStayInPlatformFamilies();
     portableTestsAvoidPosixCalls();
 
     if (failures != 0) {

@@ -494,20 +494,20 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_platform PRIVATE
-    ${SSG_SOURCE_DIR}/src/FilesystemWatcher.cpp
+    ${SSG_SOURCE_DIR}/src/platform/FilesystemWatcher.cpp
 )
 
 if(WIN32)
     target_sources(ssg_platform PRIVATE
         ${SSG_SOURCE_DIR}/src/platform/windows/WindowsPlatformRuntime.cpp
-        ${SSG_SOURCE_DIR}/src/WindowsFilesystemWatcher.cpp
-        ${SSG_SOURCE_DIR}/src/WindowsGitMetadataWatcher.cpp
+        ${SSG_SOURCE_DIR}/src/platform/windows/WindowsFilesystemWatcher.cpp
+        ${SSG_SOURCE_DIR}/src/platform/windows/WindowsGitMetadataWatcher.cpp
     )
 else()
     target_sources(ssg_platform PRIVATE
         ${SSG_SOURCE_DIR}/src/platform/linux/LinuxPlatformRuntime.cpp
-        ${SSG_SOURCE_DIR}/src/LinuxFilesystemWatcher.cpp
-        ${SSG_SOURCE_DIR}/src/LinuxGitMetadataWatcher.cpp
+        ${SSG_SOURCE_DIR}/src/platform/linux/LinuxFilesystemWatcher.cpp
+        ${SSG_SOURCE_DIR}/src/platform/linux/LinuxGitMetadataWatcher.cpp
     )
 endif()
 
@@ -840,17 +840,17 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_platform PRIVATE
-    ${SSG_SOURCE_DIR}/src/platform_files.cpp
+    ${SSG_SOURCE_DIR}/src/platform/platform_files.cpp
 )
 
 if(WIN32)
     target_sources(ssg_platform PRIVATE
-        ${SSG_SOURCE_DIR}/src/windows_files.cpp
+        ${SSG_SOURCE_DIR}/src/platform/windows/windows_files.cpp
     )
     target_link_libraries(ssg_platform PRIVATE advapi32)
 else()
     target_sources(ssg_platform PRIVATE
-        ${SSG_SOURCE_DIR}/src/linux_files.cpp
+        ${SSG_SOURCE_DIR}/src/platform/linux/linux_files.cpp
     )
 endif()
 
