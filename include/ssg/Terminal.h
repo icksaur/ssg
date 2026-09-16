@@ -2,14 +2,11 @@
 
 #include <ssg/Viewport.h>
 
-#include <array>
 #include <cstddef>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string_view>
-#include <termios.h>
-#include <vector>
 
 namespace ssg {
 
@@ -89,11 +86,8 @@ class TerminalSession {
     void enableKeyboardProtocol();
 
   private:
-    TerminalModes modes_;
-    std::vector<TerminalModes::Guard> entered_;
-    termios original_{};
-    bool active_ = false;
-    bool keyboardProtocolEntered_ = false;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 void writeAll(std::string_view bytes);

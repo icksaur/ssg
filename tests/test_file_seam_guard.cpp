@@ -195,6 +195,8 @@ constexpr PlatformHeaderOwner kPlatformHeaderOwners[] = {
      "implements the Linux filesystem watcher"},
     {"<sys/inotify.h>", "src/LinuxGitMetadataWatcher.cpp",
      "implements the Linux Git metadata watcher"},
+    {"<termios.h>", "src/Terminal.cpp",
+     "implements Linux terminal state"},
     {"<git2.h>", "src/GitRepository.cpp",
      "implements the core-owned Git repository adapter"},
     {"<lua.h>", "src/LuaCommandHost.cpp",

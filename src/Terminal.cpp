@@ -2,9 +2,11 @@
 
 #include <csignal>
 #include <sys/ioctl.h>
+#include <termios.h>
 #include <unistd.h>
 
 #include <utility>
+#include <vector>
 
 namespace ssg {
 
@@ -86,40 +88,50 @@ TerminalModes::Guard& TerminalModes::Guard::operator=(Guard&& other) noexcept {
     return *this;
 }
 
+struct TerminalSession::Impl {
+    Impl() : modes{[](std::string_view bytes) { writeAll(bytes); }} {}
+
+    TerminalModes modes;
+    std::vector<TerminalModes::Guard> entered;
+    termios original{};
+    bool active = false;
+    bool keyboardProtocolEntered = false;
+};
+
 TerminalSession::TerminalSession()
-    : modes_{[](std::string_view bytes) { writeAll(bytes); }} {
-    if (tcgetattr(STDIN_FILENO, &original_) != 0) return;
-    termios raw = original_;
+    : impl_{std::make_unique<Impl>()} {
+    if (tcgetattr(STDIN_FILENO, &impl_->original) != 0) return;
+    termios raw = impl_->original;
     raw.c_lflag &= ~(ICANON | ECHO | ISIG | IEXTEN);
     raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
     raw.c_oflag &= ~(OPOST);
     raw.c_cc[VMIN] = 1;
     raw.c_cc[VTIME] = 0;
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) return;
-    active_ = true;
-    entered_.push_back(modes_.enter(kAlternateScreen));
-    entered_.push_back(modes_.enter(kCursorStyleBar));
-    entered_.push_back(modes_.enter(kMouseButtons));
-    entered_.push_back(modes_.enter(kMouseMotion));
-    entered_.push_back(modes_.enter(kMouseSgrCoordinates));
-    entered_.push_back(modes_.enter(kBracketedPaste));
+    impl_->active = true;
+    impl_->entered.push_back(impl_->modes.enter(kAlternateScreen));
+    impl_->entered.push_back(impl_->modes.enter(kCursorStyleBar));
+    impl_->entered.push_back(impl_->modes.enter(kMouseButtons));
+    impl_->entered.push_back(impl_->modes.enter(kMouseMotion));
+    impl_->entered.push_back(impl_->modes.enter(kMouseSgrCoordinates));
+    impl_->entered.push_back(impl_->modes.enter(kBracketedPaste));
 }
 
 TerminalSession::~TerminalSession() { restore(); }
 
 void TerminalSession::restore() noexcept {
-    if (!active_) return;
-    active_ = false;
-    entered_.clear();
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_);
+    if (!impl_->active) return;
+    impl_->active = false;
+    impl_->entered.clear();
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &impl_->original);
 }
 
-bool TerminalSession::active() const noexcept { return active_; }
+bool TerminalSession::active() const noexcept { return impl_->active; }
 
 void TerminalSession::enableKeyboardProtocol() {
-    if (!active_ || keyboardProtocolEntered_) return;
-    entered_.push_back(modes_.enter(kKeyboardProtocol));
-    keyboardProtocolEntered_ = true;
+    if (!impl_->active || impl_->keyboardProtocolEntered) return;
+    impl_->entered.push_back(impl_->modes.enter(kKeyboardProtocol));
+    impl_->keyboardProtocolEntered = true;
 }
 
 } // namespace ssg
