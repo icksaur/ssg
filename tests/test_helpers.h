@@ -17,14 +17,36 @@
 //   TEST(my_test) { ASSERT_EQ(a, b); }
 //   int main() { RUN(my_test); ... }
 
+#include <chrono>
 #include <filesystem>
 #include <initializer_list>
 #include <iostream>
+#include <random>
 #include <source_location>
 #include <string>
 #include <stdexcept>
 #include <utility>
 #include <vector>
+
+class TestRuntimeDirectory {
+public:
+    explicit TestRuntimeDirectory(std::filesystem::path path)
+        : path_{std::move(path)} {
+        std::filesystem::create_directories(path_);
+    }
+
+    ~TestRuntimeDirectory() {
+        std::error_code error;
+        std::filesystem::remove_all(path_, error);
+    }
+
+    [[nodiscard]] const std::filesystem::path& path() const noexcept {
+        return path_;
+    }
+
+private:
+    std::filesystem::path path_;
+};
 
 inline std::filesystem::path testRuntimePath(
     std::filesystem::path const& name,
@@ -36,9 +58,14 @@ inline std::filesystem::path testRuntimePath(
     while (!source.empty()) {
         if (source.filename() == "tests" &&
             std::filesystem::exists(source.parent_path() / "CMakeLists.txt")) {
-            auto root = source.parent_path() / ".test-runtime";
-            std::filesystem::create_directories(root);
-            return root / name;
+            static const auto processDirectory =
+                std::to_string(std::chrono::steady_clock::now()
+                                   .time_since_epoch()
+                                   .count()) +
+                "_" + std::to_string(std::random_device{}());
+            static const TestRuntimeDirectory runtime{
+                source.parent_path() / ".test-runtime" / processDirectory};
+            return runtime.path() / name;
         }
         auto parent = source.parent_path();
         if (parent == source) break;

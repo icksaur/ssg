@@ -14,17 +14,13 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
-#include <unistd.h>
 
 namespace {
 
 namespace fs = std::filesystem;
 
-// Pid-unique so parallel ctest runs cannot remove a directory another test is
-// still using.
 fs::path uniqueRoot() {
-    auto root =
-        testRuntimePath("script_host_root_" + std::to_string(::getpid()));
+    auto root = testRuntimePath("script_host_root");
     fs::remove_all(root);
     fs::create_directories(root / "recovery");
     return root;

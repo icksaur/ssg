@@ -16,8 +16,6 @@
 #include <utility>
 #include <vector>
 
-#include <unistd.h>
-
 namespace {
 
 using ssg::SemanticRole;
@@ -167,8 +165,7 @@ TEST(anEmptyThemeSetTableIsAcceptedAndChangesNothing) {
 // nothing else. This is a wiring regression test: what CAN regress is
 // createEditor() silently starting from some other theme.
 TEST(editorRuntimeStartsFromTheDefaultTheme) {
-    auto root = std::filesystem::temp_directory_path() /
-                ("ssg_theme_wiring_" + std::to_string(::getpid()));
+    auto root = testRuntimePath("ssg_theme_wiring");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     ssg::EditorConfig config;

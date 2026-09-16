@@ -9,14 +9,13 @@
 #include <string>
 #include <vector>
 
-#include <unistd.h>
 
 namespace {
 
 namespace fs = std::filesystem;
 
 fs::path uniqueRoot() {
-    const auto root = testRuntimePath("dispatch_root_" + std::to_string(::getpid()));
+    const auto root = testRuntimePath("dispatch_root");
     fs::remove_all(root);
     fs::create_directories(root / "recovery");
     return root;

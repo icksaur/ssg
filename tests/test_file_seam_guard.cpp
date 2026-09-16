@@ -68,6 +68,22 @@ constexpr std::string_view kForbidden[] = {
 // exceptions keep the rest of the file guarded.
 constexpr std::string_view kExemptionMarker = "seam-exempt:";
 
+constexpr std::string_view kPortableTestFiles[] = {
+    "tests/test_helpers.h",
+    "tests/test_command_dispatch.cpp",
+    "tests/test_script_host.cpp",
+    "tests/test_theme.cpp",
+    "tests/test_tui_contract.cpp",
+    "tests/test_system_clipboard_reader.cpp",
+};
+
+constexpr std::string_view kPosixTestSpellings[] = {
+    "<unistd.h>",
+    "<sys/stat.h>",
+    "::getpid(",
+    "::chmod(",
+};
+
 fs::path repositoryRoot() {
     auto current = fs::current_path();
     for (int depth = 0; depth < 6; ++depth) {
@@ -229,11 +245,34 @@ void platformHeadersStayInTheirAdapters() {
     check(offenders.empty(), "platform headers stay in named adapters");
 }
 
+void portableTestsAvoidPosixCalls() {
+    const auto root = repositoryRoot();
+    if (root.empty()) return;
+
+    std::vector<std::string> offenders;
+    for (const auto relative : kPortableTestFiles) {
+        const auto source = readSource(root / relative);
+        for (const auto spelling : kPosixTestSpellings) {
+            if (source.find(spelling) != std::string::npos) {
+                offenders.push_back(std::string{relative} + " uses " +
+                                    std::string{spelling});
+            }
+        }
+    }
+
+    for (const auto& offender : offenders) {
+        std::fprintf(stderr, "FAIL: POSIX call in portable test: %s\n",
+                     offender.c_str());
+    }
+    check(offenders.empty(), "portable tests avoid POSIX calls");
+}
+
 }  // namespace
 
 SSG_TEST_SUITE(test_file_seam_guard) {
     libraryAndApplicationCodeUseTheFileSeam();
     platformHeadersStayInTheirAdapters();
+    portableTestsAvoidPosixCalls();
 
     if (failures != 0) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);

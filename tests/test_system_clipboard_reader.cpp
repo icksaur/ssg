@@ -8,7 +8,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <sys/stat.h>
 
 namespace {
 
@@ -19,7 +18,7 @@ std::filesystem::path helper(std::string_view name, std::string_view body) {
     std::ofstream output{path};
     output << "#!/bin/sh\n" << body << '\n';
     output.close();
-    ::chmod(path.c_str(), 0700);
+    std::filesystem::permissions(path, std::filesystem::perms::owner_all);
     return path;
 }
 
