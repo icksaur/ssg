@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(ssg LANGUAGES CXX)
+project(ssg LANGUAGES C CXX)
 include(GNUInstallDirs)
 
 set_property(GLOBAL PROPERTY GLOBAL_DEPENDS_NO_CYCLES ON)
@@ -65,9 +65,16 @@ add_library(ssg::ssg ALIAS ssg)
 option(SSG_WERROR "Treat compiler warnings as errors in ssg's own sources"
        ${PROJECT_IS_TOP_LEVEL})
 function(ssg_configure_component target)
-    target_compile_options("${target}" PRIVATE
-        -Wall -Wextra -Wno-missing-field-initializers)
+    if(MSVC)
+        target_compile_options("${target}" PRIVATE /W4)
+    else()
+        target_compile_options("${target}" PRIVATE
+            -Wall -Wextra -Wno-missing-field-initializers)
+    endif()
     if(SSG_SANITIZE)
+        if(MSVC)
+            message(FATAL_ERROR "SSG_SANITIZE requires Clang or GCC")
+        endif()
         target_compile_options("${target}" PUBLIC
             -fsanitize=address,undefined
             -fno-omit-frame-pointer
@@ -75,7 +82,11 @@ function(ssg_configure_component target)
         target_link_options("${target}" PUBLIC -fsanitize=address,undefined)
     endif()
     if(SSG_WERROR)
-        target_compile_options("${target}" PRIVATE -Werror)
+        if(MSVC)
+            target_compile_options("${target}" PRIVATE /WX)
+        else()
+            target_compile_options("${target}" PRIVATE -Werror)
+        endif()
     endif()
 endfunction()
 
@@ -715,36 +726,57 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 
 endif()
 
-find_path(SSG_LUA_INCLUDE_DIR lua.h
-    PATH_SUFFIXES lua5.4
+set(_SSG_LUA_DIR "${SSG_SOURCE_DIR}/vendor/lua/src")
+set(_SSG_LUA_SOURCES
+    ${_SSG_LUA_DIR}/lapi.c
+    ${_SSG_LUA_DIR}/lauxlib.c
+    ${_SSG_LUA_DIR}/lbaselib.c
+    ${_SSG_LUA_DIR}/lcode.c
+    ${_SSG_LUA_DIR}/lcorolib.c
+    ${_SSG_LUA_DIR}/lctype.c
+    ${_SSG_LUA_DIR}/ldblib.c
+    ${_SSG_LUA_DIR}/ldebug.c
+    ${_SSG_LUA_DIR}/ldo.c
+    ${_SSG_LUA_DIR}/ldump.c
+    ${_SSG_LUA_DIR}/lfunc.c
+    ${_SSG_LUA_DIR}/lgc.c
+    ${_SSG_LUA_DIR}/linit.c
+    ${_SSG_LUA_DIR}/liolib.c
+    ${_SSG_LUA_DIR}/llex.c
+    ${_SSG_LUA_DIR}/lmathlib.c
+    ${_SSG_LUA_DIR}/lmem.c
+    ${_SSG_LUA_DIR}/loadlib.c
+    ${_SSG_LUA_DIR}/lobject.c
+    ${_SSG_LUA_DIR}/lopcodes.c
+    ${_SSG_LUA_DIR}/loslib.c
+    ${_SSG_LUA_DIR}/lparser.c
+    ${_SSG_LUA_DIR}/lstate.c
+    ${_SSG_LUA_DIR}/lstring.c
+    ${_SSG_LUA_DIR}/lstrlib.c
+    ${_SSG_LUA_DIR}/ltable.c
+    ${_SSG_LUA_DIR}/ltablib.c
+    ${_SSG_LUA_DIR}/ltm.c
+    ${_SSG_LUA_DIR}/lundump.c
+    ${_SSG_LUA_DIR}/lutf8lib.c
+    ${_SSG_LUA_DIR}/lvm.c
+    ${_SSG_LUA_DIR}/lzio.c
 )
-find_library(SSG_LUA_LIBRARY
-    NAMES lua5.4 lua54
-)
-if(NOT SSG_LUA_INCLUDE_DIR OR NOT SSG_LUA_LIBRARY)
-    message(FATAL_ERROR "Lua 5.4 development files are required for the Lua command host")
+add_library(ssg_lua STATIC ${_SSG_LUA_SOURCES})
+target_include_directories(ssg_lua PUBLIC "${_SSG_LUA_DIR}")
+if(MSVC)
+    target_compile_options(ssg_lua PRIVATE /w)
+else()
+    target_compile_options(ssg_lua PRIVATE -w)
 endif()
-
-include(CheckCXXSourceCompiles)
-set(CMAKE_REQUIRED_INCLUDES "${SSG_LUA_INCLUDE_DIR}")
-check_cxx_source_compiles(
-    "#include <lua.h>
-     #if LUA_VERSION_NUM != 504
-     #error SSG requires Lua 5.4 headers
-     #endif
-     int main() { return 0; }"
-    SSG_LUA_HEADERS_ARE_54
-)
-unset(CMAKE_REQUIRED_INCLUDES)
-if(NOT SSG_LUA_HEADERS_ARE_54)
-    message(FATAL_ERROR "SSG Lua command host requires Lua 5.4 headers")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_compile_definitions(ssg_lua PRIVATE LUA_USE_LINUX)
+    target_link_libraries(ssg_lua PUBLIC ${CMAKE_DL_LIBS} m)
 endif()
 
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/LuaCommandHost.cpp
 )
-target_include_directories(ssg_core PRIVATE ${SSG_LUA_INCLUDE_DIR})
-target_link_libraries(ssg_core PRIVATE ${SSG_LUA_LIBRARY})
+target_link_libraries(ssg_core PRIVATE ssg_lua)
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
@@ -1098,6 +1130,9 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     install(TARGETS ssg_app RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
     install(FILES "${SSG_SOURCE_DIR}/LICENSE"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/ssg")
+    install(FILES "${SSG_SOURCE_DIR}/vendor/lua/LICENSE"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/ssg"
+        RENAME LICENSE-Lua)
 
     ssg_add_test_suite(
         NAME test_terminal
@@ -1224,8 +1259,6 @@ target_sources(ssg_core PRIVATE
 # Tree-sitter is compiled unconditionally.  Highlighting is disabled at RUNTIME
 # by constructing the runtime with a null EditorConfig::syntaxParser,
 # which yields plain text.
-enable_language(C)
-
 set(_SSG_TREESITTER_VENDOR_DIR ${SSG_SOURCE_DIR}/vendor)
 
 # Highlight queries embedded into the binary.  ONE LINE PER QUERY: add a
@@ -1320,10 +1353,13 @@ target_include_directories(ssg_core PRIVATE
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown-inline/src
 )
 
-set_source_files_properties(${_SSG_TREESITTER_VENDOR_SOURCES}
-    PROPERTIES
-        COMPILE_OPTIONS "-w"
-)
+if(MSVC)
+    set_source_files_properties(${_SSG_TREESITTER_VENDOR_SOURCES}
+        PROPERTIES COMPILE_OPTIONS "/w")
+else()
+    set_source_files_properties(${_SSG_TREESITTER_VENDOR_SOURCES}
+        PROPERTIES COMPILE_OPTIONS "-w")
+endif()
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(

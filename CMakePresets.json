@@ -38,12 +38,30 @@
         "SSG_ASSERTIONS": "ON",
         "SSG_SANITIZE": "ON"
       }
+    },
+    {
+      "name": "windows-msvc",
+      "displayName": "Windows MSVC (staged portability build)",
+      "description": "MSVC build used while Windows support expands target by target.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-windows",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "SSG_ASSERTIONS": "ON",
+        "SSG_CCACHE": "OFF",
+        "SSG_WERROR": "ON"
+      }
     }
   ],
   "buildPresets": [
     { "name": "dev", "configurePreset": "dev" },
     { "name": "release", "configurePreset": "release" },
-    { "name": "sanitize", "configurePreset": "sanitize" }
+    { "name": "sanitize", "configurePreset": "sanitize" },
+    {
+      "name": "windows-msvc",
+      "configurePreset": "windows-msvc",
+      "targets": ["ssg_platform"]
+    }
   ],
   "testPresets": [
     {

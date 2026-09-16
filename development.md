@@ -7,9 +7,11 @@ embed it, see [`README.md`](README.md).
 
 - CMake 3.14 or newer
 - A C++20 compiler
-- Lua 5.4 headers and library
 
-Linux and Windows are the required platforms.
+Lua 5.4 is built from the pinned source under `vendor/lua`; no system Lua
+installation is required. Linux is the current runtime platform. The
+`windows-msvc` preset is the staged native Windows portability build and
+currently builds the platform target.
 
 ## Build
 
@@ -44,6 +46,14 @@ need it:
 ```sh
 cmake --preset release && cmake --build build-release
 cmake --preset sanitize && cmake --build build-sanitize && ctest --preset sanitize
+```
+
+From an MSVC developer command prompt, run the current Windows portability
+gate with:
+
+```powershell
+cmake --preset windows-msvc
+cmake --build --preset windows-msvc
 ```
 
 ## What the library delivers

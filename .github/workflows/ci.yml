@@ -6,11 +6,7 @@ on:
 
 jobs:
   release:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Configure
@@ -18,9 +14,20 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Platform interface compile and link
-        run: cmake --build build --config Release --target test_platform_interface
+        run: cmake --build build --config Release --target ssg_tests
       - name: Core and platform gates
         run: ctest --test-dir build -C Release --output-on-failure
+
+  windows-msvc-stage:
+    continue-on-error: true
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure
+        run: cmake --preset windows-msvc
+      - name: Build staged platform target
+        run: cmake --build --preset windows-msvc
 
   sanitizer:
     runs-on: ubuntu-latest

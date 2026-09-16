@@ -94,8 +94,9 @@ rebind commands. See [`doc/config.md`](doc/config.md).
 
 ## Requirements
 
-A C++20 compiler, CMake 3.14+, and Lua 5.4. Linux and Windows are supported. Full build and test
-instructions are in [`development.md`](development.md).
+A C++20 compiler and CMake 3.14+. Lua 5.4 is built from pinned vendored
+sources. Linux is supported; native Windows support is being brought up through
+the staged MSVC build described in [`development.md`](development.md).
 
 ## License
 
