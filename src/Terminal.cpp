@@ -1,32 +1,10 @@
 #include <ssg/Terminal.h>
 
-#include <sys/ioctl.h>
-#include <termios.h>
-#include <unistd.h>
-
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
 namespace ssg {
-
-void writeAll(std::string_view bytes) {
-    std::size_t offset = 0;
-    while (offset < bytes.size()) {
-        auto written =
-            ::write(STDOUT_FILENO, bytes.data() + offset, bytes.size() - offset);
-        if (written <= 0) break;
-        offset += static_cast<std::size_t>(written);
-    }
-}
-
-ssg::ViewportDimensions terminalSize() {
-    winsize size{};
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 && size.ws_col > 0 &&
-        size.ws_row > 0) {
-        return {size.ws_col, size.ws_row};
-    }
-    return {80, 24};
-}
 
 struct TerminalModes::Impl {
     explicit Impl(Writer configuredWriter) : writer{std::move(configuredWriter)} {}
@@ -74,32 +52,38 @@ TerminalModes::Guard& TerminalModes::Guard::operator=(Guard&& other) noexcept {
 }
 
 struct TerminalSession::Impl {
-    Impl() : modes{[](std::string_view bytes) { writeAll(bytes); }} {}
+    explicit Impl(std::unique_ptr<NativeTerminal> configuredNative)
+        : native{std::move(configuredNative)},
+          modes{[this](std::string_view bytes) { native->write(bytes); }} {}
 
+    std::unique_ptr<NativeTerminal> native;
     TerminalModes modes;
     std::vector<TerminalModes::Guard> entered;
-    termios original{};
     bool active = false;
     bool keyboardProtocolEntered = false;
 };
 
 TerminalSession::TerminalSession()
-    : impl_{std::make_unique<Impl>()} {
-    if (tcgetattr(STDIN_FILENO, &impl_->original) != 0) return;
-    termios raw = impl_->original;
-    raw.c_lflag &= ~(ICANON | ECHO | ISIG | IEXTEN);
-    raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
-    raw.c_oflag &= ~(OPOST);
-    raw.c_cc[VMIN] = 1;
-    raw.c_cc[VTIME] = 0;
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) return;
+    : TerminalSession{makePlatformTerminal()} {}
+
+TerminalSession::TerminalSession(std::unique_ptr<NativeTerminal> native)
+    : impl_{std::make_unique<Impl>(std::move(native))} {
+    if (!impl_->native) {
+        throw std::invalid_argument{"terminal backend is required"};
+    }
+    if (!impl_->native->activate()) return;
     impl_->active = true;
-    impl_->entered.push_back(impl_->modes.enter(kAlternateScreen));
-    impl_->entered.push_back(impl_->modes.enter(kCursorStyleBar));
-    impl_->entered.push_back(impl_->modes.enter(kMouseButtons));
-    impl_->entered.push_back(impl_->modes.enter(kMouseMotion));
-    impl_->entered.push_back(impl_->modes.enter(kMouseSgrCoordinates));
-    impl_->entered.push_back(impl_->modes.enter(kBracketedPaste));
+    try {
+        impl_->entered.push_back(impl_->modes.enter(kAlternateScreen));
+        impl_->entered.push_back(impl_->modes.enter(kCursorStyleBar));
+        impl_->entered.push_back(impl_->modes.enter(kMouseButtons));
+        impl_->entered.push_back(impl_->modes.enter(kMouseMotion));
+        impl_->entered.push_back(impl_->modes.enter(kMouseSgrCoordinates));
+        impl_->entered.push_back(impl_->modes.enter(kBracketedPaste));
+    } catch (...) {
+        restore();
+        throw;
+    }
 }
 
 TerminalSession::~TerminalSession() { restore(); }
@@ -108,7 +92,7 @@ void TerminalSession::restore() noexcept {
     if (!impl_->active) return;
     impl_->active = false;
     impl_->entered.clear();
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &impl_->original);
+    impl_->native->restore();
 }
 
 bool TerminalSession::active() const noexcept { return impl_->active; }

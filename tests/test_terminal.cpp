@@ -30,6 +30,32 @@
 
 namespace fs = std::filesystem;
 
+struct NativeTerminalState {
+    bool activation = true;
+    int activations = 0;
+    int restorations = 0;
+    std::string written;
+};
+
+class FakeNativeTerminal final : public ssg::NativeTerminal {
+  public:
+    explicit FakeNativeTerminal(NativeTerminalState& state) : state_{state} {}
+
+    bool activate() override {
+        ++state_.activations;
+        return state_.activation;
+    }
+
+    void restore() noexcept override { ++state_.restorations; }
+
+    void write(std::string_view bytes) noexcept override {
+        state_.written.append(bytes);
+    }
+
+  private:
+    NativeTerminalState& state_;
+};
+
 struct TerminalOp {
     enum class Kind { PrivateSet, PrivateReset, CursorStyle, Unrecognised };
     Kind kind = Kind::Unrecognised;
@@ -232,12 +258,51 @@ TEST(aFrameWithNoCaretLeavesTheCursorVisible) {
     ASSERT_TRUE(frame.find("\x1b[?25l") == 0);
 }
 
+TEST(terminalSessionRestoresAnActiveBackendExactlyOnce) {
+    NativeTerminalState state;
+    {
+        ssg::TerminalSession session{
+            std::make_unique<FakeNativeTerminal>(state)};
+        ASSERT_TRUE(session.active());
+        ASSERT_EQ(state.activations, 1);
+        ASSERT_EQ(state.written, std::string{kExpectedSetup} +
+                                     std::string{ssg::kBracketedPaste.enter});
+
+        session.restore();
+        ASSERT_FALSE(session.active());
+        ASSERT_EQ(state.restorations, 1);
+        ASSERT_EQ(state.written, std::string{kExpectedSetup} +
+                                     std::string{ssg::kBracketedPaste.enter} +
+                                     std::string{ssg::kBracketedPaste.leave} +
+                                     std::string{kExpectedRestore});
+        session.restore();
+        ASSERT_EQ(state.restorations, 1);
+    }
+    ASSERT_EQ(state.restorations, 1);
+}
+
+TEST(failedTerminalActivationHasNoRestoreDebt) {
+    NativeTerminalState state;
+    state.activation = false;
+    {
+        ssg::TerminalSession session{
+            std::make_unique<FakeNativeTerminal>(state)};
+        ASSERT_FALSE(session.active());
+        session.restore();
+    }
+    ASSERT_EQ(state.activations, 1);
+    ASSERT_EQ(state.restorations, 0);
+    ASSERT_TRUE(state.written.empty());
+}
+
 SSG_TEST_SUITE(test_terminal) {
     RUN(everyDeclaredModeLeavesExactlyWhatItEnters);
     RUN(modeStackReproducesTheCuratedSetupAndRestoreSequences);
     RUN(everyEnteredModeIsLeftInReverseOrder);
     RUN(kittyKeyboardModeRoundTripsThroughAGuard);
     RUN(aFrameWithNoCaretLeavesTheCursorVisible);
+    RUN(terminalSessionRestoresAnActiveBackendExactlyOnce);
+    RUN(failedTerminalActivationHasNoRestoreDebt);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

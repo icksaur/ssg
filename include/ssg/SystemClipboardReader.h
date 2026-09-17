@@ -66,8 +66,8 @@ struct SystemClipboardPaste {
 [[nodiscard]] SystemClipboardPaste planSystemClipboardPaste(
     const ClientOwnedInput& request, SystemClipboardRead read);
 
-// Runs optional desktop clipboard helpers with bounded time and output.
-// Every started helper is terminated if necessary and reaped before return.
+// Reads the native desktop clipboard while preserving the shared deadline,
+// size, UTF-8, and fallback status contract.
 class SystemClipboardReader {
 public:
     SystemClipboardReader();

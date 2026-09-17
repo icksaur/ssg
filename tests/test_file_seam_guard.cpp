@@ -197,17 +197,12 @@ constexpr PlatformHeaderOwner kPlatformHeaderOwners[] = {
      "implements the Linux filesystem watcher"},
     {"<sys/inotify.h>", "src/platform/linux/LinuxGitMetadataWatcher.cpp",
      "implements the Linux Git metadata watcher"},
-    {"<termios.h>", "src/Terminal.cpp",
+    {"<termios.h>", "src/platform/linux/LinuxTerminal.cpp",
      "implements Linux terminal state"},
     {"<git2.h>", "src/GitRepository.cpp",
      "implements the core-owned Git repository adapter"},
     {"<lua.h>", "src/LuaCommandHost.cpp",
      "implements the Lua adapter"},
-};
-
-constexpr std::string_view kTemporaryNativeFiles[] = {
-    "src/Terminal.cpp",
-    "src/SystemClipboardReader.cpp",
 };
 
 constexpr std::string_view kNativeSpellings[] = {
@@ -233,12 +228,6 @@ constexpr std::string_view kNativeSpellings[] = {
 
 bool startsWith(std::string_view value, std::string_view prefix) {
     return value.substr(0, prefix.size()) == prefix;
-}
-
-bool temporaryNativeFile(std::string_view path) {
-    return std::find(std::begin(kTemporaryNativeFiles),
-                     std::end(kTemporaryNativeFiles),
-                     path) != std::end(kTemporaryNativeFiles);
 }
 
 void platformHeadersStayInTheirAdapters() {
@@ -303,8 +292,7 @@ void nativeCallsStayInPlatformFamilies() {
             const auto relative =
                 fs::relative(it->path(), root).generic_string();
             if (startsWith(relative, "src/platform/linux/") ||
-                startsWith(relative, "src/platform/windows/") ||
-                temporaryNativeFile(relative)) {
+                startsWith(relative, "src/platform/windows/")) {
                 continue;
             }
             const auto source = readSource(it->path());

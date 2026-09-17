@@ -66,9 +66,22 @@ class TerminalModes {
     std::unique_ptr<Impl> impl_;
 };
 
+class NativeTerminal {
+  public:
+    virtual ~NativeTerminal() = default;
+
+    // A failed activation leaves no native state to restore.
+    [[nodiscard]] virtual bool activate() = 0;
+    virtual void restore() noexcept = 0;
+    virtual void write(std::string_view bytes) noexcept = 0;
+};
+
+[[nodiscard]] std::unique_ptr<NativeTerminal> makePlatformTerminal();
+
 class TerminalSession {
   public:
     TerminalSession();
+    explicit TerminalSession(std::unique_ptr<NativeTerminal> native);
     ~TerminalSession();
     TerminalSession(const TerminalSession&) = delete;
     TerminalSession& operator=(const TerminalSession&) = delete;

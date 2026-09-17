@@ -1154,6 +1154,12 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp
         ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
     )
+    if(NOT WIN32)
+        target_sources(ssg_terminal_objects PRIVATE
+            ${SSG_SOURCE_DIR}/src/platform/linux/LinuxTerminal.cpp
+            ${SSG_SOURCE_DIR}/src/platform/linux/LinuxSystemClipboardReader.cpp
+        )
+    endif()
     target_include_directories(ssg_terminal_objects PUBLIC
         "${SSG_SOURCE_DIR}/include")
     target_link_libraries(ssg_terminal_objects PUBLIC ssg_core)
@@ -1195,6 +1201,16 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         NAME test_system_clipboard_reader
         ENTRY ${SSG_SOURCE_DIR}/tests/test_system_clipboard_reader.cpp
         SYMBOL test_system_clipboard_reader)
+    if(NOT WIN32)
+        ssg_add_test_suite(
+            NAME test_linux_terminal
+            ENTRY ${SSG_SOURCE_DIR}/tests/platform/linux/test_linux_terminal.cpp
+            SYMBOL test_linux_terminal)
+        ssg_add_test_suite(
+            NAME test_linux_system_clipboard
+            ENTRY ${SSG_SOURCE_DIR}/tests/platform/linux/test_linux_system_clipboard.cpp
+            SYMBOL test_linux_system_clipboard)
+    endif()
 
     foreach(test_target
             test_terminal
@@ -1210,6 +1226,16 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             ssg_terminal_objects
             ssg_tui_objects)
     endforeach()
+    if(NOT WIN32)
+        foreach(test_target
+                test_linux_terminal
+                test_linux_system_clipboard)
+            ssg_test_include_directories(${test_target} PRIVATE
+                ${SSG_SOURCE_DIR}/tests)
+            ssg_test_link_libraries(${test_target} PRIVATE
+                ssg_terminal_objects)
+        endforeach()
+    endif()
 
 endif()
 
