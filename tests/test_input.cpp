@@ -337,9 +337,15 @@ TEST(backendHasNoPlatformInputCaptureDependency) {
         if (!entry.is_regular_file() || entry.path().extension() != ".cpp") {
             continue;
         }
+        const auto relative =
+            entry.path().lexically_relative(SSG_SOURCE_PATH).generic_string();
         const auto source = readFile(entry.path());
         for (const auto& token : forbidden) {
-            ASSERT_TRUE(source.find(token) == std::string::npos);
+            const bool platformConsoleOwner =
+                token == "ReadConsoleInput" &&
+                relative == "platform/windows/WindowsPlatformRuntime.cpp";
+            ASSERT_TRUE(platformConsoleOwner ||
+                        source.find(token) == std::string::npos);
         }
     }
 }

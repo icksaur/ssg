@@ -60,7 +60,7 @@
     {
       "name": "windows-msvc",
       "configurePreset": "windows-msvc",
-      "targets": ["ssg_terminal_objects"]
+      "targets": ["ssg_tests"]
     }
   ],
   "testPresets": [

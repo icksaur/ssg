@@ -59,11 +59,9 @@ std::vector<fs::path> archivedFiles(const fs::path& root) {
 }
 
 std::chrono::system_clock::time_point at(int year, int month, int day) {
-    std::tm parts{};
-    parts.tm_year = year - 1900;
-    parts.tm_mon = month - 1;
-    parts.tm_mday = day;
-    return std::chrono::system_clock::from_time_t(timegm(&parts));
+    return std::chrono::sys_days{
+        std::chrono::year{year} / std::chrono::month{static_cast<unsigned>(month)} /
+        std::chrono::day{static_cast<unsigned>(day)}};
 }
 
 // The archived bytes must equal the pre-delete bytes exactly, and must be

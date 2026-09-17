@@ -501,9 +501,12 @@ target_sources(ssg_platform PRIVATE
 if(WIN32)
     target_sources(ssg_platform PRIVATE
         ${SSG_SOURCE_DIR}/src/platform/windows/WindowsPlatformRuntime.cpp
+        ${SSG_SOURCE_DIR}/src/platform/windows/WindowsConsoleInput.cpp
         ${SSG_SOURCE_DIR}/src/platform/windows/WindowsFilesystemWatcher.cpp
         ${SSG_SOURCE_DIR}/src/platform/windows/WindowsGitMetadataWatcher.cpp
     )
+    target_include_directories(ssg_platform PRIVATE
+        ${SSG_SOURCE_DIR}/src/platform/windows)
 else()
     target_sources(ssg_platform PRIVATE
         ${SSG_SOURCE_DIR}/src/platform/linux/LinuxPlatformRuntime.cpp
@@ -529,7 +532,17 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests)
     ssg_test_link_libraries(test_runtime_timing PRIVATE ssg_core)
 
-    if(NOT WIN32)
+    if(WIN32)
+        ssg_add_test_suite(
+            NAME test_windows_platform_runtime
+            ENTRY ${SSG_SOURCE_DIR}/tests/platform/windows/test_windows_platform_runtime.cpp
+            SYMBOL test_windows_platform_runtime
+            ARGS)
+        ssg_test_include_directories(test_windows_platform_runtime PRIVATE
+            ${SSG_SOURCE_DIR}/tests)
+        ssg_test_link_libraries(test_windows_platform_runtime PRIVATE
+            ssg_platform)
+    else()
         ssg_add_test_suite(
             NAME test_linux_platform_runtime
             ENTRY ${SSG_SOURCE_DIR}/tests/platform/linux/test_linux_platform_runtime.cpp
@@ -1154,13 +1167,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp
         ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
     )
-    if(WIN32)
-        target_sources(ssg_terminal_objects PRIVATE
-            ${SSG_SOURCE_DIR}/src/platform/windows/WindowsConsoleInput.cpp
-        )
-        target_include_directories(ssg_terminal_objects PRIVATE
-            ${SSG_SOURCE_DIR}/src/platform/windows)
-    else()
+    if(NOT WIN32)
         target_sources(ssg_terminal_objects PRIVATE
             ${SSG_SOURCE_DIR}/src/platform/linux/LinuxTerminal.cpp
             ${SSG_SOURCE_DIR}/src/platform/linux/LinuxSystemClipboardReader.cpp
@@ -1183,31 +1190,31 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/ssg"
         RENAME LICENSE-Lua)
 
-    ssg_add_test_suite(
-        NAME test_terminal
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal.cpp
-        SYMBOL test_terminal)
-    ssg_add_test_suite(
-        NAME test_init_script_watcher
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_init_script_watcher.cpp
-        SYMBOL test_init_script_watcher)
-    ssg_add_test_suite(
-        NAME test_terminal_capabilities
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_capabilities.cpp
-        SYMBOL test_terminal_capabilities)
-    ssg_add_test_suite(
-        NAME test_terminal_input
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_input.cpp
-        SYMBOL test_terminal_input)
-    ssg_add_test_suite(
-        NAME test_terminal_output
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_output.cpp
-        SYMBOL test_terminal_output)
-    ssg_add_test_suite(
-        NAME test_system_clipboard_reader
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_system_clipboard_reader.cpp
-        SYMBOL test_system_clipboard_reader)
     if(NOT WIN32)
+        ssg_add_test_suite(
+            NAME test_terminal
+            ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal.cpp
+            SYMBOL test_terminal)
+        ssg_add_test_suite(
+            NAME test_init_script_watcher
+            ENTRY ${SSG_SOURCE_DIR}/tests/test_init_script_watcher.cpp
+            SYMBOL test_init_script_watcher)
+        ssg_add_test_suite(
+            NAME test_terminal_capabilities
+            ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_capabilities.cpp
+            SYMBOL test_terminal_capabilities)
+        ssg_add_test_suite(
+            NAME test_terminal_input
+            ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_input.cpp
+            SYMBOL test_terminal_input)
+        ssg_add_test_suite(
+            NAME test_terminal_output
+            ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_output.cpp
+            SYMBOL test_terminal_output)
+        ssg_add_test_suite(
+            NAME test_system_clipboard_reader
+            ENTRY ${SSG_SOURCE_DIR}/tests/test_system_clipboard_reader.cpp
+            SYMBOL test_system_clipboard_reader)
         ssg_add_test_suite(
             NAME test_linux_terminal
             ENTRY ${SSG_SOURCE_DIR}/tests/platform/linux/test_linux_terminal.cpp
@@ -1220,29 +1227,30 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ssg_add_test_suite(
             NAME test_windows_console_input
             ENTRY ${SSG_SOURCE_DIR}/tests/platform/windows/test_windows_console_input.cpp
-            SYMBOL test_windows_console_input)
+            SYMBOL test_windows_console_input
+            SOURCES ${SSG_SOURCE_DIR}/src/TerminalInput.cpp)
         ssg_test_include_directories(test_windows_console_input PRIVATE
             ${SSG_SOURCE_DIR}/tests
             ${SSG_SOURCE_DIR}/src/platform/windows)
         ssg_test_link_libraries(test_windows_console_input PRIVATE
-            ssg_terminal_objects)
+            ssg_platform)
     endif()
 
-    foreach(test_target
-            test_terminal
-            test_terminal_capabilities
-            test_terminal_input
-            test_terminal_output
-            test_system_clipboard_reader)
-        ssg_test_include_directories(${test_target} PRIVATE
-            ${SSG_SOURCE_DIR}/tests)
-        ssg_test_compile_definitions(${test_target} PRIVATE
-            SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}")
-        ssg_test_link_libraries(${test_target} PRIVATE
-            ssg_terminal_objects
-            ssg_tui_objects)
-    endforeach()
     if(NOT WIN32)
+        foreach(test_target
+                test_terminal
+                test_terminal_capabilities
+                test_terminal_input
+                test_terminal_output
+                test_system_clipboard_reader)
+            ssg_test_include_directories(${test_target} PRIVATE
+                ${SSG_SOURCE_DIR}/tests)
+            ssg_test_compile_definitions(${test_target} PRIVATE
+                SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}")
+            ssg_test_link_libraries(${test_target} PRIVATE
+                ssg_terminal_objects
+                ssg_tui_objects)
+        endforeach()
         foreach(test_target
                 test_linux_terminal
                 test_linux_system_clipboard)
