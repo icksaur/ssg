@@ -26,10 +26,10 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Configure
         run: cmake --preset windows-msvc
-      - name: Build staged Windows tests
+      - name: Build staged Windows application and tests
         run: cmake --build --preset windows-msvc
       - name: Run staged Windows platform tests
-        run: ctest --test-dir build-windows -C Release --output-on-failure -R "test_platform_runtime|test_windows_platform_runtime|test_windows_console_input|ssg_watcher_tests"
+        run: ctest --test-dir build-windows -C Release --output-on-failure -R "test_platform_runtime|test_windows_platform_runtime|test_windows_console_input|test_terminal|test_windows_terminal|test_system_clipboard_reader|test_windows_system_clipboard|ssg_watcher_tests"
 
   sanitizer:
     runs-on: ubuntu-latest

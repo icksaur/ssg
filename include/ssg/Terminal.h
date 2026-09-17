@@ -74,6 +74,9 @@ class NativeTerminal {
     [[nodiscard]] virtual bool activate() = 0;
     virtual void restore() noexcept = 0;
     virtual void write(std::string_view bytes) noexcept = 0;
+    [[nodiscard]] virtual bool supportsKeyboardProtocol() const noexcept {
+        return true;
+    }
 };
 
 [[nodiscard]] std::unique_ptr<NativeTerminal> makePlatformTerminal();

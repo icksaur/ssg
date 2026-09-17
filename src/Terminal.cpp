@@ -98,7 +98,10 @@ void TerminalSession::restore() noexcept {
 bool TerminalSession::active() const noexcept { return impl_->active; }
 
 void TerminalSession::enableKeyboardProtocol() {
-    if (!impl_->active || impl_->keyboardProtocolEntered) return;
+    if (!impl_->active || impl_->keyboardProtocolEntered ||
+        !impl_->native->supportsKeyboardProtocol()) {
+        return;
+    }
     impl_->entered.push_back(impl_->modes.enter(kKeyboardProtocol));
     impl_->keyboardProtocolEntered = true;
 }
