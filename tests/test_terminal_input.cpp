@@ -15,6 +15,7 @@
 #include <ssg/InitScriptWatcher.h>
 
 #include "test_helpers.h"
+#include "fixtures/platform_input_cases.h"
 #include "grid_test_frame.h"
 
 #include <algorithm>
@@ -31,6 +32,15 @@
 #include <vector>
 
 namespace fs = std::filesystem;
+
+TEST(canonicalPlatformInputCasesDecodeToSharedEvents) {
+    for (const auto& input : ssg::test::platformInputCases()) {
+        std::size_t consumed = 0;
+        const auto decoded = ssg::decodeInput(input.bytes, true, consumed);
+        ASSERT_EQ(consumed, input.bytes.size());
+        ASSERT_TRUE(ssg::test::sameDecoded(decoded, input.expected));
+    }
+}
 
 TEST(aClickOnAnExternalActionRoutesThroughPointerTargetsToSelectThenAct) {
     // A click on an external-modification action first selects the runtime-minted
@@ -1726,6 +1736,7 @@ TEST(edgeScrollDecidesDirectionAtTheContentEdges) {
 }
 
 SSG_TEST_SUITE(test_terminal_input) {
+    RUN(canonicalPlatformInputCasesDecodeToSharedEvents);
     RUN(aClickOnAnExternalActionRoutesThroughPointerTargetsToSelectThenAct);
     RUN(decodeInputMapsPrintablesAndNamedKeys);
     RUN(decodeInputModifiedArrows);

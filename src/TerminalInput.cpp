@@ -527,15 +527,17 @@ Decoded decodeInputRaw(std::string_view bytes, bool inputExhausted,
             ++pos;
             if (!parseField(cy)) return {DecodeStatus::none, {}, {}, 0};
             if (pos != end) return {DecodeStatus::none, {}, {}, 0};
-            if (cb == 64 || cb == 65) {
+            const auto wheelCode = cb & ~8;
+            if (wheelCode == 64 || wheelCode == 65) {
                 Decoded decoded;
                 decoded.status = DecodeStatus::scroll;
-                decoded.scroll = cb == 64 ? -3 : 3;
+                decoded.scroll = wheelCode == 64 ? -3 : 3;
                 // Carry the pointer position so the app can route the wheel to
                 // the region under the cursor (the panel scrolls, not just the
                 // editor).
                 decoded.pointer.column = static_cast<int>(cx > 0 ? cx - 1 : 0);
                 decoded.pointer.row = static_cast<int>(cy > 0 ? cy - 1 : 0);
+                decoded.pointer.alt = (cb & 8) != 0;
                 return decoded;
             }
             if ((cb & 64) != 0) return {DecodeStatus::none, {}, {}, 0};  // other wheel/ext

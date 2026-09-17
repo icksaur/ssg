@@ -1154,7 +1154,13 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp
         ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
     )
-    if(NOT WIN32)
+    if(WIN32)
+        target_sources(ssg_terminal_objects PRIVATE
+            ${SSG_SOURCE_DIR}/src/platform/windows/WindowsConsoleInput.cpp
+        )
+        target_include_directories(ssg_terminal_objects PRIVATE
+            ${SSG_SOURCE_DIR}/src/platform/windows)
+    else()
         target_sources(ssg_terminal_objects PRIVATE
             ${SSG_SOURCE_DIR}/src/platform/linux/LinuxTerminal.cpp
             ${SSG_SOURCE_DIR}/src/platform/linux/LinuxSystemClipboardReader.cpp
@@ -1210,6 +1216,16 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             NAME test_linux_system_clipboard
             ENTRY ${SSG_SOURCE_DIR}/tests/platform/linux/test_linux_system_clipboard.cpp
             SYMBOL test_linux_system_clipboard)
+    else()
+        ssg_add_test_suite(
+            NAME test_windows_console_input
+            ENTRY ${SSG_SOURCE_DIR}/tests/platform/windows/test_windows_console_input.cpp
+            SYMBOL test_windows_console_input)
+        ssg_test_include_directories(test_windows_console_input PRIVATE
+            ${SSG_SOURCE_DIR}/tests
+            ${SSG_SOURCE_DIR}/src/platform/windows)
+        ssg_test_link_libraries(test_windows_console_input PRIVATE
+            ssg_terminal_objects)
     endif()
 
     foreach(test_target
