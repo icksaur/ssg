@@ -19,17 +19,20 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
 
   windows-msvc-stage:
-    continue-on-error: true
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Configure
         run: cmake --preset windows-msvc
-      - name: Build staged Windows application and tests
+      - name: Build
         run: cmake --build --preset windows-msvc
-      - name: Run staged Windows platform tests
-        run: ctest --test-dir build-windows -C Release --output-on-failure -R "test_platform_runtime|test_windows_platform_runtime|test_windows_console_input|test_terminal|test_windows_terminal|test_system_clipboard_reader|test_windows_system_clipboard|ssg_watcher_tests"
+      - name: Platform interface gate
+        run: ctest --preset windows-msvc -R "^test_platform_interface$"
+      - name: Windows watcher gates
+        run: ctest --preset windows-msvc -R "^ssg_watcher_tests$"
+      - name: Full Windows test suite
+        run: ctest --preset windows-msvc
 
   sanitizer:
     runs-on: ubuntu-latest

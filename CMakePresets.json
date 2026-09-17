@@ -41,8 +41,8 @@
     },
     {
       "name": "windows-msvc",
-      "displayName": "Windows MSVC (staged portability build)",
-      "description": "MSVC build used while Windows support expands target by target.",
+      "displayName": "Windows MSVC",
+      "description": "Required native Windows build.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-windows",
       "cacheVariables": {
@@ -59,8 +59,7 @@
     { "name": "sanitize", "configurePreset": "sanitize" },
     {
       "name": "windows-msvc",
-      "configurePreset": "windows-msvc",
-      "targets": ["ssg_app", "ssg_tests"]
+      "configurePreset": "windows-msvc"
     }
   ],
   "testPresets": [
@@ -88,6 +87,12 @@
       "configurePreset": "sanitize",
       "output": { "outputOnFailure": true },
       "execution": { "jobs": 20 }
+    },
+    {
+      "name": "windows-msvc",
+      "configurePreset": "windows-msvc",
+      "output": { "outputOnFailure": true },
+      "execution": { "jobs": 4, "noTestsAction": "error" }
     }
   ]
 }
