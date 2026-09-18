@@ -18,25 +18,47 @@ namespace {
 using namespace ssg;
 namespace fs = std::filesystem;
 
+#ifdef _WIN32
+constexpr std::string_view nullDevice = "NUL";
+
+FILE* openCommand(const char* command) {
+    return _popen(command, "r");
+}
+
+int closeCommand(FILE* pipe) {
+    return _pclose(pipe);
+}
+#else
+constexpr std::string_view nullDevice = "/dev/null";
+
+FILE* openCommand(const char* command) {
+    return popen(command, "r");
+}
+
+int closeCommand(FILE* pipe) {
+    return pclose(pipe);
+}
+#endif
+
 std::string run(const fs::path& root, std::string_view command) {
     auto full = "git -C \"" + root.string() + "\" " + std::string{command} +
-                " 2>/dev/null";
+                " 2>" + std::string{nullDevice};
     std::array<char, 4096> buffer{};
     std::string output;
-    auto* pipe = popen(full.c_str(), "r");
+    auto* pipe = openCommand(full.c_str());
     if (!pipe) {
         return output;
     }
     while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe)) {
         output += buffer.data();
     }
-    (void)pclose(pipe);
+    (void)closeCommand(pipe);
     return output;
 }
 
 int runStatus(const fs::path& root, std::string_view command) {
     auto full = "git -C \"" + root.string() + "\" " + std::string{command} +
-                " >/dev/null 2>&1";
+                " >" + std::string{nullDevice} + " 2>&1";
     return std::system(full.c_str());
 }
 
