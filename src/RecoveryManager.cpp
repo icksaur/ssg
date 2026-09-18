@@ -810,11 +810,12 @@ private:
         try {
             for (std::size_t index = 0;
                  index != stored.record.affectedPaths.size(); ++index) {
-                const auto kind =
+                const auto snapshotType =
                     snapshotKind(stored.record.affectedPaths[index]);
-                stored.snapshots.push_back(kind);
+                stored.snapshots.push_back(snapshotType);
                 copyNode(stored.record.affectedPaths[index],
-                          staging / "artifacts" / std::to_string(index), kind);
+                          staging / "artifacts" / std::to_string(index),
+                          snapshotType);
             }
             auto manifest = encodeManifest(stored);
             writeBytes(staging / "manifest.bin", manifest);
@@ -838,8 +839,10 @@ private:
         }
 
         if (stored.record.storedBytes > config_.maximumBytes) {
-            const auto removed = removeTreeIfPresent(installed);
-            if (!removed.ok()) throw std::runtime_error(removed.message);
+            const auto installationRemoval = removeTreeIfPresent(installed);
+            if (!installationRemoval.ok()) {
+                throw std::runtime_error(installationRemoval.message);
+            }
             throw BudgetExceeded(
                 "recovery record exceeds the configured byte budget");
         }
