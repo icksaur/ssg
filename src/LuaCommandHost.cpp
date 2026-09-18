@@ -115,28 +115,28 @@ struct LuaCommandHost::Impl {
         lua_pushlightuserdata(state, this);
         lua_setfield(state, LUA_REGISTRYINDEX, kHostRegistryKey);
 
-        static_assert(std::size(LuaCommandHost::kApiFunctions) == 2,
-                      "add the new API function's installer below");
-        lua_pushlightuserdata(state, this);
-        lua_pushcclosure(state, &Impl::commandCallback, 1);
-        lua_setglobal(state, "__ssg_command");
-        lua_pushlightuserdata(state, this);
-        lua_pushcclosure(state, &Impl::registerCallback, 1);
-        lua_setglobal(state, "__ssg_register");
-
-        constexpr std::string_view bridge =
-            "local command = __ssg_command\n"
-            "local register = __ssg_register\n"
-            "__ssg_command = nil\n"
-            "__ssg_register = nil\n"
+        std::string bridge;
+        for (const auto& api : LuaCommandHost::kApiFunctions) {
+            const auto name = api.name;
+            const std::string temporary{"__ssg_" + std::string{name}};
+            lua_pushlightuserdata(state, this);
+            lua_pushcclosure(state, callbackFor(api.function), 1);
+            lua_setglobal(state, temporary.c_str());
+            bridge += "local " + std::string{name} + " = " + temporary + "\n";
+            bridge += temporary + " = nil\n";
+        }
+        bridge +=
             "local function checked(call, ...)\n"
             "  local ok, message = call(...)\n"
             "  if not ok then error(message, 0) end\n"
             "end\n"
-            "ssg = {\n"
-            "  command = function(...) checked(command, ...) end,\n"
-            "  register = function(...) checked(register, ...) end,\n"
-            "}\n";
+            "ssg = {}\n";
+        for (const auto& api : LuaCommandHost::kApiFunctions) {
+            const auto name = api.name;
+            bridge += "ssg." + std::string{name} +
+                      " = function(...) checked(" + std::string{name} +
+                      ", ...) end\n";
+        }
         if (luaL_loadbuffer(state, bridge.data(), bridge.size(),
                             "ssg-api") != LUA_OK ||
             lua_pcall(state, 0, 0, 0) != LUA_OK) {
@@ -148,6 +148,16 @@ struct LuaCommandHost::Impl {
             lua_settop(state, 0);
             throw std::runtime_error{message};
         }
+    }
+
+    static lua_CFunction callbackFor(LuaCommandHost::ApiFunction function) {
+        switch (function) {
+            case LuaCommandHost::ApiFunction::Command:
+                return &Impl::commandCallback;
+            case LuaCommandHost::ApiFunction::Register:
+                return &Impl::registerCallback;
+        }
+        throw std::logic_error{"unknown Lua API function"};
     }
 
     static Impl& callbackHost(lua_State* callbackState) {

@@ -38,7 +38,7 @@ TEST(configDocDescribesEveryLuaApiFunction) {
     const auto doc = readFile(SSG_CONFIG_DOC_PATH);
     ASSERT_FALSE(doc.empty());
     for (const auto& function : ssg::LuaCommandHost::kApiFunctions) {
-        const std::string needle = "ssg." + std::string{function};
+        const std::string needle = "ssg." + std::string{function.name};
         ASSERT_TRUE(doc.find(needle) != std::string::npos);
     }
 }

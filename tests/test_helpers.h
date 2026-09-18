@@ -89,6 +89,7 @@ inline int runGitStatus(const std::filesystem::path& root,
 
 inline int passed = 0;
 inline int failed = 0;
+inline int skipped = 0;
 
 namespace ssg::test {
 
@@ -213,6 +214,14 @@ inline CommandResult dragDocument(Editor& editor, std::uint64_t anchor,
     do {                                                      \
         std::cout << "  " << #name << std::endl;              \
         name();                                               \
+    } while (0)
+
+#define SKIP(reason)                                                   \
+    do {                                                               \
+        std::cout << "  SKIP: " << reason << " at " << __FILE__ << ":" \
+                  << __LINE__ << std::endl;                             \
+        ++skipped;                                                     \
+        return;                                                        \
     } while (0)
 
 // Equality: requires operator== on the two operands.

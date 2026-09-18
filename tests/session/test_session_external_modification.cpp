@@ -548,21 +548,21 @@ TEST(anEventObservingANonRegularOrUnreadablePathAlwaysRaises) {
         ASSERT_EQ(files.size(), 1U);
         ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
     }
-    // A broken symlink where a regular file was: exists() follows the link and is
-    // false, indistinguishable there from a true absence, so the overflow path must
-    // detect the present symlink entry (lstat) and still raise.
-    {
-        auto session = Session::open("unknown_symlink_overflow", "hi\n", true);
-        std::filesystem::remove(session.workspacePath("note.txt"));
-        std::error_code linkCode;
-        std::filesystem::create_symlink("does-not-exist",
-                                        session.workspacePath("note.txt"), linkCode);
-        if (linkCode) return;
-        session.runtime->external.reconcileAllOpenDocumentsAgainstDisk();
-        const auto files = externalFiles(*session.runtime);
-        ASSERT_EQ(files.size(), 1U);
-        ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
+}
+
+TEST(aBrokenSymlinkObservationRaisesOnTheOverflowPath) {
+    auto session = Session::open("unknown_symlink_overflow", "hi\n", true);
+    std::filesystem::remove(session.workspacePath("note.txt"));
+    std::error_code linkCode;
+    std::filesystem::create_symlink(
+        "does-not-exist", session.workspacePath("note.txt"), linkCode);
+    if (linkCode) {
+        SKIP("symlink creation is unavailable: " + linkCode.message());
     }
+    session.runtime->external.reconcileAllOpenDocumentsAgainstDisk();
+    const auto files = externalFiles(*session.runtime);
+    ASSERT_EQ(files.size(), 1U);
+    ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
 }
 
 TEST(anUnknownObservationRaisesEvenAfterAMissingBaselineOnBothPaths) {
@@ -841,6 +841,7 @@ SSG_TEST_SUITE(test_session_external_modification) {
     RUN(keepBufferAdvancesTheExternalBaselineToTheDismissedDiskState);
     RUN(keepBufferOnARemovedFileSetsTheExternalBaselineMissing);
     RUN(anEventObservingANonRegularOrUnreadablePathAlwaysRaises);
+    RUN(aBrokenSymlinkObservationRaisesOnTheOverflowPath);
     RUN(anUnknownObservationRaisesEvenAfterAMissingBaselineOnBothPaths);
     RUN(aStaleOrdinaryRemoveWhosePathReappearedNonRegularRaises);
     RUN(aStaleOrdinaryRemoveWhosePathReappearedRegularRaisesAsModified);
