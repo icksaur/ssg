@@ -8,6 +8,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(WIN32)
+    add_compile_definitions(NOMINMAX)
+endif()
+
 # Use ccache as the compiler launcher when available.  Fresh build trees (e.g.
 # per-worktree builds) then reuse cached object files instead of recompiling every
 # object, which turns a clean build of an already-seen tree into a near-instant

@@ -187,9 +187,6 @@ OperationResult treeCommand(Editor& runtime, std::string_view id) {
     if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); return success(); }
     if (id == "tree.activate") {
         const auto binding = runtime.tree.activeProviderBinding();
-        const auto providerKind =
-            binding ? std::optional<TreeProviderKind>{binding->kind}
-                    : std::nullopt;
         auto selected = runtime.tree.selectedNode();
         if (!selected) return failure("no tree node is selected");
         if (selected->expandable) {
@@ -198,7 +195,8 @@ OperationResult treeCommand(Editor& runtime, std::string_view id) {
             }
             return runtime.toggleTreeExpanded(binding->id, selected->id);
         }
-        if (providerKind == TreeProviderKind::Git && selected->workspacePath) {
+        if (binding && binding->kind == TreeProviderKind::Git &&
+            selected->workspacePath) {
             const auto diffView = runtime.diff.viewState();
             auto file = std::find_if(
                 diffView.files.begin(), diffView.files.end(),
@@ -215,7 +213,7 @@ OperationResult treeCommand(Editor& runtime, std::string_view id) {
                                                        NavigationClass::User);
             }
         }
-        if (providerKind == TreeProviderKind::Search) {
+        if (binding && binding->kind == TreeProviderKind::Search) {
             if (!selected->workspacePath || !selected->sourceLine ||
                 !selected->sourceColumn) {
                 return failure("search result has no navigation target");

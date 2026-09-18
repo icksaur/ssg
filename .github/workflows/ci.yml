@@ -8,7 +8,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
       - name: Build
@@ -21,7 +21,7 @@ jobs:
   windows-msvc-stage:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Configure
         run: cmake --preset windows-msvc
@@ -37,10 +37,10 @@ jobs:
   sanitizer:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Configure ASan and UBSan
         run: cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug -DSSG_SANITIZE=ON
       - name: Build
-        run: cmake --build build-sanitize --parallel
+        run: cmake --build build-sanitize --parallel 2
       - name: Sanitizer gates
         run: ctest --test-dir build-sanitize --output-on-failure
