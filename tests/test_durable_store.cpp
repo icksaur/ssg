@@ -32,7 +32,8 @@ private:
 
 std::chrono::system_clock::time_point moment(std::int64_t nanoseconds) {
     return std::chrono::system_clock::time_point{
-        std::chrono::nanoseconds{nanoseconds}};
+        std::chrono::duration_cast<std::chrono::system_clock::duration>(
+            std::chrono::nanoseconds{nanoseconds})};
 }
 
 TEST(entryNamesRoundTripCanonicalAndLegacyTimestamps) {
