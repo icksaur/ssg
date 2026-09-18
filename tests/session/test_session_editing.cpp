@@ -151,7 +151,8 @@ TEST(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork) {
 
     (void)runtime.workspaceSearch("a");
     while (runtime.workspaceSearchPending()) runtime.advanceWorkspaceSearch();
-    active = ssg::activeTreeProvider(runtime.tree.viewState());
+    treeView = runtime.tree.viewState();
+    active = ssg::activeTreeProvider(treeView);
     ASSERT_EQ(active->nodes.size(), std::size_t{3});
 
     ASSERT_EQ(key(ssg::KeyCode::ArrowUp).outcome,

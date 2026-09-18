@@ -112,8 +112,8 @@ TEST(branchFieldProjectsWhenKnownAndDropsWhenAbsentOrEmpty) {
                 nullptr);
 
     context.currentBranch = std::string{"feature/x"};
-    const auto* branch =
-        find(ssg::projectStatusFields(context).header, "branch");
+    const auto projection = ssg::projectStatusFields(context);
+    const auto* branch = find(projection.header, "branch");
     ASSERT_TRUE(branch != nullptr);
     if (branch) {
         ASSERT_EQ(branch->value, std::string{"\xE2\x8E\x87 feature/x"});
