@@ -133,7 +133,9 @@ DurableStore::entryTimestamp(std::string_view name) {
             name.data(), name.data() + kLegacyTimestampLength, nanoseconds);
         if (parsed.ec == std::errc{}) {
             return std::chrono::system_clock::time_point{
-                std::chrono::nanoseconds{nanoseconds}};
+                std::chrono::duration_cast<
+                    std::chrono::system_clock::duration>(
+                    std::chrono::nanoseconds{nanoseconds})};
         }
     }
 
@@ -164,7 +166,9 @@ DurableStore::entryTimestamp(std::string_view name) {
             name.data() + fractionStart,
             name.data() + fractionStart + kFractionLength, nanoseconds);
         if (parsed.ec != std::errc{}) return std::nullopt;
-        created += std::chrono::nanoseconds{nanoseconds};
+        created +=
+            std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                std::chrono::nanoseconds{nanoseconds});
     }
     return created;
 }
