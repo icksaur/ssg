@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
+if(POLICY CMP0092)
+    cmake_policy(SET CMP0092 NEW)
+endif()
 project(ssg LANGUAGES C CXX)
 include(GNUInstallDirs)
 
@@ -9,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(WIN32)
-    add_compile_definitions(NOMINMAX)
+    add_compile_definitions(NOMINMAX _CRT_SECURE_NO_WARNINGS)
 endif()
 
 # Use ccache as the compiler launcher when available.  Fresh build trees (e.g.

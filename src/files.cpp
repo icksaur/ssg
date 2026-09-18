@@ -12,7 +12,7 @@ namespace {
 
 bool mutatesTheActiveDocumentsFile(FileCommand command) {
     const auto& descriptors = kFileCommands;
-    const auto* found = std::find_if(
+    const auto found = std::find_if(
         descriptors.begin(), descriptors.end(),
         [&](const FileCommandDescriptor& entry) {
             return entry.command == command;

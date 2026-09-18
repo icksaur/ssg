@@ -12,7 +12,7 @@
 
 namespace ssg {
 
-class Editor;
+struct Editor;
 
 // The editor's Lua state, and everything that connects it to the editor.
 //
