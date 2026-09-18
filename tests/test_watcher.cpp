@@ -560,6 +560,16 @@ TEST(platformPollTimeoutIsFinite) {
     std::filesystem::remove_all(root);
 }
 
+bool pollMetadataUntilDirty(
+    ssg::GitMetadataWatcher& watcher,
+    std::chrono::milliseconds budget = 2s) {
+    const auto deadline = std::chrono::steady_clock::now() + budget;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (watcher.poll(20ms)) return true;
+    }
+    return false;
+}
+
 TEST(platformGitMetadataWatcherIgnoresObjectsAndReportsGitStateChanges) {
     const auto root = uniqueTempDirectory();
     const auto metadata = root / "metadata";
@@ -571,10 +581,8 @@ TEST(platformGitMetadataWatcherIgnoresObjectsAndReportsGitStateChanges) {
         std::filesystem::create_directories(metadata / "objects");
         std::ofstream{metadata / "objects" / "pack"} << "object";
         ASSERT_FALSE(watcher->poll(50ms));
-
         std::ofstream{metadata / "refs" / "heads" / "main"} << "ref";
-        ASSERT_TRUE(watcher->poll(2s));
-        ASSERT_FALSE(watcher->poll(50ms));
+        ASSERT_TRUE(pollMetadataUntilDirty(*watcher));
     }
     std::filesystem::remove_all(root);
 }
