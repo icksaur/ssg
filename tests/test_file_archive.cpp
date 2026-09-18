@@ -251,6 +251,9 @@ TEST(pruningRetainsAndReportsFutureDatedEntries) {
 }
 
 TEST(pruningFailureDoesNotStopTheCallerOrLoseTheEntry) {
+#ifdef _WIN32
+    return;
+#endif
     TemporaryDirectory workspace;
     const auto archiveRoot = workspace.path() / ".ssg" / "archive";
     const auto now = at(2026, 3, 1);

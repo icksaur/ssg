@@ -18,6 +18,7 @@
 //   int main() { RUN(my_test); ... }
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <initializer_list>
 #include <iostream>
@@ -72,6 +73,18 @@ inline std::filesystem::path testRuntimePath(
         source = std::move(parent);
     }
     throw std::runtime_error{"test source is outside the repository test tree"};
+}
+
+inline int runGitStatus(const std::filesystem::path& root,
+                        std::string_view command) {
+#ifdef _WIN32
+    constexpr std::string_view nullDevice = "NUL";
+#else
+    constexpr std::string_view nullDevice = "/dev/null";
+#endif
+    auto full = "git -C \"" + root.string() + "\" " + std::string{command} +
+                " >" + std::string{nullDevice} + " 2>&1";
+    return std::system(full.c_str());
 }
 
 inline int passed = 0;
@@ -198,7 +211,7 @@ inline CommandResult dragDocument(Editor& editor, std::uint64_t anchor,
 
 #define RUN(name)                                             \
     do {                                                      \
-        std::cout << "  " << #name << "\n";                  \
+        std::cout << "  " << #name << std::endl;              \
         name();                                               \
     } while (0)
 

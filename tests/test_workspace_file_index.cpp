@@ -17,9 +17,7 @@ using namespace ssg;
 namespace fs = std::filesystem;
 
 int runStatus(const fs::path& root, std::string_view command) {
-    auto full = "git -C \"" + root.string() + "\" " + std::string{command} +
-                " >/dev/null 2>&1";
-    return std::system(full.c_str());
+    return runGitStatus(root, command);
 }
 
 fs::path makeUniqueRoot(std::string_view label) {

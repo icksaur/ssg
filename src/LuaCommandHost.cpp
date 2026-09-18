@@ -115,18 +115,39 @@ struct LuaCommandHost::Impl {
         lua_pushlightuserdata(state, this);
         lua_setfield(state, LUA_REGISTRYINDEX, kHostRegistryKey);
 
-        lua_newtable(state);
-        // Installed from the same list the documentation check reads, so a
-        // function cannot be exposed without a place to describe it.
         static_assert(std::size(LuaCommandHost::kApiFunctions) == 2,
                       "add the new API function's installer below");
         lua_pushlightuserdata(state, this);
         lua_pushcclosure(state, &Impl::commandCallback, 1);
-        lua_setfield(state, -2, LuaCommandHost::kApiFunctions[0].data());
+        lua_setglobal(state, "__ssg_command");
         lua_pushlightuserdata(state, this);
         lua_pushcclosure(state, &Impl::registerCallback, 1);
-        lua_setfield(state, -2, LuaCommandHost::kApiFunctions[1].data());
-        lua_setglobal(state, "ssg");
+        lua_setglobal(state, "__ssg_register");
+
+        constexpr std::string_view bridge =
+            "local command = __ssg_command\n"
+            "local register = __ssg_register\n"
+            "__ssg_command = nil\n"
+            "__ssg_register = nil\n"
+            "local function checked(call, ...)\n"
+            "  local ok, message = call(...)\n"
+            "  if not ok then error(message, 0) end\n"
+            "end\n"
+            "ssg = {\n"
+            "  command = function(...) checked(command, ...) end,\n"
+            "  register = function(...) checked(register, ...) end,\n"
+            "}\n";
+        if (luaL_loadbuffer(state, bridge.data(), bridge.size(),
+                            "ssg-api") != LUA_OK ||
+            lua_pcall(state, 0, 0, 0) != LUA_OK) {
+            std::string message{"failed to install Lua API"};
+            if (const char* error = lua_tostring(state, -1); error != nullptr) {
+                message += ": ";
+                message += error;
+            }
+            lua_settop(state, 0);
+            throw std::runtime_error{message};
+        }
     }
 
     static Impl& callbackHost(lua_State* callbackState) {
@@ -140,9 +161,17 @@ struct LuaCommandHost::Impl {
         {
             try {
                 std::size_t length = 0;
-                char const* idData =
-                    luaL_checklstring(callbackState, 1, &length);
-                std::string id{idData, length};
+                std::string id;
+                if (lua_type(callbackState, 1) != LUA_TSTRING) {
+                    host.pendingError = LuaError::InvalidScript;
+                    host.callbackMessage =
+                        "ssg.command's first argument must be a string";
+                    raiseError = true;
+                } else {
+                    char const* idData =
+                        lua_tolstring(callbackState, 1, &length);
+                    id.assign(idData, length);
+                }
 
                 // ssg.command(id, args): `args` is an OPTIONAL second Lua
                 // table argument, decoded into a flat string->string map
@@ -240,11 +269,13 @@ struct LuaCommandHost::Impl {
             }
         }
         if (!raiseError) {
-            return 0;
+            lua_pushboolean(callbackState, 1);
+            return 1;
         }
+        lua_pushboolean(callbackState, 0);
         lua_pushlstring(callbackState, host.callbackMessage.data(),
                         host.callbackMessage.size());
-        return lua_error(callbackState);
+        return 2;
     }
 
     static int registerCallback(lua_State* callbackState) noexcept {
@@ -254,29 +285,40 @@ struct LuaCommandHost::Impl {
         {
             try {
                 std::size_t length = 0;
-                char const* idData =
-                    luaL_checklstring(callbackState, 1, &length);
-                std::string id{idData, length};
-                char const* labelData =
-                    luaL_checklstring(callbackState, 2, &length);
-                std::string label{labelData, length};
-                luaL_checktype(callbackState, 3, LUA_TFUNCTION);
-                if (id.empty()) {
+                std::string id;
+                std::string label;
+                if (lua_type(callbackState, 1) != LUA_TSTRING ||
+                    lua_type(callbackState, 2) != LUA_TSTRING ||
+                    lua_type(callbackState, 3) != LUA_TFUNCTION) {
+                    host.pendingError = LuaError::InvalidScript;
+                    host.callbackMessage =
+                        "ssg.register requires string id, string label, and "
+                        "function arguments";
+                    raiseError = true;
+                } else {
+                    char const* idData =
+                        lua_tolstring(callbackState, 1, &length);
+                    id.assign(idData, length);
+                    char const* labelData =
+                        lua_tolstring(callbackState, 2, &length);
+                    label.assign(labelData, length);
+                }
+                if (!raiseError && id.empty()) {
                     host.pendingError = LuaError::RuntimeFault;
                     host.callbackMessage =
                         "plugin command ID must not be empty";
                     raiseError = true;
-                } else if (label.empty()) {
+                } else if (!raiseError && label.empty()) {
                     host.pendingError = LuaError::RuntimeFault;
                     host.callbackMessage =
                         "plugin command label must not be empty";
                     raiseError = true;
-                } else if (host.registrationStack.empty()) {
+                } else if (!raiseError && host.registrationStack.empty()) {
                     host.pendingError = LuaError::RuntimeFault;
                     host.callbackMessage =
                         "plugin commands may only be registered while evaluating";
                     raiseError = true;
-                } else {
+                } else if (!raiseError) {
                     auto& transaction = host.registrationStack.back();
                     // Only THIS evaluation's registrations are checked.  The
                     // previously published generation is retired wholesale when
@@ -309,9 +351,10 @@ struct LuaCommandHost::Impl {
             }
         }
         if (raiseError) {
+            lua_pushboolean(callbackState, 0);
             lua_pushlstring(callbackState, host.callbackMessage.data(),
                             host.callbackMessage.size());
-            return lua_error(callbackState);
+            return 2;
         }
         if (storeFunction) {
             lua_pushvalue(callbackState, 3);
@@ -320,7 +363,8 @@ struct LuaCommandHost::Impl {
             host.registrationStack.back().commands.back().functionReference =
                 reference;
         }
-        return 0;
+        lua_pushboolean(callbackState, 1);
+        return 1;
     }
 
     static void budgetHook(lua_State* callbackState,

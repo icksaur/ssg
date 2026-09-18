@@ -413,6 +413,22 @@ FileIoResult last_error_failure(DWORD error, std::string_view operation,
                 std::system_category().message(static_cast<int>(error))};
 }
 
+bool hasNonDirectoryAncestor(std::filesystem::path path) {
+    std::error_code error;
+    for (path = path.parent_path(); !path.empty();
+         path = path.parent_path()) {
+        const auto status = std::filesystem::symlink_status(path, error);
+        if (error == std::errc::no_such_file_or_directory) {
+            error.clear();
+            continue;
+        }
+        if (error) return true;
+        if (status.type() == std::filesystem::file_type::not_found) continue;
+        return !std::filesystem::is_directory(status);
+    }
+    return false;
+}
+
 } // namespace
 
 FileReadResult readFile(const std::filesystem::path& path) {
@@ -421,8 +437,14 @@ FileReadResult readFile(const std::filesystem::path& path) {
         CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
                     nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
+        const auto error = GetLastError();
+        if (error == ERROR_PATH_NOT_FOUND && hasNonDirectoryAncestor(path)) {
+            return {FileIoStatus::IoError, {},
+                    "open file for reading: a parent path is not a directory: " +
+                        path.string()};
+        }
         const auto failure =
-            last_error_failure(GetLastError(), "open file for reading", path);
+            last_error_failure(error, "open file for reading", path);
         return {failure.status, {}, failure.message};
     }
 
@@ -649,7 +671,10 @@ DirectoryListResult listDirectory(const std::filesystem::path& path,
             error};
         const std::filesystem::directory_iterator end;
         if (error) {
-            return {FileIoStatus::IoError, {}, false, error.message()};
+            return {error == std::errc::no_such_file_or_directory
+                        ? FileIoStatus::NotFound
+                        : FileIoStatus::IoError,
+                    {}, false, error.message()};
         }
         for (; current != end; current.increment(error)) {
             if (error) {
@@ -666,7 +691,10 @@ DirectoryListResult listDirectory(const std::filesystem::path& path,
             error};
         const std::filesystem::recursive_directory_iterator end;
         if (error) {
-            return {FileIoStatus::IoError, {}, false, error.message()};
+            return {error == std::errc::no_such_file_or_directory
+                        ? FileIoStatus::NotFound
+                        : FileIoStatus::IoError,
+                    {}, false, error.message()};
         }
         for (; current != end; current.increment(error)) {
             if (error) {

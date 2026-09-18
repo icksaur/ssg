@@ -179,7 +179,7 @@ TEST(platformRepositoryMatchesGitStatusAcrossWorkflow) {
     auto root = fs::temp_directory_path() / ("ssg-git-repository-" + uniqueSuffix);
     fs::remove_all(root);
     fs::create_directories(root);
-    std::ofstream{root / "a.txt"} << "a0\n";
+    std::ofstream{root / "a.txt", std::ios::binary} << "a0\n";
     ASSERT_EQ(runStatus(root, "init"), 0);
     ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
     ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
@@ -191,7 +191,7 @@ TEST(platformRepositoryMatchesGitStatusAcrossWorkflow) {
     ASSERT_TRUE(initial.complete);
     ASSERT_TRUE(initial.files.empty());
 
-    std::ofstream{root / "a.txt"} << "a1\n";
+    std::ofstream{root / "a.txt", std::ios::binary} << "a1\n";
     auto modified = repository->scanDiff({});
     ASSERT_TRUE(modified.complete);
     ASSERT_EQ(scanCurrentPaths(modified), porcelainCurrentPaths(root));
@@ -360,14 +360,21 @@ TEST(platformRepositoryOpenFailureIsIncomplete) {
     ASSERT_EQ(changed.files.size(), std::size_t{1});
 
     std::error_code error;
+#ifdef _WIN32
+    fs::remove_all(root, error);
+    ASSERT_FALSE(error);
+#else
     fs::permissions(parent, fs::perms::none, fs::perm_options::replace,
                     error);
     ASSERT_FALSE(error);
+#endif
 
     auto failedScan = repository->scanDiff({});
+#ifndef _WIN32
     fs::permissions(parent, fs::perms::owner_all,
                     fs::perm_options::replace, error);
     ASSERT_FALSE(error);
+#endif
 
     ASSERT_FALSE(failedScan.complete);
     fs::remove_all(base);

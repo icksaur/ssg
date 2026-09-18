@@ -27,8 +27,12 @@ fs::path uniqueRoot() {
 }
 
 std::unique_ptr<ssg::Editor> makeRuntime(fs::path const& root) {
-    auto created =
-        ssg::createEditor({root, root / "recovery", root / "archive"});
+    auto created = ssg::createEditor(
+        {.cwd = root,
+         .recoveryRoot = root / "recovery",
+         .archiveRoot = root / "archive",
+         .enableGitDiffWorker = false,
+         .enableFilesystemWatcher = false});
     return std::move(created.session);
 }
 
@@ -83,21 +87,24 @@ TEST(viewActionsRequireAndUseAHostSuppliedSink) {
             std::string::npos);
     }
 
-    int applications = 0;
-    ssg::ScriptHost scripts{
-        *runtime,
-        [&](ssg::ViewAction const&) {
-            ++applications;
-            return ssg::ViewActionResult{
-                ssg::ViewActionStatus::TransitionRequired,
-                ssg::ViewTransitionInput{ssg::PauseFollowTransition{}},
-                {}};
-        }};
-    ASSERT_TRUE(
-        scripts.evaluate("ssg.command('oracle.view_action')").accepted());
-    ASSERT_TRUE(
-        scripts.evaluate("ssg.command('oracle.view_action')").accepted());
-    ASSERT_EQ(applications, 2);
+    {
+        int applications = 0;
+        ssg::ScriptHost scripts{
+            *runtime,
+            [&](ssg::ViewAction const&) {
+                ++applications;
+                return ssg::ViewActionResult{
+                    ssg::ViewActionStatus::TransitionRequired,
+                    ssg::ViewTransitionInput{ssg::PauseFollowTransition{}},
+                    {}};
+            }};
+        ASSERT_TRUE(
+            scripts.evaluate("ssg.command('oracle.view_action')").accepted());
+        ASSERT_TRUE(
+            scripts.evaluate("ssg.command('oracle.view_action')").accepted());
+        ASSERT_EQ(applications, 2);
+    }
+    runtime.reset();
     fs::remove_all(root);
 }
 

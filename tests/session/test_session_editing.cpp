@@ -206,7 +206,8 @@ TEST(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork) {
 TEST(searchPanelActivatesTheSelectedResultAtItsMatchColumn) {
     auto root = uniqueRoot();
     auto workspace = root / "workspace";
-    std::ofstream{workspace / "target.txt"} << "zero\nalpha here\n";
+    std::ofstream{workspace / "target.txt", std::ios::binary}
+        << "zero\nalpha here\n";
     auto created = ssg::createEditor(
         {workspace, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
@@ -238,7 +239,7 @@ TEST(searchPanelPointerActivationRevealsTheMatch) {
     std::string text;
     for (int line = 0; line < 30; ++line) text += "line\n";
     text += "needle\n";
-    std::ofstream{workspace / "target.txt"} << text;
+    std::ofstream{workspace / "target.txt", std::ios::binary} << text;
     auto created = ssg::createEditor(
         {workspace, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());

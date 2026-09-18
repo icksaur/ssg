@@ -143,9 +143,7 @@ public:
         const int openResult =
             git_repository_open_ext(&repository, rootUtf8_.c_str(), 0, nullptr);
         if (openResult != 0) {
-            if (openResult != GIT_ENOTFOUND) {
-                result.complete = false;
-            }
+            result.complete = false;
             return result;
         }
         auto repositoryGuard = std::unique_ptr<git_repository, decltype(&git_repository_free)>(
@@ -202,9 +200,7 @@ public:
         const int openResult =
             git_repository_open_ext(&repository, rootUtf8_.c_str(), 0, nullptr);
         if (openResult != 0) {
-            if (openResult != GIT_ENOTFOUND) {
-                result.complete = false;
-            }
+            result.complete = false;
             return result;
         }
         auto repositoryGuard = std::unique_ptr<git_repository, decltype(&git_repository_free)>(

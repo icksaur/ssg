@@ -941,7 +941,7 @@ TEST(filePickerPublishesWorkspaceFiles) {
     // The test root lives inside SSG's own repository, whose .gitignore covers
     // it; give the workspace its own repository so the picker's ignore rules are
     // the fixture's, not the enclosing checkout's.
-    ASSERT_EQ(std::system(("git -C \"" + workspace.string() + "\" init -q >/dev/null 2>&1").c_str()), 0);
+    ASSERT_EQ(runGitStatus(workspace, "init -q"), 0);
 
     auto created = ssg::createEditor({workspace, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
@@ -979,7 +979,7 @@ TEST(togglingGitignoreRebuildsTheOpenFilePickerIndex) {
     std::ofstream{workspace / ".gitignore"} << "build/\n";
     std::ofstream{workspace / "kept.txt"} << "k\n";
     std::ofstream{workspace / "build" / "hidden.o"} << "h\n";
-    ASSERT_EQ(std::system(("git -C \"" + workspace.string() + "\" init -q >/dev/null 2>&1").c_str()), 0);
+    ASSERT_EQ(runGitStatus(workspace, "init -q"), 0);
 
     auto created = ssg::createEditor({workspace, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
@@ -1012,10 +1012,7 @@ TEST(togglingGitignoreRebuildsTheOpenFilePickerIndex) {
 
 TEST(workerFilesystemRefreshPublishesChangedFileCandidates) {
     auto root = uniqueRoot();
-    ASSERT_EQ(std::system(("git -C \"" + (root / "workspace").string() +
-                           "\" init -q >/dev/null 2>&1")
-                              .c_str()),
-              0);
+    ASSERT_EQ(runGitStatus(root / "workspace", "init -q"), 0);
     auto created = ssg::createEditor(
         {.cwd = root / "workspace",
          .recoveryRoot = root / "recovery",
@@ -1047,7 +1044,7 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "present.txt"} << "p\n";
-    ASSERT_EQ(std::system(("git -C \"" + workspace.string() + "\" init -q >/dev/null 2>&1").c_str()), 0);
+    ASSERT_EQ(runGitStatus(workspace, "init -q"), 0);
 
     auto created = ssg::createEditor({workspace, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
@@ -1080,10 +1077,7 @@ TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
     auto root = uniqueRoot();
     auto workspace = root / "workspace";
     std::ofstream{workspace / "present.txt"} << "present\n";
-    ASSERT_EQ(std::system(("git -C \"" + workspace.string() +
-                           "\" init -q >/dev/null 2>&1")
-                              .c_str()),
-              0);
+    ASSERT_EQ(runGitStatus(workspace, "init -q"), 0);
     auto created = ssg::createEditor(
         {workspace, root / "recovery", root / "archive"});
     ASSERT_TRUE(created.accepted());
@@ -2322,10 +2316,12 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
 
 std::unique_ptr<ssg::Editor> gotoFileRuntime() {
     auto root = uniqueRoot();
-    std::ofstream{root / "workspace" / "a.txt"} << "one\ntwo\nthree\n";
-    std::ofstream{root / "workspace" / "b.txt"} << "beta\n";
-    std::ofstream{root / "workspace" / "c.txt"} << "gamma\n";
-    std::ofstream{root / "workspace" / "wide.txt"} << "\xce\xb1\xce\xb2\n";
+    std::ofstream{root / "workspace" / "a.txt", std::ios::binary}
+        << "one\ntwo\nthree\n";
+    std::ofstream{root / "workspace" / "b.txt", std::ios::binary} << "beta\n";
+    std::ofstream{root / "workspace" / "c.txt", std::ios::binary} << "gamma\n";
+    std::ofstream{root / "workspace" / "wide.txt", std::ios::binary}
+        << "\xce\xb1\xce\xb2\n";
     auto created = ssg::createEditor(
         {root / "workspace", root / "recovery", root / "archive"});
     if (!created.accepted()) return nullptr;
@@ -2351,11 +2347,7 @@ TEST(filesTreeLoadsOneLevelBelowVisibleDirectories) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace / "a" / "b" / "c");
     std::ofstream{workspace / "a" / "b" / "c" / "deep.txt"} << "x";
-    ASSERT_EQ(
-        std::system(("git -C \"" + workspace.string() +
-                     "\" init -q >/dev/null 2>&1")
-                        .c_str()),
-        0);
+    ASSERT_EQ(runGitStatus(workspace, "init -q"), 0);
     auto created = ssg::createEditor(
         {.cwd = workspace,
          .recoveryRoot = root / "recovery",
