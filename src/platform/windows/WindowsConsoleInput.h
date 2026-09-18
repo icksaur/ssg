@@ -5,6 +5,7 @@
 #endif
 #include <windows.h>
 
+#include <cstddef>
 #include <optional>
 #include <span>
 #include <string>
@@ -26,6 +27,20 @@ public:
 private:
   std::optional<KEY_EVENT_RECORD> pendingHighSurrogate_;
   DWORD pressedButtons_ = 0;
+};
+
+// Translated bytes remain ready until read. Resize is returned only from the
+// append call that observes it and is never retained as buffer state.
+class WindowsConsoleInputBuffer {
+public:
+  [[nodiscard]] bool append(std::span<const INPUT_RECORD> records,
+                            COORD visibleWindowOrigin);
+  [[nodiscard]] bool ready() const noexcept;
+  [[nodiscard]] std::size_t read(std::span<char> destination);
+
+private:
+  WindowsConsoleInputTranslator translator_;
+  std::string bytes_;
 };
 
 } // namespace ssg

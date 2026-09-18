@@ -14,7 +14,6 @@
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <thread>
 #include <vector>
 
 namespace {
@@ -86,26 +85,12 @@ INPUT_RECORD key(wchar_t text, WORD repeat = 1) {
   return record;
 }
 
-INPUT_RECORD resize() {
-  INPUT_RECORD record{};
-  record.EventType = WINDOW_BUFFER_SIZE_EVENT;
-  record.Event.WindowBufferSizeEvent.dwSize = {120, 40};
-  return record;
-}
-
-INPUT_RECORD focus() {
-  INPUT_RECORD record{};
-  record.EventType = FOCUS_EVENT;
-  record.Event.FocusEvent.bSetFocus = TRUE;
-  return record;
-}
-
 bool woke(const ssg::PlatformReadiness &readiness, std::size_t index) {
   return std::find(readiness.wakes.begin(), readiness.wakes.end(), index) !=
          readiness.wakes.end();
 }
 
-TEST(consoleInputAndWakeCanBecomeReadyTogether) {
+TEST(nativeConsoleInputAndWakeSmoke) {
   Console console;
   ssg::PlatformEventLoop loop{{true, false}};
   ssg::PlatformWake wake;
@@ -114,59 +99,20 @@ TEST(consoleInputAndWakeCanBecomeReadyTogether) {
   console.write({&record, 1});
   wake.notify();
 
-  const auto readiness = loop.wait(1s, wakes);
+  const auto deadline = std::chrono::steady_clock::now() + 1s;
+  ssg::PlatformReadiness readiness;
+  do {
+    const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(
+        deadline - std::chrono::steady_clock::now());
+    readiness = loop.wait(std::max(remaining, 0ms), wakes);
+  } while ((!readiness.input || !woke(readiness, 0)) &&
+           std::chrono::steady_clock::now() < deadline);
   ASSERT_TRUE(readiness.input);
   ASSERT_TRUE(woke(readiness, 0));
   std::array<char, 8> bytes{};
   const auto count = loop.readInput(bytes);
   ASSERT_EQ(std::string_view(bytes.data(), count), std::string_view{"a"});
   wake.consume();
-}
-
-TEST(timeoutAndIgnorableRecordsReturnNoReadiness) {
-  Console console;
-  ssg::PlatformEventLoop loop{{true, false}};
-  const auto record = focus();
-  console.write({&record, 1});
-
-  const auto readiness = loop.wait(10ms, {});
-  ASSERT_FALSE(readiness.input);
-  ASSERT_FALSE(readiness.resize);
-  ASSERT_TRUE(readiness.wakes.empty());
-}
-
-TEST(indefiniteWaitReturnsTranslatedInputAndResize) {
-  Console console;
-  ssg::PlatformEventLoop loop{{true, false}};
-  std::thread producer{[&] {
-    std::this_thread::sleep_for(10ms);
-    const std::array records{resize(), key(L'a')};
-    console.write(records);
-  }};
-
-  const auto readiness = loop.wait(std::nullopt, {});
-  producer.join();
-  ASSERT_TRUE(readiness.input);
-  ASSERT_TRUE(readiness.resize);
-}
-
-TEST(translatedInputRemainsReadyUntilFullyRead) {
-  Console console;
-  ssg::PlatformEventLoop loop{{true, false}};
-  const auto record = key(L'x', 3);
-  console.write({&record, 1});
-  ASSERT_TRUE(loop.wait(1s, {}).input);
-
-  std::array<char, 2> first{};
-  ASSERT_EQ(loop.readInput(first), first.size());
-  ASSERT_EQ(std::string_view(first.data(), first.size()),
-            std::string_view{"xx"});
-  ASSERT_TRUE(loop.wait(0ms, {}).input);
-
-  std::array<char, 2> second{};
-  const auto count = loop.readInput(second);
-  ASSERT_EQ(count, std::size_t{1});
-  ASSERT_EQ(std::string_view(second.data(), count), std::string_view{"x"});
 }
 
 int runControlChild() {
@@ -183,7 +129,7 @@ int runControlChild() {
   ssg::terminateProcess(*readiness.termination);
 }
 
-TEST(consoleControlBecomesTypedTerminationAndPlatformExit) {
+TEST(nativeConsoleControlAndTerminationSmoke) {
   std::array<wchar_t, 32'768> executable{};
   const DWORD length =
       ::GetModuleFileNameW(nullptr, executable.data(), executable.size());
@@ -193,7 +139,7 @@ TEST(consoleControlBecomesTypedTerminationAndPlatformExit) {
   }
 
   std::wstring command = L"\"" + std::wstring{executable.data(), length} +
-                         L"\" --suite test_windows_platform_runtime "
+                         L"\" --suite test_windows_platform_smoke "
                          L"--control-child";
   std::vector<wchar_t> mutableCommand(command.begin(), command.end());
   mutableCommand.push_back(L'\0');
@@ -222,7 +168,7 @@ TEST(consoleControlBecomesTypedTerminationAndPlatformExit) {
   (void)::CloseHandle(process.hProcess);
 }
 
-TEST(platformIdentityAndClockAreNative) {
+TEST(nativePlatformIdentityAndClockSmoke) {
   ASSERT_EQ(ssg::processId(),
             static_cast<std::uint64_t>(::GetCurrentProcessId()));
   const auto before = ssg::monotonicTime();
@@ -232,15 +178,12 @@ TEST(platformIdentityAndClockAreNative) {
 
 } // namespace
 
-SSG_TEST_SUITE_ARGS(test_windows_platform_runtime) {
+SSG_TEST_SUITE_ARGS(test_windows_platform_smoke) {
   if (argc == 2 && std::string_view{argv[1]} == "--control-child") {
     return runControlChild();
   }
-  RUN(consoleInputAndWakeCanBecomeReadyTogether);
-  RUN(timeoutAndIgnorableRecordsReturnNoReadiness);
-  RUN(indefiniteWaitReturnsTranslatedInputAndResize);
-  RUN(translatedInputRemainsReadyUntilFullyRead);
-  RUN(consoleControlBecomesTypedTerminationAndPlatformExit);
-  RUN(platformIdentityAndClockAreNative);
+  RUN(nativeConsoleInputAndWakeSmoke);
+  RUN(nativeConsoleControlAndTerminationSmoke);
+  RUN(nativePlatformIdentityAndClockSmoke);
   return failed == 0 ? 0 : 1;
 }

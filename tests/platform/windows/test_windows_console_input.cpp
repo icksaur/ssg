@@ -165,6 +165,50 @@ TEST(bufferSizeRecordsReportResizeWithoutInput) {
   ASSERT_TRUE(translated.bytes.empty());
 }
 
+TEST(inputBufferIgnoresRecordsThatProduceNoInput) {
+  ssg::WindowsConsoleInputBuffer buffer;
+  INPUT_RECORD focus{};
+  focus.EventType = FOCUS_EVENT;
+
+  ASSERT_FALSE(buffer.append({&focus, 1}, {}));
+  ASSERT_FALSE(buffer.ready());
+}
+
+TEST(inputBufferReportsResizeOnceAndKeepsTranslatedInputReady) {
+  ssg::WindowsConsoleInputBuffer buffer;
+  INPUT_RECORD resized{};
+  resized.EventType = WINDOW_BUFFER_SIZE_EVENT;
+  const std::array mixed{resized, key('A', L'a')};
+
+  ASSERT_TRUE(buffer.append(mixed, {}));
+  ASSERT_TRUE(buffer.ready());
+  ASSERT_FALSE(buffer.append({}, {}));
+
+  std::array<char, 1> bytes{};
+  ASSERT_EQ(buffer.read(bytes), bytes.size());
+  ASSERT_EQ(bytes[0], 'a');
+  ASSERT_FALSE(buffer.ready());
+}
+
+TEST(inputBufferRemainsReadyUntilTranslatedBytesAreFullyRead) {
+  ssg::WindowsConsoleInputBuffer buffer;
+  const auto repeated = key('X', L'x', 0, 3);
+  ASSERT_FALSE(buffer.append({&repeated, 1}, {}));
+
+  std::array<char, 2> first{};
+  ASSERT_EQ(buffer.read(first), first.size());
+  const std::string_view firstView{first.data(), first.size()};
+  ASSERT_EQ(firstView, std::string_view{"xx"});
+  ASSERT_TRUE(buffer.ready());
+
+  std::array<char, 2> second{};
+  const auto count = buffer.read(second);
+  ASSERT_EQ(count, std::size_t{1});
+  const std::string_view secondView{second.data(), count};
+  ASSERT_EQ(secondView, std::string_view{"x"});
+  ASSERT_FALSE(buffer.ready());
+}
+
 TEST(mouseTransitionsPreserveReleasedButtonAndAltWheel) {
   ssg::WindowsConsoleInputTranslator translator;
   const auto left = mouse(2, 3, FROM_LEFT_1ST_BUTTON_PRESSED);
@@ -192,6 +236,9 @@ SSG_TEST_SUITE(test_windows_console_input) {
   RUN(altGrCommitsTextWithoutCreatingAChord);
   RUN(malformedAndIgnorableRecordsProduceNoInput);
   RUN(bufferSizeRecordsReportResizeWithoutInput);
+  RUN(inputBufferIgnoresRecordsThatProduceNoInput);
+  RUN(inputBufferReportsResizeOnceAndKeepsTranslatedInputReady);
+  RUN(inputBufferRemainsReadyUntilTranslatedBytesAreFullyRead);
   RUN(mouseTransitionsPreserveReleasedButtonAndAltWheel);
   return failed == 0 ? 0 : 1;
 }

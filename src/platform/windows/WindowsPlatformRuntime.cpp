@@ -255,11 +255,11 @@ struct PlatformEventLoop::Impl {
       if (count == 0) {
         throw std::runtime_error{"console input read returned no records"};
       }
-      const auto translated = translator.translate(
-          std::span<const INPUT_RECORD>{records.data(), count},
-          visibleWindowOrigin());
-      inputBytes += translated.bytes;
-      readiness.resize = readiness.resize || translated.resize;
+      readiness.resize =
+          consoleInput.append(
+              std::span<const INPUT_RECORD>{records.data(), count},
+              visibleWindowOrigin()) ||
+          readiness.resize;
     }
   }
 
@@ -269,8 +269,7 @@ struct PlatformEventLoop::Impl {
   HANDLE controlEvent = nullptr;
   HANDLE cleanupEvent = nullptr;
   bool controlHandlerInstalled = false;
-  WindowsConsoleInputTranslator translator;
-  std::string inputBytes;
+  WindowsConsoleInputBuffer consoleInput;
 };
 
 PlatformEventLoop::PlatformEventLoop(PlatformEventLoopOptions options)
@@ -303,7 +302,7 @@ PlatformEventLoop::wait(std::optional<std::chrono::milliseconds> timeout,
     }
 
     PlatformReadiness readiness;
-    readiness.input = !impl_->inputBytes.empty();
+    readiness.input = impl_->consoleInput.ready();
     if (handles.empty()) {
       if (readiness.input) {
         return readiness;
@@ -349,7 +348,7 @@ PlatformEventLoop::wait(std::optional<std::chrono::milliseconds> timeout,
         }
       }
     }
-    readiness.input = !impl_->inputBytes.empty();
+    readiness.input = impl_->consoleInput.ready();
     if (ready(readiness) || result == WAIT_TIMEOUT) {
       return readiness;
     }
@@ -363,14 +362,10 @@ std::size_t PlatformEventLoop::readInput(std::span<char> destination) {
   if (destination.empty()) {
     throw std::invalid_argument{"standard input destination is empty"};
   }
-  if (impl_->inputBytes.empty()) {
+  if (!impl_->consoleInput.ready()) {
     throw std::logic_error{"no translated console input is ready"};
   }
-  const std::size_t count =
-      std::min(destination.size(), impl_->inputBytes.size());
-  std::copy_n(impl_->inputBytes.data(), count, destination.data());
-  impl_->inputBytes.erase(0, count);
-  return count;
+  return impl_->consoleInput.read(destination);
 }
 
 std::uint64_t processId() noexcept {

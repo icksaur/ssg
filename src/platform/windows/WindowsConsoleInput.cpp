@@ -333,4 +333,22 @@ WindowsConsoleInputTranslator::translate(std::span<const INPUT_RECORD> records,
   return result;
 }
 
+bool WindowsConsoleInputBuffer::append(std::span<const INPUT_RECORD> records,
+                                       COORD visibleWindowOrigin) {
+  auto translated = translator_.translate(records, visibleWindowOrigin);
+  bytes_ += std::move(translated.bytes);
+  return translated.resize;
+}
+
+bool WindowsConsoleInputBuffer::ready() const noexcept {
+  return !bytes_.empty();
+}
+
+std::size_t WindowsConsoleInputBuffer::read(std::span<char> destination) {
+  const std::size_t count = std::min(destination.size(), bytes_.size());
+  std::copy_n(bytes_.data(), count, destination.data());
+  bytes_.erase(0, count);
+  return count;
+}
+
 } // namespace ssg

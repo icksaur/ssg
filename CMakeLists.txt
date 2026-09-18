@@ -553,13 +553,13 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 
     if(WIN32)
         ssg_add_test_suite(
-            NAME test_windows_platform_runtime
+            NAME test_windows_platform_smoke
             ENTRY ${SSG_SOURCE_DIR}/tests/platform/windows/test_windows_platform_runtime.cpp
-            SYMBOL test_windows_platform_runtime
+            SYMBOL test_windows_platform_smoke
             ARGS)
-        ssg_test_include_directories(test_windows_platform_runtime PRIVATE
+        ssg_test_include_directories(test_windows_platform_smoke PRIVATE
             ${SSG_SOURCE_DIR}/tests)
-        ssg_test_link_libraries(test_windows_platform_runtime PRIVATE
+        ssg_test_link_libraries(test_windows_platform_smoke PRIVATE
             ssg_platform)
     else()
         ssg_add_test_suite(
