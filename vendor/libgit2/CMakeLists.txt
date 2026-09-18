@@ -4,7 +4,7 @@
 # This top-level CMakeLists.txt sets up configuration options and
 # determines which subprojects to build.
 
-cmake_minimum_required(VERSION 3.5.1)
+cmake_minimum_required(VERSION 3.14)
 
 project(libgit2 VERSION "1.9.4" LANGUAGES C)
 
