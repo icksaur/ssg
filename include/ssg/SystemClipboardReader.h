@@ -66,8 +66,8 @@ struct SystemClipboardPaste {
 [[nodiscard]] SystemClipboardPaste planSystemClipboardPaste(
     const ClientOwnedInput& request, SystemClipboardRead read);
 
-// Reads the native desktop clipboard while preserving the shared deadline,
-// size, UTF-8, and fallback status contract.
+// Reads the native desktop clipboard while preserving deadline, byte limit,
+// UTF-8 validity, explicit status mapping, and internal-register fallback.
 class SystemClipboardReader {
 public:
     SystemClipboardReader();

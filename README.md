@@ -19,10 +19,20 @@ The script runs `makepkg --syncdeps --install --force` against the repository's
 
 ## Run from source
 
+Linux:
+
 ```sh
 cmake --preset dev && cmake --build build   # build the `ssg` binary
 ./build/ssg .            # open the current directory as a workspace
 ./build/ssg path/to/file.cpp   # or open a file directly
+```
+
+Windows, from an MSVC developer command prompt:
+
+```powershell
+cmake --preset windows-msvc
+cmake --build --preset windows-msvc
+.\build-windows\ssg.exe .
 ```
 
 You get a full-screen editor: a file tree on the left, tabs across the top, your
@@ -57,8 +67,9 @@ The things you reach for in a modern editor, in the terminal:
   split editor panes, and a collapsible left sidebar (`Mod+B`) that switches between the
   filesystem tree and Git status.
 - **Full-text search** (`Mod+Shift+F`)
-- **Desktop clipboard paste** — `Mod+V` reads through `wl-paste` on Wayland or
-  `xclip` on X11 when available; terminal paste shortcuts also work.
+- **Desktop clipboard paste** — `Mod+V` reads through `wl-paste` on Wayland,
+  `xclip` on X11, or the native Windows Unicode clipboard; terminal paste
+  shortcuts also work.
 
 A handful of chords are Alt-only: a terminal transmits `Ctrl+I`, `Ctrl+M`,
 `Ctrl+H` and `Ctrl+[` as Tab, Enter, Backspace and Escape, so nothing survives
@@ -95,8 +106,9 @@ rebind commands. See [`doc/config.md`](doc/config.md).
 ## Requirements
 
 A C++20 compiler and CMake 3.14+. Lua 5.4 is built from pinned vendored
-sources. Linux is supported; native Windows support is being brought up through
-the staged MSVC build described in [`development.md`](development.md).
+sources. Linux and native Windows console builds are supported. Windows builds
+use MSVC and are intended to run in Windows Terminal or another host with
+virtual-terminal output support. See [`development.md`](development.md).
 
 ## License
 

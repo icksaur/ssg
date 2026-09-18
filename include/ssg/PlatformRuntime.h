@@ -60,13 +60,16 @@ struct PlatformEventLoopOptions {
 
 class PlatformEventLoop {
 public:
+    // Construction acquires every requested native resource. Failure is
+    // reported rather than silently disabling input or process control.
     explicit PlatformEventLoop(PlatformEventLoopOptions options = {});
     ~PlatformEventLoop();
     PlatformEventLoop(const PlatformEventLoop&) = delete;
     PlatformEventLoop& operator=(const PlatformEventLoop&) = delete;
 
     // Registered wakes are borrowed only for this call and must outlive it.
-    // A missing timeout blocks until readiness without periodic polling.
+    // The runtime thread owns all resulting state mutation. A missing timeout
+    // blocks until readiness without periodic polling.
     [[nodiscard]] PlatformReadiness wait(
         std::optional<std::chrono::milliseconds> timeout,
         std::span<const PlatformWake* const> wakes);

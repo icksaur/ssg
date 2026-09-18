@@ -83,6 +83,8 @@ class NativeTerminal {
 
 class TerminalSession {
   public:
+    // Every successful native-state mutation is restored exactly once on
+    // normal destruction, explicit restore, startup failure, or termination.
     TerminalSession();
     explicit TerminalSession(std::unique_ptr<NativeTerminal> native);
     ~TerminalSession();

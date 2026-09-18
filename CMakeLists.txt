@@ -498,6 +498,7 @@ target_sources(ssg_platform PRIVATE
     ${SSG_SOURCE_DIR}/src/platform/FilesystemWatcher.cpp
 )
 
+# Exactly one complete native implementation family is selected per build.
 if(WIN32)
     target_sources(ssg_platform PRIVATE
         ${SSG_SOURCE_DIR}/src/platform/windows/WindowsPlatformRuntime.cpp

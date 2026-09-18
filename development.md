@@ -9,9 +9,9 @@ embed it, see [`README.md`](README.md).
 - A C++20 compiler
 
 Lua 5.4 is built from the pinned source under `vendor/lua`; no system Lua
-installation is required. Linux is the current runtime platform. The
-`windows-msvc` preset is the staged native Windows portability build and
-currently builds the platform target.
+installation is required. Linux and native Windows are supported. Windows
+development requires an MSVC developer command prompt and Ninja; the
+`windows-msvc` preset configures the complete application and test suite.
 
 ## Build
 
@@ -48,13 +48,24 @@ cmake --preset release && cmake --build build-release
 cmake --preset sanitize && cmake --build build-sanitize && ctest --preset sanitize
 ```
 
-From an MSVC developer command prompt, run the current Windows portability
-gate with:
+From an MSVC developer command prompt, run the Windows gate with:
 
 ```powershell
 cmake --preset windows-msvc
 cmake --build --preset windows-msvc
+ctest --preset windows-msvc
 ```
+
+The Windows build uses one native implementation family under
+`src/platform/windows/`; Linux selects `src/platform/linux/` instead. Shared
+application code must not include operating-system headers or call native APIs.
+`test_file_seam_guard` enforces that boundary, and platform-specific tests live
+under the matching `tests/platform/` directory.
+
+Before a Windows release, exercise `ssg.exe` in Windows Terminal and verify
+text rendering and Unicode input, keyboard chords, mouse selection and wheel
+scrolling, resize, desktop clipboard paste, init-script reload, Git refresh,
+idle CPU usage, normal quit, and Ctrl/console-close terminal restoration.
 
 ## What the library delivers
 
