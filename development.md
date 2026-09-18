@@ -10,7 +10,7 @@ embed it, see [`README.md`](README.md).
 
 Lua 5.4 is built from the pinned source under `vendor/lua`; no system Lua
 installation is required. Linux and native Windows are supported. Windows
-development requires an MSVC developer command prompt and Ninja; the
+development requires an x64 MSVC developer command prompt and Ninja; the
 `windows-msvc` preset configures the complete application and test suite.
 
 ## Build
@@ -48,7 +48,7 @@ cmake --preset release && cmake --build build-release
 cmake --preset sanitize && cmake --build build-sanitize && ctest --preset sanitize
 ```
 
-From an MSVC developer command prompt, run the Windows gate with:
+From an x64 MSVC developer command prompt, run the Windows gate with:
 
 ```powershell
 cmake --preset windows-msvc

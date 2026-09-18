@@ -27,7 +27,7 @@ cmake --preset dev && cmake --build build   # build the `ssg` binary
 ./build/ssg path/to/file.cpp   # or open a file directly
 ```
 
-Windows, from an MSVC developer command prompt:
+Windows, from an x64 MSVC developer command prompt:
 
 ```powershell
 cmake --preset windows-msvc

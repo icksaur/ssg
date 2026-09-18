@@ -13,6 +13,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(WIN32)
     add_compile_definitions(NOMINMAX _CRT_SECURE_NO_WARNINGS)
+    if(CMAKE_SIZEOF_VOID_P LESS 8)
+        message(FATAL_ERROR
+            "SSG requires a 64-bit Windows toolchain. "
+            "Configure from an x64 MSVC developer environment.")
+    endif()
 endif()
 
 # Use ccache as the compiler launcher when available.  Fresh build trees (e.g.
@@ -28,11 +33,14 @@ if(SSG_CCACHE AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
 endif()
 option(SSG_ASSERTIONS "Keep C and C++ assertions enabled" OFF)
 if(SSG_ASSERTIONS)
-    if(MSVC)
-        add_compile_options(/UNDEBUG)
-    else()
-        add_compile_options(-UNDEBUG)
-    endif()
+    foreach(LANGUAGE C CXX)
+        foreach(CONFIGURATION RELEASE RELWITHDEBINFO MINSIZEREL)
+            string(REGEX REPLACE
+                "(^| )[/-]DNDEBUG($| )" " "
+                CMAKE_${LANGUAGE}_FLAGS_${CONFIGURATION}
+                "${CMAKE_${LANGUAGE}_FLAGS_${CONFIGURATION}}")
+        endforeach()
+    endforeach()
 endif()
 
 # Keep project paths correct when SSG is loaded through add_subdirectory.
