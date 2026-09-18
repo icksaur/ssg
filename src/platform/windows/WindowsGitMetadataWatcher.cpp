@@ -9,7 +9,9 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <deque>
+#include <iostream>
 #include <memory>
 #include <limits>
 #include <stdexcept>
@@ -23,6 +25,18 @@ namespace {
 std::system_error windowsError(const char* operation) {
     return std::system_error(
         static_cast<int>(::GetLastError()), std::system_category(), operation);
+}
+
+bool watcherTraceEnabled() {
+    const auto* value = std::getenv("SSG_WINDOWS_WATCHER_TRACE");
+    return value != nullptr && *value != '\0';
+}
+
+void traceCompletion(bool refs, DWORD bytes, DWORD error) {
+    if (!watcherTraceEnabled()) return;
+    std::cerr << "WindowsGitMetadataWatcher completion scope="
+              << (refs ? "refs" : "root") << " bytes=" << bytes
+              << " error=" << error << '\n';
 }
 
 class WindowsGitMetadataWatcher final : public GitMetadataWatcher {
@@ -48,12 +62,17 @@ public:
             static_cast<DWORD>(events.size()), events.data(), FALSE, bounded);
         if (wait == WAIT_TIMEOUT) return false;
         if (wait == WAIT_FAILED) throw windowsError("failed to poll Git metadata watcher");
+        if (watcherTraceEnabled()) {
+            std::cerr << "WindowsGitMetadataWatcher wait result=" << wait
+                      << " watch=" << (wait - WAIT_OBJECT_0) << '\n';
+        }
         bool dirty = false;
         for (auto& watch : watches_) {
             DWORD bytes = 0;
             if (!::GetOverlappedResult(watch.directory, &watch.overlapped, &bytes,
                                        FALSE)) {
                 const auto error = ::GetLastError();
+                traceCompletion(watch.refs, bytes, error);
                 if (error == ERROR_IO_INCOMPLETE) continue;
                 if (error == ERROR_NOTIFY_ENUM_DIR) {
                     healthy_ = false;
@@ -61,10 +80,13 @@ public:
                 }
                 else throw windowsError("failed to read Git metadata watcher");
             } else if (bytes == 0) {
+                traceCompletion(watch.refs, bytes, ERROR_SUCCESS);
                 healthy_ = false;
                 dirty = true;
             } else {
-                dirty = dirty || relevant(watch, bytes);
+                traceCompletion(watch.refs, bytes, ERROR_SUCCESS);
+                const bool completionRelevant = relevant(watch, bytes);
+                dirty = dirty || completionRelevant;
             }
             start(watch);
         }
@@ -151,13 +173,21 @@ private:
     static bool relevant(const Watch& watch, DWORD bytes) {
         const auto* current =
             reinterpret_cast<const FILE_NOTIFY_INFORMATION*>(watch.buffer.data());
+        bool result = false;
         for (DWORD offset = 0; offset < bytes;) {
             const std::filesystem::path path{
                 std::wstring{current->FileName,
                              current->FileNameLength / sizeof(wchar_t)}};
-            if (watch.refs || path == "HEAD" || path == "index" ||
-                path == "packed-refs" || path == "commondir") {
-                return true;
+            const bool eventRelevant =
+                watch.refs || path == "HEAD" || path == "index" ||
+                path == "packed-refs" || path == "commondir";
+            result = result || eventRelevant;
+            if (watcherTraceEnabled()) {
+                std::wcerr << L"WindowsGitMetadataWatcher event scope="
+                           << (watch.refs ? L"refs" : L"root")
+                           << L" action=" << current->Action << L" path="
+                           << path.native() << L" relevant="
+                           << (eventRelevant ? L"true" : L"false") << L'\n';
             }
             if (current->NextEntryOffset == 0) break;
             offset += current->NextEntryOffset;
@@ -165,7 +195,7 @@ private:
                 reinterpret_cast<const std::byte*>(current) +
                 current->NextEntryOffset);
         }
-        return false;
+        return result;
     }
 
     std::deque<Watch> watches_;

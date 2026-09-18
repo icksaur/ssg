@@ -31,6 +31,8 @@ jobs:
         run: ctest --preset windows-msvc -R "^test_platform_interface$"
       - name: Windows watcher gates
         run: ctest --preset windows-msvc -R "^ssg_watcher_tests$"
+        env:
+          SSG_WINDOWS_WATCHER_TRACE: 1
       - name: Full Windows test suite
         run: ctest --preset windows-msvc
 

@@ -136,20 +136,18 @@ std::optional<FileStat> statFile(const std::filesystem::path& path,
     } else {
         kind = FileKind::Regular;
     }
+    const auto ticks = basic.LastWriteTime.QuadPart;
+#ifdef _MSC_VER
+    const auto fileTime = std::filesystem::file_time_type{
+        std::filesystem::file_time_type::duration{ticks}};
+#else
     constexpr std::int64_t windowsEpochSeconds = 11644473600LL;
     constexpr std::int64_t ticksPerSecond = 10000000LL;
-    const auto ticks = basic.LastWriteTime.QuadPart;
     const auto systemTime =
         std::chrono::system_clock::time_point{
             std::chrono::seconds{ticks / ticksPerSecond -
                                  windowsEpochSeconds}} +
         std::chrono::nanoseconds{(ticks % ticksPerSecond) * 100};
-#ifdef _MSC_VER
-    const auto fileTime =
-        std::chrono::time_point_cast<std::filesystem::file_time_type::duration>(
-            std::chrono::file_clock::from_utc(
-                std::chrono::utc_clock::from_sys(systemTime)));
-#else
     const auto fileTime =
         std::chrono::time_point_cast<std::filesystem::file_time_type::duration>(
             std::chrono::file_clock::from_sys(systemTime));
