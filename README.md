@@ -35,6 +35,23 @@ cmake --build --preset windows-msvc
 .\build-windows\ssg.exe .
 ```
 
+Windows cross-build from Linux with MinGW-w64:
+
+```sh
+cmake -S . -B build-mingw -G Ninja \
+  -DCMAKE_SYSTEM_NAME=Windows \
+  -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+  -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+  -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DSSG_ASSERTIONS=ON -DSSG_CCACHE=OFF -DSSG_WERROR=ON
+cmake --build build-mingw
+```
+
+This produces `build-mingw/ssg.exe` and `build-mingw/ssg_tests.exe`. The
+cross-build verifies compilation and linking; running the executables requires
+Windows or a compatible Wine environment.
+
 You get a full-screen editor: a file tree on the left, tabs across the top, your
 document in the middle, and a status header/footer. It opens instantly and should
 use no CPU while idle.
@@ -107,8 +124,9 @@ rebind commands. See [`doc/config.md`](doc/config.md).
 
 A C++20 compiler and CMake 3.14+. Lua 5.4 is built from pinned vendored
 sources. Linux and native Windows console builds are supported. Windows builds
-use MSVC and are intended to run in Windows Terminal or another host with
-virtual-terminal output support. See [`development.md`](development.md).
+use MSVC or MinGW-w64 and are intended to run in Windows Terminal or another
+host with virtual-terminal output support. See
+[`development.md`](development.md).
 
 ## License
 
