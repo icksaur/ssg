@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -157,12 +158,17 @@ const TSQuery* queryFor(TreeSitterParser::QueryCache& cache,
         cache.failed.insert(key);
         return nullptr;
     }
+    if (source.size() > std::numeric_limits<std::uint32_t>::max()) {
+        cache.failed.insert(key);
+        return nullptr;
+    }
 
     std::uint32_t errorOffset = 0;
     TSQueryError errorType = TSQueryErrorNone;
     auto query = std::unique_ptr<TSQuery, decltype(&ts_query_delete)>(
         ts_query_new(static_cast<const TSLanguage*>(grammar.language()),
-                     source.data(), source.size(), &errorOffset, &errorType),
+                     source.data(), static_cast<std::uint32_t>(source.size()),
+                     &errorOffset, &errorType),
         &ts_query_delete);
     (void)errorOffset;
     if (!query || errorType != TSQueryErrorNone) {
@@ -316,10 +322,16 @@ SyntaxParseOutput TreeSitterParser::parse(const SyntaxParseRequest& request) {
         output.status = SyntaxParseStatus::Failed;
         return output;
     }
+    if (request.text().size() >
+        std::numeric_limits<std::uint32_t>::max()) {
+        output.status = SyntaxParseStatus::Failed;
+        return output;
+    }
 
     std::unique_ptr<TSTree, decltype(&ts_tree_delete)> tree(
         ts_parser_parse_string(parser.get(), nullptr, request.text().data(),
-                               request.text().size()),
+                               static_cast<std::uint32_t>(
+                                   request.text().size())),
         &ts_tree_delete);
     if (!tree) {
         output.status = SyntaxParseStatus::Failed;

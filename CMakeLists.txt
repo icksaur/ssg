@@ -50,6 +50,9 @@ endif()
 
 add_library(ssg_platform STATIC)
 add_library(ssg_core STATIC)
+set_target_properties(ssg_core PROPERTIES
+    C_STANDARD 11
+    C_STANDARD_REQUIRED ON)
 
 target_include_directories(ssg_platform PUBLIC "${SSG_SOURCE_DIR}/include")
 target_include_directories(ssg_core PUBLIC "${SSG_SOURCE_DIR}/include")
