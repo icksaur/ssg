@@ -2,6 +2,7 @@
 
 add_library(util OBJECT)
 
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/gen_headers")
 configure_file(git2_features.h.in "${PROJECT_BINARY_DIR}/gen_headers/git2_features.h")
 
 set(UTIL_INCLUDES

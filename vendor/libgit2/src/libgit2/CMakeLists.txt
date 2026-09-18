@@ -103,6 +103,7 @@ endif()
 
 # support experimental features and functionality
 
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/gen_headers")
 configure_file(experimental.h.in "${PROJECT_BINARY_DIR}/gen_headers/experimental.h")
 
 # translate filenames in the headers so that they match the install directory
@@ -111,6 +112,10 @@ configure_file(experimental.h.in "${PROJECT_BINARY_DIR}/gen_headers/experimental
 foreach(HEADER_SOURCE ${SRC_H})
 	file(RELATIVE_PATH HEADER_RELATIVE ${PROJECT_SOURCE_DIR} ${HEADER_SOURCE})
 	string(REGEX REPLACE "^include\/git2" "include/${LIBGIT2_FILENAME}" HEADER_RELATIVE ${HEADER_RELATIVE})
+	get_filename_component(HEADER_DIRECTORY "${HEADER_RELATIVE}" DIRECTORY)
+	file(MAKE_DIRECTORY
+		"${CMAKE_CURRENT_BINARY_DIR}/${HEADER_DIRECTORY}"
+		"${PROJECT_BINARY_DIR}/${HEADER_DIRECTORY}")
 
 	file(READ "${HEADER_SOURCE}" HEADER_CONTENTS)
 	string(REGEX REPLACE "#include \"git2\/" "#include \"${LIBGIT2_FILENAME}/" HEADER_CONTENTS "${HEADER_CONTENTS}")
@@ -119,6 +124,9 @@ foreach(HEADER_SOURCE ${SRC_H})
 	configure_file("${CMAKE_CURRENT_BINARY_DIR}/${HEADER_RELATIVE}.tmp" "${PROJECT_BINARY_DIR}/${HEADER_RELATIVE}" COPYONLY)
 endforeach()
 
+file(MAKE_DIRECTORY
+	"${PROJECT_BINARY_DIR}/include/${LIBGIT2_FILENAME}"
+	"${PROJECT_BINARY_DIR}/cmake")
 configure_file("${PROJECT_BINARY_DIR}/gen_headers/experimental.h" "${PROJECT_BINARY_DIR}/include/${LIBGIT2_FILENAME}/experimental.h" COPYONLY)
 
 # cmake package targets

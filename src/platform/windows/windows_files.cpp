@@ -145,10 +145,14 @@ std::optional<FileStat> statFile(const std::filesystem::path& path,
                                  windowsEpochSeconds}} +
         std::chrono::nanoseconds{(ticks % ticksPerSecond) * 100};
 #ifdef _MSC_VER
-    const auto fileTime = std::chrono::file_clock::from_utc(
-        std::chrono::utc_clock::from_sys(systemTime));
+    const auto fileTime =
+        std::chrono::time_point_cast<std::filesystem::file_time_type::duration>(
+            std::chrono::file_clock::from_utc(
+                std::chrono::utc_clock::from_sys(systemTime)));
 #else
-    const auto fileTime = std::chrono::file_clock::from_sys(systemTime);
+    const auto fileTime =
+        std::chrono::time_point_cast<std::filesystem::file_time_type::duration>(
+            std::chrono::file_clock::from_sys(systemTime));
 #endif
     return FileStat{
         kind,
