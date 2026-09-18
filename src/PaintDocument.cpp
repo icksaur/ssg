@@ -257,8 +257,8 @@ std::optional<SemanticRole> findMatchRole(FindReplaceViewState const& find,
 // cursor and to paint secondary caret cells.
 std::optional<GridPosition> screenCellFor(ViewportViewState const& viewport,
                                             Rect const& content,
-                                            std::uint32_t caretLine,
-                                            std::uint32_t caretCell,
+                                            std::uint64_t caretLine,
+                                            std::uint64_t caretCell,
                                             ByteOffset caretByteOffset) {
     std::optional<GridPosition> boundary;  // A match landing at the row's edge.
     for (std::size_t index = 0; index < viewport.visibleRows.size(); ++index) {
@@ -691,7 +691,7 @@ void paintLineNumbers(CellGrid& grid, GridPresentation const& snapshot,
     // Every caret's logical line highlights its gutter number, not just the
     // primary's, so multi-cursor edits show one lit number per cursor.
     auto const& selections = snapshot.selections;
-    std::vector<std::uint32_t> caretLines;
+    std::vector<std::uint64_t> caretLines;
     caretLines.reserve(selections.items().size());
     for (auto const& selection : selections.items()) {
         caretLines.push_back(selection.active.line.value());
