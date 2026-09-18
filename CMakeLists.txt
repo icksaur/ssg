@@ -57,7 +57,7 @@ add_library(ssg::ssg ALIAS ssg)
 # a top-level build: a consumer embedding ssg via add_subdirectory compiles with
 # its own toolchain and its own idea of which warnings matter, and inheriting
 # -Werror from a dependency is how a library breaks someone else's build on a
-# compiler upgrade.  Vendored third-party sources already build with -w.
+# compiler upgrade.  Vendored third-party warnings are disabled.
 #
 # missing-field-initializers is off because omitting a trailing aggregate member
 # value-initializes it, which is what every site here means.  Do not re-enable it
@@ -649,9 +649,16 @@ if(EXISTS "${SSG_SOURCE_DIR}/vendor/libgit2/CMakeLists.txt")
     set(USE_BUNDLED_ZLIB ON CACHE BOOL "" FORCE)
     set(REGEX_BACKEND builtin CACHE STRING "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(_ssg_saved_c_flags "${CMAKE_C_FLAGS}")
+    if(MSVC)
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /w")
+    else()
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w")
+    endif()
     add_subdirectory(${SSG_SOURCE_DIR}/vendor/libgit2
                      ${CMAKE_BINARY_DIR}/vendor-libgit2
                      EXCLUDE_FROM_ALL)
+    set(CMAKE_C_FLAGS "${_ssg_saved_c_flags}")
     if(_ssg_had_c_standard)
         set(CMAKE_C_STANDARD "${_ssg_saved_c_standard}" CACHE STRING "" FORCE)
     else()
