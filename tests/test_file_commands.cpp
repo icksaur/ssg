@@ -14,11 +14,11 @@ namespace {
 class TemporaryDirectory {
 public:
     TemporaryDirectory() {
-        path_ = std::filesystem::temp_directory_path() /
-                ("ssg-file-commands-" + std::to_string(
-                                            std::chrono::steady_clock::now()
-                                                .time_since_epoch()
-                                                .count()));
+        path_ = testSystemRuntimePath(
+            "file_commands_" +
+            std::to_string(std::chrono::steady_clock::now()
+                               .time_since_epoch()
+                               .count()));
         std::filesystem::create_directories(path_);
     }
     ~TemporaryDirectory() { std::filesystem::remove_all(path_); }

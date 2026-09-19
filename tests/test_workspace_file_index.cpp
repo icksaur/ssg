@@ -23,7 +23,8 @@ int runStatus(const fs::path& root, std::string_view command) {
 fs::path makeUniqueRoot(std::string_view label) {
     const auto suffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    return fs::temp_directory_path() / ("ssg-" + std::string{label} + "-" + suffix);
+    return testSystemRuntimePath(
+        "workspace_index_" + std::string{label} + "_" + suffix);
 }
 
 void writeFile(const fs::path& path, std::string_view text) {

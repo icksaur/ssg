@@ -184,7 +184,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
     // into its base grapheme (width 1), a ZWJ emoji sequence is one wide cluster,
     // the caret advances by 2 past a wide glyph, and the encoder emits one glyph
     // per cluster and nothing for a continuation cell.
-    auto root = fs::temp_directory_path() / "ssg-m9u";
+    auto root = testSystemRuntimePath("terminal_output_m9u");
     fs::remove_all(root);
     fs::create_directories(root / "workspace");
     fs::create_directories(root / "recovery");

@@ -29,8 +29,8 @@ class TemporaryDirectory {
 public:
     TemporaryDirectory() {
         const auto seed = std::chrono::steady_clock::now().time_since_epoch().count();
-        path_ = std::filesystem::temp_directory_path() /
-                ("ssg-platform-files-" + std::to_string(seed));
+        path_ =
+            testSystemRuntimePath("platform_files_" + std::to_string(seed));
         std::filesystem::create_directory(path_);
     }
 

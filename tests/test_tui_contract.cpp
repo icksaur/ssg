@@ -25,11 +25,7 @@ namespace {
 namespace fs = std::filesystem;
 
 fs::path uniqueRoot(std::string const& name) {
-    // A FIXED path (not pid-based): the rendered screen includes the workspace
-    // CWD in the header, so the golden must be produced against a deterministic
-    // path.  Linux-first (temp_directory_path() is /tmp on CI and dev); the
-    // golden encodes that fixture path.
-    auto base = fs::temp_directory_path() / "ssg-contract-fixtures" / name;
+    auto base = testSystemRuntimePath("tui_contract_" + name);
     fs::remove_all(base);
     fs::create_directories(base / "workspace");
     fs::create_directories(base / "recovery");

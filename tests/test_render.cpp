@@ -41,8 +41,8 @@ struct PaletteProjection {
 };
 
 fs::path uniqueRoot() {
-    auto base = fs::temp_directory_path() /
-                ("ssg-render-" + std::to_string(::rand()));
+    auto base =
+        testSystemRuntimePath("render_" + std::to_string(::rand()));
     fs::create_directories(base / "recovery");
     return base;
 }

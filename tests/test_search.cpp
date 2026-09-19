@@ -43,8 +43,7 @@ WorkspaceSnapshot fixtureWorkspace(std::uint64_t revision) {
 WorkspaceCorpus corpusFor(
     const WorkspaceSnapshot& snapshot,
     WorkspaceCorpusReader reader = readFile) {
-    const auto root =
-        std::filesystem::temp_directory_path() / "ssg-search-open-buffers";
+    const auto root = testSystemRuntimePath("search_open_buffers");
     std::filesystem::create_directories(root);
     std::vector<WorkspaceCorpusBuffer> buffers;
     buffers.reserve(snapshot.files.size());
@@ -190,8 +189,7 @@ TEST(cancellationSupersessionAndStaleRevisionAreRejected) {
 }
 
 TEST(slicedTextSearchMatchesUnslicedAndStopsWhenCancelled) {
-    const auto root =
-        std::filesystem::temp_directory_path() / "ssg-search-slices";
+    const auto root = testSystemRuntimePath("search_slices");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
     for (int index = 0; index < 4; ++index) {

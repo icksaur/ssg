@@ -14,6 +14,8 @@ function(ssg_initialize_tests)
     target_include_directories(ssg_tests PRIVATE
         "${SSG_SOURCE_DIR}/tests"
         "${_generatedDir}")
+    target_precompile_headers(ssg_tests PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:${SSG_SOURCE_DIR}/tests/test_helpers.h>")
     target_link_libraries(ssg_tests PRIVATE ssg_core)
 
     set_property(GLOBAL PROPERTY SSG_TESTS_INITIALIZED TRUE)
@@ -113,6 +115,11 @@ function(ssg_test_compile_definitions suite visibility)
     _ssg_require_test_suite("${suite}" _entry)
     set_property(SOURCE "${_entry}" APPEND PROPERTY
         COMPILE_DEFINITIONS ${ARGN})
+endfunction()
+
+function(ssg_test_labels suite)
+    _ssg_require_test_suite("${suite}" _entry)
+    set_tests_properties("${suite}" PROPERTIES LABELS "${ARGN}")
 endfunction()
 
 function(ssg_test_include_directories suite visibility)

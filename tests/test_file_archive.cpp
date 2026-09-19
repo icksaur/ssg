@@ -16,10 +16,10 @@ namespace fs = std::filesystem;
 class TemporaryDirectory {
 public:
     TemporaryDirectory() {
-        path_ = fs::temp_directory_path() /
-                ("ssg-archive-" +
-                 std::to_string(
-                     std::chrono::steady_clock::now().time_since_epoch().count()));
+        path_ = testSystemRuntimePath(
+            "file_archive_" +
+            std::to_string(
+                std::chrono::steady_clock::now().time_since_epoch().count()));
         fs::create_directories(path_);
     }
     ~TemporaryDirectory() {

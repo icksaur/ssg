@@ -17,8 +17,8 @@ using namespace ssg;
 class TemporaryDirectory {
 public:
     TemporaryDirectory()
-        : path_(std::filesystem::temp_directory_path() /
-                ("ssg-tree-" + std::to_string(++sequence))) {
+        : path_(
+              testSystemRuntimePath("tree_" + std::to_string(++sequence))) {
         std::filesystem::remove_all(path_);
         std::filesystem::create_directories(path_);
     }

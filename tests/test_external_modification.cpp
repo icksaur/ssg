@@ -11,8 +11,8 @@ namespace {
 class TemporaryDirectory {
 public:
     TemporaryDirectory()
-        : path_{std::filesystem::temp_directory_path() /
-                ("ssg-external-" + std::to_string(++next))} {
+        : path_{testSystemRuntimePath(
+              "external_modification_" + std::to_string(++next))} {
         std::filesystem::remove_all(path_);
         std::filesystem::create_directories(path_);
     }

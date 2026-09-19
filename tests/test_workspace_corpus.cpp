@@ -25,10 +25,10 @@ public:
 };
 
 fs::path uniqueRoot(std::string_view label) {
-    return fs::temp_directory_path() /
-           ("ssg-corpus-" + std::string{label} + "-" +
-            std::to_string(
-                std::chrono::steady_clock::now().time_since_epoch().count()));
+    return testSystemRuntimePath(
+        "corpus_" + std::string{label} + "_" +
+        std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
 }
 
 void writeBytes(const fs::path& path,

@@ -17,6 +17,7 @@
 //   TEST(my_test) { ASSERT_EQ(a, b); }
 //   int main() { RUN(my_test); ... }
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -29,11 +30,39 @@
 #include <utility>
 #include <vector>
 
+inline std::string testRuntimeToken(std::random_device::result_type value) {
+    static constexpr std::string_view digits = "0123456789abcdefghijklmnopqrstuvwxyz";
+    std::string token;
+    do {
+        token.push_back(digits[value % digits.size()]);
+        value /= digits.size();
+    } while (value != 0);
+    std::ranges::reverse(token);
+    return token;
+}
+
 class TestRuntimeDirectory {
 public:
     explicit TestRuntimeDirectory(std::filesystem::path path)
         : path_{std::move(path)} {
         std::filesystem::create_directories(path_);
+    }
+
+    TestRuntimeDirectory() {
+        std::random_device random;
+        for (;;) {
+            auto candidate = std::filesystem::temp_directory_path() /
+                             ("s" + testRuntimeToken(random()));
+            std::error_code error;
+            if (std::filesystem::create_directory(candidate, error)) {
+                path_ = std::move(candidate);
+                return;
+            }
+            if (error) {
+                throw std::filesystem::filesystem_error{
+                    "create test runtime directory", candidate, error};
+            }
+        }
     }
 
     ~TestRuntimeDirectory() {
@@ -73,6 +102,15 @@ inline std::filesystem::path testRuntimePath(
         source = std::move(parent);
     }
     throw std::runtime_error{"test source is outside the repository test tree"};
+}
+
+inline std::filesystem::path testSystemRuntimePath(
+    std::filesystem::path const& name) {
+    if (name.empty() || name.is_absolute() || name.has_parent_path()) {
+        throw std::runtime_error{"test runtime name must be one relative component"};
+    }
+    static const TestRuntimeDirectory runtime;
+    return runtime.path() / name;
 }
 
 inline int runGitStatus(const std::filesystem::path& root,

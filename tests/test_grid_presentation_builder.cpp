@@ -25,8 +25,8 @@ namespace {
 namespace fs = std::filesystem;
 
 fs::path uniqueRoot() {
-    auto base = fs::temp_directory_path() /
-                ("ssg-builder-" + std::to_string(::rand()));
+    auto base =
+        testSystemRuntimePath("grid_builder_" + std::to_string(::rand()));
     fs::remove_all(base);
     fs::create_directories(base / "recovery");
     return base;

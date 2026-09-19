@@ -71,7 +71,7 @@
       "execution": { "jobs": 20 },
       "filter": {
         "exclude": {
-          "name": "test_recovery|test_theme"
+          "label": "extended"
         }
       }
     },

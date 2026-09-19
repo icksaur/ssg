@@ -50,7 +50,7 @@ void writeOutOfBand(const fs::path& path, std::string_view text) {
 class ScopedDirectory {
 public:
     explicit ScopedDirectory(std::string_view name)
-        : path_(fs::temp_directory_path() / name) {
+        : path_(testSystemRuntimePath(std::string{name})) {
         std::error_code code;
         fs::remove_all(path_, code);
         fs::create_directories(path_);

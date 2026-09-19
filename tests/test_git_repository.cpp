@@ -176,7 +176,7 @@ void assertStatusMatches(const fs::path& root,
 TEST(platformRepositoryMatchesGitStatusAcrossWorkflow) {
     const auto uniqueSuffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    auto root = fs::temp_directory_path() / ("ssg-git-repository-" + uniqueSuffix);
+    auto root = testSystemRuntimePath("git_repository_" + uniqueSuffix);
     fs::remove_all(root);
     fs::create_directories(root);
     std::ofstream{root / "a.txt", std::ios::binary} << "a0\n";
@@ -253,10 +253,9 @@ TEST(platformRepositoryMatchesGitStatusAcrossWorkflow) {
 TEST(platformRepositoryResolvesNormalNestedAndLinkedWorktreeMetadata) {
     const auto uniqueSuffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    const auto root =
-        fs::temp_directory_path() / ("ssg-git-metadata-" + uniqueSuffix);
+    const auto root = testSystemRuntimePath("git_metadata_" + uniqueSuffix);
     const auto nested = root / "nested" / "workspace";
-    const auto linked = root.parent_path() / ("ssg-git-linked-" + uniqueSuffix);
+    const auto linked = testSystemRuntimePath("git_linked_" + uniqueSuffix);
     fs::remove_all(root);
     fs::remove_all(linked);
     fs::create_directories(nested);
@@ -292,7 +291,7 @@ TEST(platformRepositoryStatusClassificationMatchesGitPorcelain) {
     const auto uniqueSuffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     auto root =
-        fs::temp_directory_path() / ("ssg-git-status-classification-" + uniqueSuffix);
+        testSystemRuntimePath("git_status_classification_" + uniqueSuffix);
     fs::remove_all(root);
     fs::create_directories(root);
 
@@ -341,7 +340,8 @@ TEST(platformRepositoryStatusClassificationMatchesGitPorcelain) {
 TEST(platformRepositoryOpenFailureIsIncomplete) {
     const auto uniqueSuffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    auto base = fs::temp_directory_path() / ("ssg-git-repository-openfail-" + uniqueSuffix);
+    auto base =
+        testSystemRuntimePath("git_repository_openfail_" + uniqueSuffix);
     auto parent = base / "parent";
     auto root = parent / "repo";
     fs::remove_all(base);
@@ -383,7 +383,7 @@ TEST(platformRepositoryOpenFailureIsIncomplete) {
 TEST(platformRepositoryCurrentBranchMatchesGitBranchAndDetachedHead) {
     const auto uniqueSuffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    auto root = fs::temp_directory_path() / ("ssg-git-branch-" + uniqueSuffix);
+    auto root = testSystemRuntimePath("git_branch_" + uniqueSuffix);
     fs::remove_all(root);
     fs::create_directories(root);
     std::ofstream{root / "a.txt"} << "a0\n";
@@ -409,7 +409,7 @@ TEST(platformRepositoryCurrentBranchMatchesGitBranchAndDetachedHead) {
 TEST(platformRepositoryCurrentBranchIsAbsentOutsideGitRepo) {
     const auto uniqueSuffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    auto root = fs::temp_directory_path() / ("ssg-non-git-branch-" + uniqueSuffix);
+    auto root = testSystemRuntimePath("non_git_branch_" + uniqueSuffix);
     fs::remove_all(root);
     fs::create_directories(root);
     std::ofstream{root / "plain.txt"} << "x\n";
@@ -430,8 +430,8 @@ int gitSaysIgnored(const fs::path& repoRoot, std::string_view repoRelative) {
 fs::path makeUniqueRoot(std::string_view label) {
     const auto suffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    return fs::temp_directory_path() /
-           ("ssg-" + std::string{label} + "-" + suffix);
+    return testSystemRuntimePath(
+        "git_" + std::string{label} + "_" + suffix);
 }
 
 TEST(ignoreMatcherAgreesWithGitCheckIgnoreAtTheRepositoryRoot) {

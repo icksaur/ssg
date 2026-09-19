@@ -27,9 +27,9 @@ std::optional<ssg::GridPresentation> projectFrame(
 }
 
 std::filesystem::path uniqueRoot() {
-    auto root = std::filesystem::temp_directory_path() /
-                ("runtime_editing_" + std::to_string(
-                    std::chrono::steady_clock::now().time_since_epoch().count()));
+    auto root = testSystemRuntimePath(
+        "runtime_editing_" + std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "recovery");

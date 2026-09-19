@@ -21,10 +21,10 @@ namespace fs = std::filesystem;
 class TemporaryDirectory {
 public:
     TemporaryDirectory() {
-        path_ = fs::temp_directory_path() /
-                ("ssg-path-prompt-" +
-                 std::to_string(
-                     std::chrono::steady_clock::now().time_since_epoch().count()));
+        path_ = testSystemRuntimePath(
+            "path_prompt_" +
+            std::to_string(
+                std::chrono::steady_clock::now().time_since_epoch().count()));
         fs::create_directories(path_);
     }
     ~TemporaryDirectory() {

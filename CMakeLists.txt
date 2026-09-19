@@ -25,10 +25,15 @@ endif()
 # object, which turns a clean build of an already-seen tree into a near-instant
 # cache replay.  Opt out with -DSSG_CCACHE=OFF.
 option(SSG_CCACHE "Use ccache as the compiler launcher when found" ON)
-if(SSG_CCACHE AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
+if(SSG_CCACHE)
     find_program(SSG_CCACHE_PROGRAM ccache)
     if(SSG_CCACHE_PROGRAM)
-        set(CMAKE_CXX_COMPILER_LAUNCHER "${SSG_CCACHE_PROGRAM}")
+        foreach(LANGUAGE C CXX)
+            if(NOT CMAKE_${LANGUAGE}_COMPILER_LAUNCHER)
+                set(CMAKE_${LANGUAGE}_COMPILER_LAUNCHER
+                    "${SSG_CCACHE_PROGRAM}")
+            endif()
+        endforeach()
     endif()
 endif()
 option(SSG_ASSERTIONS "Keep C and C++ assertions enabled" OFF)
@@ -300,6 +305,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
     ssg_test_link_libraries(test_syntax_injection PRIVATE ssg_core)
+    ssg_test_labels(test_syntax_injection extended)
 
     ssg_add_test_suite(
         NAME test_session_files
@@ -990,6 +996,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
     ssg_test_link_libraries(test_recovery PRIVATE ssg_core)
+    ssg_test_labels(test_recovery extended)
+    ssg_test_labels(test_recovery_reconstruction extended)
+    ssg_test_labels(test_recovery_budget extended)
+    ssg_test_labels(test_recovery_budget_rejection extended)
 
 endif()
 
@@ -1216,6 +1226,11 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(ssg_app PRIVATE
         ssg_terminal_objects
         ssg_tui_objects)
+    if(MSVC)
+        set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION
+            "${CMAKE_INSTALL_BINDIR}")
+        include(InstallRequiredSystemLibraries)
+    endif()
     install(TARGETS ssg_app RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
     install(FILES "${SSG_SOURCE_DIR}/LICENSE"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/ssg")
@@ -1231,6 +1246,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         NAME test_init_script_watcher
         ENTRY ${SSG_SOURCE_DIR}/tests/test_init_script_watcher.cpp
         SYMBOL test_init_script_watcher)
+    ssg_test_labels(test_init_script_watcher extended)
     ssg_add_test_suite(
         NAME test_terminal_capabilities
         ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_capabilities.cpp
@@ -1374,6 +1390,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         SSG_THEME_ROLES_PATH="${SSG_SOURCE_DIR}/tests/fixtures/theme_roles.json"
     )
     ssg_test_link_libraries(test_theme PRIVATE ssg_core)
+    ssg_test_labels(test_theme extended)
 
 endif()
 

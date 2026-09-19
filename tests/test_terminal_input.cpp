@@ -1205,7 +1205,7 @@ TEST(altDoubleClickStillSelectsAWordNeverRemoves) {
 // End-to-end: the REAL router plan dispatched into a REAL runtime. Two carets,
 // Alt-click one, and exactly the un-clicked caret survives.
 TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
-    auto root = fs::temp_directory_path() / "ssg-altremove-e2e";
+    auto root = testSystemRuntimePath("terminal_input_altremove");
     fs::remove_all(root);
     fs::create_directories(root / "workspace");
     fs::create_directories(root / "recovery");

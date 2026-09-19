@@ -32,10 +32,10 @@ namespace {
 namespace fs = std::filesystem;
 
 fs::path uniqueRoot() {
-    auto base = fs::temp_directory_path() /
-                ("ssg-open-equiv-" +
-                 std::to_string(
-                     std::chrono::steady_clock::now().time_since_epoch().count()));
+    auto base = testSystemRuntimePath(
+        "open_equivalence_" +
+        std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::remove_all(base);
     fs::create_directories(base);
     return base;
