@@ -47,6 +47,8 @@
       "binaryDir": "${sourceDir}/build-windows",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+        "STATIC_CRT": "ON",
         "SSG_ASSERTIONS": "ON",
         "SSG_CCACHE": "OFF",
         "SSG_WERROR": "ON"

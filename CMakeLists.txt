@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
 if(POLICY CMP0092)
     cmake_policy(SET CMP0092 NEW)
 endif()
@@ -1226,11 +1229,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(ssg_app PRIVATE
         ssg_terminal_objects
         ssg_tui_objects)
-    if(MSVC)
-        set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION
-            "${CMAKE_INSTALL_BINDIR}")
-        include(InstallRequiredSystemLibraries)
-    endif()
     install(TARGETS ssg_app RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
     install(FILES "${SSG_SOURCE_DIR}/LICENSE"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/ssg")

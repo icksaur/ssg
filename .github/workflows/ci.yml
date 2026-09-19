@@ -57,18 +57,16 @@ jobs:
           cmake --install build-windows
           --config Release
           --prefix build-windows/package
-      - name: Verify packaged runtime dependencies
+      - name: Verify static runtime
         shell: pwsh
         run: |
           $package = Resolve-Path "build-windows/package"
           $executable = Join-Path $package "bin/ssg.exe"
-          $dependencies = dumpbin /dependents $executable |
-            Select-String '^\s+(MSVCP|VCRUNTIME|CONCRT).*\.dll\s*$' |
+          $runtimeDependencies = dumpbin /dependents $executable |
+            Select-String '^\s+(MSVCP|VCRUNTIME|CONCRT|ucrtbase).*\.dll\s*$' |
             ForEach-Object { $_.Matches.Value.Trim() }
-          foreach ($dependency in $dependencies) {
-            if (-not (Test-Path (Join-Path $package "bin/$dependency"))) {
-              throw "Missing packaged MSVC runtime dependency: $dependency"
-            }
+          if ($runtimeDependencies) {
+            throw "Dynamically linked MSVC runtime: $($runtimeDependencies -join ', ')"
           }
       - uses: actions/upload-artifact@v4
         with:
