@@ -4,7 +4,6 @@
 #include <ssg/TerminalOutput.h>
 #include <ssg/pointer_routing.h>
 
-#include <ssg/Editor.h>
 #include <ssg/focus.h>
 #include <ssg/HitTester.h>
 #include <ssg/PromptSurface.h>
@@ -15,6 +14,7 @@
 #include <ssg/InitScriptWatcher.h>
 
 #include "test_helpers.h"
+#include "editor_test_support.h"
 #include "grid_test_frame.h"
 
 #include <algorithm>

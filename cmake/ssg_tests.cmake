@@ -10,7 +10,9 @@ function(ssg_initialize_tests)
     file(WRITE "${_generatedDir}/suite_declarations.inc" "")
     file(WRITE "${_generatedDir}/suite_cases.inc" "")
 
-    add_executable(ssg_tests "${SSG_SOURCE_DIR}/tests/test_dispatcher.cpp")
+    add_executable(ssg_tests
+        "${SSG_SOURCE_DIR}/tests/test_dispatcher.cpp"
+        "${SSG_SOURCE_DIR}/tests/editor_test_support.cpp")
     target_include_directories(ssg_tests PRIVATE
         "${SSG_SOURCE_DIR}/tests"
         "${_generatedDir}")

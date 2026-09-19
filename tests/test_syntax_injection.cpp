@@ -1,7 +1,7 @@
-#include <ssg/Editor.h>
 #include "grid_test_frame.h"
 #include <ssg/SyntaxModel.h>
 #include "test_helpers.h"
+#include "editor_test_support.h"
 
 #include <filesystem>
 #include <fstream>

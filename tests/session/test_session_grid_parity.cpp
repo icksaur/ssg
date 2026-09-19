@@ -8,9 +8,9 @@
 // SSG_REGEN_GOLDEN=1.
 
 #include "../test_helpers.h"
+#include "../editor_test_support.h"
 #include "../grid_test_frame.h"
 
-#include <ssg/Editor.h>
 #include <ssg/Renderer.h>
 
 #include <cstdlib>

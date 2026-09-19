@@ -12,8 +12,8 @@
 #include "grid_presentation_builder.h"
 #include "grid_test_frame.h"
 #include "test_helpers.h"
+#include "editor_test_support.h"
 
-#include <ssg/Editor.h>
 #include <ssg/Renderer.h>
 
 #include <filesystem>

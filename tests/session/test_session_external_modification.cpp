@@ -9,8 +9,8 @@
 // test drives ingress deterministically through the runtime-thread test hook rather
 // than depending on inotify timing.
 #include "../test_helpers.h"
+#include "../editor_test_support.h"
 
-#include <ssg/Editor.h>
 #include <ssg/FileCommands.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/TextCodec.h>

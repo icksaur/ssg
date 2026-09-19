@@ -2,8 +2,8 @@
 #include "../grid_test_frame.h"
 #include "../grid_test_view.h"
 #include "../test_helpers.h"
+#include "../editor_test_support.h"
 
-#include <ssg/Editor.h>
 #include <ssg/GridPresenter.h>
 #include <ssg/Keymap.h>
 #include <ssg/UiTree.h>

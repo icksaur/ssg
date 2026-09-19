@@ -1,7 +1,7 @@
 #include "../test_helpers.h"
+#include "../editor_test_support.h"
 #include "../grid_test_frame.h"
 
-#include <ssg/Editor.h>
 #include <ssg/Keymap.h>
 #include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>

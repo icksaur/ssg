@@ -1,8 +1,8 @@
 #include "../grid_test_view.h"
 #include "../grid_test_frame.h"
 #include "../test_helpers.h"
+#include "../editor_test_support.h"
 
-#include <ssg/Editor.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Keymap.h>
 #include <ssg/PromptSurface.h>

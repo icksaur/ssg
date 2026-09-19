@@ -1,8 +1,8 @@
 #include "../test_helpers.h"
+#include "../editor_test_support.h"
 #include "../grid_test_frame.h"
 #include "../grid_test_view.h"
 
-#include <ssg/Editor.h>
 #include <ssg/FindReplace.h>
 #include <ssg/Keymap.h>
 #include <ssg/Selection.h>

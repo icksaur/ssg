@@ -1,8 +1,8 @@
 #include "test_helpers.h"
+#include "editor_test_support.h"
 #include "grid_test_frame.h"
 #include "tui_fixture.h"
 
-#include <ssg/Editor.h>
 #include <ssg/TextInputCommands.h>
 
 #include <filesystem>

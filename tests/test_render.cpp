@@ -1,6 +1,5 @@
 #include <ssg/Renderer.h>
 
-#include <ssg/Editor.h>
 #include <ssg/FindReplace.h>
 #include <ssg/HitTester.h>
 #include <ssg/PaletteSearcher.h>
@@ -14,6 +13,7 @@
 #include "grid_test_frame.h"
 #include "grid_test_view.h"
 #include "test_helpers.h"
+#include "editor_test_support.h"
 
 #include <cstdio>
 #include <filesystem>

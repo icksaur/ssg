@@ -1,4 +1,5 @@
 #include "test_helpers.h"
+#include "editor_test_support.h"
 
 #include <ssg/SessionSnapshot.h>
 

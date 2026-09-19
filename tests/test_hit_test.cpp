@@ -1,12 +1,12 @@
 #include <ssg/HitTester.h>
 
-#include <ssg/Editor.h>
 #include <ssg/Selection.h>
 #include <ssg/SyntaxModel.h>
 
 #include "grid_presentation_builder.h"
 #include "grid_test_frame.h"
 #include "test_helpers.h"
+#include "editor_test_support.h"
 
 #include <algorithm>
 #include <cstdio>
