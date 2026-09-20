@@ -77,6 +77,7 @@ public:
     Document& operator=(Document&&) noexcept;
 
     [[nodiscard]] std::uint64_t revision() const noexcept;
+    [[nodiscard]] std::uint64_t lineCount() const noexcept;
     [[nodiscard]] DocumentMode mode() const noexcept;
     [[nodiscard]] DocumentSnapshot snapshot() const;
 

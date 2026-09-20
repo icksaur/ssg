@@ -575,7 +575,9 @@ void paintDocument(CellGrid& grid, GridPresentation const& snapshot,
             }
             auto const documentOffset = line.documentOffset + span.byteOffset;
             auto const scope =
-                snapshot.syntax.scopeAt(ByteOffset{documentOffset});
+                snapshot.syntax
+                    ? snapshot.syntax->scopeAt(ByteOffset{documentOffset})
+                    : SyntaxScope::PlainText;
             auto const foreground = syntaxIndex(theme, scope);
             auto const selected = offsetInSelection(selection, documentOffset);
             auto cellBg = selected ? selectionBg : background;

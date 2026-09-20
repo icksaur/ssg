@@ -32,7 +32,7 @@ TEST(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport) {
     ASSERT_FALSE(completion.accepted());
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_EQ(snapshot->syntax.revision(), snapshot->documentRevision);
+    ASSERT_EQ(snapshot->syntax->revision(), snapshot->documentRevision);
 }
 
 } // namespace

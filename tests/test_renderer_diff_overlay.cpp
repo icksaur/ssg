@@ -202,14 +202,15 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     sections.diffFileIdentity = diffFile.id.value();
     sections.diff =
         ssg::DiffViewState{sections.documentRevision, {diffFile}};
-    sections.syntax = ssg::SyntaxViewState{
+    sections.syntax = std::make_shared<const ssg::SyntaxViewState>(
         sections.documentRevision,
         ssg::LanguageId::plainText(),
         text.size(),
-        {{ssg::ByteOffset{0}, ssg::ByteOffset{5}, ssg::SyntaxScope::Keyword},
-         {ssg::ByteOffset{34}, ssg::ByteOffset{36}, ssg::SyntaxScope::Number}},
-        {},
-    };
+        std::vector<ssg::SyntaxSpan>{
+            {ssg::ByteOffset{0}, ssg::ByteOffset{5},
+             ssg::SyntaxScope::Keyword},
+            {ssg::ByteOffset{34}, ssg::ByteOffset{36},
+             ssg::SyntaxScope::Number}});
     presentation.viewport = ssg::computeUnwrappedViewport(
         text, presentation.viewport.dimensions, 0, 0, 4, &diffFile);
     ASSERT_TRUE(base->document.has_value());

@@ -57,19 +57,6 @@ struct SyntaxSpan {
     friend bool operator==(const SyntaxSpan&, const SyntaxSpan&) = default;
 };
 
-struct LineIndentation {
-    LineIndex line;
-    ByteOffset lineStart;
-    ByteOffset contentStart;
-    std::uint32_t spaces = 0;
-    std::uint32_t tabs = 0;
-    std::uint32_t columns = 0;
-    bool blank = true;
-
-    friend bool operator==(const LineIndentation&,
-                           const LineIndentation&) = default;
-};
-
 class OpaqueSyntaxParse {
 public:
     virtual ~OpaqueSyntaxParse() = default;
@@ -132,6 +119,10 @@ public:
         const SyntaxParseRequest& request) = 0;
 };
 
+[[nodiscard]] SyntaxParseOutput runSyntaxParse(
+    const std::shared_ptr<SyntaxParser>& parser,
+    const SyntaxParseRequest& request);
+
 struct SyntaxConfig {
     std::uint32_t tabWidth = 4;
     std::size_t maximumDocumentBytes = 64 * 1024 * 1024;
@@ -140,8 +131,7 @@ struct SyntaxConfig {
 class SyntaxViewState {
 public:
     SyntaxViewState(std::uint64_t revision, LanguageId language,
-                    std::uint64_t textBytes, std::vector<SyntaxSpan> spans,
-                    std::vector<LineIndentation> indentation);
+                    std::uint64_t textBytes, std::vector<SyntaxSpan> spans);
 
     // The unhighlighted view for `text`: no spans or brackets, only the
     // indentation the caret and wrap logic always need.  The view a document
@@ -169,11 +159,6 @@ public:
     [[nodiscard]] const std::vector<SyntaxSpan>& spans() const noexcept {
         return spans_;
     }
-    [[nodiscard]] const std::vector<LineIndentation>& indentation()
-        const noexcept {
-        return indentation_;
-    }
-
     friend bool operator==(const SyntaxViewState&,
                            const SyntaxViewState&) = default;
 
@@ -182,7 +167,6 @@ private:
     LanguageId language_;
     std::uint64_t textBytes_;
     std::vector<SyntaxSpan> spans_;
-    std::vector<LineIndentation> indentation_;
 };
 
 enum class SyntaxRequestError : std::uint8_t {
@@ -244,6 +228,13 @@ public:
     [[nodiscard]] bool hasGrammar(const LanguageId& language) const noexcept;
     [[nodiscard]] bool canIncrementallyParse(
         const LanguageId& language) const noexcept;
+    [[nodiscard]] bool hasPending() const noexcept {
+        return pending_ != nullptr;
+    }
+    [[nodiscard]] std::shared_ptr<const SyntaxParseRequest> pendingRequest()
+        const noexcept {
+        return pending_;
+    }
 
     // Parse `text` and adopt the result, driving request -> run -> accept inline
     // on the CALLING thread. The convenience for the common synchronous case: it
@@ -265,13 +256,17 @@ public:
     void cancelPending() noexcept;
 
     [[nodiscard]] const SyntaxViewState& viewState() const noexcept {
+        return *viewState_;
+    }
+    [[nodiscard]] std::shared_ptr<const SyntaxViewState> sharedViewState()
+        const noexcept {
         return viewState_;
     }
 
 private:
     std::shared_ptr<SyntaxParser> parser_;
     SyntaxConfig config_;
-    SyntaxViewState viewState_;
+    std::shared_ptr<const SyntaxViewState> viewState_;
     SyntaxParseHandle acceptedParse_;
     std::string acceptedText_;
     std::shared_ptr<const SyntaxParseRequest> pending_;

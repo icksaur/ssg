@@ -331,7 +331,7 @@ TEST(helpTabIsHighlightedAsMarkdown) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& syntax = snapshot->syntax;
+    auto const& syntax = *snapshot->syntax;
     // The untitled help buffer is highlighted as Markdown (not plain text)
     // because openReadOnlyTab set a language override.
     ASSERT_EQ(syntax.language().value(), std::string{"markdown"});

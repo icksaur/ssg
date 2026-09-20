@@ -23,6 +23,7 @@ code-review-*.md
 agility-analysis-*.md
 tasks.md
 plan.md
+/.measurements/
 
 # various tools
 tools/

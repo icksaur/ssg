@@ -257,6 +257,24 @@ TEST(snapshotIsOwningAndRevisionAdvancesOncePerTransaction) {
     ASSERT_TRUE(document.snapshot().dirty);
 }
 
+TEST(lineCountTracksAcceptedTransactionsAndReplacement) {
+    Document document("one\ntwo\n");
+    ASSERT_EQ(document.lineCount(), std::uint64_t{3});
+
+    const auto edited = document.apply(transaction(
+        document.revision(), {edit(3, 1, ""), edit(7, 0, "\nthree\n")}));
+    ASSERT_TRUE(edited.accepted());
+    ASSERT_EQ(document.lineCount(), std::uint64_t{4});
+
+    const auto rejected =
+        document.apply(transaction(document.revision() - 1, {edit(0, 0, "\n")}));
+    ASSERT_FALSE(rejected.accepted());
+    ASSERT_EQ(document.lineCount(), std::uint64_t{4});
+
+    ASSERT_TRUE(document.replace("single").accepted());
+    ASSERT_EQ(document.lineCount(), std::uint64_t{1});
+}
+
 }  // namespace
 
 SSG_TEST_SUITE(test_document) {
@@ -271,5 +289,6 @@ SSG_TEST_SUITE(test_document) {
     RUN(invalidConstructionIsActionable);
     RUN(emptyAndNoopTransactionsAreRejected);
     RUN(snapshotIsOwningAndRevisionAdvancesOncePerTransaction);
+    RUN(lineCountTracksAcceptedTransactionsAndReplacement);
     return failed == 0 ? 0 : 1;
 }

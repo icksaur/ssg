@@ -102,7 +102,10 @@ inline GridPresentation copyGridFrame(
         values.document = solveDocumentSurface(
             *node, PaneTopology::initial(),
             values.document && values.document->lineNumbers.width > 0,
-            static_cast<std::uint32_t>(values.syntax.indentation().size()),
+            static_cast<std::uint32_t>(
+                std::count(values.documentText.begin(),
+                           values.documentText.end(), '\n') +
+                1),
             values.style.dimensions);
     } else {
         values.document.reset();

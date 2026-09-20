@@ -539,6 +539,7 @@ int main(int argc, char** argv) {
     auto runtimeOwner = std::move(created.session);
     auto& runtime = *runtimeOwner;
     const PlatformWake* gitDiffWake = runtime.gitDiffWake();
+    const PlatformWake* syntaxWake = runtime.syntaxWake();
     recordStartupMark("post_create");
 
     ssg::GridPresenter presenter;
@@ -646,10 +647,15 @@ int main(int argc, char** argv) {
             }
             std::vector<const PlatformWake*> wakes;
             std::optional<std::size_t> gitDiffWakeIndex;
+            std::optional<std::size_t> syntaxWakeIndex;
             std::optional<std::size_t> initScriptWakeIndex;
             if (gitDiffWake != nullptr) {
                 gitDiffWakeIndex = wakes.size();
                 wakes.push_back(gitDiffWake);
+            }
+            if (syntaxWake != nullptr) {
+                syntaxWakeIndex = wakes.size();
+                wakes.push_back(syntaxWake);
             }
             if (initScriptWatcher) {
                 initScriptWakeIndex = wakes.size();
@@ -675,7 +681,14 @@ int main(int argc, char** argv) {
             }
             if (wakeReady(gitDiffWakeIndex)) {
                 (void)runtime.pump();
-                if (!wait.input && !runtime.workspaceSearchPending()) continue;
+            }
+            if (wakeReady(syntaxWakeIndex)) {
+                (void)runtime.pumpSyntax();
+            }
+            if ((wakeReady(gitDiffWakeIndex) ||
+                 wakeReady(syntaxWakeIndex)) &&
+                !wait.input && !runtime.workspaceSearchPending()) {
+                continue;
             }
             if (wait.input) {
                 const auto readBytes = eventLoop.readInput(bytes);

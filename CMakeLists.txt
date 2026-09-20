@@ -1410,6 +1410,7 @@ endif()
 
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/SyntaxModel.cpp
+    ${SSG_SOURCE_DIR}/src/SyntaxWorker.cpp
 )
 
 # Tree-sitter is compiled unconditionally.  Highlighting is disabled at RUNTIME
@@ -1527,6 +1528,15 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
     ssg_test_link_libraries(test_syntax PRIVATE ssg_core)
+
+    ssg_add_test_suite(
+        NAME test_syntax_worker
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_syntax_worker.cpp
+        SYMBOL test_syntax_worker)
+    ssg_test_include_directories(test_syntax_worker PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
+    ssg_test_link_libraries(test_syntax_worker PRIVATE ssg_core)
 
     ssg_add_test_suite(
         NAME test_syntax_language_detection

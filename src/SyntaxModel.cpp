@@ -136,42 +136,6 @@ bool validEdits(const std::vector<SyntaxEdit>& edits,
            currentText.substr(currentCursor);
 }
 
-std::vector<LineIndentation> deriveIndentation(std::string_view text,
-                                                std::uint32_t tabWidth) {
-    std::vector<LineIndentation> result;
-    std::size_t lineStart = 0;
-    std::uint64_t line = 0;
-    while (lineStart <= text.size()) {
-        const auto newline = text.find('\n', lineStart);
-        const auto lineEnd =
-            newline == std::string_view::npos ? text.size() : newline;
-        auto content = lineStart;
-        std::uint32_t spaces = 0;
-        std::uint32_t tabs = 0;
-        std::uint32_t columns = 0;
-        while (content < lineEnd &&
-               (text[content] == ' ' || text[content] == '\t')) {
-            if (text[content] == ' ') {
-                ++spaces;
-                ++columns;
-            } else {
-                ++tabs;
-                columns += tabWidth - columns % tabWidth;
-            }
-            ++content;
-        }
-        result.push_back(
-            {LineIndex{line}, ByteOffset{lineStart}, ByteOffset{content},
-             spaces, tabs, columns, content == lineEnd});
-        if (newline == std::string_view::npos) {
-            break;
-        }
-        lineStart = newline + 1;
-        ++line;
-    }
-    return result;
-}
-
 std::vector<SyntaxSpan> canonicalSpans(std::uint64_t textBytes,
                                         std::vector<SyntaxSpan> spans) {
     spans.erase(
@@ -286,13 +250,11 @@ void SyntaxParseRequest::cancel() const noexcept {
 
 SyntaxViewState::SyntaxViewState(
     std::uint64_t revision, LanguageId language, std::uint64_t textBytes,
-    std::vector<SyntaxSpan> spans,
-    std::vector<LineIndentation> indentation)
+    std::vector<SyntaxSpan> spans)
     : revision_(revision),
       language_(std::move(language)),
       textBytes_(textBytes),
-      spans_(std::move(spans)),
-      indentation_(std::move(indentation)) {}
+      spans_(std::move(spans)) {}
 
 SyntaxViewState SyntaxViewState::plainText(
     std::uint64_t revision, LanguageId language, std::string_view text,
@@ -308,8 +270,7 @@ SyntaxViewState SyntaxViewState::plainText(
     return {revision,
             std::move(language),
             text.size(),
-            std::move(spans),
-            deriveIndentation(text, tabWidth)};
+            std::move(spans)};
 }
 
 SyntaxViewState SyntaxViewState::fromParse(
@@ -327,7 +288,6 @@ SyntaxViewState SyntaxViewState::fromParse(
         std::move(language),
         text.size(),
         canonicalSpans(text.size(), output.spans),
-        deriveIndentation(text, config.tabWidth),
     };
 }
 
@@ -350,8 +310,10 @@ SyntaxModel::SyntaxModel(std::shared_ptr<SyntaxParser> parser,
                          SyntaxConfig config)
     : parser_(std::move(parser)),
       config_(config),
-      viewState_(SyntaxViewState::plainText(
-          std::uint64_t{0}, LanguageId::plainText(), {}, config.tabWidth)) {
+      viewState_(std::make_shared<const SyntaxViewState>(
+          SyntaxViewState::plainText(
+              std::uint64_t{0}, LanguageId::plainText(), {},
+              config.tabWidth))) {
     if (config_.tabWidth == 0) {
         throw std::invalid_argument{"tab width must be positive"};
     }
@@ -371,7 +333,7 @@ bool SyntaxModel::hasGrammar(const LanguageId& language) const noexcept {
 
 bool SyntaxModel::canIncrementallyParse(
     const LanguageId& language) const noexcept {
-    return acceptedParse_ != nullptr && language == viewState_.language();
+    return acceptedParse_ != nullptr && language == viewState().language();
 }
 
 SyntaxParseResult SyntaxModel::parse(
@@ -391,26 +353,27 @@ SyntaxParseRequestResult SyntaxModel::request(
     std::uint64_t revision, LanguageId language, std::string text,
     std::vector<SyntaxEdit> edits) {
     const bool repeatsView =
-        revision == viewState_.revision() &&
-        language == viewState_.language();
+        revision == viewState().revision() &&
+        language == viewState().language();
     const bool repeatsPending =
         pending_ && revision == pending_->revision() &&
         language == pending_->language();
-    if (revision < viewState_.revision() || repeatsView ||
+    if (revision < viewState().revision() || repeatsView ||
         (pending_ && revision < pending_->revision()) || repeatsPending) {
         return {nullptr, SyntaxRequestError::StaleRevision};
     }
     cancelPending();
     if (text.size() > config_.maximumDocumentBytes) {
-        viewState_ = SyntaxViewState::plainText(
-            revision, language, text, config_.tabWidth);
+        viewState_ = std::make_shared<const SyntaxViewState>(
+            SyntaxViewState::plainText(
+                revision, language, text, config_.tabWidth));
         acceptedParse_.reset();
         acceptedText_ = text;
         pending_.reset();
         return {nullptr, SyntaxRequestError::DocumentTooLarge};
     }
     const auto priorParse =
-        language == viewState_.language() ? acceptedParse_ : nullptr;
+        language == viewState().language() ? acceptedParse_ : nullptr;
     if (!edits.empty() &&
         (!priorParse || !validEdits(edits, text, acceptedText_))) {
         return {nullptr, SyntaxRequestError::MalformedEdits};
@@ -428,16 +391,29 @@ SyntaxParseRequestResult SyntaxModel::request(
 
 SyntaxParseOutput SyntaxModel::run(
     const SyntaxParseRequest& request) const {
+    return runSyntaxParse(parser_, request);
+}
+
+SyntaxParseOutput runSyntaxParse(
+    const std::shared_ptr<SyntaxParser>& parser,
+    const SyntaxParseRequest& request) {
     if (request.cancelled()) {
         return {.revision = request.revision(),
                 .status = SyntaxParseStatus::Cancelled};
     }
-    if (!hasGrammar(request.language())) {
+    bool grammarAvailable = false;
+    try {
+        grammarAvailable =
+            parser && !request.language().isPlainText() &&
+            parser->hasGrammar(request.language());
+    } catch (...) {
+    }
+    if (!grammarAvailable) {
         return {.revision = request.revision(),
                 .status = SyntaxParseStatus::GrammarUnavailable};
     }
     try {
-        return parser_->parse(request);
+        return parser->parse(request);
     } catch (...) {
         return {.revision = request.revision(),
                 .status = SyntaxParseStatus::Failed};
@@ -450,9 +426,9 @@ SyntaxAcceptResult SyntaxModel::accept(
     if (!request) {
         return {SyntaxAcceptError::UnknownRequest, false};
     }
-    if (request->revision() < viewState_.revision() ||
-        (request->revision() == viewState_.revision() &&
-         request->language() == viewState_.language())) {
+    if (request->revision() < viewState().revision() ||
+        (request->revision() == viewState().revision() &&
+         request->language() == viewState().language())) {
         return {SyntaxAcceptError::StaleRevision, false};
     }
     if (request->cancelled()) {
@@ -477,7 +453,8 @@ SyntaxAcceptResult SyntaxModel::accept(
                     : SyntaxViewState::fromParse(
                           request->revision(), request->language(),
                           request->text(), output, config_);
-    viewState_ = std::move(next);
+    viewState_ =
+        std::make_shared<const SyntaxViewState>(std::move(next));
     acceptedParse_ = fallback ? nullptr : output.parse;
     acceptedText_ = request->text();
     pending_.reset();

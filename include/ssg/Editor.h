@@ -28,6 +28,7 @@
 #include <ssg/StatusFields.h>
 #include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
+#include <ssg/SyntaxWorker.h>
 #include <ssg/TabManager.h>
 #include <ssg/Theme.h>
 #include <ssg/TreeModel.h>
@@ -195,6 +196,8 @@ public:
     Editor& operator=(Editor&&) = delete;
 
     [[nodiscard]] PumpResult pump();
+    [[nodiscard]] bool pumpSyntax();
+    [[nodiscard]] const PlatformWake* syntaxWake() const noexcept;
     // CMD-5: no command handler runs while another handler is executing.
     [[nodiscard]] CommandResult dispatch(std::string_view commandId);
     // CMD-6: payload-bearing client operations remain typed through application.
@@ -251,6 +254,7 @@ public:
     FollowEditsModel follow;
     TreeModel tree;
     std::shared_ptr<SyntaxParser> syntaxParser;
+    SyntaxWorker syntaxWorker;
     // The single interaction authority: owner of the screen schema, the
     // prompt surface, panel/focus/provider truth, the interaction projection,
     // and the tree revision source. Presentation reads its projection; every
@@ -384,7 +388,10 @@ public:
     void discardDocumentRuntimeState(FileDocumentId document);
     [[nodiscard]] DocumentHistory& historyFor(FileDocumentId document);
     [[nodiscard]] SyntaxModel& syntaxFor(FileDocumentId document);
-    [[nodiscard]] SyntaxViewState activeSyntaxView() const;
+    [[nodiscard]] std::shared_ptr<const SyntaxViewState>
+    activeSyntaxView() const;
+    [[nodiscard]] LanguageId languageFor(FileDocumentId document) const;
+    [[nodiscard]] LanguageId activeSyntaxLanguage() const;
     [[nodiscard]] std::optional<WorkspaceDocumentState> activeWorkspaceState() const;
     [[nodiscard]] std::optional<DiffFileView> activeDiffFile() const;
     [[nodiscard]] std::string const& activeText() const;
@@ -463,17 +470,11 @@ public:
     // setting.
     void rebuildFileCandidates();
     void refreshSyntax(std::vector<SyntaxEdit> edits = {});
-    // While `deferring_enrichment` is set (the pre-first-frame window when
-    // created with defer_enrichment=true), refresh_tree and refresh_syntax
-    // record that work is pending instead of running the
-    // O(workspace)/O(document) scan, so the first frame is not blocked by it.
-    // prime_deferred() clears the flag and runs any pending scan.  The run
-    // counters exist for the startup oracle to assert no scan happened before
-    // priming.
+    // While `deferringEnrichment` is set, workspace tree scans wait until
+    // `primeDeferred`; syntax requests are always non-blocking.
     void primeDeferred();
     bool deferringEnrichment = false;
     bool pendingTreeRefresh = false;
-    bool pendingSyntaxRefresh = false;
     GitDiffIngress gitDiffIngress;
 
     void showStatus(std::string text);

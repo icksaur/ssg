@@ -35,7 +35,7 @@ struct GridPresentation {
     FindReplaceViewState findReplace;
     DiffViewState diff;
     LspSyncViewState lspSync;
-    SyntaxViewState syntax;
+    std::shared_ptr<const SyntaxViewState> syntax;
     ThemeSnapshot theme;
     UiSchema uiTree;
     TabViewState tabs;

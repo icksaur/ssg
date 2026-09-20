@@ -81,10 +81,19 @@ TransactionResult failure(DocumentError error, std::uint64_t revision,
 
 struct Document::Impl {
     explicit Impl(std::string_view text, DocumentMode documentMode)
-        : tree(std::string{text}), mode(documentMode) {}
+        : lineCount(static_cast<std::uint64_t>(
+                        std::ranges::count(text, '\n')) +
+                    1),
+          tree(std::string{text}),
+          mode(documentMode) {}
     explicit Impl(std::string text, DocumentMode documentMode)
-        : tree(std::move(text)), mode(documentMode) {}
+        : lineCount(static_cast<std::uint64_t>(
+                        std::ranges::count(text, '\n')) +
+                    1),
+          tree(std::move(text)),
+          mode(documentMode) {}
 
+    std::uint64_t lineCount{1};
     detail::PieceTree tree;
     std::uint64_t revision{1};
     DocumentMode mode;
@@ -109,6 +118,10 @@ Document& Document::operator=(Document&&) noexcept = default;
 
 std::uint64_t Document::revision() const noexcept {
     return impl_->revision;
+}
+
+std::uint64_t Document::lineCount() const noexcept {
+    return impl_->lineCount;
 }
 
 DocumentMode Document::mode() const noexcept {
@@ -198,6 +211,10 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
         const auto& edit = **iterator;
         const auto offset = static_cast<std::size_t>(edit.offset.value());
         const auto erased = static_cast<std::size_t>(edit.erasedBytes);
+        impl_->lineCount -= static_cast<std::uint64_t>(std::ranges::count(
+            std::string_view{original}.substr(offset, erased), '\n'));
+        impl_->lineCount += static_cast<std::uint64_t>(
+            std::ranges::count(edit.insertedText, '\n'));
         if (erased != 0) {
             impl_->tree.erase(offset, erased);
         }
@@ -232,6 +249,8 @@ TransactionResult Document::replace(std::string_view text) {
     if (impl_->tree.text() != text) {
         impl_->tree = detail::PieceTree{std::string{text}};
     }
+    impl_->lineCount =
+        static_cast<std::uint64_t>(std::ranges::count(text, '\n')) + 1;
     impl_->revision = currentRevision + 1;
     impl_->dirty = false;
     return {DocumentError::None, impl_->revision, {}};

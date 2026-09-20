@@ -171,6 +171,7 @@ OperationResult applyFilePathCompletion(Editor& runtime,
             result = runtime.workspace.saveAs(*id, std::string{path});
             if (!result.accepted()) return failure(workspaceMessage(result));
             (void)runtime.refreshTree();
+            runtime.refreshSyntax();
             return runtime.updateTabsFor(*id);
         }
         case PromptCompletion::FileRename: {
@@ -179,6 +180,7 @@ OperationResult applyFilePathCompletion(Editor& runtime,
             result = runtime.workspace.renameFile(*id, std::string{path});
             if (!result.accepted()) return failure(workspaceMessage(result));
             (void)runtime.refreshTree();
+            runtime.refreshSyntax();
             return runtime.updateTabsFor(*id);
         }
         case PromptCompletion::FileNewDirectory:

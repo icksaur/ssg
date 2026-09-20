@@ -151,8 +151,9 @@ public:
             .documentRevision = revision_,
             .selections = SelectionSet{{
                 Selection{caretPosition(caret), caretPosition(caret)}}},
-            .syntax = SyntaxViewState::plainText(
-                revision_, LanguageId{"plain"}, text_, 4),
+            .syntax = std::make_shared<const SyntaxViewState>(
+                SyntaxViewState::plainText(
+                    revision_, LanguageId{"plain"}, text_, 4)),
             .theme = defaultTheme(),
             .uiTree = std::move(uiTree),
             .tabs = std::move(tabs),
@@ -262,7 +263,9 @@ public:
             presentation.document = solveDocumentSurface(
                 *node, PaneTopology::initial(), lineNumbers_,
                 static_cast<std::uint32_t>(
-                    presentation.syntax.indentation().size()),
+                    std::count(presentation.documentText.begin(),
+                               presentation.documentText.end(), '\n') +
+                    1),
                 presentation.style.dimensions);
             if (!presentation.document->panes.empty()) {
                 const auto& content =

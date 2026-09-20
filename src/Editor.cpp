@@ -21,8 +21,6 @@
 namespace ssg {
 namespace {
 
-constexpr std::size_t kFirstFrameSyntaxMaxBytes = 2 * 1024 * 1024;
-
 std::string liveDiffTabLabelForPath(const std::filesystem::path& path) {
     const auto filename = path.filename().string();
     return filename.empty() ? path.generic_string() : filename;
@@ -665,6 +663,7 @@ Editor::Editor(std::filesystem::path canonicalCwd,
       workspace{Workspace::create(root, recovery, this->archiveRoot)},
       selection{initialSelection()}, clipboard{4}, tabs{},
       external{workspace, diff}, syntaxParser{std::move(parser)},
+      syntaxWorker{syntaxParser},
       screen{assembleScreen("help.open", StyleDimensions{},
                             Style{}.inputLineSigil),
              tree},
@@ -684,6 +683,10 @@ Editor::~Editor() = default;
 
 const PlatformWake* Editor::gitDiffWake() const noexcept {
     return gitDiffIngress.worker.wake();
+}
+
+const PlatformWake* Editor::syntaxWake() const noexcept {
+    return syntaxWorker.wake();
 }
 
 
@@ -1043,8 +1046,7 @@ OperationResult Editor::openReadOnlyTab(
     auto mapped = readOnlyTabDocuments.find(contentIdentity);
     if (mapped != readOnlyTabDocuments.end()) {
         const auto previous = mapped->second;
-        documentRuntimeStates.erase(previous.value());
-        documentLanguageOverrides.erase(previous.value());
+        discardDocumentRuntimeState(previous);
         (void)workspace.removeDocument(previous);
     }
     readOnlyTabDocuments[contentIdentity] = *replacement.document;
@@ -1091,6 +1093,7 @@ void Editor::ensureDocumentRuntimeState(FileDocumentId document) {
 }
 
 void Editor::discardDocumentRuntimeState(FileDocumentId document) {
+    syntaxWorker.cancel(document);
     documentRuntimeStates.erase(document.value());
     documentLanguageOverrides.erase(document.value());
     if (findDocumentId == document) findDocumentId.reset();
@@ -1123,17 +1126,41 @@ SyntaxModel& Editor::syntaxFor(FileDocumentId document) {
     return it->second.syntax;
 }
 
-SyntaxViewState Editor::activeSyntaxView() const {
+std::shared_ptr<const SyntaxViewState> Editor::activeSyntaxView() const {
     if (auto id = activeDocumentId()) {
         if (auto it = documentRuntimeStates.find(id->value());
             it != documentRuntimeStates.end()) {
-            return it->second.syntax.viewState();
+            if (auto pending = it->second.syntax.pendingRequest()) {
+                return std::make_shared<const SyntaxViewState>(
+                    pending->revision(), pending->language(),
+                    pending->text().size(), std::vector<SyntaxSpan>{});
+            }
+            return it->second.syntax.sharedViewState();
         }
     }
     const auto* document = activeDocument();
     const auto text = document ? document->snapshot().text : std::string{};
     const auto revision = document ? document->revision() : std::uint64_t{0};
-    return SyntaxViewState::plainText(revision, LanguageId::plainText(), text, 4);
+    return std::make_shared<const SyntaxViewState>(
+        SyntaxViewState::plainText(
+            revision, LanguageId::plainText(), text, 4));
+}
+
+LanguageId Editor::languageFor(FileDocumentId document) const {
+    if (auto override = documentLanguageOverrides.find(document.value());
+        override != documentLanguageOverrides.end()) {
+        return override->second;
+    }
+    if (auto state = workspace.state(document);
+        state && state->key.kind() == DocumentKeyKind::Saved) {
+        return LanguageId::fromPath(state->key.savedPath());
+    }
+    return LanguageId::plainText();
+}
+
+LanguageId Editor::activeSyntaxLanguage() const {
+    auto document = activeDocumentId();
+    return document ? languageFor(*document) : LanguageId::plainText();
 }
 
 std::optional<WorkspaceDocumentState> Editor::activeWorkspaceState() const {
@@ -1315,26 +1342,19 @@ void Editor::refreshSyntax(std::vector<SyntaxEdit> edits) {
     auto const* document = activeDocument();
     auto text = document ? document->snapshot().text : std::string{};
     auto revision = document ? document->revision() : std::uint64_t{0};
-    auto language = LanguageId::plainText();
-    if (auto const override = documentLanguageOverrides.find(id->value());
-        override != documentLanguageOverrides.end()) {
-        language = override->second;
-    } else if (auto state = activeWorkspaceState();
-               state && state->key.kind() == DocumentKeyKind::Saved) {
-        language = LanguageId::fromPath(state->key.savedPath());
-    }
-    if (deferringEnrichment) {
-        const bool canEagerlyParse =
-            document != nullptr && model.hasGrammar(language) &&
-            text.size() <= kFirstFrameSyntaxMaxBytes;
-        if (!canEagerlyParse) {
-            pendingSyntaxRefresh = true;
-            return;
-        }
-    }
+    auto language = languageFor(*id);
+    if (model.hasPending()) edits.clear();
     if (!model.canIncrementallyParse(language)) edits.clear();
-    (void)model.parse(revision, std::move(language), std::move(text),
-                      std::move(edits));
+    if (!model.hasParser()) {
+        (void)model.parse(revision, std::move(language), std::move(text),
+                          std::move(edits));
+        return;
+    }
+    auto prepared = model.request(revision, std::move(language), std::move(text),
+                                  std::move(edits));
+    if (prepared.accepted()) {
+        syntaxWorker.submit({*id, std::move(prepared.request)});
+    }
 }
 
 void Editor::primeDeferred() {
@@ -1345,11 +1365,6 @@ void Editor::primeDeferred() {
     if (pendingTreeRefresh) {
         pendingTreeRefresh = false;
         (void)refreshTree();
-        ran = true;
-    }
-    if (pendingSyntaxRefresh) {
-        pendingSyntaxRefresh = false;
-        refreshSyntax();
         ran = true;
     }
     (void)ran;
@@ -1660,6 +1675,32 @@ PumpResult Editor::pump() {
     }
     std::lock_guard operationLock{operationMutex};
     return {gitDiffIngress.drainGitDiffWorker()};
+}
+
+bool Editor::pumpSyntax() {
+    if (commands.dispatchInProgress()) {
+        throw std::logic_error{"worker results cannot be pumped during dispatch"};
+    }
+    std::lock_guard operationLock{operationMutex};
+    bool accepted = false;
+    for (auto& completion : syntaxWorker.drain()) {
+        auto state = documentRuntimeStates.find(completion.document.value());
+        auto const* document = workspace.tryDocument(completion.document);
+        if (state == documentRuntimeStates.end() || document == nullptr) {
+            continue;
+        }
+        auto language = languageFor(completion.document);
+        if (document->revision() != completion.request->revision() ||
+            language != completion.request->language()) {
+            continue;
+        }
+        accepted =
+            state->second.syntax
+                .accept(completion.request, completion.output)
+                .accepted() ||
+            accepted;
+    }
+    return accepted;
 }
 
 bool Editor::dispatchInProgress() const noexcept {

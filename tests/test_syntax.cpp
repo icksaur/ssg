@@ -250,15 +250,6 @@ TEST(handComputedMetadataGoldenCoversAllExportedSections) {
             {byte(22), byte(29), SyntaxScope::Comment},
             {byte(29), byte(32), SyntaxScope::PlainText},
         }));
-    ASSERT_EQ(
-        state.indentation(),
-        (std::vector<LineIndentation>{
-            {line(0), byte(0), byte(0), 0, 0, 0, false},
-            {line(1), byte(11), byte(12), 0, 1, 4, false},
-            {line(2), byte(17), byte(19), 2, 0, 2, false},
-            {line(3), byte(30), byte(30), 0, 0, 0, false},
-            {line(4), byte(32), byte(32), 0, 0, 0, true},
-        }));
     ASSERT_EQ(state.scopeAt(ByteOffset{5}), SyntaxScope::Number);
     ASSERT_EQ(state.scopeAt(ByteOffset{19}), SyntaxScope::PlainText);
 
@@ -378,8 +369,6 @@ TEST(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot) {
               (std::vector<SyntaxSpan>{
                   {byte(0), byte(text.size()), SyntaxScope::PlainText},
               }));
-    ASSERT_EQ(noParser.viewState().indentation().at(0).columns,
-              std::uint32_t{4});
 }
 
 TEST(requestAndResultValidationIsFailureAtomic) {

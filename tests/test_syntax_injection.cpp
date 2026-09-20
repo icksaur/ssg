@@ -3,57 +3,62 @@
 #include "test_helpers.h"
 #include "editor_test_support.h"
 
+#include <atomic>
 #include <filesystem>
 #include <fstream>
-#include <atomic>
 #include <memory>
+#include <semaphore>
 #include <string>
+#include <thread>
 
 namespace {
 
 using namespace ssg;
 
-// A minimal opaque parse payload for the recording parser.
-class RecordingParse final : public OpaqueSyntaxParse {
-public:
-    explicit RecordingParse(std::string text) : text_(std::move(text)) {}
+class RecordingParse final : public OpaqueSyntaxParse {};
 
-private:
-    std::string text_;
-};
-
-// A SyntaxParser test double that tags the entire document as Keyword and counts
-// how many times the runtime drove it. It proves the injection seam: the runtime
-// uses the parser handed to it via EditorConfig, not a hard-constructed one.
 class RecordingParser final : public SyntaxParser {
 public:
-    explicit RecordingParser(bool grammarAvailable = true)
-        : grammarAvailable_(grammarAvailable) {}
+    explicit RecordingParser(bool blockFirst = false)
+        : blockFirst_{blockFirst} {}
 
-    std::shared_ptr<std::size_t> parseCalls = std::make_shared<std::size_t>(0);
-
-    bool hasGrammar(const LanguageId&) const override { return grammarAvailable_; }
+    bool hasGrammar(const LanguageId&) const override { return true; }
 
     SyntaxParseOutput parse(const SyntaxParseRequest& request) override {
-        ++*parseCalls;
+        const auto call = calls_.fetch_add(1);
+        entered_.release();
+        if (blockFirst_ && call == 0) release_.acquire();
+
         SyntaxParseOutput output;
         output.revision = request.revision();
         if (request.cancelled()) {
             output.status = SyntaxParseStatus::Cancelled;
-            return output;
+        } else {
+            output.status = SyntaxParseStatus::Parsed;
+            output.parse = std::make_shared<RecordingParse>();
+            if (!request.text().empty()) {
+                output.spans.push_back(
+                    {ByteOffset{0}, ByteOffset{request.text().size()},
+                     SyntaxScope::Keyword});
+            }
         }
-        output.status = SyntaxParseStatus::Parsed;
-        output.parse = std::make_shared<RecordingParse>(request.text());
-        if (!request.text().empty()) {
-            output.spans.push_back(
-                {ByteOffset{0}, ByteOffset{request.text().size()},
-                 SyntaxScope::Keyword});
-        }
+        completed_.release();
         return output;
     }
 
+    void waitUntilEntered() { entered_.acquire(); }
+    void waitUntilCompleted() { completed_.acquire(); }
+    void releaseFirst() { release_.release(); }
+    [[nodiscard]] std::size_t calls() const noexcept {
+        return calls_.load();
+    }
+
 private:
-    bool grammarAvailable_ = true;
+    bool blockFirst_ = false;
+    std::atomic<std::size_t> calls_{0};
+    std::counting_semaphore<> entered_{0};
+    std::counting_semaphore<> completed_{0};
+    std::binary_semaphore release_{0};
 };
 
 std::filesystem::path uniqueRoot() {
@@ -76,40 +81,53 @@ EditorConfig configFor(const std::filesystem::path& root) {
     EditorConfig config;
     config.cwd = root / "workspace";
     config.recoveryRoot = root / "recovery";
+    config.enableGitDiffWorker = false;
+    config.enableFilesystemWatcher = false;
     return config;
 }
 
-// The runtime drives the injected parser and its scopes reach the snapshot.
-TEST(injectedParserDrivesHighlighting) {
+bool pumpUntilAccepted(Editor& editor) {
+    for (std::size_t attempt = 0; attempt < 10000; ++attempt) {
+        if (editor.pumpSyntax()) return true;
+        std::this_thread::yield();
+    }
+    return false;
+}
+
+TEST(editProjectsBeforeBlockedSyntaxAndHighlightsAfterPump) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}";
 
-    auto parser = std::make_shared<RecordingParser>();
-    auto calls = parser->parseCalls;
+    auto parser = std::make_shared<RecordingParser>(true);
     auto config = configFor(root);
     config.syntaxParser = parser;
-
     auto created = createEditor(std::move(config));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"main.cpp"})
-                    .accepted());
+    ASSERT_TRUE(
+        ssg::test::openFile(runtime, std::string{"main.cpp"}).accepted());
 
-    auto snapshot = ssg::test::projectGridFrame(runtime);
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot.has_value()) return;
-    ASSERT_TRUE(*calls > 0);
-    ASSERT_TRUE(hasScope(snapshot->syntax, SyntaxScope::Keyword));
+    parser->waitUntilEntered();
+    ASSERT_TRUE(ssg::test::typeText(runtime, "x").accepted());
+    auto pending = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(pending.has_value());
+    if (!pending) return;
+    ASSERT_EQ(pending->documentText.front(), 'x');
+    ASSERT_FALSE(hasScope(*pending->syntax, SyntaxScope::Keyword));
+
+    parser->releaseFirst();
+    parser->waitUntilCompleted();
+    parser->waitUntilCompleted();
+    ASSERT_TRUE(pumpUntilAccepted(runtime));
+    auto enriched = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(enriched.has_value());
+    if (!enriched) return;
+    ASSERT_EQ(enriched->syntax->revision(), enriched->documentRevision);
+    ASSERT_TRUE(hasScope(*enriched->syntax, SyntaxScope::Keyword));
 }
 
-// Without an injected parser the runtime falls back to plain-text spans.
-// The ONLY way to disable highlighting, now that tree-sitter is compiled
-// unconditionally: construct the runtime
-// with no parser and every span stays plain. Before Phase B a build could also
-// opt out at compile time, so this test was one of two proofs; it is now the
-// only one.
-TEST(nullParserYieldsPlainText) {
+TEST(nullParserYieldsPlainTextSynchronously) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}";
 
@@ -117,125 +135,113 @@ TEST(nullParserYieldsPlainText) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"main.cpp"})
-                    .accepted());
+    ASSERT_TRUE(
+        ssg::test::openFile(runtime, std::string{"main.cpp"}).accepted());
 
     auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot.has_value()) return;
-    ASSERT_FALSE(hasScope(snapshot->syntax, SyntaxScope::Keyword));
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->syntax->revision(), snapshot->documentRevision);
+    ASSERT_FALSE(hasScope(*snapshot->syntax, SyntaxScope::Keyword));
 }
 
-// With deferred enrichment enabled, a grammar-backed small file is still parsed
-// on open so the first frame already carries syntax colors.
-TEST(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame) {
+TEST(supersededCompletionCannotReplaceLatestRevision) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}";
+
+    auto parser = std::make_shared<RecordingParser>(true);
+    auto config = configFor(root);
+    config.syntaxParser = parser;
+    auto created = createEditor(std::move(config));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(
+        ssg::test::openFile(runtime, std::string{"main.cpp"}).accepted());
+    parser->waitUntilEntered();
+
+    ASSERT_TRUE(ssg::test::typeText(runtime, "a").accepted());
+    ASSERT_TRUE(ssg::test::typeText(runtime, "b").accepted());
+    const auto latestRevision = runtime.activeDocument()->revision();
+    parser->releaseFirst();
+    parser->waitUntilCompleted();
+    parser->waitUntilCompleted();
+
+    ASSERT_TRUE(pumpUntilAccepted(runtime));
+    auto snapshot = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->syntax->revision(), latestRevision);
+    ASSERT_EQ(snapshot->syntax->textBytes(), snapshot->documentText.size());
+    ASSERT_TRUE(hasScope(*snapshot->syntax, SyntaxScope::Keyword));
+}
+
+TEST(projectedSyntaxLifetimeSurvivesLaterAcceptance) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}";
 
     auto parser = std::make_shared<RecordingParser>();
-    auto calls = parser->parseCalls;
     auto config = configFor(root);
-    config.deferEnrichment = true;
     config.syntaxParser = parser;
-
     auto created = createEditor(std::move(config));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"main.cpp"})
-                    .accepted());
+    ASSERT_TRUE(
+        ssg::test::openFile(runtime, std::string{"main.cpp"}).accepted());
+    parser->waitUntilCompleted();
+    ASSERT_TRUE(pumpUntilAccepted(runtime));
+    auto before = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(before.has_value());
+    if (!before) return;
+    auto retained = before->syntax;
 
-    auto first = ssg::test::projectGridFrame(runtime);
-    ASSERT_TRUE(first.has_value());
-    if (!first.has_value()) return;
-    ASSERT_TRUE(*calls > 0);
-    ASSERT_TRUE(hasScope(first->syntax, SyntaxScope::Keyword));
-}
-
-// Large files stay deferred under deferEnrichment even with an available grammar:
-// first frame is plain text, then primeDeferred applies syntax.
-TEST(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred) {
-    auto root = uniqueRoot();
-    std::string text(3 * 1024 * 1024, 'a');
-    std::ofstream{root / "workspace" / "big.cpp"} << text;
-
-    auto parser = std::make_shared<RecordingParser>();
-    auto calls = parser->parseCalls;
-    auto config = configFor(root);
-    config.deferEnrichment = true;
-    config.syntaxParser = parser;
-
-    auto created = createEditor(std::move(config));
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"big.cpp"})
-                    .accepted());
-
-    auto first = ssg::test::projectGridFrame(runtime);
-    ASSERT_TRUE(first.has_value());
-    if (!first.has_value()) return;
-    ASSERT_EQ(*calls, std::size_t{0});
-    ASSERT_FALSE(hasScope(first->syntax, SyntaxScope::Keyword));
-
-    runtime.primeDeferred();
+    ASSERT_TRUE(ssg::test::typeText(runtime, "z").accepted());
+    parser->waitUntilCompleted();
+    ASSERT_TRUE(pumpUntilAccepted(runtime));
     auto after = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(after.has_value());
-    if (!after.has_value()) return;
-    ASSERT_TRUE(*calls > 0);
-    ASSERT_TRUE(hasScope(after->syntax, SyntaxScope::Keyword));
+    if (!after) return;
+    ASSERT_TRUE(retained != after->syntax);
+    ASSERT_TRUE(hasScope(*retained, SyntaxScope::Keyword));
+    ASSERT_TRUE(hasScope(*after->syntax, SyntaxScope::Keyword));
 }
 
-// Syntax state is document-owned: switching back to a deferred large file must
-// never show keyword spans parsed for another tab.
-TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
+TEST(pathLanguageChangeQueuesReplacementSyntaxAtSameRevision) {
     auto root = uniqueRoot();
-    std::string large = "alpha = 1;\n";
-    large.append(3 * 1024 * 1024, 'x');
-    std::ofstream{root / "workspace" / "fileA.cpp"} << large;
-    std::ofstream{root / "workspace" / "fileB.cpp"} << "return b;\n";
+    std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}";
 
     auto parser = std::make_shared<RecordingParser>();
     auto config = configFor(root);
-    config.deferEnrichment = true;
     config.syntaxParser = parser;
-
     auto created = createEditor(std::move(config));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
+    ASSERT_TRUE(
+        ssg::test::openFile(runtime, std::string{"main.cpp"}).accepted());
+    parser->waitUntilCompleted();
+    ASSERT_TRUE(pumpUntilAccepted(runtime));
+    const auto revision = runtime.activeDocument()->revision();
+    ASSERT_EQ(runtime.activeSyntaxView()->language(), LanguageId{"cpp"});
 
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"fileA.cpp"})
-                    .accepted());
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"fileB.cpp"})
-                    .accepted());
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"fileA.cpp"})
-                    .accepted());
-
-    auto firstA = ssg::test::projectGridFrame(runtime);
-    ASSERT_TRUE(firstA.has_value());
-    if (!firstA.has_value()) return;
-    ASSERT_FALSE(hasScope(firstA->syntax, SyntaxScope::Keyword));
-
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"fileB.cpp"})
-                    .accepted());
-    ASSERT_TRUE(ssg::test::typeText(runtime, "z").accepted());
-    ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"fileA.cpp"})
-                    .accepted());
-
-    auto secondA = ssg::test::projectGridFrame(runtime);
-    ASSERT_TRUE(secondA.has_value());
-    if (!secondA.has_value()) return;
-    ASSERT_FALSE(hasScope(secondA->syntax, SyntaxScope::Keyword));
+    ASSERT_TRUE(applyFilePathCompletion(
+                    runtime, PromptCompletion::FileRename, "renamed.md")
+                    .accepted);
+    ASSERT_EQ(runtime.activeDocument()->revision(), revision);
+    parser->waitUntilCompleted();
+    ASSERT_TRUE(pumpUntilAccepted(runtime));
+    ASSERT_EQ(runtime.activeSyntaxView()->language(), LanguageId{"markdown"});
+    ASSERT_EQ(runtime.activeSyntaxView()->revision(), revision);
 }
 
 }  // namespace
 
 SSG_TEST_SUITE(test_syntax_injection) {
-    RUN(injectedParserDrivesHighlighting);
-    RUN(nullParserYieldsPlainText);
-    RUN(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame);
-    RUN(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred);
-    RUN(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState);
+    RUN(editProjectsBeforeBlockedSyntaxAndHighlightsAfterPump);
+    RUN(nullParserYieldsPlainTextSynchronously);
+    RUN(supersededCompletionCannotReplaceLatestRevision);
+    RUN(projectedSyntaxLifetimeSurvivesLaterAcceptance);
+    RUN(pathLanguageChangeQueuesReplacementSyntaxAtSameRevision);
     return failed == 0 ? 0 : 1;
 }

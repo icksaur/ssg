@@ -222,6 +222,8 @@ std::optional<GridPresentation> GridPresenter::project(
     std::string documentText = runtime.activeText();
     std::uint64_t documentRevision =
         activeDocument ? activeDocument->revision() : 0;
+    std::uint64_t documentLineCount =
+        activeDocument ? activeDocument->lineCount() : 1;
     std::optional<std::string> diffFileIdentity;
     if (const auto* tab = runtime.activeTabState();
         tab && tab->kind == TabKind::LiveDiff &&
@@ -236,6 +238,13 @@ std::optional<GridPresentation> GridPresenter::project(
     auto diff = runtime.diff.viewState();
     auto lspSync = runtime.lspSync;
     auto syntax = runtime.activeSyntaxView();
+    if (!syntax || syntax->revision() != documentRevision ||
+        syntax->language() != runtime.activeSyntaxLanguage() ||
+        syntax->textBytes() != documentText.size()) {
+        syntax = std::make_shared<const SyntaxViewState>(
+            documentRevision, LanguageId::plainText(),
+            documentText.size(), std::vector<SyntaxSpan>{});
+    }
     auto theme = runtime.theme;
     auto uiTree = runtime.projectedUiTree();
     auto tabs = runtime.tabs.viewState();
@@ -311,7 +320,7 @@ std::optional<GridPresentation> GridPresenter::project(
             layout.find(UiNodeId{std::string{kDocumentViewportNodeId}})) {
         document = solveDocumentSurface(
             *node, panes, lineNumbers,
-            static_cast<std::uint32_t>(syntax.indentation().size()),
+            static_cast<std::uint32_t>(documentLineCount),
             style.dimensions);
     }
 
