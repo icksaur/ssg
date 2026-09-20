@@ -274,7 +274,7 @@ PaletteViewState Editor::paletteView() const {
             view.activePicker = screen.openPickerActivation();
         }
     }
-    // CMD-8: palette user commands project the same live registry as Lua.
+    // CMD-8: palette user commands project the same live registry as dispatch.
     for (auto const& [id, command] : commands.all()) {
         std::string detail;
         if (auto sequence = KeymapMatcher{keymap}.preferredBinding(id)) {

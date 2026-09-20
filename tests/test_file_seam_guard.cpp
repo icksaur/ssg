@@ -132,7 +132,7 @@ void libraryAndApplicationCodeUseTheFileSeam() {
             const auto source = readSource(it->path());
             // Line-scoped so a single justified exception cannot silently
             // license the whole file. A file-level exemption for main.cpp,
-            // say, would let a future raw init.lua read slip back in.
+            // say, would let a future ad hoc file read slip back in.
             std::size_t line = 1;
             std::size_t start = 0;
             std::string previous;
@@ -210,8 +210,6 @@ constexpr PlatformHeaderOwner kPlatformHeaderOwners[] = {
      "implements Linux terminal state"},
     {"<git2.h>", "src/GitRepository.cpp",
      "implements the core-owned Git repository adapter"},
-    {"<lua.h>", "src/LuaCommandHost.cpp",
-     "implements the Lua adapter"},
 };
 
 constexpr std::string_view kNativeSpellings[] = {

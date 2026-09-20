@@ -90,7 +90,6 @@ TEST(treeSitterSyntaxGoldenByLanguage) {
         {"typescript", "typescript.ts", "typescript.golden", "",
          SyntaxScope::PlainText, false},
         {"csharp", "csharp.cs", "csharp.golden", "", SyntaxScope::PlainText},
-        {"lua", "lua.lua", "lua.golden", "add(", SyntaxScope::Function},
         // Markdown runs TWO grammars: the block grammar, and the inline grammar
         // injected into its `inline` nodes.  The oracle checks an INLINE
         // construct -- a code span -- because that is what the injection exists
@@ -157,7 +156,6 @@ TEST(embeddedQueryTextMatchesTheVendorFilesByteForByte) {
         {"javascript", "tree-sitter-javascript/queries/highlights.scm"},
         {"typescript", "tree-sitter-typescript/queries/highlights.scm"},
         {"csharp", "tree-sitter-c-sharp/queries/highlights.scm"},
-        {"lua", "tree-sitter-lua/queries/highlights.scm"},
     };
     // Reference-implementation oracle: the test reads the file itself and
     // compares, so a generator that truncates or mangles escaping fails here.

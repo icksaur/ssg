@@ -31,7 +31,6 @@ const TSLanguage* tree_sitter_cpp();
 const TSLanguage* tree_sitter_javascript();
 const TSLanguage* tree_sitter_typescript();
 const TSLanguage* tree_sitter_c_sharp();
-const TSLanguage* tree_sitter_lua();
 const TSLanguage* tree_sitter_markdown();
 const TSLanguage* tree_sitter_markdown_inline();
 }
@@ -76,9 +75,6 @@ std::vector<TreeSitterGrammar> TreeSitterParserFactory::vendoredGrammars() {
     grammars.push_back(vendoredGrammar(
         {"csharp", "c#", "cs"},
         []() -> SyntaxLanguageHandle { return tree_sitter_c_sharp(); }, "csharp",
-        ""));
-    grammars.push_back(vendoredGrammar(
-        {"lua"}, []() -> SyntaxLanguageHandle { return tree_sitter_lua(); }, "lua",
         ""));
     grammars.push_back(vendoredGrammar(
         {"markdown", "md"},

@@ -104,8 +104,7 @@ public:
         }
     }
 
-    // CMD-4: replacement validates a copied map before it becomes live. oldIds is
-    // ScriptHost's complete set of IDs from its prior successful publication.
+    // CMD-4: replacement validates a copied map before it becomes live.
     void replace(std::span<std::string const> oldIds,
                  Replacements replacements) {
         rejectMutationDuringDispatch();

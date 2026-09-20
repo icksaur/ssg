@@ -9,16 +9,14 @@
 #include <ssg/GraphemeLayout.h>
 #include <ssg/TreeSitterGrammars.h>
 #include <ssg/HitTester.h>
-#include <ssg/ScriptHost.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Picker.h>
 #include <ssg/PlatformRuntime.h>
 #include <ssg/PromptEditState.h>
 #include <ssg/RuntimeTiming.h>
+#include <ssg/UserConfig.h>
 #include <ssg/platform_files.h>
 #include <ssg/SystemClipboardReader.h>
-
-#include <ssg/InitScriptWatcher.h>
 
 #include <chrono>
 #include <cstdint>
@@ -26,6 +24,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
+#include <exception>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -81,14 +80,6 @@ LaunchTarget resolveLaunch(const fs::path& argument) {
 
 } // namespace
 
-ViewActionResult applyScriptViewAction(Editor& runtime, GridPresenter& presenter, const ViewAction& request) {
-    auto frame = presenter.project(runtime, {terminalSize(), {}});
-    if (!frame) {
-        return {ViewActionStatus::Rejected, std::nullopt, "view action has no current grid frame"};
-    }
-    return presenter.apply(request, *frame);
-}
-
 const char* environmentVariable(std::string_view name) { return std::getenv(std::string{name}.c_str()); }
 
 class PaletteView;
@@ -96,10 +87,8 @@ class PaletteView;
 struct SsgContext {
     Editor& runtime;
     GridPresenter& presenter;
-    ScriptHost& scripts;
     TerminalSession& terminal;
     PlatformEventLoop& eventLoop;
-    InitScriptWatcher* initScript;
     std::unique_ptr<PaletteView> palette;
     std::optional<GridPresentation> activeSnapshot;
     FocusTarget focus = FocusTarget::Editor;
@@ -544,11 +533,11 @@ int main(int argc, char** argv) {
 
     ssg::GridPresenter presenter;
     recordStartupMark("post_presenter_init");
-    ssg::ScriptHost scripts{runtime, std::bind_front(applyScriptViewAction, std::ref(runtime), std::ref(presenter))};
-    auto const appliedInitScript = loadInitScript(scripts);
-    std::optional<InitScriptWatcher> initScriptWatcher;
-    if (auto scriptPath = resolveInitScriptPath()) {
-        initScriptWatcher.emplace(*scriptPath, appliedInitScript);
+    try {
+        ssg::applyUserConfig(runtime);
+    } catch (std::exception const& error) {
+        std::fprintf(stderr, "ssg: user config failed: %s\n", error.what());
+        return 1;
     }
 
     bool startsWithAnEditableDocument = !runtime.tabs.viewState().tabs.empty();
@@ -573,8 +562,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    SsgContext context{runtime, presenter, scripts, terminal, eventLoop,
-                       initScriptWatcher ? &*initScriptWatcher : nullptr};
+    SsgContext context{runtime, presenter, terminal, eventLoop};
     context.palette = std::make_unique<PaletteView>(context);
     auto& mode = context.terminal;
     ssg::ColorDepth const colorDepth = context.capabilities.colorDepth();
@@ -648,7 +636,6 @@ int main(int argc, char** argv) {
             std::vector<const PlatformWake*> wakes;
             std::optional<std::size_t> gitDiffWakeIndex;
             std::optional<std::size_t> syntaxWakeIndex;
-            std::optional<std::size_t> initScriptWakeIndex;
             if (gitDiffWake != nullptr) {
                 gitDiffWakeIndex = wakes.size();
                 wakes.push_back(gitDiffWake);
@@ -656,10 +643,6 @@ int main(int argc, char** argv) {
             if (syntaxWake != nullptr) {
                 syntaxWakeIndex = wakes.size();
                 wakes.push_back(syntaxWake);
-            }
-            if (initScriptWatcher) {
-                initScriptWakeIndex = wakes.size();
-                wakes.push_back(&initScriptWatcher->wake());
             }
             const auto timeout = selectRuntimeWaitTimeout(
                 {.workspaceSearchPending = runtime.workspaceSearchPending()});
@@ -673,11 +656,6 @@ int main(int argc, char** argv) {
             if (wait.resize && !wait.input &&
                 !runtime.workspaceSearchPending()) {
                 continue;
-            }
-            if (wakeReady(initScriptWakeIndex)) {
-                // ScriptHost belongs to the main thread.
-                initScriptWatcher->drainAndEvaluate(scripts);
-                if (!wait.input && !runtime.workspaceSearchPending()) continue;
             }
             if (wakeReady(gitDiffWakeIndex)) {
                 (void)runtime.pump();

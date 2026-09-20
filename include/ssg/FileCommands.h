@@ -30,7 +30,6 @@ enum class FileCommand : std::uint8_t {
 struct FileCommandDescriptor {
     std::string_view id;
     FileCommand command;
-    bool lua = true;
     // Takes a workspace-relative path, and so must open the path prompt when
     // dispatched without one. Declaring it here is what lets a test enumerate
     // the path-taking commands and prove each one is wired; without the flag
@@ -47,16 +46,16 @@ struct FileCommandDescriptor {
 };
 
 inline constexpr std::array<FileCommandDescriptor, 10> kFileCommands{{
-    {"workspace.open_directory", FileCommand::OpenDirectory, true, true, false},
-    {"file.new", FileCommand::Create, true, false, false},
-    {"file.open", FileCommand::Open, true, true, false},
-    {"file.save", FileCommand::Save, true, false, true},
-    {"file.save_all", FileCommand::SaveAll, true, false, false},
-    {"file.save_as", FileCommand::SaveAs, true, true, true},
-    {"file.reload", FileCommand::Reload, true, false, true},
-    {"file.rename", FileCommand::Rename, true, true, true},
-    {"file.delete", FileCommand::Remove, true, false, true},
-    {"file.new_directory", FileCommand::NewDirectory, true, true, false},
+    {"workspace.open_directory", FileCommand::OpenDirectory, true, false},
+    {"file.new", FileCommand::Create, false, false},
+    {"file.open", FileCommand::Open, true, false},
+    {"file.save", FileCommand::Save, false, true},
+    {"file.save_all", FileCommand::SaveAll, false, false},
+    {"file.save_as", FileCommand::SaveAs, true, true},
+    {"file.reload", FileCommand::Reload, false, true},
+    {"file.rename", FileCommand::Rename, true, true},
+    {"file.delete", FileCommand::Remove, false, true},
+    {"file.new_directory", FileCommand::NewDirectory, true, false},
 }};
 
 [[nodiscard]] PromptRequest fileCommandPathPrompt(FileCommand command);

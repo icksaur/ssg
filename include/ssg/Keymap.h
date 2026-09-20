@@ -35,8 +35,7 @@ using KeySequence = std::vector<KeyStroke>;
 [[nodiscard]] std::optional<KeyStroke> parseKeyStroke(std::string_view encoded);
 [[nodiscard]] std::optional<KeySequence> parseKeySequence(
     std::initializer_list<std::string_view> encoded);
-// Runtime counterpart to parseKeySequence's compile-time initializer_list, used
-// without widening the flat string-to-string Lua argument bridge to arrays.
+// Runtime counterpart to parseKeySequence's compile-time initializer_list.
 [[nodiscard]] std::optional<KeySequence> parseKeySequenceString(
     std::string_view encoded);
 [[nodiscard]] std::string formatKeySequence(const KeySequence& sequence);
@@ -119,7 +118,7 @@ struct KeymapBindArguments {
 // it was bound in (empty defaults to "*"). Unbinding a sequence that is
 // not currently bound in that context is a no-op success, not an error --
 // matching the reset-then-reapply model's "config always reflects exactly
-// what init.lua asked for" contract.
+// what the current config asked for" contract.
 struct KeymapUnbindArguments {
     std::string sequence;
     std::string context;

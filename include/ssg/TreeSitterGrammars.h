@@ -72,7 +72,7 @@ struct TreeSitterGrammar {
 // the concrete tree-sitter parser type or tree-sitter's headers.
 class TreeSitterParserFactory {
 public:
-    // The grammars SSG vendors: C, C++, JavaScript, TypeScript, C#, Lua, and
+    // The grammars SSG vendors: C, C++, JavaScript, TypeScript, C#, and
     // Markdown, with their queries compiled into the binary.  Markdown is the
     // block grammar only -- upstream splits it in two, and the inline half
     // (emphasis, links, code spans) is registered as a language injection.

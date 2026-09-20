@@ -172,7 +172,7 @@ public:
 // ...); a glyph value is the literal string, a `dim_` value is a decimal
 // integer.  The table may be PARTIAL -- a name absent from `values` keeps the
 // current style's value for that field.  This mirrors
-// theme.define's partial-table shape and is the one shape the Lua seam permits.
+// theme.define's partial-table shape and is the one shape the config hook uses.
 struct StyleDefineArguments {
     std::unordered_map<std::string, std::string> values;
 

@@ -196,7 +196,7 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
     const std::set<std::string> scannedExtensions{
         ".h",    ".hpp",  ".cpp", ".cc",   ".cxx", ".json", ".cmake",
         ".css",  ".scss", ".sass", ".html", ".js",  ".jsx",  ".ts",
-        ".tsx",  ".mjs",  ".lua"};
+        ".tsx",  ".mjs"};
     std::vector<std::string> violations;
     const auto prunedDirectory = [](std::string_view relative) {
         return relative == ".git" || relative == ".test-runtime" ||
