@@ -14,7 +14,7 @@ struct MappingCase {
     std::string_view language;
 };
 
-constexpr std::array<MappingCase, 23> kMappings{{
+constexpr std::array<MappingCase, 22> kMappings{{
     {"main.c", "c"},
     {"header.h", "c"},
     {"engine.cc", "cpp"},
@@ -29,7 +29,6 @@ constexpr std::array<MappingCase, 23> kMappings{{
     {"app.ts", "typescript"},
     {"app.tsx", "typescript"},
     {"tool.cs", "csharp"},
-    {"script.lua", "lua"},
     {"readme.md", "markdown"},
     {"CHANGELOG.markdown", "markdown"},
     {"notes.mdown", "markdown"},

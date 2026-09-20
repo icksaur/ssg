@@ -1,262 +1,93 @@
 # Configuring ssg
 
-ssg loads one Lua script at startup, `init.lua`, and runs whatever
-`ssg.command(...)` calls it contains. There is no other configuration file
-format today.
+SSG has no runtime scripting language or config file. Configuration is compiled
+in: edit `src/UserConfig.cpp`, implement `applyUserConfig(Editor&)`, and
+rebuild.
 
-## Where `init.lua` lives
+The default implementation is a no-op. If you leave it alone, SSG starts with
+its built-in theme, style, and keymap.
 
-- Linux: `~/.config/ssg/init.lua` (or `$XDG_CONFIG_HOME/ssg/init.lua` if you
-  have `XDG_CONFIG_HOME` set).
-- Windows: `%APPDATA%\ssg\init.lua`.
+## Entry points
 
-If the file doesn't exist, ssg starts normally with its built-in defaults --
-this is not an error, and nothing is printed.
+`applyUserConfig(Editor&)` is expected to use the same configuration operations
+the runtime already uses internally:
 
-If the file exists but has a Lua syntax error, throws a runtime error, or
-runs too long, ssg prints one line to stderr describing the problem and
-still starts normally with whatever configuration ran successfully before
-the error (usually none, since a syntax error fails the whole script before
-anything executes).
+- `applyThemeSet(Editor&, ThemeSetArguments)`
+- `applyStyleDefine(Editor&, StyleDefineArguments)`
+- `applyKeymapBind(Editor&, KeymapBindArguments)`
+- `applyKeymapUnbind(Editor&, KeymapUnbindArguments)`
 
-`init.lua` is watched while ssg runs: editing and saving it re-runs the
-whole script a moment later, without restarting ssg. Every re-run starts
-from ssg's built-in defaults (not from whatever the previous run left
-in place), so `init.lua`'s current content is always the *whole*
-configuration -- delete a line and save, and that change reverts on the
-next reload. A broken edit behaves the same as a broken file at startup:
-one stderr line, and ssg keeps running with whatever the last *good* run
-configured.
+Each returns an `OperationResult`. Handle a rejected result explicitly; the
+default `main()` path reports any exception thrown from `applyUserConfig`.
 
-## What you can do today
+## Example
 
-`init.lua` can change palette colors and rebind keys.
+```cpp
+#include <stdexcept>
 
-### Colors
+#include <ssg/UserConfig.h>
 
-`theme.set` maps **role and scope names** directly to `"#rrggbb"` hex strings.
-Every UI element and every syntax token has its own name and its own color --
-there is no shared palette and no slot mapping, so setting `selection` sets
-exactly the selection color and nothing else. The table may be partial: any name
-you omit keeps its current color. An unknown name or a malformed `"#rrggbb"`
-string rejects the whole call, leaving your theme untouched.
+namespace ssg {
 
-The block below is ssg's complete built-in dark theme. Copy it into `init.lua`
-as a starting point and change the colors you want; the role names double as the
-full list of what can be themed (`text` is the default document text color,
-`canvas` is the editor background, the syntax scopes color document tokens):
+void applyUserConfig(Editor& editor) {
+    if (auto result = applyThemeSet(
+            editor,
+            ThemeSetArguments{{{"keyword", "#ab47bc"},
+                               {"selection", "#2a4e2e"}}});
+        !result.accepted) {
+        throw std::runtime_error{result.message};
+    }
 
-```lua
-ssg.command("theme.set", {
-    text                     = "#d4d4d4",
-    canvas                   = "#1e1e1e",
-    caret                    = "#ffffff",
-    selection                = "#4daafc",
-    tree_background          = "#3e3e42",
-    tree_focus               = "#4daafc",
-    tab_active               = "#4daafc",
-    tab_inactive             = "#bbbbbb",
-    panel_active             = "#26c0c0",
-    panel_inactive           = "#858585",
-    header                   = "#bbbbbb",
-    footer                   = "#bbbbbb",
-    status_info              = "#26c0c0",
-    status_warning           = "#e5c07b",
-    line_number              = "#858585",
-    search_match             = "#d4956a",
-    prompt                   = "#ab47bc",
-    scrollbar_track          = "#6a6a6a",
-    scrollbar_thumb          = "#858585",
-    diff_added               = "#4caf50",
-    diff_removed             = "#ef4a4a",
-    diff_modified            = "#d4956a",
-    tab_inactive_background  = "#3e3e42",
-    header_background        = "#3e3e42",
-    footer_background        = "#3e3e42",
-    current_line_number      = "#e8e8e8",
-    current_line_number_background = "#6a6a6a",
-    line_number_background   = "#3e3e42",
-    -- syntax scopes
-    plain_text               = "#d4d4d4",
-    comment                  = "#858585",
-    keyword                  = "#ab47bc",
-    string                   = "#4caf50",
-    number                   = "#d4956a",
-    type                     = "#26c0c0",
-    ["function"]             = "#4daafc",
-    variable                 = "#d4d4d4",
-    operator                 = "#e5c07b",
-    punctuation              = "#e8e8e8",
-    invalid                  = "#ef4a4a",
-})
+    if (auto result = applyStyleDefine(
+            editor,
+            StyleDefineArguments{{{"tab_separator", " | "},
+                                  {"tree_collapsed", "> "}}});
+        !result.accepted) {
+        throw std::runtime_error{result.message};
+    }
+
+    if (auto result =
+            applyKeymapBind(editor, {"Mod+KeyH", "help.open", "*"});
+        !result.accepted) {
+        throw std::runtime_error{result.message};
+    }
+
+    if (auto result = applyKeymapUnbind(editor, {"Mod+KeyS", "*"});
+        !result.accepted) {
+        throw std::runtime_error{result.message};
+    }
+}
+
+}  // namespace ssg
 ```
 
-Each name is set to a full, final color. The diff and selection backgrounds are
-whatever you set `diff_added`, `diff_removed`, `diff_modified` and `selection`
-to -- if a wash is too strong under text, pick a darker hex value for that role
-directly. There is no separate intensity control: the color you set is the color
-that is drawn.
+## Theme colors
 
-### Key bindings
+`applyThemeSet` maps role and scope names directly to `"#rrggbb"` strings. The
+table may be partial: omitted names keep their existing value. An unknown name
+or malformed color rejects the whole call.
 
-```lua
-ssg.command("keymap.bind", {
-    sequence = "Alt+KeyG",
-    command = "find.open",
-})
-ssg.command("keymap.unbind", {
-    sequence = "Mod+KeyS",
-})
-```
+The supported names are the semantic roles and syntax scopes defined in
+`include/ssg/Theme.h`. The built-in defaults live in `src/DefaultTheme.cpp`.
 
-SSG has exactly one chord modifier, written `Mod`, and **`Mod` means Ctrl or
-Alt**: both produce the same stroke, so a binding written once answers to
-either.  Ctrl and Alt pressed together is deliberately not a chord -- it is
-discarded (Shift included) and left to the window manager.  There is no setting
-that selects the modifier; `Ctrl+` and `Alt+` are not accepted as `sequence`
-prefixes and a binding using them is rejected.
+## Key bindings
 
-Four chords are reachable only from Alt.  A terminal transmits `Ctrl+I`,
-`Ctrl+M`, `Ctrl+H` and `Ctrl+[` as the bytes for Tab, Enter, Backspace and
-Escape, so no evidence of the Ctrl press survives for SSG to read.
+`KeymapBindArguments` takes:
 
-Frequent actions bind to single `Mod+<key>` chords -- `Mod+S` saves, `Mod+P`
-opens the file finder, `Mod+Shift+P` the command palette.  Escape is a plain key
-that cancels a prompt or closes find in one press.  On macOS the terminal must
-be set to treat Option as Meta (iTerm2: "Use Option as Meta"; Terminal.app: "Use
-Option as Meta key"), or `Option+<letter>` inserts a composed character instead
--- or use Ctrl, which needs no such setting.
+- `sequence` — one stroke such as `"Mod+KeyS"` or `"Mod+Shift+KeyM"`
+- `command` — the command id to run
+- `context` — `"*"`, `"editor"`, `"panel"`, or `"prompt"`
 
-On a terminal that supports the keyboard protocol (kitty, foot, WezTerm,
-ghostty, recent xterm.js and others), ssg enables it automatically and decodes
-these chords from the terminal's exact modifier report instead of the
-Escape-prefix bytes.  This makes `Mod+Shift+<letter>` bindings unambiguous and
-immune to Caps Lock -- with the legacy encoding, Caps Lock inverts letter case
-and could swap `Mod+P` and `Mod+Shift+P`.  It is enabled
-only when the terminal answers the capability query; `SSG_TERM_KEYBOARD_PROTOCOL=off`
-forces the legacy path if a terminal advertises it but behaves badly.
+`Mod` means Ctrl or Alt. Multi-stroke bindings are rejected. `applyKeymapBind`
+replaces any existing binding for the same `(sequence, context)` pair, and
+`applyKeymapUnbind` removes one if present.
 
-- `sequence` is a single key stroke, e.g. `"Mod+KeyS"` or `"Mod+Shift+KeyM"`.
-  It is an optional `Mod+`/`Meta+`/`Shift+` prefix followed by one key
-  name: `KeyA`-`KeyZ`, `Digit0`-`Digit9`, `F1`-`F24`, or a named key (`Escape`,
-  `Enter`, `Tab`, `Space`, `Backspace`, `Delete`, the arrow keys,
-  `Home`/`End`/`PageUp`/`PageDown`, and punctuation names like
-  `BracketLeft`/`Comma`/`Slash`).  Multi-stroke sequences are not supported:
-  a value naming more than one stroke is rejected.
-- `command` is the command id to run (the same ids used throughout ssg,
-  e.g. `file.save`, `edit.undo`, `tab.next`).
-- `context` is optional and defaults to `"*"` (every focus target); it can
-  instead be `"editor"`, `"panel"`, or `"prompt"` to bind only while that
-  part of the UI has focus.
-- `keymap.bind` replaces any existing binding for the same
-  `(sequence, context)` pair rather than adding a duplicate. It's rejected
-  -- leaving the keymap unchanged -- if the sequence is unparseable or names
-  more than one stroke, the context is unknown, `command` is empty, or the
-  result would be an invalid keymap (e.g. removing the last `Alt+Shift+KeyT`
-  -> `settings.open` binding, ssg's built-in escape hatch to the Settings
-  screen).
-- `keymap.unbind` removes any binding matching `(sequence, context)`;
-  unbinding something that isn't bound is not an error. It's rejected on
-  the same "would remove the last `settings.open` binding" ground as
-  `keymap.bind`.
-- Bound commands show up in the command palette (`Alt+Shift+KeyP`) with
-  their current key sequence next to them.
-- Binding a command that needs more than a keystroke to do anything
-  useful (e.g. `settings.set`, `cursor.set_position`, `text.insert`) is
-  not rejected today, but pressing that key silently does nothing --
-  those commands aren't reachable this way yet.
+## Chrome glyphs and dimensions
 
-### UI glyphs and dimensions
-
-`style.define` changes the glyphs ssg draws its own furniture with -- the
-scrollbar track and thumb, the tree's expand/collapse arrows, the tab dirty
-marker, and so on -- and the sizes of the header, footer, tab bar, scrollbar
-gutter, and sidebar:
-
-```lua
-ssg.command("style.define", {
-  scrollbar_track = ":",
-  scrollbar_body = "#",
-  tree_expanded = "v ",
-  tree_collapsed = "> ",
-})
-```
-
-The table is partial: any key you omit keeps its current value. Glyph values
-are the literal string to draw; dimension keys start with `dim_` and take a
-whole number (e.g. `dim_header_height = 1`). An unknown key, or a non-numeric
-or negative dimension, rejects the whole call and changes nothing. The full key
-list matches the style fields in `include/ssg/Style.h`.
-
-A glyph has to fit the slot it draws in, so it must be **exactly as wide as the
-one it replaces** -- one column for `scrollbar_track`, two for `tree_expanded`,
-and so on. A double-width character (most CJK, and many emoji) counts as two.
-A glyph of the wrong width is rejected and named, rather than silently shifting
-the rest of the row sideways.
-
-The tab layout glyphs are the exception: `tab_left_edge` and `tab_right_edge`
-(drawn at each tab's start and end, both empty by default) and `tab_separator`
-(drawn between adjacent tabs, a single space by default) may be **any** width,
-because the tab row recomputes its geometry from whatever you set. For example,
-`tab_left_edge = "["`, `tab_right_edge = "]"`, `tab_separator = " | "` renders
-tabs as `[one] | [two]`. They still reject control characters and invalid UTF-8.
-
-Glyphs also cannot contain **control characters** -- including escape -- or
-invalid UTF-8. A stray escape sequence in a glyph does not draw: it changes how
-your terminal interprets everything after it, which usually looks like the
-whole screen turning into line-drawing characters. If you paste a glyph from
-somewhere and it is rejected for this, the string picked up an invisible
-character along the way.
-
-Header, footer, and prompt arrangement is fixed by the editor's semantic UI
-tree. `init.lua` configures the glyphs and sizes above, not UI structure.
-
-### Your own commands
-
-`ssg.register` defines a command with an ID, a label shown to people, and a
-function. It becomes a real ssg command: it shows up in the command palette,
-you can bind it to a key with `keymap.bind`, and it runs the same way every
-built-in does.
-
-```lua
-ssg.register("my.hotpink", "Hot Pink", function()
-    ssg.command("theme.set", { keyword = "#ff00ff", selection = "#402038" })
-end)
-
-ssg.command("keymap.bind", {
-    sequence = "Alt+KeyU",
-    command = "my.hotpink",
-})
-```
-
-Pick a name with a prefix of your own (`my.`, or your initials) so it can't
-collide with a built-in. If it does collide, or if you register the same name
-twice in one file, the whole script is rejected and your previous commands keep
-working.
-
-Your commands live exactly as long as the lines that define them. Every reload
-replaces the whole set: delete a `register` line and save, and that
-command stops existing. A key still bound to it does nothing. A reload that
-fails leaves your previous commands in place and working.
-
-Your function may call any no-argument command available in the command palette,
-plus the table-based configuration operations `theme.set`, `style.define`,
-`keymap.bind`, and `keymap.unbind`.
-
-Two things about `ssg.command` inside a registered function are worth knowing,
-because neither is obvious:
-
-- **The commands you ask for run after your function returns**, in the order you
-  asked, not at the moment you call them. Your function is already running as a
-  command, and ssg finishes one command before starting the next.
-- **`ssg.command` tells you the request was accepted, not that it worked.**
-  Since it hasn't run yet, there's nothing to report. If one of them fails, ssg
-  reports that failure against the key you pressed, names the command that
-  failed, and skips the rest. If your own function raises an error, none of the
-  commands it asked for run at all.
-
-There's also a limit -- a few dozen -- on how many commands one of your
-commands may ask for. Past it the call is refused rather than ssg locking up.
+`applyStyleDefine` updates the glyphs and dimension values from
+`include/ssg/Style.h`. The table may be partial. Unknown keys, invalid UTF-8,
+control characters, wrong-width glyphs, or negative dimensions reject the whole
+call.
 
 ## Terminal capabilities
 
@@ -295,12 +126,3 @@ a multiplexer answers on its own behalf: under tmux or screen you get what
 the multiplexer supports, which may be less than the terminal behind it.
 That is correct, not a bug: the multiplexer is the terminal ssg is talking
 to.
-
-## Sandbox notes
-
-`init.lua` runs in a restricted Lua interpreter: no file I/O, no
-`os`/`io`/`package` libraries, no way to load other Lua files, and a
-bounded instruction/time budget. This isn't a security boundary against a
-malicious file (it's your own machine-local file, and you granted it
-whatever it does), it's there so a runaway or accidental infinite loop in
-your config can't hang ssg's startup.

@@ -181,22 +181,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 
 endif()
 
-if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    ssg_add_test_suite(
-        NAME test_config_doc
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_config_doc.cpp
-        SYMBOL test_config_doc)
-    ssg_test_include_directories(test_config_doc PRIVATE
-        ${SSG_SOURCE_DIR}/include
-        ${SSG_SOURCE_DIR}/tests
-    )
-    ssg_test_compile_definitions(test_config_doc PRIVATE
-        SSG_CONFIG_DOC_PATH="${SSG_SOURCE_DIR}/doc/config.md"
-    )
-    ssg_test_link_libraries(test_config_doc PRIVATE ssg_core)
-
-endif()
-
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/DiffModel.cpp
 )
@@ -813,73 +797,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 
 endif()
 
-set(_SSG_LUA_DIR "${SSG_SOURCE_DIR}/vendor/lua/src")
-set(_SSG_LUA_SOURCES
-    ${_SSG_LUA_DIR}/lapi.c
-    ${_SSG_LUA_DIR}/lauxlib.c
-    ${_SSG_LUA_DIR}/lbaselib.c
-    ${_SSG_LUA_DIR}/lcode.c
-    ${_SSG_LUA_DIR}/lcorolib.c
-    ${_SSG_LUA_DIR}/lctype.c
-    ${_SSG_LUA_DIR}/ldblib.c
-    ${_SSG_LUA_DIR}/ldebug.c
-    ${_SSG_LUA_DIR}/ldo.c
-    ${_SSG_LUA_DIR}/ldump.c
-    ${_SSG_LUA_DIR}/lfunc.c
-    ${_SSG_LUA_DIR}/lgc.c
-    ${_SSG_LUA_DIR}/linit.c
-    ${_SSG_LUA_DIR}/liolib.c
-    ${_SSG_LUA_DIR}/llex.c
-    ${_SSG_LUA_DIR}/lmathlib.c
-    ${_SSG_LUA_DIR}/lmem.c
-    ${_SSG_LUA_DIR}/loadlib.c
-    ${_SSG_LUA_DIR}/lobject.c
-    ${_SSG_LUA_DIR}/lopcodes.c
-    ${_SSG_LUA_DIR}/loslib.c
-    ${_SSG_LUA_DIR}/lparser.c
-    ${_SSG_LUA_DIR}/lstate.c
-    ${_SSG_LUA_DIR}/lstring.c
-    ${_SSG_LUA_DIR}/lstrlib.c
-    ${_SSG_LUA_DIR}/ltable.c
-    ${_SSG_LUA_DIR}/ltablib.c
-    ${_SSG_LUA_DIR}/ltm.c
-    ${_SSG_LUA_DIR}/lundump.c
-    ${_SSG_LUA_DIR}/lutf8lib.c
-    ${_SSG_LUA_DIR}/lvm.c
-    ${_SSG_LUA_DIR}/lzio.c
-)
-add_library(ssg_lua STATIC ${_SSG_LUA_SOURCES})
-target_include_directories(ssg_lua PUBLIC "${_SSG_LUA_DIR}")
-if(MSVC)
-    target_compile_options(ssg_lua PRIVATE /w)
-else()
-    target_compile_options(ssg_lua PRIVATE -w)
-endif()
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_compile_definitions(ssg_lua PRIVATE LUA_USE_LINUX)
-    target_link_libraries(ssg_lua PUBLIC ${CMAKE_DL_LIBS} m)
-endif()
-
-target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/LuaCommandHost.cpp
-)
-target_link_libraries(ssg_core PRIVATE ssg_lua)
-
-if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    ssg_add_test_suite(
-        NAME test_lua
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_lua.cpp
-        SYMBOL test_lua)
-    ssg_test_include_directories(test_lua PRIVATE
-        ${SSG_SOURCE_DIR}/tests
-    )
-    ssg_test_compile_definitions(test_lua PRIVATE
-        SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}"
-    )
-    ssg_test_link_libraries(test_lua PRIVATE ssg_core)
-
-endif()
-
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
         NAME test_open_equivalence
@@ -1051,20 +968,8 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/ScriptHost.cpp
+    ${SSG_SOURCE_DIR}/src/UserConfig.cpp
 )
-
-if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    ssg_add_test_suite(
-        NAME test_script_host
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_script_host.cpp
-        SYMBOL test_script_host)
-    ssg_test_include_directories(test_script_host PRIVATE
-        ${SSG_SOURCE_DIR}/tests
-    )
-    ssg_test_link_libraries(test_script_host PRIVATE ssg_tui_objects)
-
-endif()
 
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Search.cpp
@@ -1203,7 +1108,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/src/TerminalInput.cpp
         ${SSG_SOURCE_DIR}/src/TerminalOutput.cpp
         ${SSG_SOURCE_DIR}/src/SystemClipboardReader.cpp
-        ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp
         ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
     )
     if(NOT WIN32)
@@ -1232,19 +1136,11 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     install(TARGETS ssg_app RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
     install(FILES "${SSG_SOURCE_DIR}/LICENSE"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/ssg")
-    install(FILES "${SSG_SOURCE_DIR}/vendor/lua/LICENSE"
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/ssg"
-        RENAME LICENSE-Lua)
 
     ssg_add_test_suite(
         NAME test_terminal
         ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal.cpp
         SYMBOL test_terminal)
-    ssg_add_test_suite(
-        NAME test_init_script_watcher
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_init_script_watcher.cpp
-        SYMBOL test_init_script_watcher)
-    ssg_test_labels(test_init_script_watcher extended)
     ssg_add_test_suite(
         NAME test_terminal_capabilities
         ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_capabilities.cpp
@@ -1428,7 +1324,6 @@ set(_SSG_EMBEDDED_QUERIES
     "javascript=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/queries/highlights.scm"
     "typescript=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/queries/highlights.scm"
     "csharp=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/queries/highlights.scm"
-    "lua=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/queries/highlights.scm"
     "markdown=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/queries/highlights.scm"
     "markdown_inline=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown-inline/queries/highlights.scm"
 )
@@ -1479,8 +1374,6 @@ set(_SSG_TREESITTER_VENDOR_SOURCES
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/typescript/src/scanner.c
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src/parser.c
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src/scanner.c
-    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src/parser.c
-    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src/scanner.c
     # Only the BLOCK grammar is vendored.  Upstream splits markdown in two, and
     # the inline grammar (emphasis, links, code spans) can only be applied
     # through a language injection, which this parser does not implement.
@@ -1506,7 +1399,6 @@ target_include_directories(ssg_core PRIVATE
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/typescript/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src
-    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown-inline/src
 )

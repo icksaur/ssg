@@ -75,14 +75,15 @@ constexpr std::string_view kHelpConfigSection =
     "\n"
     "## Configuring SSG\n"
     "\n"
-    "SSG reads an optional init.lua at startup (see doc/config.md). From it you\n"
-    "can recolor every UI role and syntax scope with theme.set, rebind keys with\n"
-    "keymap.bind / keymap.unbind, and change the glyphs SSG draws its chrome with\n"
-    "using style.define. A missing init.lua is not an error.\n"
+    "SSG has a compiled-in configuration hook: edit src/UserConfig.cpp,\n"
+    "implement applyUserConfig(Editor&), and rebuild. That hook can call\n"
+    "applyThemeSet, applyStyleDefine, applyKeymapBind, and applyKeymapUnbind.\n"
     "\n"
     "Example:\n"
     "\n"
-    "    ssg.command(\"keymap.bind\", { sequence = \"Mod+KeyH\", command = \"help.open\" })\n"
+    "    if (auto result = applyKeymapBind(editor, {\"Mod+KeyH\", \"help.open\", \"*\"}); !result.accepted) {\n"
+    "        throw std::runtime_error{result.message};\n"
+    "    }\n"
     "\n"
     "### Chrome glyphs\n"
     "\n"
@@ -90,14 +91,16 @@ constexpr std::string_view kHelpConfigSection =
     "now. Most must keep their current width, but the tab edge and separator\n"
     "glyphs may be any width. Example:\n"
     "\n"
-    "    ssg.command(\"style.define\", { tab_separator = \" | \" })\n"
+    "    if (auto result = applyStyleDefine(editor, {{{\"tab_separator\", \" | \"}}}); !result.accepted) {\n"
+    "        throw std::runtime_error{result.message};\n"
+    "    }\n"
     "\n";
 
 // The chrome-glyph listing, one Markdown item per style.define glyph key with
 // its current value quoted so spaces and empties are visible. Generated from
 // Style::glyphValues so a newly added glyph appears here without a second list.
 // The value is escaped so a glyph containing a quote or backslash stays a valid,
-// copy-pasteable Lua string literal.
+// copy-pasteable C++ string literal.
 std::string renderGlyphList(Style const& style) {
     std::string out;
     for (auto const& [key, value] : style.glyphValues()) {

@@ -17,7 +17,6 @@
 #include <ssg/Keymap.h>
 #include <ssg/LineLayoutCache.h>
 #include <ssg/LspState.h>
-#include <ssg/LuaCommandHost.h>
 #include <ssg/PaneTopology.h>
 #include <ssg/Picker.h>
 #include <ssg/PromptSurface.h>
@@ -303,8 +302,6 @@ public:
     // UI glyphs and dimensions, beside the theme because they are the same
     // kind of thing: presentation this runtime owns and hands to layout.
     Style style{};
-    // The init.lua-composed header/footer,
-    // pushed by the host after each init.lua evaluation via
     mutable std::mutex operationMutex;
     Commands commands;
     // Holds command IDs requested by the active handler until it finishes.

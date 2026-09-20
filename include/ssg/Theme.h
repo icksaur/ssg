@@ -176,7 +176,7 @@ struct ThemeSetResult {
 };
 
 // The compiled-in built-in theme: createEditor()'s starting
-// ThemeSnapshot, before any init.lua theme.set() call runs. This is the ONE
+// ThemeSnapshot, before any user override runs. This is the ONE
 // source of the default theme's colors -- there is no data-file or other
 // loadable-config path; a second, independently hand-maintained copy would
 // silently drift with nothing to catch it. Defined in src/DefaultTheme.cpp, not

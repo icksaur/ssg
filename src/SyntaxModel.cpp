@@ -17,7 +17,7 @@ struct LanguageExtension {
     std::string_view language;
 };
 
-constexpr std::array<LanguageExtension, 18> kLanguageExtensions{{
+constexpr std::array<LanguageExtension, 17> kLanguageExtensions{{
     {".c", "c"},
     {".h", "c"},
     {".cc", "cpp"},
@@ -32,7 +32,6 @@ constexpr std::array<LanguageExtension, 18> kLanguageExtensions{{
     {".ts", "typescript"},
     {".tsx", "typescript"},
     {".cs", "csharp"},
-    {".lua", "lua"},
     {".md", "markdown"},
     {".markdown", "markdown"},
     {".mdown", "markdown"},

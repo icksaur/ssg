@@ -188,7 +188,7 @@ TEST(helpGlyphListingEscapesQuotesSoItStaysCopyPasteable) {
     ASSERT_TRUE(runtime.dispatch("help.open")
                     .accepted());
     const auto text = ssg::test::activeDocumentText(runtime);
-    // The quote is backslash-escaped so the listed value is a valid Lua string.
+    // The quote is backslash-escaped so the listed value is a valid string.
     ASSERT_TRUE(contains(text, "`tab_separator` = \"\\\"\""));
 }
 

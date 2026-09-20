@@ -8,10 +8,7 @@
 #include <ssg/HitTester.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/Renderer.h>
-#include <ssg/ScriptHost.h>
 #include <ssg/Selection.h>
-
-#include <ssg/InitScriptWatcher.h>
 
 #include "test_helpers.h"
 #include "editor_test_support.h"

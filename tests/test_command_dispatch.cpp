@@ -1,5 +1,4 @@
 #include <ssg/Editor.h>
-#include <ssg/ScriptHost.h>
 
 #include "grid_test_frame.h"
 #include "test_helpers.h"
@@ -78,9 +77,6 @@ TEST(keyBoundToUnknownIdWorksAfterRegistrationWithoutRebuildingTheBinding) {
     auto registered = runtime->input(ssg::ClientKeyInput{key, {}});
     ASSERT_EQ(registered.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_EQ(calls, 1);
-    ssg::ScriptHost scripts{*runtime};
-    ASSERT_TRUE(scripts.evaluate("ssg.command('oracle.late')").accepted());
-    ASSERT_EQ(calls, 2);
     fs::remove_all(root);
 }
 

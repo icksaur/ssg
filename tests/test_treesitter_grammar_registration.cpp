@@ -82,7 +82,6 @@ TEST(aCustomGrammarSetReplacesRatherThanExtendsTheVendoredOne) {
     ASSERT_TRUE(parser->hasGrammar(LanguageId{"ssg-test-lang"}));
     ASSERT_FALSE(parser->hasGrammar(LanguageId{"c"}));
     ASSERT_FALSE(parser->hasGrammar(LanguageId{"cpp"}));
-    ASSERT_FALSE(parser->hasGrammar(LanguageId{"lua"}));
 }
 
 TEST(theDefaultParserStillCarriesEveryVendoredGrammar) {
@@ -90,7 +89,7 @@ TEST(theDefaultParserStillCarriesEveryVendoredGrammar) {
     ASSERT_TRUE(parser != nullptr);
     if (!parser) return;
     for (const auto* id : {"c", "cpp", "c++", "javascript", "js", "typescript",
-                           "ts", "csharp", "c#", "lua"}) {
+                           "ts", "csharp", "c#"}) {
         ASSERT_TRUE(parser->hasGrammar(LanguageId{id}));
     }
     ASSERT_FALSE(parser->hasGrammar(LanguageId{"ssg-test-lang"}));

@@ -85,7 +85,7 @@ is `Alt` specifically, a mouse chord rather than a `Mod` chord.
 ## Under the hood
 
 - **Syntax highlighting** via Tree-sitter for C, C++, JavaScript, TypeScript,
-  C#, Lua, and Markdown — on by default.
+  C#, and Markdown — on by default.
 - **Workspaces** rooted at a directory: Git diff views with live follow-editing,
   a line-number gutter, and word wrap. Symlinked files are searchable;
   symlinked directories appear in the file tree but are not searched or
@@ -99,16 +99,17 @@ is `Alt` specifically, a mouse chord rather than a `Mod` chord.
 
 ## Configuration
 
-Custom colors, keymaps, and chrome glyphs live in `init.lua`
-(`~/.config/ssg/init.lua`). A capability-limited Lua 5.4 host lets you script and
-rebind commands. See [`doc/config.md`](doc/config.md).
+Custom colors, keymaps, and chrome glyphs live in
+[`src/UserConfig.cpp`](src/UserConfig.cpp). Edit `applyUserConfig(Editor&)`,
+recompile, and call the existing `applyThemeSet`, `applyStyleDefine`,
+`applyKeymapBind`, and `applyKeymapUnbind` entry points there. See
+[`doc/config.md`](doc/config.md).
 
 ## Requirements
 
-A C++20 compiler and CMake 3.14+. Lua 5.4 is built from pinned vendored
-sources. Linux and native Windows console builds are supported. Windows builds
-use x64 MSVC and are intended to run in Windows Terminal or another host with
-virtual-terminal output support. See
+A C++20 compiler and CMake 3.14+. Linux and native Windows console builds are
+supported. Windows builds use x64 MSVC and are intended to run in Windows
+Terminal or another host with virtual-terminal output support. See
 [`development.md`](development.md).
 
 ## License

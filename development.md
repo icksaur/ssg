@@ -1,51 +1,39 @@
 # Developing SSG
 
-Building, testing, and the contributor workflow. For what SSG is and how to
-embed it, see [`README.md`](README.md).
+SSG is one native terminal-editor application. This guide covers building and
+testing it; [`README.md`](README.md) covers installation and use.
 
 ## Requirements
 
-- CMake 3.14 or newer
+- CMake 3.21 or newer
 - A C++20 compiler
 
-Lua 5.4 is built from the pinned source under `vendor/lua`; no system Lua
-installation is required. Linux and native Windows are supported. Windows
-development requires an x64 MSVC developer command prompt and Ninja; the
-`windows-msvc` preset configures the complete application and test suite.
+Linux and native Windows are supported. Windows development requires an x64
+MSVC developer command prompt and Ninja.
 
-## Build
+## Build and test
 
-Configure once with the `dev` preset (Ninja + ccache, size optimized with
-assertions enabled), then iterate with a single build command:
+Configure the development build once, then use the build and fast test loop:
 
 ```sh
-cmake --preset dev     # one-time configuration into build/
-cmake --build build    # steady-state build
-```
-
-Fast inner loop for iteration:
-
-```sh
-cmake --build build --target ssg_tests
-ctest --test-dir build -R '^test_document$' --output-on-failure
+cmake --preset dev
+cmake --build build
 ctest --preset dev
 ```
 
-`ctest --preset dev` excludes the recovery and theme suites so the unit loop
-stays sub-second. Run everything with:
+The `dev` test preset excludes extended recovery and theme tests. Run the full
+suite before submitting a change:
 
 ```sh
 ctest --preset all
 ```
 
-Production Release and symbolic sanitizer builds use their own presets and
-out-of-source build directories (`build-release/`, `build-sanitize/`). Full
-debug information is kept in the sanitizer build, where failure diagnostics
-need it:
+Release and sanitizer builds use separate directories:
 
 ```sh
 cmake --preset release && cmake --build build-release
-cmake --preset sanitize && cmake --build build-sanitize && ctest --preset sanitize
+cmake --preset sanitize && cmake --build build-sanitize
+ctest --preset sanitize
 ```
 
 From an x64 MSVC developer command prompt, run the Windows gate with:
@@ -56,63 +44,22 @@ cmake --build --preset windows-msvc
 ctest --preset windows-msvc
 ```
 
-The Windows build uses one native implementation family under
-`src/platform/windows/`; Linux selects `src/platform/linux/` instead. Shared
-application code must not include operating-system headers or call native APIs.
-`test_file_seam_guard` enforces that boundary, and platform-specific tests live
-under the matching `tests/platform/` directory.
+## Platform boundary
 
-Before a Windows release, exercise `ssg.exe` in Windows Terminal and verify
-text rendering and Unicode input, keyboard chords, mouse selection and wheel
-scrolling, resize, desktop clipboard paste, init-script reload, Git refresh,
-idle CPU usage, normal quit, and Ctrl/console-close terminal restoration.
+Shared application code must not include operating-system headers or call native
+APIs. Linux and Windows implementations live under their respective
+`src/platform/` directories. `test_file_seam_guard` enforces this boundary, and
+platform-specific tests live in the matching `tests/platform/` directory.
 
-## What the library delivers
-
-The user-facing capability set, stated as engineering deliverables:
-
-- Headless editing library with UTF-8 validation, Unicode 15 grapheme/cell
-  layout, multiple cursors (add-next-occurrence, add-cursor-up/down, split-
-  selection-into-lines), undo/redo, clipboard registers, find/replace, command
-  palette, configurable keymaps, and 160 stable commands.
-- CWD-focused workspaces with tabs and split panes, atomic file operations,
-  encoding and mixed-EOL preservation, normal-exit session snapshots,
-  external-change handling, filesystem/Git/symbol trees, live diffs, and
-  follow-edits.
-- Shared monospace presentation model with wrapping, mouse hit targets (click to
-  place the cursor, double-click to select a word, drag to select), wheel and
-  scrollbar navigation, middle-click to close a tab, a collapsible left panel,
-  status header/footer, and fully themeable per-role and per-syntax-scope colors.
-- Tree-sitter syntax state, LSP synchronization/diagnostics/language features
-  and atomic workspace edits, plus a capability-limited Lua 5.4 command host.
-- A reference TUI adapter (`tests/`) and focused presentation fixtures.
-
-## Data and configuration
-
-- `data/required-commands.json` — exact required command catalog
-- `data/unicode/` — pinned Unicode 15 source data and provenance
-
-Runtime settings support default, user, workspace, language, and document
-scopes. Workspace file authority and persisted relative paths are rooted at the
-canonical CWD.
-
-## Publishing checklist
-
-Before pushing to a public remote, scan the source tree for personal
-information and secrets:
-
-```sh
-node ../scan-pii.js .          # scan the whole tree
-node ../scan-pii.js . --staged # scan only staged files (git hooks)
-```
-
-Exit code 0 is clean; 1 means findings to review.
+Before a Windows release, exercise `ssg.exe` in Windows Terminal and verify text
+rendering and Unicode input, keyboard and mouse interaction, resize, desktop
+clipboard paste, Git refresh, idle CPU usage, normal quit, and console-close
+restoration.
 
 ## Project documentation
 
-- `AGENTS.md` — ambient contract: where a promise lives, when to spec, gates
-- `doc/config.md` — user guide: writing `init.lua`
+- `AGENTS.md` — project architecture and development constraints
+- `doc/config.md` — compiled configuration guide
 - `doc/commands.md` — generated command reference
 - `doc/learnings.md` — durable implementation and integration constraints
-- `cpp-values.md` — public C++ API design values
-- `backlog.md` (repository root) — deferred work, and the process for it
+- `doc/backlog.md` — deferred work
