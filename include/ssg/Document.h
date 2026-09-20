@@ -81,6 +81,7 @@ public:
     [[nodiscard]] DocumentSnapshot snapshot() const;
 
     [[nodiscard]] TransactionResult apply(EditTransaction const& transaction);
+    [[nodiscard]] TransactionResult replace(std::string_view text);
 
 private:
     struct Impl;

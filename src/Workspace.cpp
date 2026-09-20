@@ -115,6 +115,18 @@ std::string normalizedRelative(std::string_view path) {
     return std::filesystem::path{path}.lexically_normal().generic_string();
 }
 
+TransactionResult replaceDocumentText(Document& document,
+                                      std::string_view text) {
+    return document.replace(text);
+}
+
+WorkspaceResult replacementFailure(const TransactionResult& result) {
+    return failure(result.error == DocumentError::ReadOnly
+                       ? WorkspaceError::ReadOnly
+                       : WorkspaceError::IoFailed,
+                   result.message);
+}
+
 LineTerminator defaultTerminator(const TextEncodingStatus& status) {
     switch (status.lineEnding) {
         case LineEnding::Crlf:
@@ -960,7 +972,9 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
             return failure(WorkspaceError::DecodeFailed,
                            decoded.error->message);
         }
-        entry->document = Document{decoded.text->utf8};
+        const auto replaced =
+            replaceDocumentText(entry->document, decoded.text->utf8);
+        if (!replaced.accepted()) return replacementFailure(replaced);
         entry->decoded = std::move(*decoded.text);
         entry->rawBytes = bytes;
         entry->persistedStatus = entry->decoded.status;
@@ -1008,7 +1022,9 @@ WorkspaceResult Workspace::reloadWithContent(FileDocumentId id,
         return failure(WorkspaceError::DecodeFailed,
                        "binary file cannot replace an editable document");
     }
-    entry->document = Document{decoded.text->utf8, entry->document.mode()};
+    const auto replaced =
+        replaceDocumentText(entry->document, decoded.text->utf8);
+    if (!replaced.accepted()) return replacementFailure(replaced);
     entry->decoded = std::move(*decoded.text);
     entry->rawBytes = bytes;
     entry->persistedStatus = entry->decoded.status;
@@ -1055,16 +1071,15 @@ WorkspaceResult Workspace::adoptExternalRename(FileDocumentId id,
                        "binary file cannot replace an editable document");
     }
     const std::string diskText = decoded.text->utf8;
-    const std::string bufferContent =
-        replaceBuffer ? diskText : entry->document.snapshot().text;
-    entry->key = DocumentKey::saved(path);
-    entry->displayLabel = destination->filename().string();
     if (replaceBuffer) {
-        entry->document = Document{diskText, entry->document.mode()};
+        const auto replaced = replaceDocumentText(entry->document, diskText);
+        if (!replaced.accepted()) return replacementFailure(replaced);
         entry->decoded = *decoded.text;
     } else {
         entry->decoded.utf8 = diskText;
     }
+    entry->key = DocumentKey::saved(path);
+    entry->displayLabel = destination->filename().string();
     // The baseline is always the new-path disk content, so dirtiness is derived
     // from buffer-vs-disk regardless of whether the buffer followed. Persisted
     // status reflects the decoded disk bytes.

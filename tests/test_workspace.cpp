@@ -252,9 +252,11 @@ TEST(saveAndReloadUpdateDiskAndDocument) {
     ASSERT_EQ(readBytes(temporary.path() / "file.txt"),
               std::string{"disk-edited"});
 
+    const auto revisionBeforeReload = workspace.document(id).revision();
     writeBytes(temporary.path() / "file.txt", "external");
     ASSERT_TRUE(workspace.reload(id).accepted());
     ASSERT_EQ(workspace.document(id).snapshot().text, std::string{"external"});
+    ASSERT_EQ(workspace.document(id).revision(), revisionBeforeReload + 1);
 }
 
 TEST(newDirectoryRejectsEscapeAndCreatesOnlyInsideRoot) {

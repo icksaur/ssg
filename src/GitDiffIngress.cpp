@@ -72,6 +72,7 @@ bool GitDiffIngress::drainGitDiffWorker() {
         editor.refreshTreeForPublication();
     }
     if (externalAdvanced) {
+        editor.refreshSyntax();
         for (const auto document : editor.workspace.documents()) {
             (void)editor.updateTabsFor(document);
         }

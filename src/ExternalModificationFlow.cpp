@@ -136,8 +136,11 @@ OperationResult invokeExternalAction(
     }
     if (invocation.action == ExternalAction::Reload) {
         const auto result = editor.external.resolveReload(file);
-        return result.accepted() ? success()
-                                 : failure("external modification reload failed");
+        if (!result.accepted()) {
+            return failure("external modification reload failed");
+        }
+        editor.refreshSyntax();
+        return success();
     }
     if (invocation.action == ExternalAction::KeepBuffer) {
         const auto result = editor.external.keepBuffer(file);
@@ -176,9 +179,11 @@ void bindExternalModificationCommands(Commands& commands, Editor& editor) {
         }
         if (action == ExternalAction::Reload) {
             const auto result = editor.external.resolveReload(file);
-            return result.accepted()
-                       ? success()
-                       : failure("external modification reload failed");
+            if (!result.accepted()) {
+                return failure("external modification reload failed");
+            }
+            editor.refreshSyntax();
+            return success();
         }
         if (action == ExternalAction::KeepBuffer) {
             const auto result = editor.external.keepBuffer(file);

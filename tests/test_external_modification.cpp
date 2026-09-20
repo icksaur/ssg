@@ -194,9 +194,13 @@ TEST(reloadReplacesBufferWithoutRecoveryRecord) {
 
 TEST(ssgSaveAdvancesBaselineWithoutDuplicateStatus) {
     Fixture fixture;
+    const auto revisionBeforeReload =
+        fixture.workspace.document(fixture.documentId).revision();
     ASSERT_TRUE(
         fixture.workspace.reloadWithContent(fixture.documentId, "saved\n")
             .accepted());
+    ASSERT_EQ(fixture.workspace.document(fixture.documentId).revision(),
+              revisionBeforeReload + 1);
 
     const auto saved = fixture.flow.processEvent(
         input(2, "saved\n", ssg::WatchEventOrigin::SsgSave), std::uint64_t{2});

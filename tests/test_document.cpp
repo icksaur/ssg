@@ -145,6 +145,11 @@ TEST(readOnlyAndDiffModesRejectWithoutStateChange) {
                                     ? DocumentError::ReadOnly
                                     : DocumentError::Diff);
         ASSERT_EQ(document.snapshot(), before);
+
+        const auto replacement = document.replace("changed");
+        ASSERT_FALSE(replacement.accepted());
+        ASSERT_EQ(replacement.error, result.error);
+        ASSERT_EQ(document.snapshot(), before);
     }
 }
 

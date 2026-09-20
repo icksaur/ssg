@@ -211,4 +211,30 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
     return TransactionResult{DocumentError::None, impl_->revision, {}};
 }
 
+TransactionResult Document::replace(std::string_view text) {
+    const auto currentRevision = impl_->revision;
+    if (impl_->mode == DocumentMode::ReadOnly) {
+        return failure(DocumentError::ReadOnly, currentRevision,
+                       "read-only documents cannot be replaced");
+    }
+    if (impl_->mode == DocumentMode::Diff) {
+        return failure(DocumentError::Diff, currentRevision,
+                       "diff documents cannot be replaced");
+    }
+    if (!validUtf8WithoutNul(text)) {
+        return failure(DocumentError::InvalidUtf8, currentRevision,
+                       "replacement text must be well-formed UTF-8 without NUL bytes");
+    }
+    if (currentRevision == std::numeric_limits<std::uint64_t>::max()) {
+        return failure(DocumentError::RevisionExhausted, currentRevision,
+                       "document revision is exhausted");
+    }
+    if (impl_->tree.text() != text) {
+        impl_->tree = detail::PieceTree{std::string{text}};
+    }
+    impl_->revision = currentRevision + 1;
+    impl_->dirty = false;
+    return {DocumentError::None, impl_->revision, {}};
+}
+
 }  // namespace ssg

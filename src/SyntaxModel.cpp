@@ -390,12 +390,23 @@ SyntaxParseResult SyntaxModel::parse(
 SyntaxParseRequestResult SyntaxModel::request(
     std::uint64_t revision, LanguageId language, std::string text,
     std::vector<SyntaxEdit> edits) {
-    if (revision <= viewState_.revision() ||
-        (pending_ && revision <= pending_->revision())) {
+    const bool repeatsView =
+        revision == viewState_.revision() &&
+        language == viewState_.language();
+    const bool repeatsPending =
+        pending_ && revision == pending_->revision() &&
+        language == pending_->language();
+    if (revision < viewState_.revision() || repeatsView ||
+        (pending_ && revision < pending_->revision()) || repeatsPending) {
         return {nullptr, SyntaxRequestError::StaleRevision};
     }
     cancelPending();
     if (text.size() > config_.maximumDocumentBytes) {
+        viewState_ = SyntaxViewState::plainText(
+            revision, language, text, config_.tabWidth);
+        acceptedParse_.reset();
+        acceptedText_ = text;
+        pending_.reset();
         return {nullptr, SyntaxRequestError::DocumentTooLarge};
     }
     const auto priorParse =
@@ -439,7 +450,9 @@ SyntaxAcceptResult SyntaxModel::accept(
     if (!request) {
         return {SyntaxAcceptError::UnknownRequest, false};
     }
-    if (request->revision() <= viewState_.revision()) {
+    if (request->revision() < viewState_.revision() ||
+        (request->revision() == viewState_.revision() &&
+         request->language() == viewState_.language())) {
         return {SyntaxAcceptError::StaleRevision, false};
     }
     if (request->cancelled()) {

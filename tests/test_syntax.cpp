@@ -384,13 +384,17 @@ TEST(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot) {
 
 TEST(requestAndResultValidationIsFailureAtomic) {
     auto parser = std::make_shared<DeterministicParser>();
-    SyntaxModel model{parser, SyntaxConfig{.maximumDocumentBytes = 8}};
+    SyntaxModel oversizedModel{
+        parser, SyntaxConfig{.maximumDocumentBytes = 8}};
 
     const auto oversized =
-        requestFor(model, std::uint64_t{1}, "123456789");
+        requestFor(oversizedModel, std::uint64_t{1}, "123456789");
     ASSERT_EQ(oversized.error, SyntaxRequestError::DocumentTooLarge);
-    ASSERT_EQ(model.viewState().revision(), std::uint64_t{0});
+    ASSERT_EQ(oversizedModel.viewState().revision(), std::uint64_t{1});
+    ASSERT_EQ(oversizedModel.viewState().scopeAt(ByteOffset{0}),
+              SyntaxScope::PlainText);
 
+    SyntaxModel model{parser, SyntaxConfig{.maximumDocumentBytes = 8}};
     const SyntaxEdit malformed{
         .startByte = ByteOffset{4},
         .oldEndByte = ByteOffset{3},
@@ -417,8 +421,13 @@ TEST(requestAndResultValidationIsFailureAtomic) {
     ASSERT_EQ(stale.error, SyntaxRequestError::StaleRevision);
     ASSERT_EQ(model.viewState().revision(), std::uint64_t{1});
 
+    const auto sameRevisionSwitch = model.request(
+        std::uint64_t{1}, LanguageId{"other"}, "let 1\n");
+    ASSERT_TRUE(parseAndAccept(model, sameRevisionSwitch).accepted());
+    ASSERT_EQ(model.viewState().language(), LanguageId{"other"});
+
     const auto switchedLanguage = model.request(
-        std::uint64_t{2}, LanguageId{"other"}, "let 1\n");
+        std::uint64_t{1}, LanguageId{"toy"}, "let 1\n");
     ASSERT_TRUE(switchedLanguage.accepted());
     ASSERT_TRUE(switchedLanguage.request->priorParse() == nullptr);
     const auto completedSwitch = model.run(*switchedLanguage.request);
@@ -428,8 +437,10 @@ TEST(requestAndResultValidationIsFailureAtomic) {
     ASSERT_EQ(rejectedNewer.error, SyntaxRequestError::DocumentTooLarge);
     ASSERT_TRUE(switchedLanguage.request->cancelled());
     ASSERT_EQ(model.accept(switchedLanguage.request, completedSwitch).error,
-              SyntaxAcceptError::Cancelled);
-    ASSERT_EQ(model.viewState().revision(), std::uint64_t{1});
+              SyntaxAcceptError::StaleRevision);
+    ASSERT_EQ(model.viewState().revision(), std::uint64_t{3});
+    ASSERT_EQ(model.viewState().scopeAt(ByteOffset{0}),
+              SyntaxScope::PlainText);
 }
 
 TEST(parseConvenienceMatchesHandDrivenRequestRunAccept) {
@@ -462,13 +473,15 @@ TEST(parseConvenienceMatchesHandDrivenRequestRunAccept) {
                     .accepted());
     ASSERT_EQ(noGrammar.viewState(), plainReference.viewState());
 
-    // Oversized document: refused, view-state untouched.
+    // Oversized document: refused with a current plain-text view.
     auto tinyParser = std::make_shared<DeterministicParser>();
     SyntaxModel tiny{tinyParser, SyntaxConfig{.maximumDocumentBytes = 4}};
     const auto oversized = tiny.parse(std::uint64_t{1}, LanguageId{"toy"}, text);
     ASSERT_EQ(oversized.requestError, SyntaxRequestError::DocumentTooLarge);
     ASSERT_FALSE(oversized.accepted());
-    ASSERT_EQ(tiny.viewState().revision(), std::uint64_t{0});
+    ASSERT_EQ(tiny.viewState().revision(), std::uint64_t{1});
+    ASSERT_EQ(tiny.viewState().scopeAt(ByteOffset{0}),
+              SyntaxScope::PlainText);
 
     // Stale revision: refused, the newer accepted state stands.
     auto staleParser = std::make_shared<DeterministicParser>();

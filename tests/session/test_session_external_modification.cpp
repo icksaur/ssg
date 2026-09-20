@@ -187,6 +187,8 @@ TEST(externalReloadCommitsDiskIntoTheWorkspaceAndClearsTheSection) {
 
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
     ASSERT_EQ(ssg::test::activeDocumentText(*session.runtime), "external\n");
+    ASSERT_EQ(session.runtime->activeSyntaxView().revision(),
+              session.runtime->activeDocument()->revision());
 }
 
 TEST(externalKeepBufferClearsTheSectionWithoutTouchingTheBuffer) {
