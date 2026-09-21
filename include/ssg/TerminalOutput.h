@@ -30,5 +30,7 @@ encodeAnsiFrame(const CellGrid& screen,
 [[nodiscard]] ColorDepth detectColorDepth(const char* colorDepthOverride,
                                           const char* colorterm,
                                           const char* term,
-                                          const char* termProgram);
+                                          const char* termProgram,
+                                          const char* windowsTerminalSession =
+                                              nullptr);
 } // namespace ssg

@@ -109,7 +109,8 @@ TerminalCapabilities::TerminalCapabilities(EnvironmentLookup lookup, Clock clock
         return lookup_ ? lookup_(name) : nullptr;
     };
     colorDepth_ = detectColorDepth(read("SSG_COLOR_DEPTH"), read("COLORTERM"),
-                                     read("TERM"), read("TERM_PROGRAM"));
+                                     read("TERM"), read("TERM_PROGRAM"),
+                                     read("WT_SESSION"));
 }
 
 std::string TerminalCapabilities::beginProbe() {

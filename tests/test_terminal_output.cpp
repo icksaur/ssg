@@ -115,6 +115,18 @@ TEST(detectColorDepthReadsEnvironment) {
     ASSERT_TRUE(ssg::detectColorDepth(nullptr, nullptr, nullptr, "wezterm") ==
                 ColorDepth::Ansi16);
 
+    ASSERT_TRUE(ssg::detectColorDepth(nullptr, nullptr, nullptr, nullptr,
+                                     "windows-terminal-session") ==
+                ColorDepth::Truecolor);
+    ASSERT_TRUE(ssg::detectColorDepth(nullptr, nullptr, "", nullptr,
+                                     "windows-terminal-session") ==
+                ColorDepth::Truecolor);
+    ASSERT_TRUE(ssg::detectColorDepth(nullptr, nullptr, "dumb", nullptr,
+                                     "windows-terminal-session") ==
+                ColorDepth::Ansi16);
+    ASSERT_TRUE(ssg::detectColorDepth(nullptr, nullptr, nullptr, nullptr, "") ==
+                ColorDepth::Ansi16);
+
     ASSERT_TRUE(ssg::detectColorDepth(nullptr, nullptr, "screen",
                                              "iTerm.app") == ColorDepth::Truecolor);
     ASSERT_TRUE(ssg::detectColorDepth(nullptr, nullptr, "xterm-kitty",

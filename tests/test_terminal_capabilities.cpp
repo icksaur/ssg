@@ -173,6 +173,9 @@ TEST(anOverrideBeatsTheTerminalsOwnAnswer) {
     ASSERT_TRUE(colored.colorDepth() == ssg::ColorDepth::Truecolor);
     ssg::TerminalCapabilities dumb{fakeEnvironment({{"TERM", "dumb"}})};
     ASSERT_TRUE(dumb.colorDepth() == ssg::ColorDepth::Ansi16);
+    ssg::TerminalCapabilities windowsTerminal{
+        fakeEnvironment({{"WT_SESSION", "windows-terminal-session"}})};
+    ASSERT_TRUE(windowsTerminal.colorDepth() == ssg::ColorDepth::Truecolor);
 }
 
 // Every capability must be reachable by an override, or a user hitting a

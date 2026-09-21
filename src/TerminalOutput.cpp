@@ -30,7 +30,8 @@ bool matchesAny(std::string_view value,
 
 ssg::ColorDepth detectColorDepth(char const* colorDepthOverride,
                                  char const* colorterm, char const* term,
-                                 char const* termProgram) {
+                                 char const* termProgram,
+                                 char const* windowsTerminalSession) {
     if (colorDepthOverride != nullptr) {
         const auto overrideValue = lowercase(colorDepthOverride);
         if (matchesAny(overrideValue, {"truecolor", "24bit"})) {
@@ -53,9 +54,14 @@ ssg::ColorDepth detectColorDepth(char const* colorDepthOverride,
 
     const auto termValue =
         term == nullptr ? std::string{} : lowercase(std::string_view{term});
-    if (termValue == "dumb" || termValue.empty()) {
+    if (termValue == "dumb") {
         return ssg::ColorDepth::Ansi16;
     }
+    if (windowsTerminalSession != nullptr &&
+        windowsTerminalSession[0] != '\0') {
+        return ssg::ColorDepth::Truecolor;
+    }
+    if (termValue.empty()) return ssg::ColorDepth::Ansi16;
 
     const auto termProgramValue = termProgram == nullptr
                                       ? std::string{}
