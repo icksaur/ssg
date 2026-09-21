@@ -197,6 +197,10 @@ void appendRepeated(std::string &output, std::string_view bytes, WORD repeat) {
 
 void appendKey(std::string &output, const KEY_EVENT_RECORD &key,
                std::uint32_t codepoint, WORD repeat) {
+  if (key.wVirtualKeyCode == 0 && codepoint == 0x1b) {
+    appendRepeated(output, "\x1b", repeat);
+    return;
+  }
   if (codepoint >= 0x20 &&
       ((!control(key.dwControlKeyState) && !alt(key.dwControlKeyState)) ||
        altGr(key.dwControlKeyState))) {

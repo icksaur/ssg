@@ -17,8 +17,9 @@ struct WindowsConsoleInputTranslation {
   bool resize = false;
 };
 
-// One translator owns one console input stream. Recreating it between read
-// batches loses split surrogate pairs and mouse-button continuity.
+// One translator owns one console input stream and preserves terminal protocol
+// framing from character-only records. Recreating it between read batches loses
+// split surrogate pairs and mouse-button continuity.
 class WindowsConsoleInputTranslator {
 public:
   [[nodiscard]] WindowsConsoleInputTranslation

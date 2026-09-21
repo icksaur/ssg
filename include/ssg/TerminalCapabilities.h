@@ -26,6 +26,7 @@ inline constexpr std::array<Capability, 3> kAllCapabilities{
 
 [[nodiscard]] std::string_view capabilityName(Capability capability);
 
+// Owns terminal probing, reply interpretation, and normalized capability state.
 class TerminalCapabilities {
   public:
     using EnvironmentLookup = std::function<const char*(std::string_view)>;

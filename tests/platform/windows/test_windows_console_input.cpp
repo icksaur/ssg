@@ -5,6 +5,8 @@
 
 #include <array>
 #include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -30,6 +32,16 @@ INPUT_RECORD mouse(SHORT column, SHORT row, DWORD buttons, DWORD flags = 0,
   record.Event.MouseEvent.dwControlKeyState = modifiers;
   record.Event.MouseEvent.dwEventFlags = flags;
   return record;
+}
+
+std::vector<INPUT_RECORD> terminalRecords(std::string_view bytes) {
+  std::vector<INPUT_RECORD> result;
+  result.reserve(bytes.size());
+  for (const char byte : bytes) {
+    result.push_back(
+        key(0, static_cast<wchar_t>(static_cast<unsigned char>(byte))));
+  }
+  return result;
 }
 
 std::vector<INPUT_RECORD> records(ssg::test::PlatformInputCaseId id) {
@@ -138,6 +150,83 @@ TEST(altGrCommitsTextWithoutCreatingAChord) {
   ASSERT_FALSE(decoded.stroke.mod);
 }
 
+TEST(terminalRepliesPreserveFramingAndNeverBecomeText) {
+  constexpr std::array replies{
+      std::string_view{"\x1b[?2026;2$y"},
+      std::string_view{"\x1b[?61;4;6;7;14;21;22;23;24;28;32;42;52c"},
+  };
+  const std::string adjacent = std::string{replies[0]} + std::string{replies[1]};
+  const auto input = terminalRecords(adjacent);
+
+  ssg::WindowsConsoleInputTranslator translator;
+  const auto translated = translator.translate(input, {});
+  ASSERT_EQ(translated.bytes, adjacent);
+
+  std::size_t offset = 0;
+  for (const auto expected : replies) {
+    std::size_t consumed = 0;
+    const auto decoded =
+        ssg::decodeInput(std::string_view{translated.bytes}.substr(offset),
+                         false, consumed);
+    ASSERT_TRUE(decoded.status == ssg::DecodeStatus::reply);
+    ASSERT_EQ(decoded.reply, std::string{expected});
+    ASSERT_TRUE(decoded.text.empty());
+    ASSERT_EQ(consumed, expected.size());
+    offset += consumed;
+  }
+  ASSERT_EQ(offset, adjacent.size());
+
+  ssg::WindowsConsoleInputBuffer buffer;
+  const std::size_t split = replies[0].size() - 1;
+  ASSERT_FALSE(buffer.append(
+      std::span<const INPUT_RECORD>{input.data(), split}, {}));
+  std::string reconstructed;
+  std::array<char, 3> chunk{};
+  while (buffer.ready()) {
+    const auto count = buffer.read(chunk);
+    reconstructed.append(chunk.data(), count);
+  }
+  std::size_t consumed = 99;
+  const auto partial = ssg::decodeInput(reconstructed, false, consumed);
+  ASSERT_TRUE(partial.status == ssg::DecodeStatus::incomplete);
+  ASSERT_EQ(consumed, std::size_t{0});
+
+  ASSERT_FALSE(buffer.append(
+      std::span<const INPUT_RECORD>{input.data() + split,
+                                    input.size() - split},
+      {}));
+  while (buffer.ready()) {
+    const auto count = buffer.read(chunk);
+    reconstructed.append(chunk.data(), count);
+  }
+  ASSERT_EQ(reconstructed, adjacent);
+}
+
+TEST(terminalFramingDoesNotChangeEscapeOrControlBracket) {
+  ssg::WindowsConsoleInputTranslator translator;
+
+  const auto physicalEscape = key(VK_ESCAPE, L'\x1b');
+  const auto translatedEscape = translator.translate({&physicalEscape, 1}, {});
+  ASSERT_EQ(translatedEscape.bytes, std::string{"\x1b"});
+  std::size_t consumed = 0;
+  const auto decodedEscape =
+      ssg::decodeInput(translatedEscape.bytes, true, consumed);
+  ASSERT_TRUE(decodedEscape.status == ssg::DecodeStatus::key);
+  ASSERT_EQ(decodedEscape.stroke.code, ssg::KeyCode::Escape);
+  ASSERT_FALSE(decodedEscape.stroke.mod);
+
+  const auto controlBracket =
+      key(VK_OEM_4, L'\x1b', LEFT_CTRL_PRESSED);
+  const auto translatedBracket =
+      translator.translate({&controlBracket, 1}, {});
+  ASSERT_EQ(translatedBracket.bytes, std::string{"\x1b[91;5u"});
+  const auto decodedBracket =
+      ssg::decodeInput(translatedBracket.bytes, true, consumed);
+  ASSERT_TRUE(decodedBracket.status == ssg::DecodeStatus::key);
+  ASSERT_EQ(decodedBracket.stroke.code, ssg::KeyCode::BracketLeft);
+  ASSERT_TRUE(decodedBracket.stroke.mod);
+}
+
 TEST(malformedAndIgnorableRecordsProduceNoInput) {
   ssg::WindowsConsoleInputTranslator translator;
   const auto low = key(0, static_cast<wchar_t>(0xde00));
@@ -234,6 +323,8 @@ SSG_TEST_SUITE(test_windows_console_input) {
   RUN(windowsRecordsProduceCanonicalSharedInput);
   RUN(textRepeatsAndSplitSurrogatePairsStayWhole);
   RUN(altGrCommitsTextWithoutCreatingAChord);
+  RUN(terminalRepliesPreserveFramingAndNeverBecomeText);
+  RUN(terminalFramingDoesNotChangeEscapeOrControlBracket);
   RUN(malformedAndIgnorableRecordsProduceNoInput);
   RUN(bufferSizeRecordsReportResizeWithoutInput);
   RUN(inputBufferIgnoresRecordsThatProduceNoInput);
