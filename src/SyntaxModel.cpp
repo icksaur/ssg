@@ -236,6 +236,21 @@ std::vector<SyntaxSpan> projectSpans(
             if (cursor == span.end.value()) ++spanIndex;
         }
     };
+    const auto insertedScope = [&](std::uint64_t start,
+                                   std::uint64_t oldEnd) {
+        if (spanIndex >= view.spans().size()) {
+            return SyntaxScope::PlainText;
+        }
+        const auto& span = view.spans()[spanIndex];
+        if (start == oldEnd) {
+            return span.begin.value() < start && start < span.end.value()
+                       ? span.scope
+                       : SyntaxScope::PlainText;
+        }
+        return span.begin.value() <= start && oldEnd <= span.end.value()
+                   ? span.scope
+                   : SyntaxScope::PlainText;
+    };
 
     std::uint64_t oldCursor = 0;
     std::uint64_t newCursor = 0;
@@ -246,7 +261,7 @@ std::vector<SyntaxSpan> projectSpans(
         copyUnchanged(oldCursor, start, newCursor);
         newCursor += start - oldCursor;
         append(ByteOffset{newCursor}, ByteOffset{newCursor + insertedBytes},
-               SyntaxScope::PlainText);
+               insertedScope(start, oldEnd));
         newCursor += insertedBytes;
         oldCursor = oldEnd;
     }

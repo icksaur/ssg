@@ -295,7 +295,7 @@ TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
     ASSERT_EQ(incremental.viewState(), full.viewState());
 }
 
-TEST(pendingEditsProjectUnchangedScopesAtCurrentOffsets) {
+TEST(pendingEditsProjectScopesAtCurrentOffsets) {
     auto parser = std::make_shared<DeterministicParser>();
     SyntaxModel model{parser};
     const std::string before = "let x = 1;\n";
@@ -330,11 +330,55 @@ TEST(pendingEditsProjectUnchangedScopesAtCurrentOffsets) {
     ASSERT_EQ(
         model.viewState().spans(),
         (std::vector<SyntaxSpan>{
-            {byte(0), byte(1), SyntaxScope::Keyword},
-            {byte(1), byte(2), SyntaxScope::PlainText},
-            {byte(2), byte(4), SyntaxScope::Keyword},
-            {byte(4), byte(13), SyntaxScope::PlainText},
+            {byte(0), byte(4), SyntaxScope::Keyword},
+            {byte(4), byte(9), SyntaxScope::PlainText},
+            {byte(9), byte(11), SyntaxScope::Number},
+            {byte(11), byte(13), SyntaxScope::PlainText},
         }));
+}
+
+TEST(pendingEditsLeaveAmbiguousInsertedScopesPlain) {
+    auto parser = std::make_shared<DeterministicParser>();
+    SyntaxModel model{parser};
+    const std::string before = "let 1;\n";
+    ASSERT_TRUE(
+        parseAndAccept(model, requestFor(model, std::uint64_t{1}, before))
+            .accepted());
+
+    const SyntaxEdit boundaryInsertion{
+        .startByte = byte(3),
+        .oldEndByte = byte(3),
+        .newEndByte = byte(4),
+        .startPosition = {line(0), 3},
+        .oldEndPosition = {line(0), 3},
+        .newEndPosition = {line(0), 4},
+    };
+    ASSERT_TRUE(
+        requestFor(model, std::uint64_t{2}, "letx 1;\n",
+                   {boundaryInsertion})
+            .accepted());
+    ASSERT_EQ(model.viewState().scopeAt(byte(3)), SyntaxScope::PlainText);
+
+    SyntaxModel crossingModel{parser};
+    ASSERT_TRUE(
+        parseAndAccept(
+            crossingModel,
+            requestFor(crossingModel, std::uint64_t{1}, before))
+            .accepted());
+    const SyntaxEdit crossingReplacement{
+        .startByte = byte(3),
+        .oldEndByte = byte(5),
+        .newEndByte = byte(4),
+        .startPosition = {line(0), 3},
+        .oldEndPosition = {line(0), 5},
+        .newEndPosition = {line(0), 4},
+    };
+    ASSERT_TRUE(
+        requestFor(crossingModel, std::uint64_t{2}, "letx;\n",
+                   {crossingReplacement})
+            .accepted());
+    ASSERT_EQ(crossingModel.viewState().scopeAt(byte(3)),
+              SyntaxScope::PlainText);
 }
 
 TEST(pendingProjectionUsesByteOffsetsBesideUtf8) {
@@ -645,7 +689,8 @@ TEST(parseConvenienceRejectsAParserThatCancelsMidParse) {
 SSG_TEST_SUITE(test_syntax) {
     RUN(handComputedMetadataGoldenCoversAllExportedSections);
     RUN(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse);
-    RUN(pendingEditsProjectUnchangedScopesAtCurrentOffsets);
+    RUN(pendingEditsProjectScopesAtCurrentOffsets);
+    RUN(pendingEditsLeaveAmbiguousInsertedScopesPlain);
     RUN(pendingProjectionUsesByteOffsetsBesideUtf8);
     RUN(rapidProjectionDoesNotReuseDisplayRelativeEditsForParsing);
     RUN(pendingLanguageSwitchNeverReusesTheOldLanguageParse);
