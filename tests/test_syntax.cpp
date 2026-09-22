@@ -295,6 +295,145 @@ TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
     ASSERT_EQ(incremental.viewState(), full.viewState());
 }
 
+TEST(pendingEditsProjectUnchangedScopesAtCurrentOffsets) {
+    auto parser = std::make_shared<DeterministicParser>();
+    SyntaxModel model{parser};
+    const std::string before = "let x = 1;\n";
+    ASSERT_TRUE(
+        parseAndAccept(model, requestFor(model, std::uint64_t{1}, before))
+            .accepted());
+
+    const std::string after = "lZet x = 42;\n";
+    const std::vector<SyntaxEdit> edits{
+        {
+            .startByte = byte(1),
+            .oldEndByte = byte(1),
+            .newEndByte = byte(2),
+            .startPosition = {line(0), 1},
+            .oldEndPosition = {line(0), 1},
+            .newEndPosition = {line(0), 2},
+        },
+        {
+            .startByte = byte(8),
+            .oldEndByte = byte(9),
+            .newEndByte = byte(10),
+            .startPosition = {line(0), 8},
+            .oldEndPosition = {line(0), 9},
+            .newEndPosition = {line(0), 10},
+        },
+    };
+    const auto pending =
+        requestFor(model, std::uint64_t{2}, after, edits);
+    ASSERT_TRUE(pending.accepted());
+    ASSERT_EQ(model.viewState().revision(), std::uint64_t{2});
+    ASSERT_EQ(model.viewState().textBytes(), after.size());
+    ASSERT_EQ(
+        model.viewState().spans(),
+        (std::vector<SyntaxSpan>{
+            {byte(0), byte(1), SyntaxScope::Keyword},
+            {byte(1), byte(2), SyntaxScope::PlainText},
+            {byte(2), byte(4), SyntaxScope::Keyword},
+            {byte(4), byte(13), SyntaxScope::PlainText},
+        }));
+}
+
+TEST(pendingProjectionUsesByteOffsetsBesideUtf8) {
+    auto parser = std::make_shared<DeterministicParser>();
+    SyntaxModel model{parser};
+    const std::string before = "let \xc3\xa9 = 1;\n";
+    ASSERT_TRUE(
+        parseAndAccept(model, requestFor(model, std::uint64_t{1}, before))
+            .accepted());
+
+    const std::string after = "let \xc3\xa9x = 1;\n";
+    const SyntaxEdit edit{
+        .startByte = byte(6),
+        .oldEndByte = byte(6),
+        .newEndByte = byte(7),
+        .startPosition = {line(0), 6},
+        .oldEndPosition = {line(0), 6},
+        .newEndPosition = {line(0), 7},
+    };
+    ASSERT_TRUE(
+        requestFor(model, std::uint64_t{2}, after, {edit}).accepted());
+    ASSERT_EQ(model.viewState().textBytes(), after.size());
+    ASSERT_EQ(model.viewState().scopeAt(byte(0)), SyntaxScope::Keyword);
+    ASSERT_EQ(model.viewState().scopeAt(byte(5)), SyntaxScope::PlainText);
+    ASSERT_EQ(model.viewState().scopeAt(byte(6)), SyntaxScope::PlainText);
+    ASSERT_EQ(model.viewState().scopeAt(byte(10)), SyntaxScope::Number);
+}
+
+TEST(rapidProjectionDoesNotReuseDisplayRelativeEditsForParsing) {
+    auto parser = std::make_shared<DeterministicParser>();
+    SyntaxModel model{parser};
+    const std::string initialText = "let x = 1;\n";
+    ASSERT_TRUE(
+        parseAndAccept(
+            model, requestFor(model, std::uint64_t{1}, initialText))
+            .accepted());
+
+    const SyntaxEdit firstEdit{
+        .startByte = byte(4),
+        .oldEndByte = byte(4),
+        .newEndByte = byte(5),
+        .startPosition = {line(0), 4},
+        .oldEndPosition = {line(0), 4},
+        .newEndPosition = {line(0), 5},
+    };
+    const auto first = requestFor(
+        model, std::uint64_t{2}, "let ax = 1;\n", {firstEdit});
+    ASSERT_TRUE(first.accepted());
+    ASSERT_TRUE(first.request->priorParse() != nullptr);
+    ASSERT_EQ(first.request->edits(), (std::vector<SyntaxEdit>{firstEdit}));
+
+    const SyntaxEdit secondEdit{
+        .startByte = byte(5),
+        .oldEndByte = byte(5),
+        .newEndByte = byte(6),
+        .startPosition = {line(0), 5},
+        .oldEndPosition = {line(0), 5},
+        .newEndPosition = {line(0), 6},
+    };
+    const auto second = requestFor(
+        model, std::uint64_t{3}, "let abx = 1;\n", {secondEdit});
+    ASSERT_TRUE(second.accepted());
+    ASSERT_TRUE(first.request->cancelled());
+    ASSERT_TRUE(second.request->priorParse() == nullptr);
+    ASSERT_TRUE(second.request->edits().empty());
+    ASSERT_EQ(model.viewState().revision(), std::uint64_t{3});
+    ASSERT_EQ(model.viewState().scopeAt(byte(0)), SyntaxScope::Keyword);
+    ASSERT_EQ(model.viewState().scopeAt(byte(4)), SyntaxScope::PlainText);
+    ASSERT_EQ(model.viewState().scopeAt(byte(5)), SyntaxScope::PlainText);
+}
+
+TEST(pendingLanguageSwitchNeverReusesTheOldLanguageParse) {
+    auto parser = std::make_shared<DeterministicParser>();
+    SyntaxModel model{parser};
+    ASSERT_TRUE(
+        parseAndAccept(
+            model, requestFor(model, std::uint64_t{1}, "let x = 1;\n"))
+            .accepted());
+
+    const auto switched =
+        model.request(std::uint64_t{1}, LanguageId{"other"}, "let x = 1;\n");
+    ASSERT_TRUE(switched.accepted());
+    ASSERT_TRUE(switched.request->priorParse() == nullptr);
+
+    const SyntaxEdit edit{
+        .startByte = byte(4),
+        .oldEndByte = byte(4),
+        .newEndByte = byte(5),
+        .startPosition = {line(0), 4},
+        .oldEndPosition = {line(0), 4},
+        .newEndPosition = {line(0), 5},
+    };
+    const auto edited = model.request(
+        std::uint64_t{2}, LanguageId{"other"}, "let ax = 1;\n", {edit});
+    ASSERT_TRUE(edited.accepted());
+    ASSERT_TRUE(edited.request->priorParse() == nullptr);
+    ASSERT_TRUE(edited.request->edits().empty());
+}
+
 TEST(supersededAndCancelledResultsNeverReplaceNewerState) {
     auto parser = std::make_shared<DeterministicParser>();
     SyntaxModel model{parser};
@@ -308,16 +447,17 @@ TEST(supersededAndCancelledResultsNeverReplaceNewerState) {
     const auto third = requestFor(model, std::uint64_t{3}, "let a = 3;\n");
     ASSERT_TRUE(third.accepted());
     ASSERT_TRUE(second.request->cancelled());
+    const auto latestDisplay = model.viewState();
 
     ASSERT_EQ(model.accept(second.request, completedSecond).error,
               SyntaxAcceptError::Cancelled);
-    ASSERT_EQ(model.viewState(), accepted);
+    ASSERT_EQ(model.viewState(), latestDisplay);
 
     model.cancelPending();
     ASSERT_TRUE(third.request->cancelled());
     ASSERT_EQ(model.accept(third.request, model.run(*third.request)).error,
               SyntaxAcceptError::Cancelled);
-    ASSERT_EQ(model.viewState(), accepted);
+    ASSERT_EQ(model.viewState(), latestDisplay);
 
     const auto newest = requestFor(model, std::uint64_t{4}, "let a = 4;\n");
     ASSERT_TRUE(parseAndAccept(model, newest).accepted());
@@ -403,7 +543,7 @@ TEST(requestAndResultValidationIsFailureAtomic) {
     mismatched.revision = std::uint64_t{2};
     ASSERT_EQ(model.accept(valid.request, mismatched).error,
               SyntaxAcceptError::MalformedOutput);
-    ASSERT_EQ(model.viewState().revision(), std::uint64_t{0});
+    ASSERT_EQ(model.viewState().revision(), std::uint64_t{1});
 
     ASSERT_TRUE(parseAndAccept(model, valid).accepted());
     const auto stale = requestFor(model, std::uint64_t{1}, "let 2\n");
@@ -426,7 +566,7 @@ TEST(requestAndResultValidationIsFailureAtomic) {
     ASSERT_EQ(rejectedNewer.error, SyntaxRequestError::DocumentTooLarge);
     ASSERT_TRUE(switchedLanguage.request->cancelled());
     ASSERT_EQ(model.accept(switchedLanguage.request, completedSwitch).error,
-              SyntaxAcceptError::StaleRevision);
+              SyntaxAcceptError::Cancelled);
     ASSERT_EQ(model.viewState().revision(), std::uint64_t{3});
     ASSERT_EQ(model.viewState().scopeAt(ByteOffset{0}),
               SyntaxScope::PlainText);
@@ -490,14 +630,14 @@ TEST(parseConvenienceRejectsAParserThatCancelsMidParse) {
     const auto accepted = model.viewState();
 
     // A parser cancelling its own request mid-parse is rejected at accept, and
-    // the last accepted view-state stands -- the synchronous mirror of the
-    // superseded-request path.
+    // its revision-aligned display view remains pending.
     parser->selfCancelDuringParse = true;
     const auto result =
         model.parse(std::uint64_t{2}, LanguageId{"toy"}, "let a = 2;\n");
     ASSERT_FALSE(result.accepted());
     ASSERT_EQ(result.acceptError, SyntaxAcceptError::Cancelled);
-    ASSERT_EQ(model.viewState(), accepted);
+    ASSERT_EQ(model.viewState().revision(), std::uint64_t{2});
+    ASSERT_TRUE(model.viewState() != accepted);
 }
 
 } // namespace
@@ -505,6 +645,10 @@ TEST(parseConvenienceRejectsAParserThatCancelsMidParse) {
 SSG_TEST_SUITE(test_syntax) {
     RUN(handComputedMetadataGoldenCoversAllExportedSections);
     RUN(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse);
+    RUN(pendingEditsProjectUnchangedScopesAtCurrentOffsets);
+    RUN(pendingProjectionUsesByteOffsetsBesideUtf8);
+    RUN(rapidProjectionDoesNotReuseDisplayRelativeEditsForParsing);
+    RUN(pendingLanguageSwitchNeverReusesTheOldLanguageParse);
     RUN(supersededAndCancelledResultsNeverReplaceNewerState);
     RUN(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot);
     RUN(requestAndResultValidationIsFailureAtomic);

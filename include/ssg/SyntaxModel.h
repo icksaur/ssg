@@ -255,6 +255,8 @@ public:
         const SyntaxParseOutput& output);
     void cancelPending() noexcept;
 
+    // INV-syntax-view-revision-aligned: this display view always describes the
+    // current requested revision, language, and byte count.
     [[nodiscard]] const SyntaxViewState& viewState() const noexcept {
         return *viewState_;
     }
@@ -264,11 +266,15 @@ public:
     }
 
 private:
+    // INV-syntax-authority: display projection never changes this accepted
+    // parser tuple; only accepting parser output does.
     std::shared_ptr<SyntaxParser> parser_;
     SyntaxConfig config_;
     std::shared_ptr<const SyntaxViewState> viewState_;
+    std::string displayText_;
     SyntaxParseHandle acceptedParse_;
     std::string acceptedText_;
+    std::optional<LanguageId> acceptedLanguage_;
     std::shared_ptr<const SyntaxParseRequest> pending_;
 };
 

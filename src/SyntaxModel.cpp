@@ -187,6 +187,73 @@ std::vector<SyntaxSpan> canonicalSpans(std::uint64_t textBytes,
     return merged;
 }
 
+std::vector<SyntaxSpan> projectSpans(
+    const SyntaxViewState& view, std::uint64_t newTextBytes,
+    const std::vector<SyntaxEdit>& edits) {
+    std::vector<SyntaxSpan> result;
+    result.reserve(view.spans().size() + edits.size() * 2);
+    const auto append = [&](ByteOffset begin, ByteOffset end,
+                            SyntaxScope scope) {
+        if (begin >= end) return;
+        if (!result.empty() && result.back().end == begin &&
+            result.back().scope == scope) {
+            result.back().end = end;
+        } else {
+            result.push_back({begin, end, scope});
+        }
+    };
+
+    std::size_t spanIndex = 0;
+    const auto copyUnchanged = [&](std::uint64_t oldBegin,
+                                   std::uint64_t oldEnd,
+                                   std::uint64_t newBegin) {
+        while (spanIndex < view.spans().size() &&
+               view.spans()[spanIndex].end.value() <= oldBegin) {
+            ++spanIndex;
+        }
+        std::uint64_t cursor = oldBegin;
+        while (cursor < oldEnd) {
+            if (spanIndex >= view.spans().size() ||
+                view.spans()[spanIndex].begin.value() >= oldEnd) {
+                append(ByteOffset{newBegin + cursor - oldBegin},
+                       ByteOffset{newBegin + oldEnd - oldBegin},
+                       SyntaxScope::PlainText);
+                return;
+            }
+            const auto& span = view.spans()[spanIndex];
+            if (cursor < span.begin.value()) {
+                const auto gapEnd = std::min(oldEnd, span.begin.value());
+                append(ByteOffset{newBegin + cursor - oldBegin},
+                       ByteOffset{newBegin + gapEnd - oldBegin},
+                       SyntaxScope::PlainText);
+                cursor = gapEnd;
+                continue;
+            }
+            const auto copiedEnd = std::min(oldEnd, span.end.value());
+            append(ByteOffset{newBegin + cursor - oldBegin},
+                   ByteOffset{newBegin + copiedEnd - oldBegin}, span.scope);
+            cursor = copiedEnd;
+            if (cursor == span.end.value()) ++spanIndex;
+        }
+    };
+
+    std::uint64_t oldCursor = 0;
+    std::uint64_t newCursor = 0;
+    for (const auto& edit : edits) {
+        const auto start = edit.startByte.value();
+        const auto oldEnd = edit.oldEndByte.value();
+        const auto insertedBytes = edit.newEndByte.value() - start;
+        copyUnchanged(oldCursor, start, newCursor);
+        newCursor += start - oldCursor;
+        append(ByteOffset{newCursor}, ByteOffset{newCursor + insertedBytes},
+               SyntaxScope::PlainText);
+        newCursor += insertedBytes;
+        oldCursor = oldEnd;
+    }
+    copyUnchanged(oldCursor, view.textBytes(), newCursor);
+    return canonicalSpans(newTextBytes, std::move(result));
+}
+
 template <typename T>
 std::optional<T> changed(const T& before, const T& after) {
     if (before == after) {
@@ -332,7 +399,8 @@ bool SyntaxModel::hasGrammar(const LanguageId& language) const noexcept {
 
 bool SyntaxModel::canIncrementallyParse(
     const LanguageId& language) const noexcept {
-    return acceptedParse_ != nullptr && language == viewState().language();
+    return acceptedParse_ != nullptr && acceptedLanguage_ &&
+           language == *acceptedLanguage_;
 }
 
 SyntaxParseResult SyntaxModel::parse(
@@ -361,30 +429,52 @@ SyntaxParseRequestResult SyntaxModel::request(
         (pending_ && revision < pending_->revision()) || repeatsPending) {
         return {nullptr, SyntaxRequestError::StaleRevision};
     }
-    cancelPending();
     if (text.size() > config_.maximumDocumentBytes) {
+        cancelPending();
         viewState_ = std::make_shared<const SyntaxViewState>(
             SyntaxViewState::plainText(
                 revision, language, text, config_.tabWidth));
+        displayText_ = text;
         acceptedParse_.reset();
         acceptedText_ = text;
+        acceptedLanguage_ = language;
         pending_.reset();
         return {nullptr, SyntaxRequestError::DocumentTooLarge};
     }
-    const auto priorParse =
-        language == viewState().language() ? acceptedParse_ : nullptr;
-    if (!edits.empty() &&
-        (!priorParse || !validEdits(edits, text, acceptedText_))) {
+    const bool canProject =
+        !edits.empty() && language == viewState().language() &&
+        validEdits(edits, text, displayText_);
+    if (!edits.empty() && !canProject) {
         return {nullptr, SyntaxRequestError::MalformedEdits};
     }
 
+    std::vector<SyntaxEdit> parserEdits;
+    const bool editsMatchAccepted =
+        !edits.empty() && acceptedParse_ && acceptedLanguage_ &&
+        language == *acceptedLanguage_ &&
+        validEdits(edits, text, acceptedText_);
+    if (editsMatchAccepted) parserEdits = edits;
     const auto requestPrior =
-        priorParse && (text == acceptedText_ || !edits.empty())
-            ? priorParse
+        acceptedParse_ && acceptedLanguage_ &&
+                language == *acceptedLanguage_ &&
+                (text == acceptedText_ || !parserEdits.empty())
+            ? acceptedParse_
             : nullptr;
+
+    cancelPending();
+    auto nextView =
+        canProject
+            ? SyntaxViewState{
+                  revision, language, text.size(),
+                  projectSpans(viewState(), text.size(), edits)}
+            : SyntaxViewState::plainText(revision, language, text,
+                                         config_.tabWidth);
+    viewState_ =
+        std::make_shared<const SyntaxViewState>(std::move(nextView));
+    displayText_ = text;
     pending_ = std::shared_ptr<const SyntaxParseRequest>(
         new SyntaxParseRequest{revision, std::move(language), std::move(text),
-                               requestPrior, std::move(edits)});
+                               requestPrior, std::move(parserEdits)});
     return {pending_, SyntaxRequestError::None};
 }
 
@@ -425,13 +515,11 @@ SyntaxAcceptResult SyntaxModel::accept(
     if (!request) {
         return {SyntaxAcceptError::UnknownRequest, false};
     }
-    if (request->revision() < viewState().revision() ||
-        (request->revision() == viewState().revision() &&
-         request->language() == viewState().language())) {
-        return {SyntaxAcceptError::StaleRevision, false};
-    }
     if (request->cancelled()) {
         return {SyntaxAcceptError::Cancelled, false};
+    }
+    if (request->revision() < viewState().revision()) {
+        return {SyntaxAcceptError::StaleRevision, false};
     }
     if (request != pending_) {
         return {SyntaxAcceptError::UnknownRequest, false};
@@ -454,8 +542,10 @@ SyntaxAcceptResult SyntaxModel::accept(
                           request->text(), output, config_);
     viewState_ =
         std::make_shared<const SyntaxViewState>(std::move(next));
+    displayText_ = request->text();
     acceptedParse_ = fallback ? nullptr : output.parse;
     acceptedText_ = request->text();
+    acceptedLanguage_ = request->language();
     pending_.reset();
     return {SyntaxAcceptError::None, fallback};
 }

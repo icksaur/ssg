@@ -19,15 +19,15 @@ class RecordingParse final : public OpaqueSyntaxParse {};
 
 class RecordingParser final : public SyntaxParser {
 public:
-    explicit RecordingParser(bool blockFirst = false)
-        : blockFirst_{blockFirst} {}
+    explicit RecordingParser(std::optional<std::size_t> blockedCall = std::nullopt)
+        : blockedCall_{blockedCall} {}
 
     bool hasGrammar(const LanguageId&) const override { return true; }
 
     SyntaxParseOutput parse(const SyntaxParseRequest& request) override {
         const auto call = calls_.fetch_add(1);
         entered_.release();
-        if (blockFirst_ && call == 0) release_.acquire();
+        if (blockedCall_ && call == *blockedCall_) release_.acquire();
 
         SyntaxParseOutput output;
         output.revision = request.revision();
@@ -54,7 +54,7 @@ public:
     }
 
 private:
-    bool blockFirst_ = false;
+    std::optional<std::size_t> blockedCall_;
     std::atomic<std::size_t> calls_{0};
     std::counting_semaphore<> entered_{0};
     std::counting_semaphore<> completed_{0};
@@ -94,11 +94,11 @@ bool pumpUntilAccepted(Editor& editor) {
     return false;
 }
 
-TEST(editProjectsBeforeBlockedSyntaxAndHighlightsAfterPump) {
+TEST(rapidEditsKeepUnchangedHighlightingWhileSyntaxIsBlocked) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}";
 
-    auto parser = std::make_shared<RecordingParser>(true);
+    auto parser = std::make_shared<RecordingParser>(std::size_t{1});
     auto config = configFor(root);
     config.syntaxParser = parser;
     auto created = createEditor(std::move(config));
@@ -107,14 +107,44 @@ TEST(editProjectsBeforeBlockedSyntaxAndHighlightsAfterPump) {
     auto& runtime = *created.session;
     ASSERT_TRUE(
         ssg::test::openFile(runtime, std::string{"main.cpp"}).accepted());
-
     parser->waitUntilEntered();
+    parser->waitUntilCompleted();
+    ASSERT_TRUE(pumpUntilAccepted(runtime));
+    auto accepted = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(accepted.has_value());
+    if (!accepted) return;
+    ASSERT_TRUE(hasScope(*accepted->syntax, SyntaxScope::Keyword));
+
     ASSERT_TRUE(ssg::test::typeText(runtime, "x").accepted());
-    auto pending = ssg::test::projectGridFrame(runtime);
-    ASSERT_TRUE(pending.has_value());
-    if (!pending) return;
-    ASSERT_EQ(pending->documentText.front(), 'x');
-    ASSERT_FALSE(hasScope(*pending->syntax, SyntaxScope::Keyword));
+    parser->waitUntilEntered();
+    auto firstPending = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(firstPending.has_value());
+    if (!firstPending) return;
+    ASSERT_EQ(firstPending->documentText.front(), 'x');
+    ASSERT_EQ(firstPending->syntax->revision(),
+              firstPending->documentRevision);
+    ASSERT_EQ(firstPending->syntax->textBytes(),
+              firstPending->documentText.size());
+    ASSERT_EQ(firstPending->syntax->scopeAt(ByteOffset{0}),
+              SyntaxScope::PlainText);
+    ASSERT_EQ(firstPending->syntax->scopeAt(ByteOffset{1}),
+              SyntaxScope::Keyword);
+
+    ASSERT_TRUE(ssg::test::typeText(runtime, "y").accepted());
+    auto secondPending = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(secondPending.has_value());
+    if (!secondPending) return;
+    ASSERT_TRUE(secondPending->documentText.starts_with("xy"));
+    ASSERT_EQ(secondPending->syntax->revision(),
+              secondPending->documentRevision);
+    ASSERT_EQ(secondPending->syntax->textBytes(),
+              secondPending->documentText.size());
+    ASSERT_EQ(secondPending->syntax->scopeAt(ByteOffset{0}),
+              SyntaxScope::PlainText);
+    ASSERT_EQ(secondPending->syntax->scopeAt(ByteOffset{1}),
+              SyntaxScope::PlainText);
+    ASSERT_EQ(secondPending->syntax->scopeAt(ByteOffset{2}),
+              SyntaxScope::Keyword);
 
     parser->releaseFirst();
     parser->waitUntilCompleted();
@@ -149,7 +179,7 @@ TEST(supersededCompletionCannotReplaceLatestRevision) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}";
 
-    auto parser = std::make_shared<RecordingParser>(true);
+    auto parser = std::make_shared<RecordingParser>(std::size_t{0});
     auto config = configFor(root);
     config.syntaxParser = parser;
     auto created = createEditor(std::move(config));
@@ -238,7 +268,7 @@ TEST(pathLanguageChangeQueuesReplacementSyntaxAtSameRevision) {
 }  // namespace
 
 SSG_TEST_SUITE(test_syntax_injection) {
-    RUN(editProjectsBeforeBlockedSyntaxAndHighlightsAfterPump);
+    RUN(rapidEditsKeepUnchangedHighlightingWhileSyntaxIsBlocked);
     RUN(nullParserYieldsPlainTextSynchronously);
     RUN(supersededCompletionCannotReplaceLatestRevision);
     RUN(projectedSyntaxLifetimeSurvivesLaterAcceptance);

@@ -1130,11 +1130,6 @@ std::shared_ptr<const SyntaxViewState> Editor::activeSyntaxView() const {
     if (auto id = activeDocumentId()) {
         if (auto it = documentRuntimeStates.find(id->value());
             it != documentRuntimeStates.end()) {
-            if (auto pending = it->second.syntax.pendingRequest()) {
-                return std::make_shared<const SyntaxViewState>(
-                    pending->revision(), pending->language(),
-                    pending->text().size(), std::vector<SyntaxSpan>{});
-            }
             return it->second.syntax.sharedViewState();
         }
     }
@@ -1343,8 +1338,6 @@ void Editor::refreshSyntax(std::vector<SyntaxEdit> edits) {
     auto text = document ? document->snapshot().text : std::string{};
     auto revision = document ? document->revision() : std::uint64_t{0};
     auto language = languageFor(*id);
-    if (model.hasPending()) edits.clear();
-    if (!model.canIncrementallyParse(language)) edits.clear();
     if (!model.hasParser()) {
         (void)model.parse(revision, std::move(language), std::move(text),
                           std::move(edits));
