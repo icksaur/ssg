@@ -34,7 +34,8 @@ class TerminalCapabilities {
 
     static constexpr std::chrono::milliseconds kProbeWindow{250};
 
-    explicit TerminalCapabilities(EnvironmentLookup lookup, Clock clock = {});
+    explicit TerminalCapabilities(EnvironmentLookup lookup, Clock clock = {},
+                                  bool terminalSupportsTruecolor = false);
 
     [[nodiscard]] std::string beginProbe();
     void observeReply(std::string_view reply);

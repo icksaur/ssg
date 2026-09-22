@@ -32,5 +32,7 @@ encodeAnsiFrame(const CellGrid& screen,
                                           const char* term,
                                           const char* termProgram,
                                           const char* windowsTerminalSession =
-                                              nullptr);
+                                              nullptr,
+                                          bool terminalSupportsTruecolor =
+                                              false);
 } // namespace ssg

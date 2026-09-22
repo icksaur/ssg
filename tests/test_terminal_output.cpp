@@ -126,6 +126,12 @@ TEST(detectColorDepthReadsEnvironment) {
                 ColorDepth::Ansi16);
     ASSERT_TRUE(ssg::detectColorDepth(nullptr, nullptr, nullptr, nullptr, "") ==
                 ColorDepth::Ansi16);
+    ASSERT_TRUE(
+        ssg::detectColorDepth(nullptr, nullptr, nullptr, nullptr, nullptr, true) ==
+        ColorDepth::Truecolor);
+    ASSERT_TRUE(
+        ssg::detectColorDepth("16", nullptr, nullptr, nullptr, nullptr, true) ==
+        ColorDepth::Ansi16);
 
     ASSERT_TRUE(ssg::detectColorDepth(nullptr, nullptr, "screen",
                                              "iTerm.app") == ColorDepth::Truecolor);

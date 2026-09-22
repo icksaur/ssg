@@ -141,6 +141,7 @@ public:
   }
 
   bool supportsKeyboardProtocol() const noexcept override { return false; }
+  bool supportsTruecolor() const noexcept override { return true; }
 
 private:
   std::unique_ptr<WindowsConsoleApi> console_;

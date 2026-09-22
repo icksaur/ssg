@@ -176,6 +176,11 @@ TEST(anOverrideBeatsTheTerminalsOwnAnswer) {
     ssg::TerminalCapabilities windowsTerminal{
         fakeEnvironment({{"WT_SESSION", "windows-terminal-session"}})};
     ASSERT_TRUE(windowsTerminal.colorDepth() == ssg::ColorDepth::Truecolor);
+    ssg::TerminalCapabilities windowsConsole{fakeEnvironment({}), {}, true};
+    ASSERT_TRUE(windowsConsole.colorDepth() == ssg::ColorDepth::Truecolor);
+    ssg::TerminalCapabilities forcedWindowsConsole{
+        fakeEnvironment({{"SSG_COLOR_DEPTH", "16"}}), {}, true};
+    ASSERT_TRUE(forcedWindowsConsole.colorDepth() == ssg::ColorDepth::Ansi16);
 }
 
 // Every capability must be reachable by an override, or a user hitting a

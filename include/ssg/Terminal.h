@@ -77,6 +77,9 @@ class NativeTerminal {
     [[nodiscard]] virtual bool supportsKeyboardProtocol() const noexcept {
         return true;
     }
+    [[nodiscard]] virtual bool supportsTruecolor() const noexcept {
+        return false;
+    }
 };
 
 [[nodiscard]] std::unique_ptr<NativeTerminal> makePlatformTerminal();
@@ -93,6 +96,7 @@ class TerminalSession {
 
     void restore() noexcept;
     [[nodiscard]] bool active() const noexcept;
+    [[nodiscard]] bool supportsTruecolor() const noexcept;
     void enableKeyboardProtocol();
 
   private:

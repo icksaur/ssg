@@ -97,6 +97,10 @@ void TerminalSession::restore() noexcept {
 
 bool TerminalSession::active() const noexcept { return impl_->active; }
 
+bool TerminalSession::supportsTruecolor() const noexcept {
+    return impl_->active && impl_->native->supportsTruecolor();
+}
+
 void TerminalSession::enableKeyboardProtocol() {
     if (!impl_->active || impl_->keyboardProtocolEntered ||
         !impl_->native->supportsKeyboardProtocol()) {

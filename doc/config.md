@@ -118,8 +118,9 @@ SSG_TERM_SYNCHRONIZED_OUTPUT=off ssg
 
 Colour depth is resolved the same way and forced with `SSG_COLOR_DEPTH`
 (`truecolor`/`24bit`, `256`/`256color`/`indexed256`, or `16`/`ansi16`).
-Windows Terminal is recognized as truecolor through its `WT_SESSION`
-environment variable when `TERM` is not `dumb`.
+On Windows, successfully enabling virtual-terminal output identifies the
+console as truecolor. `WT_SESSION` remains a fallback signal when terminal
+capabilities are resolved without an active console.
 
 Two notes worth knowing. Capabilities belong to the *connection*, not the
 machine -- the same computer answers differently over ssh, inside tmux, or

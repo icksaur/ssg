@@ -88,6 +88,7 @@ TEST(windowsTerminalActivatesAndRestoresExactState) {
   ASSERT_TRUE((state.outputMode & ENABLE_PROCESSED_OUTPUT) != 0);
   ASSERT_TRUE((state.outputMode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0);
   ASSERT_EQ(state.codePage, UINT{CP_UTF8});
+  ASSERT_TRUE(terminal->supportsTruecolor());
 
   terminal->write("utf8");
   ASSERT_EQ(state.written, std::string{"utf8"});
@@ -143,6 +144,7 @@ TEST(windowsSessionDoesNotRequestKittyKeyboardMode) {
   ssg::TerminalSession session{
       ssg::makeWindowsTerminal(std::make_unique<FakeConsole>(state))};
   ASSERT_TRUE(session.active());
+  ASSERT_TRUE(session.supportsTruecolor());
   state.written.clear();
   session.enableKeyboardProtocol();
   ASSERT_TRUE(state.written.empty());

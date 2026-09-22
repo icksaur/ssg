@@ -99,7 +99,8 @@ std::string overrideVariable(Capability capability) {
 
 }  // namespace
 
-TerminalCapabilities::TerminalCapabilities(EnvironmentLookup lookup, Clock clock)
+TerminalCapabilities::TerminalCapabilities(EnvironmentLookup lookup, Clock clock,
+                                           bool terminalSupportsTruecolor)
     : lookup_{std::move(lookup)}, clock_{std::move(clock)} {
     if (!clock_) {
         clock_ = [] { return std::chrono::steady_clock::now(); };
@@ -110,7 +111,8 @@ TerminalCapabilities::TerminalCapabilities(EnvironmentLookup lookup, Clock clock
     };
     colorDepth_ = detectColorDepth(read("SSG_COLOR_DEPTH"), read("COLORTERM"),
                                      read("TERM"), read("TERM_PROGRAM"),
-                                     read("WT_SESSION"));
+                                     read("WT_SESSION"),
+                                     terminalSupportsTruecolor);
 }
 
 std::string TerminalCapabilities::beginProbe() {

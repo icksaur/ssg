@@ -85,6 +85,14 @@ const char* environmentVariable(std::string_view name) { return std::getenv(std:
 class PaletteView;
 
 struct SsgContext {
+    SsgContext(Editor& configuredRuntime, GridPresenter& configuredPresenter,
+               TerminalSession& configuredTerminal,
+               PlatformEventLoop& configuredEventLoop)
+        : runtime{configuredRuntime}, presenter{configuredPresenter},
+          terminal{configuredTerminal}, eventLoop{configuredEventLoop},
+          capabilities{environmentVariable, {},
+                       configuredTerminal.supportsTruecolor()} {}
+
     Editor& runtime;
     GridPresenter& presenter;
     TerminalSession& terminal;
@@ -94,7 +102,7 @@ struct SsgContext {
     FocusTarget focus = FocusTarget::Editor;
     SystemClipboardWriter clipboardWriter;
     SystemClipboardReader clipboardReader;
-    TerminalCapabilities capabilities{environmentVariable};
+    TerminalCapabilities capabilities;
 };
 
 struct GutterDrag {
