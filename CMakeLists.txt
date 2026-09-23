@@ -1104,6 +1104,7 @@ endif()
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_library(ssg_terminal_objects OBJECT
         ${SSG_SOURCE_DIR}/src/Terminal.cpp
+        ${SSG_SOURCE_DIR}/src/TerminalClient.cpp
         ${SSG_SOURCE_DIR}/src/TerminalCapabilities.cpp
         ${SSG_SOURCE_DIR}/src/TerminalInput.cpp
         ${SSG_SOURCE_DIR}/src/TerminalOutput.cpp
@@ -1145,6 +1146,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         NAME test_terminal_capabilities
         ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_capabilities.cpp
         SYMBOL test_terminal_capabilities)
+    ssg_add_test_suite(
+        NAME test_terminal_client
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_client.cpp
+        SYMBOL test_terminal_client)
     ssg_add_test_suite(
         NAME test_terminal_input
         ENTRY ${SSG_SOURCE_DIR}/tests/test_terminal_input.cpp
@@ -1199,6 +1204,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     foreach(test_target
             test_terminal
             test_terminal_capabilities
+            test_terminal_client
             test_terminal_input
             test_terminal_output
             test_system_clipboard_reader)

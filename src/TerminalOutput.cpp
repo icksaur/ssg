@@ -289,4 +289,150 @@ std::string encodeAnsiFrame(ssg::CellGrid const& screen, ssg::ColorDepth depth) 
     return out;
 }
 
+RetainedTerminalFrame
+RetainedTerminalEncoder::encode(const CellGrid& screen, bool showCursor) const {
+    const auto requiresCompleteFrame = [&] {
+        if (!retained_ || invalidated_) return true;
+        return retained_->size != screen.size ||
+               retained_->colors != screen.colors ||
+               retained_->diffTints != screen.diffTints ||
+               retained_->selectionFill != screen.selectionFill ||
+               retained_->hyperlinks != screen.hyperlinks ||
+               (!screen.hyperlinks.empty() &&
+                retained_->cells != screen.cells) ||
+               retained_->caret.has_value() != screen.caret.has_value() ||
+               retained_->cells.size() != screen.cells.size();
+    };
+    if (requiresCompleteFrame()) {
+        return {encodeFrame(screen, depth_, showCursor), screen.cells.size(),
+                true};
+    }
+
+    constexpr std::size_t maxIndex = kThemeColorSlotCount - 1;
+    auto color = [&](SrgbColor value, char kind) {
+        auto const resolved = ColorResolver{depth_}.resolve(value);
+        switch (resolved.encoding) {
+        case ColorDepth::Truecolor:
+            return "\x1b[" + std::string{kind} + "8;2;" +
+                   std::to_string(resolved.rgb.red) + ";" +
+                   std::to_string(resolved.rgb.green) + ";" +
+                   std::to_string(resolved.rgb.blue) + "m";
+        case ColorDepth::Indexed256:
+            return "\x1b[" + std::string{kind} + "8;5;" +
+                   std::to_string(resolved.index) + "m";
+        case ColorDepth::Ansi16: {
+            int const base = kind == '3' ? 30 : 40;
+            int const bright = kind == '3' ? 90 : 100;
+            int const code = resolved.index < 8
+                                 ? base + resolved.index
+                                 : bright + (resolved.index - 8);
+            return "\x1b[" + std::to_string(code) + "m";
+        }
+        }
+        return std::string{};
+    };
+    auto background = [&](CellGridCell const& cell) {
+        if (cell.tint != DiffTint::None) {
+            SrgbColor tint = screen.diffTints.addedRow;
+            switch (cell.tint) {
+            case DiffTint::AddedRow: tint = screen.diffTints.addedRow; break;
+            case DiffTint::RemovedRow: tint = screen.diffTints.removedRow; break;
+            case DiffTint::ModifiedRow: tint = screen.diffTints.modifiedRow; break;
+            case DiffTint::AddedWord: tint = screen.diffTints.addedWord; break;
+            case DiffTint::RemovedWord: tint = screen.diffTints.removedWord; break;
+            case DiffTint::ModifiedWord: tint = screen.diffTints.modifiedWord; break;
+            case DiffTint::None: break;
+            }
+            return color(tint, '4');
+        }
+        if (cell.role == SemanticRole::Selection) {
+            return color(screen.selectionFill, '4');
+        }
+        return color(screen.colors[std::min<std::size_t>(
+                         cell.background, maxIndex)],
+                     '4');
+    };
+
+    RetainedTerminalFrame result;
+    const int columns = screen.size.columns;
+    const int rows = screen.size.rows;
+    bool painting = false;
+    for (int row = 0; row < rows; ++row) {
+        int column = 0;
+        while (column < columns) {
+            const auto index =
+                static_cast<std::size_t>(row * columns + column);
+            if (screen.cells[index] == retained_->cells[index]) {
+                ++column;
+                continue;
+            }
+            const int runStart = column;
+            while (column < columns) {
+                const auto runIndex =
+                    static_cast<std::size_t>(row * columns + column);
+                if (screen.cells[runIndex] == retained_->cells[runIndex]) break;
+                ++column;
+            }
+            if (!painting) {
+                result.bytes.append(kCursorHidden.enter);
+                painting = true;
+            }
+            result.bytes += "\x1b[" + std::to_string(row + 1) + ";" +
+                            std::to_string(runStart + 1) + "H\x1b[0m";
+            int foreground = -1;
+            int backgroundIndex = -1;
+            int role = -1;
+            auto tint = DiffTint::None;
+            auto underline = CellUnderline::None;
+            for (int x = runStart; x < column; ++x) {
+                auto const& cell = screen.cells[static_cast<std::size_t>(
+                    row * columns + x)];
+                ++result.changedCells;
+                if (cell.continuation) continue;
+                if (cell.foreground != foreground ||
+                    cell.background != backgroundIndex ||
+                    cell.tint != tint || cell.underline != underline ||
+                    static_cast<int>(cell.role) != role) {
+                    result.bytes += color(
+                        screen.colors[std::min<std::size_t>(
+                            cell.foreground, maxIndex)],
+                        '3');
+                    result.bytes += background(cell);
+                    result.bytes += underlineSgr(cell.underline);
+                    foreground = cell.foreground;
+                    backgroundIndex = cell.background;
+                    tint = cell.tint;
+                    underline = cell.underline;
+                    role = static_cast<int>(cell.role);
+                }
+                result.bytes += cell.text.empty() ? " " : cell.text;
+            }
+        }
+    }
+    if (painting) result.bytes += "\x1b[0m";
+    if (showCursor) {
+        if (screen.caret &&
+            (painting || !retainedCursorVisible_ ||
+             screen.caret != retained_->caret)) {
+            result.bytes += "\x1b[" + std::to_string(screen.caret->row + 1) +
+                            ";" +
+                            std::to_string(screen.caret->column + 1) + "H";
+        }
+        if (painting || !retainedCursorVisible_) {
+            result.bytes.append(kCursorHidden.leave);
+        }
+    } else if (retainedCursorVisible_ || painting) {
+        result.bytes.append(kCursorHidden.enter);
+    }
+    return result;
+}
+
+void RetainedTerminalEncoder::commit(const CellGrid& screen, bool showCursor) {
+    retained_ = screen;
+    retainedCursorVisible_ = showCursor;
+    invalidated_ = false;
+}
+
+void RetainedTerminalEncoder::invalidate() noexcept { invalidated_ = true; }
+
 } // namespace ssg

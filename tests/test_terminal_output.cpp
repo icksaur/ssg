@@ -11,6 +11,7 @@
 #include <ssg/Selection.h>
 
 #include "test_helpers.h"
+#include "ansi_screen_model.h"
 #include "editor_test_support.h"
 #include "grid_test_frame.h"
 
@@ -455,6 +456,155 @@ TEST(oneCopyIsWrittenOnceAndOnlyToATerminalThatAdvertisedOsc52) {
     ASSERT_TRUE(gated.bytesFor(third, true).has_value());
 }
 
+TEST(retainedEncoderEmitsOnlyChangedRunsAndCursorState) {
+    ssg::CellGrid first;
+    first.size = {5, 1};
+    first.cells.resize(5);
+    for (int column = 0; column < 5; ++column) {
+        first.cells[static_cast<std::size_t>(column)].text =
+            std::string{static_cast<char>('a' + column)};
+    }
+    first.caret = ssg::GridPosition{0, 0};
+
+    ssg::RetainedTerminalEncoder encoder{ssg::ColorDepth::Ansi16};
+    auto initial = encoder.encode(first);
+    ASSERT_TRUE(initial.complete);
+    ASSERT_EQ(initial.changedCells, std::size_t{5});
+    encoder.commit(first);
+
+    auto caretOnly = first;
+    caretOnly.caret = ssg::GridPosition{4, 0};
+    auto caretPatch = encoder.encode(caretOnly);
+    ASSERT_FALSE(caretPatch.complete);
+    ASSERT_EQ(caretPatch.changedCells, std::size_t{0});
+    ASSERT_TRUE(caretPatch.bytes.find("\x1b[1;5H") != std::string::npos);
+    ASSERT_TRUE(caretPatch.bytes.find('a') == std::string::npos);
+    encoder.commit(caretOnly);
+
+    auto changed = caretOnly;
+    changed.cells[0].text = "x";
+    changed.cells[0].foreground = 1;
+    changed.cells[4].text = "y";
+    changed.cells[4].foreground = 2;
+    auto patch = encoder.encode(changed);
+    ASSERT_FALSE(patch.complete);
+    ASSERT_EQ(patch.changedCells, std::size_t{2});
+    ASSERT_TRUE(patch.bytes.find("\x1b[1;1H") != std::string::npos);
+    ASSERT_TRUE(patch.bytes.find("\x1b[1;5H") != std::string::npos);
+    ASSERT_TRUE(patch.bytes.find('b') == std::string::npos);
+    ASSERT_TRUE(patch.bytes.find('c') == std::string::npos);
+    ASSERT_TRUE(patch.bytes.find('d') == std::string::npos);
+}
+
+TEST(retainedEncoderFallsBackForCoordinateAndRangeStateChanges) {
+    ssg::CellGrid grid;
+    grid.size = {2, 1};
+    grid.cells.resize(2);
+    ssg::RetainedTerminalEncoder encoder{ssg::ColorDepth::Truecolor};
+    encoder.commit(grid);
+
+    auto palette = grid;
+    palette.colors[0] = {1, 2, 3};
+    ASSERT_TRUE(encoder.encode(palette).complete);
+
+    auto links = grid;
+    links.hyperlinks.push_back({0, 0, 1, "https://example.com"});
+    ASSERT_TRUE(encoder.encode(links).complete);
+    encoder.commit(links);
+    links.cells[0].text = "x";
+    ASSERT_TRUE(encoder.encode(links).complete);
+
+    auto resized = grid;
+    resized.size = {1, 1};
+    resized.cells.resize(1);
+    ASSERT_TRUE(encoder.encode(resized).complete);
+
+    encoder.invalidate();
+    ASSERT_TRUE(encoder.encode(grid).complete);
+}
+
+TEST(retainedEncoderAdvancesOnlyWhenCommitted) {
+    ssg::CellGrid initial;
+    initial.size = {1, 1};
+    initial.cells.resize(1);
+    initial.cells[0].text = "a";
+    ssg::RetainedTerminalEncoder encoder{ssg::ColorDepth::Ansi16};
+    encoder.commit(initial);
+
+    auto changed = initial;
+    changed.cells[0].text = "b";
+    const auto firstAttempt = encoder.encode(changed);
+    const auto secondAttempt = encoder.encode(changed);
+    ASSERT_EQ(firstAttempt.bytes, secondAttempt.bytes);
+    ASSERT_EQ(firstAttempt.changedCells, secondAttempt.changedCells);
+    encoder.commit(changed);
+    ASSERT_EQ(encoder.encode(changed).changedCells, std::size_t{0});
+}
+
+TEST(retainedOutputReplaysToTheCompleteFrameState) {
+    ssg::CellGrid initial;
+    initial.size = {5, 1};
+    initial.cells.resize(5);
+    initial.colors[0] = {0, 0, 0};
+    initial.colors[1] = {255, 0, 0};
+    initial.colors[2] = {0, 255, 0};
+    for (int column = 0; column < 5; ++column) {
+        auto& cell = initial.cells[static_cast<std::size_t>(column)];
+        cell.text = std::string{static_cast<char>('a' + column)};
+        cell.foreground = static_cast<std::uint8_t>(column % 2 + 1);
+    }
+    initial.caret = ssg::GridPosition{0, 0};
+
+    auto target = initial;
+    target.cells[0].text = "x";
+    target.cells[0].foreground = 2;
+    target.cells[4].text = "y";
+    target.cells[4].foreground = 1;
+    target.caret = ssg::GridPosition{4, 0};
+
+    ssg::RetainedTerminalEncoder encoder{ssg::ColorDepth::Truecolor};
+    const auto completeInitial = encoder.encode(initial);
+    encoder.commit(initial);
+    const auto patch = encoder.encode(target);
+
+    AnsiScreenModel retainedState{5, 1};
+    retainedState.apply(completeInitial.bytes);
+    retainedState.apply(patch.bytes);
+    AnsiScreenModel completeState{5, 1};
+    completeState.apply(
+        ssg::encodeFrame(target, ssg::ColorDepth::Truecolor));
+    ASSERT_TRUE(retainedState == completeState);
+}
+
+TEST(showingTheCursorAfterDragRestoresTheCaretPosition) {
+    ssg::CellGrid initial;
+    initial.size = {3, 1};
+    initial.cells.resize(3);
+    initial.caret = ssg::GridPosition{0, 0};
+
+    ssg::RetainedTerminalEncoder encoder{ssg::ColorDepth::Ansi16};
+    auto visible = encoder.encode(initial);
+    encoder.commit(initial, true);
+
+    auto dragged = initial;
+    dragged.cells[2].text = "x";
+    auto hidden = encoder.encode(dragged, false);
+    encoder.commit(dragged, false);
+
+    auto shown = encoder.encode(dragged, true);
+    ASSERT_TRUE(shown.bytes.find("\x1b[1;1H") != std::string::npos);
+    ASSERT_TRUE(shown.bytes.ends_with(ssg::kCursorHidden.leave));
+
+    AnsiScreenModel retainedState{3, 1};
+    retainedState.apply(visible.bytes);
+    retainedState.apply(hidden.bytes);
+    retainedState.apply(shown.bytes);
+    AnsiScreenModel completeState{3, 1};
+    completeState.apply(
+        ssg::encodeFrame(dragged, ssg::ColorDepth::Ansi16, true));
+    ASSERT_TRUE(retainedState == completeState);
+}
+
 SSG_TEST_SUITE(test_terminal_output) {
     RUN(encodeAnsiFrameAdaptsToColorDepth);
     RUN(encodeAnsiFrameEmitsOrthogonalTintBackgrounds);
@@ -467,6 +617,11 @@ SSG_TEST_SUITE(test_terminal_output) {
     RUN(diagnosticsUnderlineTheirCellsWithoutRecolouringThem);
     RUN(hyperlinkRunsAreOpenedAndAlwaysClosed);
     RUN(oneCopyIsWrittenOnceAndOnlyToATerminalThatAdvertisedOsc52);
+    RUN(retainedEncoderEmitsOnlyChangedRunsAndCursorState);
+    RUN(retainedEncoderFallsBackForCoordinateAndRangeStateChanges);
+    RUN(retainedEncoderAdvancesOnlyWhenCommitted);
+    RUN(retainedOutputReplaysToTheCompleteFrameState);
+    RUN(showingTheCursorAfterDragRestoresTheCaretPosition);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

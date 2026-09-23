@@ -292,6 +292,20 @@ TEST(failedTerminalActivationHasNoRestoreDebt) {
     ASSERT_TRUE(state.written.empty());
 }
 
+TEST(terminalSessionOwnsApplicationWrites) {
+    NativeTerminalState state;
+    ssg::TerminalSession session{
+        std::make_unique<FakeNativeTerminal>(state)};
+    state.written.clear();
+    session.write("probe");
+    session.write("frame");
+    ASSERT_EQ(state.written, std::string{"probeframe"});
+    session.restore();
+    const auto restored = state.written;
+    session.write("ignored");
+    ASSERT_EQ(state.written, restored);
+}
+
 SSG_TEST_SUITE(test_terminal) {
     RUN(everyDeclaredModeLeavesExactlyWhatItEnters);
     RUN(modeStackReproducesTheCuratedSetupAndRestoreSequences);
@@ -300,6 +314,7 @@ SSG_TEST_SUITE(test_terminal) {
     RUN(aFrameWithNoCaretLeavesTheCursorVisible);
     RUN(terminalSessionRestoresAnActiveBackendExactlyOnce);
     RUN(failedTerminalActivationHasNoRestoreDebt);
+    RUN(terminalSessionOwnsApplicationWrites);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

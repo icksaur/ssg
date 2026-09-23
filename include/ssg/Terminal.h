@@ -97,6 +97,7 @@ class TerminalSession {
     void restore() noexcept;
     [[nodiscard]] bool active() const noexcept;
     [[nodiscard]] bool supportsTruecolor() const noexcept;
+    void write(std::string_view bytes) noexcept;
     void enableKeyboardProtocol();
 
   private:

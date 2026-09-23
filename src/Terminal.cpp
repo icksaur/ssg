@@ -101,6 +101,10 @@ bool TerminalSession::supportsTruecolor() const noexcept {
     return impl_->active && impl_->native->supportsTruecolor();
 }
 
+void TerminalSession::write(std::string_view bytes) noexcept {
+    if (impl_->active) impl_->native->write(bytes);
+}
+
 void TerminalSession::enableKeyboardProtocol() {
     if (!impl_->active || impl_->keyboardProtocolEntered ||
         !impl_->native->supportsKeyboardProtocol()) {

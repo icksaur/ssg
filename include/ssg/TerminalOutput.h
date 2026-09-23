@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <cstddef>
 #include <string>
 #include <string_view>
 
@@ -27,6 +28,31 @@ class SystemClipboardWriter {
 [[nodiscard]] std::string
 encodeAnsiFrame(const CellGrid& screen,
                 ColorDepth depth = ColorDepth::Truecolor);
+
+struct RetainedTerminalFrame {
+    std::string bytes;
+    std::size_t changedCells = 0;
+    bool complete = false;
+};
+
+class RetainedTerminalEncoder {
+  public:
+    explicit RetainedTerminalEncoder(ColorDepth depth) : depth_{depth} {}
+
+    // Encoding is speculative until commit(): retained state always describes
+    // the last frame handed to the terminal writer.
+    [[nodiscard]] RetainedTerminalFrame encode(const CellGrid& screen,
+                                               bool showCursor = true) const;
+    void commit(const CellGrid& screen, bool showCursor = true);
+    void invalidate() noexcept;
+
+  private:
+    ColorDepth depth_;
+    std::optional<CellGrid> retained_;
+    bool retainedCursorVisible_ = true;
+    bool invalidated_ = false;
+};
+
 [[nodiscard]] ColorDepth detectColorDepth(const char* colorDepthOverride,
                                           const char* colorterm,
                                           const char* term,
