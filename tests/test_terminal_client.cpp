@@ -111,14 +111,20 @@ TEST(bufferedNavigationWritesBeforeTheNextDispatch) {
         fixture.stages.begin(), fixture.stages.end(),
         ssg::TerminalClientStage::FrameWrite);
     ASSERT_TRUE(firstWrite != fixture.stages.end());
+    const auto firstWriteIndex =
+        static_cast<std::size_t>(firstWrite - fixture.stages.begin());
 
     auto second = fixture.client.consumeInput();
     ASSERT_TRUE(second.status == ssg::InputConsumption::Status::Consumed);
     const auto secondDispatch = std::find(
-        std::next(firstWrite), fixture.stages.end(),
+        fixture.stages.begin() +
+            static_cast<std::ptrdiff_t>(firstWriteIndex + 1),
+        fixture.stages.end(),
         ssg::TerminalClientStage::Dispatch);
     ASSERT_TRUE(secondDispatch != fixture.stages.end());
-    ASSERT_TRUE(firstWrite < secondDispatch);
+    ASSERT_TRUE(firstWriteIndex <
+                static_cast<std::size_t>(
+                    secondDispatch - fixture.stages.begin()));
     ASSERT_EQ(countStage(fixture.stages, ssg::TerminalClientStage::Project),
               2 * kNavigationProjectionBudget);
     ASSERT_EQ(countStage(fixture.stages,

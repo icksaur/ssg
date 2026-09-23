@@ -13,7 +13,7 @@
 
 namespace ssg {
 
-class Editor;
+struct Editor;
 class GridPresenter;
 class TerminalSession;
 
