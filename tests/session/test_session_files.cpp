@@ -146,6 +146,29 @@ TEST(closingTheLastTabClearsTheEditorDocument) {
     if (snapshot) ASSERT_TRUE(snapshot->documentText.empty());
 }
 
+TEST(deletingAFileDiscardsEveryDocumentAssociation) {
+    auto root = uniqueRoot("delete_discards_associations");
+    std::ofstream{root / "workspace" / "delete.txt", std::ios::binary}
+        << "content";
+
+    auto created = ssg::createEditor(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(ssg::test::openFile(runtime, "delete.txt").accepted());
+    const auto document = runtime.activeDocumentId();
+    ASSERT_TRUE(document.has_value());
+    if (!document) return;
+    runtime.documentLanguageOverrides.insert_or_assign(
+        document->value(), ssg::LanguageId::plainText());
+    runtime.findDocumentId = document;
+    ASSERT_TRUE(ssg::test::hasDocumentAssociation(runtime, *document));
+
+    ASSERT_TRUE(runtime.dispatch("file.delete").accepted());
+
+    ASSERT_FALSE(ssg::test::hasDocumentAssociation(runtime, *document));
+}
+
 TEST(tabActivateFocusesTheEditor) {
     auto root = uniqueRoot("tab_activate_focus");
     std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << "alpha";
@@ -274,6 +297,7 @@ SSG_TEST_SUITE(test_session_files) {
     RUN(openingAFileRevealsTheCaretResettingAStaleScroll);
     RUN(droppedContentOpensAsANewDocument);
     RUN(closingTheLastTabClearsTheEditorDocument);
+    RUN(deletingAFileDiscardsEveryDocumentAssociation);
     RUN(tabActivateFocusesTheEditor);
     RUN(switchingTabsRevealsTheNewDocumentsCaret);
     RUN(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId);

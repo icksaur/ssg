@@ -381,10 +381,8 @@ public:
     [[nodiscard]] Document const* activeDocument() const;
     [[nodiscard]] Document* activeDocument();
     void ensureDocumentRuntimeState(FileDocumentId document);
-    // Discards every per-document association for a document that no longer
-    // exists. Normally tab close does this; delete bypasses that close
-    // path (there is nothing left to flush), so it must do the same
-    // cleanup or the state outlives the document.
+    // Called after workspace ownership ends. Removes every runtime association
+    // for the document and is safe to repeat.
     void discardDocumentRuntimeState(FileDocumentId document);
     [[nodiscard]] DocumentHistory& historyFor(FileDocumentId document);
     [[nodiscard]] SyntaxModel& syntaxFor(FileDocumentId document);

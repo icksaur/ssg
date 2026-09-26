@@ -218,6 +218,9 @@ TEST(helpOpenIsIdempotentAndRefreshes) {
     ASSERT_TRUE(runtime.dispatch("help.open")
                     .accepted());
     const auto firstCount = tabCount(runtime);
+    const auto firstDocument = runtime.readOnlyTabDocuments.at("help:main");
+    runtime.findDocumentId = firstDocument;
+    ASSERT_TRUE(ssg::test::hasDocumentAssociation(runtime, firstDocument));
     ASSERT_TRUE(runtime.dispatch("help.open")
                     .accepted());
     // No second help tab.
@@ -227,6 +230,7 @@ TEST(helpOpenIsIdempotentAndRefreshes) {
     ASSERT_TRUE(tab.has_value());
     if (tab) ASSERT_TRUE(tab->mode == ssg::DocumentMode::ReadOnly);
     ASSERT_TRUE(contains(ssg::test::activeDocumentText(runtime), "SSG Help"));
+    ASSERT_FALSE(ssg::test::hasDocumentAssociation(runtime, firstDocument));
 }
 
 TEST(helpTabRejectsEditsAndLeavesTheBufferUnchanged) {

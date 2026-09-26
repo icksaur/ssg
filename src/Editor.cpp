@@ -700,10 +700,13 @@ TabLifecycleResult Editor::closeTab(
             const auto mapped = readOnlyTabDocuments.find(tab.contentIdentity);
             if (mapped != readOnlyTabDocuments.end()) {
                 const auto document = mapped->second;
-                readOnlyTabDocuments.erase(mapped);
-                documentRuntimeStates.erase(document.value());
-                documentLanguageOverrides.erase(document.value());
-                (void)workspace.removeDocument(document);
+                auto removed = workspace.removeDocument(document);
+                if (!removed.accepted()) {
+                    return {TabError::LifecycleFailed,
+                            workspaceMessage(removed), std::nullopt,
+                            std::nullopt, std::nullopt, false};
+                }
+                discardDocumentRuntimeState(document);
             }
             return {TabError::None, {}, std::nullopt, std::nullopt, std::nullopt,
                     true};
@@ -745,8 +748,7 @@ TabLifecycleResult Editor::closeTab(
                         return {TabError::LifecycleFailed, workspaceMessage(removed),
                                 std::nullopt, std::nullopt, std::nullopt, false};
                     }
-                    documentRuntimeStates.erase(document.value());
-                    liveDiffDocuments.erase(mapped);
+                    discardDocumentRuntimeState(document);
                     return {TabError::None, {}, closed.compensation, std::nullopt,
                             std::nullopt};
                 }
@@ -798,7 +800,7 @@ TabLifecycleResult Editor::closeTab(
         return {TabError::LifecycleFailed, workspaceMessage(removed),
                 std::nullopt, std::nullopt, std::nullopt, false};
     }
-    documentRuntimeStates.erase(tab.document->value());
+    discardDocumentRuntimeState(*tab.document);
     return {TabError::None,      {},
             closed.compensation, std::nullopt,
             std::nullopt};
@@ -1001,12 +1003,11 @@ OperationResult Editor::openOrFocusLiveDiffTab(
             opened->snapshot().text == diffText) {
             document = mapped->second;
         } else {
-            documentRuntimeStates.erase(mapped->second.value());
             auto removed = workspace.removeDocument(mapped->second);
-            liveDiffDocuments.erase(mapped);
             if (!removed.accepted()) {
                 return failure(workspaceMessage(removed));
             }
+            discardDocumentRuntimeState(mapped->second);
         }
     }
     if (!document) {
@@ -1042,15 +1043,19 @@ OperationResult Editor::openReadOnlyTab(
     if (!replacement.accepted() || !replacement.document) {
         return failure(workspaceMessage(replacement));
     }
-    ensureDocumentRuntimeState(*replacement.document);
-    documentLanguageOverrides.insert_or_assign(replacement.document->value(),
-                                                std::move(language));
     auto mapped = readOnlyTabDocuments.find(contentIdentity);
     if (mapped != readOnlyTabDocuments.end()) {
         const auto previous = mapped->second;
+        auto removed = workspace.removeDocument(previous);
+        if (!removed.accepted()) {
+            (void)workspace.removeDocument(*replacement.document);
+            return failure(workspaceMessage(removed));
+        }
         discardDocumentRuntimeState(previous);
-        (void)workspace.removeDocument(previous);
     }
+    ensureDocumentRuntimeState(*replacement.document);
+    documentLanguageOverrides.insert_or_assign(replacement.document->value(),
+                                                std::move(language));
     readOnlyTabDocuments[contentIdentity] = *replacement.document;
     auto opened =
         tabs.openContent(kind, contentIdentity, label, DocumentMode::ReadOnly);

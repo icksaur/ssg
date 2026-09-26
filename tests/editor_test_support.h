@@ -24,5 +24,6 @@ CommandResult clickDocument(Editor& editor, std::uint64_t byteOffset,
 CommandResult dragDocument(Editor& editor, std::uint64_t anchor,
                            std::uint64_t active,
                            bool additive = false);
+bool hasDocumentAssociation(const Editor& editor, FileDocumentId document);
 
 }

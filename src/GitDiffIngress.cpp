@@ -83,22 +83,26 @@ bool GitDiffIngress::drainGitDiffWorker() {
 }
 
 void GitDiffIngress::refreshLiveDiffDocuments(const DiffViewState& diffView) {
-    for (auto it = editor.liveDiffDocuments.begin();
-         it != editor.liveDiffDocuments.end();) {
-        const auto id = DiffFileId{it->first};
+    const std::vector<std::pair<std::string, FileDocumentId>> trackedDocuments(
+        editor.liveDiffDocuments.begin(), editor.liveDiffDocuments.end());
+    for (const auto& [identity, document] : trackedDocuments) {
+        const auto mapped = editor.liveDiffDocuments.find(identity);
+        if (mapped == editor.liveDiffDocuments.end() ||
+            mapped->second != document) {
+            continue;
+        }
+        const auto id = DiffFileId{identity};
         auto file = std::find_if(
             diffView.files.begin(), diffView.files.end(),
             [&](const DiffFileView& candidate) { return candidate.id == id; });
         const auto desired =
             file == diffView.files.end() ? std::string{} : file->currentContent;
-        const auto document = it->second;
         const auto* opened = editor.workspace.tryDocument(document);
         if (opened == nullptr) {
-            it = editor.liveDiffDocuments.erase(it);
+            editor.discardDocumentRuntimeState(document);
             continue;
         }
         if (opened->snapshot().text == desired) {
-            ++it;
             continue;
         }
         auto state = editor.workspace.state(document);
@@ -109,13 +113,14 @@ void GitDiffIngress::refreshLiveDiffDocuments(const DiffViewState& diffView) {
         if (!replacement.accepted() || !replacement.document) {
             continue;
         }
-        it->second = *replacement.document;
-        editor.ensureDocumentRuntimeState(*replacement.document);
         auto removed = editor.workspace.removeDocument(document);
-        if (removed.accepted()) {
-            editor.documentRuntimeStates.erase(document.value());
+        if (!removed.accepted()) {
+            (void)editor.workspace.removeDocument(*replacement.document);
+            continue;
         }
-        ++it;
+        editor.discardDocumentRuntimeState(document);
+        editor.ensureDocumentRuntimeState(*replacement.document);
+        editor.liveDiffDocuments[identity] = *replacement.document;
     }
 }
 

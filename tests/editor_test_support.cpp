@@ -1,5 +1,6 @@
 #include "editor_test_support.h"
 
+#include <algorithm>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -114,6 +115,19 @@ CommandResult dragDocument(Editor& editor, std::uint64_t anchor,
             InputPointerButton::Primary, InputPointerPhase::Release});
     if (!release.accepted()) return release;
     return move;
+}
+
+bool hasDocumentAssociation(const Editor& editor, FileDocumentId document) {
+    const auto mappedDocument =
+        [&](const auto& entry) { return entry.second == document; };
+    return editor.workspace.tryDocument(document) != nullptr ||
+           editor.documentRuntimeStates.contains(document.value()) ||
+           editor.documentLanguageOverrides.contains(document.value()) ||
+           editor.findDocumentId == document ||
+           std::any_of(editor.liveDiffDocuments.begin(),
+                       editor.liveDiffDocuments.end(), mappedDocument) ||
+           std::any_of(editor.readOnlyTabDocuments.begin(),
+                       editor.readOnlyTabDocuments.end(), mappedDocument);
 }
 
 }

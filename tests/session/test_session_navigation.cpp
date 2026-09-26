@@ -484,19 +484,26 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     if (!first) return;
     std::optional<ssg::TabId> documentTab;
     std::optional<ssg::TabId> liveDiffTab;
+    std::optional<ssg::FileDocumentId> documentId;
     for (const auto& tab : first->tabs.tabs) {
         if (tab.kind == ssg::TabKind::Document) {
             documentTab = tab.id;
+            documentId = tab.document;
         } else if (tab.kind == ssg::TabKind::LiveDiff) {
             liveDiffTab = tab.id;
         }
     }
     ASSERT_TRUE(documentTab.has_value());
     ASSERT_TRUE(liveDiffTab.has_value());
-    if (!documentTab || !liveDiffTab) return;
+    ASSERT_TRUE(documentId.has_value());
+    if (!documentTab || !liveDiffTab || !documentId) return;
 
+    runtime.documentLanguageOverrides.insert_or_assign(
+        documentId->value(), ssg::LanguageId::plainText());
+    runtime.findDocumentId = documentId;
     ASSERT_TRUE(ssg::test::dispatchInput(runtime, ssg::TabPointerInput{*documentTab}).accepted());
     ASSERT_TRUE(ssg::closeTabById(runtime, *documentTab).accepted);
+    ASSERT_FALSE(ssg::test::hasDocumentAssociation(runtime, *documentId));
     auto afterDocumentClose =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterDocumentClose.has_value());
@@ -521,8 +528,15 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     ASSERT_EQ(countTabsOfKind(reopened->tabs, ssg::TabKind::LiveDiff),
               std::size_t{1});
 
+    const auto liveDiffDocument =
+        runtime.liveDiffDocuments.at("coexist-id");
+    runtime.documentLanguageOverrides.insert_or_assign(
+        liveDiffDocument.value(), ssg::LanguageId::plainText());
+    runtime.findDocumentId = liveDiffDocument;
     ASSERT_TRUE(ssg::test::dispatchInput(runtime, ssg::TabPointerInput{*liveDiffTab}).accepted());
     ASSERT_TRUE(ssg::closeTabById(runtime, *liveDiffTab).accepted);
+    ASSERT_FALSE(
+        ssg::test::hasDocumentAssociation(runtime, liveDiffDocument));
     auto afterLiveDiffClose =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterLiveDiffClose.has_value());
