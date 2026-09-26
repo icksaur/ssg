@@ -2,6 +2,7 @@
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/ScreenLayout.h>
+#include <ssg/Selection.h>
 #include <ssg/TextCodec.h>
 #include <ssg/Style.h>
 #include <ssg/platform_files.h>
@@ -24,6 +25,31 @@ namespace {
 std::string liveDiffTabLabelForPath(const std::filesystem::path& path) {
     const auto filename = path.filename().string();
     return filename.empty() ? path.generic_string() : filename;
+}
+
+std::vector<GitTreeRecord> gitTreeRecordsFromScan(
+    const std::vector<GitDiffFile>& files) {
+    std::vector<GitTreeRecord> records;
+    records.reserve(files.size());
+    for (const auto& file : files) {
+        records.push_back(
+            {.workspacePath = file.path.generic_string(),
+             .label = file.path.generic_string(),
+             .status = file.status(),
+             .commands = {}});
+    }
+    return records;
+}
+
+std::size_t lineStartOffset(std::string_view text, std::size_t line) {
+    std::size_t offset = 0;
+    for (std::size_t current = 0; current < line && offset < text.size();
+         ++current) {
+        const auto newline = text.find('\n', offset);
+        if (newline == std::string_view::npos) return text.size();
+        offset = newline + 1;
+    }
+    return offset;
 }
 
 std::string resolveHomeDirectory() {
@@ -670,8 +696,7 @@ Editor::Editor(std::filesystem::path canonicalCwd,
                             Style{}.inputLineSigil),
              tree},
       theme{defaultTheme()}, deferringEnrichment{deferEnrichment},
-      gitDiffIngress{*this, root, enableGitDiffWorker,
-                     enableFilesystemWatcher} {
+      gitDiffIngress{root, enableGitDiffWorker, enableFilesystemWatcher} {
     homeDirectory = resolveHomeDirectory();
     workspace.setSaveObserver(
         [this](const std::filesystem::path& relativePath) {
@@ -684,7 +709,7 @@ Editor::Editor(std::filesystem::path canonicalCwd,
 Editor::~Editor() = default;
 
 const PlatformWake* Editor::gitDiffWake() const noexcept {
-    return gitDiffIngress.worker.wake();
+    return gitDiffIngress.wake();
 }
 
 const PlatformWake* Editor::syntaxWake() const noexcept {
@@ -1094,8 +1119,61 @@ bool Editor::openOrRevealFollowTargetProgrammatic(const FollowTarget& target) {
     if (target.deleted) {
         return true;
     }
-    return gitDiffIngress.revealCurrentDiffTarget(
-        target, NavigationClass::Programmatic);
+    return revealCurrentDiffTarget(target);
+}
+
+bool Editor::revealCurrentDiffTarget(const FollowTarget& target) {
+    const auto& text = activeText();
+    const auto offset = lineStartOffset(text, target.newestHunkLine);
+    const auto position = resolveSelectionPosition(text, ByteOffset{offset});
+    if (!position) {
+        return false;
+    }
+    selection.selections =
+        SelectionSet{std::vector<Selection>{Selection{*position, *position}}};
+    screen.focusEditor();
+    return true;
+}
+
+void Editor::refreshLiveDiffDocuments(const DiffViewState& diffView) {
+    const std::vector<std::pair<std::string, FileDocumentId>> trackedDocuments(
+        liveDiffDocuments.begin(), liveDiffDocuments.end());
+    for (const auto& [identity, document] : trackedDocuments) {
+        const auto mapped = liveDiffDocuments.find(identity);
+        if (mapped == liveDiffDocuments.end() || mapped->second != document) {
+            continue;
+        }
+        const auto id = DiffFileId{identity};
+        auto file = std::find_if(
+            diffView.files.begin(), diffView.files.end(),
+            [&](const DiffFileView& candidate) { return candidate.id == id; });
+        const auto desired =
+            file == diffView.files.end() ? std::string{} : file->currentContent;
+        const auto* opened = workspace.tryDocument(document);
+        if (opened == nullptr) {
+            discardDocumentRuntimeState(document);
+            continue;
+        }
+        if (opened->snapshot().text == desired) {
+            continue;
+        }
+        auto state = workspace.state(document);
+        const auto label =
+            state ? state->displayLabel : std::string{"LiveDiff"};
+        auto replacement = workspace.openVirtualDocument(
+            label, desired, DocumentMode::Diff);
+        if (!replacement.accepted() || !replacement.document) {
+            continue;
+        }
+        auto removed = workspace.removeDocument(document);
+        if (!removed.accepted()) {
+            (void)workspace.removeDocument(*replacement.document);
+            continue;
+        }
+        discardDocumentRuntimeState(document);
+        ensureDocumentRuntimeState(*replacement.document);
+        liveDiffDocuments[identity] = *replacement.document;
+    }
 }
 
 Document const* Editor::activeDocument() const {
@@ -1691,7 +1769,94 @@ PumpResult Editor::pump() {
         throw std::logic_error{"worker results cannot be pumped during dispatch"};
     }
     std::lock_guard operationLock{operationMutex};
-    return {gitDiffIngress.drainGitDiffWorker()};
+    return {adoptGitDiffWorkerDrainLocked(gitDiffIngress.drain())};
+}
+
+bool Editor::adoptGitDiffWorkerDrainLocked(GitDiffWorkerDrain batch) {
+    bool accepted = batch.watcherAvailabilityChanged || !batch.scans.empty() ||
+                    !batch.watchEvents.empty() || batch.fullReconcile;
+    bool externalAdvanced = false;
+    for (auto& scan : batch.scans) {
+        (void)applyGitDiffScanLocked(std::move(scan));
+    }
+    if (!batch.watchEvents.empty()) {
+        externalAdvanced = external.ingest(std::vector<WatchEvent>{
+            batch.watchEvents.begin(), batch.watchEvents.end()});
+        const bool inventoryChanged = std::any_of(
+            batch.watchEvents.begin(), batch.watchEvents.end(),
+            [](const WatchEvent& event) {
+                return event.kind != WatchEventKind::Modify ||
+                       event.path.filename() == ".gitignore";
+            });
+        if (inventoryChanged) {
+            refreshTreeForPublication();
+        }
+    }
+    if (batch.fullReconcile) {
+        externalAdvanced |= external.reconcileAllOpenDocumentsAgainstDisk();
+        refreshTreeForPublication();
+    }
+    if (externalAdvanced) {
+        refreshSyntax();
+        for (const auto document : workspace.documents()) {
+            (void)updateTabsFor(document);
+        }
+        screen.refreshExternalModificationPresence(
+            externalModificationPresent());
+    }
+    return accepted;
+}
+
+DiffIngressResult Editor::applyGitDiffScanLocked(GitDiffScan scan) {
+    if (scan.revision == 0) {
+        currentGitBranch = scan.currentBranch;
+        return {};
+    }
+    if (scan.revision <= lastGitScanRevision) {
+        return {DiffIngressError::DiffRejected};
+    }
+    currentGitBranch = scan.currentBranch;
+    auto gitRecords = gitTreeRecordsFromScan(scan.files);
+    const auto revision = scan.revision;
+    auto staged = stageGitDiffScan(std::move(scan), diff, follow);
+    if (!staged.accepted()) {
+        return staged.result;
+    }
+    if (staged.mutated) {
+        const auto previousTarget = follow.viewState().activeTarget;
+        diff = std::move(staged.diff);
+        follow = std::move(staged.follow);
+        for (const auto& id : staged.statusOnlyIds) {
+            std::optional<TabId> liveTab;
+            for (const auto& tab : tabs.viewState().tabs) {
+                if (tab.kind == TabKind::LiveDiff &&
+                    tab.contentIdentity == id.value()) {
+                    liveTab = tab.id;
+                    break;
+                }
+            }
+            if (liveTab) {
+                const auto currentTabs = tabs.viewState();
+                const auto found = std::find_if(
+                    currentTabs.tabs.begin(), currentTabs.tabs.end(),
+                    [&](const TabState& tab) { return tab.id == *liveTab; });
+                if (found != currentTabs.tabs.end()) {
+                    auto outcome = closeTab(*found);
+                    (void)tabs.close(*liveTab, std::move(outcome));
+                }
+            }
+        }
+        refreshLiveDiffDocuments(diff.viewState());
+        const auto next = follow.viewState();
+        if (next.mode == FollowMode::Following && next.activeTarget &&
+            next.activeTarget != previousTarget) {
+            (void)openOrRevealFollowTargetProgrammatic(*next.activeTarget);
+        }
+    }
+    tree.replaceProvider(TreeProviderSnapshot::fromGit(
+        TreeProviderId{"git"}, std::move(gitRecords)));
+    lastGitScanRevision = revision;
+    return {};
 }
 
 bool Editor::pumpSyntax() {

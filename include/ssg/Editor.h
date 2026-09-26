@@ -13,6 +13,7 @@
 #include <ssg/FindReplace.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/GitDiffIngress.h>
+#include <ssg/GitDiffScanStage.h>
 #include <ssg/InputRouting.h>
 #include <ssg/Keymap.h>
 #include <ssg/LineLayoutCache.h>
@@ -78,20 +79,6 @@ struct EditorCreateResult {
 struct ExternalDiffRevision {
     NonGitDiffEvent event;
     std::uint64_t revision{0};
-};
-
-enum class DiffIngressError {
-    None,
-    EmptyBurst,
-    DiffRejected,
-    FollowRejected,
-};
-
-struct DiffIngressResult {
-    DiffIngressError error = DiffIngressError::None;
-    [[nodiscard]] bool accepted() const noexcept {
-        return error == DiffIngressError::None;
-    }
 };
 
 struct PumpResult {
@@ -197,6 +184,10 @@ public:
     Editor& operator=(Editor&&) = delete;
 
     [[nodiscard]] PumpResult pump();
+    // Runtime-thread scan adoption; the caller holds operationMutex.
+    [[nodiscard]] DiffIngressResult applyGitDiffScanLocked(GitDiffScan scan);
+    // Applies a drained batch; the caller holds operationMutex as in pump.
+    [[nodiscard]] bool adoptGitDiffWorkerDrainLocked(GitDiffWorkerDrain batch);
     [[nodiscard]] bool pumpSyntax();
     [[nodiscard]] const PlatformWake* syntaxWake() const noexcept;
     // CMD-5: no command handler runs while another handler is executing.
@@ -471,11 +462,15 @@ public:
     // setting.
     void rebuildFileCandidates();
     void refreshSyntax(std::vector<SyntaxEdit> edits = {});
+    void refreshLiveDiffDocuments(const DiffViewState& view);
+    [[nodiscard]] bool revealCurrentDiffTarget(const FollowTarget& target);
     // While `deferringEnrichment` is set, workspace tree scans wait until
     // `primeDeferred`; syntax requests are always non-blocking.
     void primeDeferred();
     bool deferringEnrichment = false;
     bool pendingTreeRefresh = false;
+    std::uint64_t lastGitScanRevision = 0;
+    std::optional<std::string> currentGitBranch;
     GitDiffIngress gitDiffIngress;
 
     void showStatus(std::string text);

@@ -27,7 +27,7 @@ inline std::string activeDocumentText(Editor& session) {
 
 inline DiffIngressResult applyGitDiffScan(Editor& session, GitDiffScan scan) {
     std::lock_guard lock{session.operationMutex};
-    return session.gitDiffIngress.applyGitDiffScanLocked(std::move(scan));
+    return session.applyGitDiffScanLocked(std::move(scan));
 }
 
 inline void registerCommand(Editor& session, std::string id, std::string label,

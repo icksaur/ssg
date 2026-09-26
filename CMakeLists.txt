@@ -252,6 +252,7 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/DocumentPointerGesture.cpp
     ${SSG_SOURCE_DIR}/src/Editor.cpp
     ${SSG_SOURCE_DIR}/src/GitDiffIngress.cpp
+    ${SSG_SOURCE_DIR}/src/GitDiffScanStage.cpp
     ${SSG_SOURCE_DIR}/src/editing.cpp
     ${SSG_SOURCE_DIR}/src/input_routing.cpp
     ${SSG_SOURCE_DIR}/src/files.cpp
@@ -571,6 +572,14 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_test_include_directories(test_git_diff_worker PRIVATE
         ${SSG_SOURCE_DIR}/tests)
     ssg_test_link_libraries(test_git_diff_worker PRIVATE ssg_core)
+
+    ssg_add_test_suite(
+        NAME test_git_diff_ingress
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_git_diff_ingress.cpp
+        SYMBOL test_git_diff_ingress)
+    ssg_test_include_directories(test_git_diff_ingress PRIVATE
+        ${SSG_SOURCE_DIR}/tests)
+    ssg_test_link_libraries(test_git_diff_ingress PRIVATE ssg_core)
 
     ssg_add_test_suite(
         NAME ssg_watcher_tests

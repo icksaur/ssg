@@ -243,7 +243,7 @@ StatusFieldProjection Editor::uiStatusFields() const {
     auto fields = projectStatusFields(
         {.workspaceRoot = root,
          .homeDirectory = homeDirectory,
-         .currentBranch = gitDiffIngress.currentGitBranch,
+         .currentBranch = currentGitBranch,
          .statusValue = statusText,
          .followMode = followProjection.mode,
          .cwdPrefix = {}});
