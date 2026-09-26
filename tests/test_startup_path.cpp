@@ -111,12 +111,18 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
 }
 
 TEST(sessionSnapshotPathStaysAtTheProcessStartingDirectory) {
+    const fs::path state{"/state"};
     const fs::path starting{"/launch/directory"};
     const fs::path openedWorkspace{"/other/workspace"};
-    const auto snapshot = ssg::sessionSnapshotPath(starting);
+    const auto snapshot = ssg::sessionSnapshotPath(state, starting);
+    const auto identity = ssg::sessionSnapshotIdentity(starting);
     ASSERT_EQ(snapshot,
-              starting / ssg::kSessionDirectoryName /
+              state / ssg::kSessionDirectoryName /
+                  ssg::sessionSnapshotKey(identity) /
                   ssg::kSessionSnapshotFilename);
+    ASSERT_EQ(ssg::sessionSnapshotKey("/launch/directory"),
+              std::string{"4fcd1b8ff1484f81"});
+    ASSERT_FALSE(snapshot.string().find(starting.string()) == 0);
     ASSERT_FALSE(snapshot.string().find(openedWorkspace.string()) == 0);
 }
 

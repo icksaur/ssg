@@ -6,7 +6,9 @@
 
 #include <array>
 #include <cstddef>
+#include <iomanip>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_set>
 #include <utility>
@@ -16,7 +18,8 @@ namespace {
 
 constexpr std::array<std::uint8_t, 8> kMagic{
     'S', 'S', 'G', 'S', 'N', 'A', 'P', '\0'};
-constexpr std::uint32_t kVersion = 1;
+constexpr std::uint32_t kLegacyVersion = 1;
+constexpr std::uint32_t kVersion = 2;
 constexpr std::size_t kTabFixedBytes = 4 + 4 * sizeof(std::uint64_t);
 
 std::string invalidSnapshot(const std::filesystem::path& path,
@@ -35,6 +38,9 @@ bool validUtf8(std::string_view value) {
 }
 
 std::optional<std::string> validate(const SessionSnapshot& snapshot) {
+    if (!snapshot.identity.empty() && !validUtf8(snapshot.identity)) {
+        return "contains an invalid session identity";
+    }
     bool hasActive = false;
     std::unordered_set<std::string> namedPaths;
     for (const auto& tab : snapshot.tabs) {
@@ -174,10 +180,36 @@ private:
 
 } // namespace
 
-std::filesystem::path sessionSnapshotPath(
+std::string sessionSnapshotIdentity(
     const std::filesystem::path& processStartingDirectory) {
     if (processStartingDirectory.empty()) return {};
-    return processStartingDirectory / kSessionDirectoryName /
+    return weaklyCanonicalPath(processStartingDirectory).generic_string();
+}
+
+std::string sessionSnapshotKey(std::string_view identity) {
+    std::uint64_t hash = 14695981039346656037ULL;
+    for (const auto byte : identity) {
+        hash ^= static_cast<std::uint8_t>(byte);
+        hash *= 1099511628211ULL;
+    }
+    std::ostringstream key;
+    key << std::hex << std::setfill('0') << std::setw(16) << hash;
+    return key.str();
+}
+
+std::filesystem::path sessionSnapshotPath(
+    const std::filesystem::path& stateRoot,
+    const std::filesystem::path& processStartingDirectory) {
+    if (stateRoot.empty() || processStartingDirectory.empty()) return {};
+    const auto identity = sessionSnapshotIdentity(processStartingDirectory);
+    return stateRoot / kSessionDirectoryName / sessionSnapshotKey(identity) /
+           kSessionSnapshotFilename;
+}
+
+std::filesystem::path legacySessionSnapshotPath(
+    const std::filesystem::path& processStartingDirectory) {
+    if (processStartingDirectory.empty()) return {};
+    return processStartingDirectory / kLegacySessionDirectoryName /
            kSessionSnapshotFilename;
 }
 
@@ -188,6 +220,7 @@ SessionSnapshotEncodeResult encodeSessionSnapshot(
         std::vector<std::uint8_t> output;
         output.insert(output.end(), kMagic.begin(), kMagic.end());
         appendU32(output, kVersion);
+        appendString(output, snapshot.identity);
         appendU64(output, static_cast<std::uint64_t>(snapshot.tabs.size()));
         for (const auto& tab : snapshot.tabs) {
             output.push_back(static_cast<std::uint8_t>(tab.backing));
@@ -215,7 +248,15 @@ SessionSnapshotDecodeResult decodeSessionSnapshot(
         }
         const auto version = reader.u32();
         if (!version) return {std::nullopt, "is truncated"};
-        if (*version != kVersion) return {std::nullopt, "uses an unsupported version"};
+        if (*version != kLegacyVersion && *version != kVersion) {
+            return {std::nullopt, "uses an unsupported version"};
+        }
+        std::string identity;
+        if (*version == kVersion) {
+            auto decodedIdentity = reader.string();
+            if (!decodedIdentity) return {std::nullopt, "is truncated"};
+            identity = std::move(*decodedIdentity);
+        }
         const auto tabCount = reader.u64();
         if (!tabCount) return {std::nullopt, "is truncated"};
         if (*tabCount > reader.remaining() / kTabFixedBytes) {
@@ -223,6 +264,7 @@ SessionSnapshotDecodeResult decodeSessionSnapshot(
         }
 
         SessionSnapshot snapshot;
+        snapshot.identity = std::move(identity);
         snapshot.tabs.reserve(static_cast<std::size_t>(*tabCount));
         for (std::uint64_t index = 0; index < *tabCount; ++index) {
             const auto backing = reader.u8();
@@ -258,7 +300,8 @@ SessionSnapshotDecodeResult decodeSessionSnapshot(
 }
 
 SessionSnapshotReadResult readSessionSnapshot(
-    const std::filesystem::path& path) {
+    const std::filesystem::path& path,
+    std::string_view expectedIdentity) {
     if (path.empty()) return {};
     try {
         auto contents = readFile(path);
@@ -270,6 +313,11 @@ SessionSnapshotReadResult readSessionSnapshot(
         auto decoded = decodeSessionSnapshot(contents.bytes);
         if (!decoded.accepted()) {
             return {std::nullopt, invalidSnapshot(path, decoded.message)};
+        }
+        if (!expectedIdentity.empty() &&
+            decoded.snapshot->identity != expectedIdentity) {
+            return {std::nullopt,
+                    invalidSnapshot(path, "belongs to another launch directory")};
         }
         return {std::move(decoded.snapshot), {}};
     } catch (const std::exception& error) {
@@ -300,6 +348,64 @@ SessionSnapshotWriteResult writeSessionSnapshot(
     } catch (const std::exception& error) {
         return {"could not write session snapshot '" + path.string() +
                 "': " + error.what()};
+    }
+}
+
+SessionSnapshotMigrationResult migrateLegacySessionSnapshot(
+    const std::filesystem::path& centralPath,
+    std::string_view identity,
+    const std::filesystem::path& legacyPath) {
+    try {
+        const auto central = readSessionSnapshot(centralPath, identity);
+        if (!central.accepted()) return {central.message};
+
+        const auto legacyDirectory = legacyPath.parent_path();
+        const auto directoryStatus = statFile(legacyDirectory);
+        if (!directoryStatus) return {};
+        if (directoryStatus->kind == FileKind::Symlink) {
+            return {"legacy session directory '" + legacyDirectory.string() +
+                    "' is a symbolic link; move or delete it before starting"};
+        }
+
+        auto legacy = readSessionSnapshot(legacyPath);
+        if (!legacy.accepted()) {
+            return central.snapshot ? SessionSnapshotMigrationResult{}
+                                    : SessionSnapshotMigrationResult{
+                                          legacy.message};
+        }
+        if (!legacy.snapshot) return {};
+
+        auto retireLegacy = [&]() -> SessionSnapshotMigrationResult {
+            const auto currentDirectoryStatus = statFile(legacyDirectory);
+            if (!currentDirectoryStatus ||
+                currentDirectoryStatus->kind == FileKind::Symlink) {
+                return {"legacy session directory '" +
+                        legacyDirectory.string() +
+                        "' changed during migration"};
+            }
+            const auto status = statFile(legacyPath);
+            if (!status) return {};
+            if (status->kind != FileKind::Regular) {
+                return {"legacy session snapshot '" + legacyPath.string() +
+                        "' is not a regular file"};
+            }
+            const auto removed = removeTree(legacyPath);
+            if (!removed.ok() && removed.status != FileIoStatus::NotFound) {
+                return {"could not remove legacy session snapshot '" +
+                        legacyPath.string() + "': " + removed.message};
+            }
+            return {};
+        };
+
+        if (central.snapshot) return retireLegacy();
+
+        legacy.snapshot->identity = std::string{identity};
+        const auto written = writeSessionSnapshot(centralPath, *legacy.snapshot);
+        if (!written.accepted()) return {written.message};
+        return retireLegacy();
+    } catch (const std::exception& error) {
+        return {"could not migrate legacy session snapshot '" +
+                legacyPath.string() + "': " + error.what()};
     }
 }
 

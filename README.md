@@ -92,7 +92,8 @@ is `Alt` specifically, a mouse chord rather than a `Mod` chord.
   descended into.
 - **Safe files** — atomic saves, encoding and line-ending preservation, and
   restoration of unsaved editable tabs after a normal exit. Session snapshots
-  live in `./.ssg/session.snapshot` relative to the process starting directory.
+  live in SSG's user-state directory and are keyed by the process starting
+  directory, so edited workspaces are not modified.
 - **Unicode 15** — correct grapheme and wide/combining-character layout.
 - **Themes** — fully themeable per-role and per-syntax-scope colors, adapting
   down to 256- and 16-color terminals.

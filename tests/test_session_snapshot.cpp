@@ -32,7 +32,8 @@ ssg::EditorConfig editorConfig(const fs::path& root) {
     config.cwd = root / "workspace";
     config.recoveryRoot = root / "recovery";
     config.archiveRoot = root / "archive";
-    config.snapshotPath = root / ".ssg" / "session.snapshot";
+    config.snapshotIdentity = ssg::sessionSnapshotIdentity(root);
+    config.snapshotPath = ssg::sessionSnapshotPath(root / "state", root);
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
     return config;
@@ -66,7 +67,10 @@ TEST(codecAcceptsCanonicalEmptyFixture) {
     };
     const auto decoded = ssg::decodeSessionSnapshot(fixture);
     ASSERT_TRUE(decoded.accepted());
-    if (decoded.snapshot) ASSERT_TRUE(decoded.snapshot->tabs.empty());
+    if (decoded.snapshot) {
+        ASSERT_TRUE(decoded.snapshot->tabs.empty());
+        ASSERT_TRUE(decoded.snapshot->identity.empty());
+    }
 }
 
 TEST(codecRejectsEveryTruncatedPrefix) {
@@ -85,7 +89,7 @@ TEST(codecRejectsWrongMagicVersionAndTrailingBytes) {
     ASSERT_FALSE(ssg::decodeSessionSnapshot(encoded).accepted());
 
     encoded = ssg::encodeSessionSnapshot(exampleSnapshot()).bytes;
-    encoded[8] = 2;
+    encoded[8] = 0xff;
     ASSERT_FALSE(ssg::decodeSessionSnapshot(encoded).accepted());
 
     encoded = ssg::encodeSessionSnapshot(exampleSnapshot()).bytes;
@@ -161,11 +165,100 @@ TEST(cleanEditorSaveReplacesStaleSnapshotWithEmptyState) {
 }
 
 TEST(pathDerivationUsesOnlyStartingDirectory) {
+    const fs::path state{"/state"};
     const fs::path starting{"/start"};
-    ASSERT_EQ(ssg::sessionSnapshotPath(starting),
-              starting / ssg::kSessionDirectoryName /
+    ASSERT_EQ(ssg::sessionSnapshotPath(state, starting),
+              state / ssg::kSessionDirectoryName /
+                  ssg::sessionSnapshotKey("/start") /
                   ssg::kSessionSnapshotFilename);
-    ASSERT_TRUE(ssg::sessionSnapshotPath({}).empty());
+    ASSERT_TRUE(ssg::sessionSnapshotPath({}, starting).empty());
+    ASSERT_TRUE(ssg::sessionSnapshotPath(state, {}).empty());
+}
+
+TEST(identityMismatchRefusesRestore) {
+    const auto root = testRuntimePath("session_snapshot_identity");
+    fs::remove_all(root);
+    auto snapshot = exampleSnapshot();
+    snapshot.identity = "/first";
+    const auto path = root / "session.snapshot";
+    ASSERT_TRUE(ssg::writeSessionSnapshot(path, snapshot).accepted());
+    ASSERT_TRUE(ssg::readSessionSnapshot(path, "/first").accepted());
+    const auto mismatched = ssg::readSessionSnapshot(path, "/second");
+    ASSERT_FALSE(mismatched.accepted());
+    ASSERT_TRUE(mismatched.message.find("another launch directory") !=
+                std::string::npos);
+    fs::remove_all(root);
+}
+
+TEST(legacySnapshotMigratesAndCentralStateWins) {
+    const auto root = testRuntimePath("session_snapshot_migration");
+    fs::remove_all(root);
+    const auto launch = root / "launch";
+    const auto state = root / "state";
+    fs::create_directories(launch);
+    const auto identity = ssg::sessionSnapshotIdentity(launch);
+    const auto central = ssg::sessionSnapshotPath(state, launch);
+    const auto legacy = ssg::legacySessionSnapshotPath(launch);
+    const auto snapshot = exampleSnapshot();
+    ASSERT_TRUE(ssg::writeSessionSnapshot(legacy, snapshot).accepted());
+    writeBytes(legacy.parent_path() / "keep.txt", "unrelated");
+
+    const auto migrated =
+        ssg::migrateLegacySessionSnapshot(central, identity, legacy);
+    ASSERT_TRUE(migrated.accepted());
+    const auto stored = ssg::readSessionSnapshot(central, identity);
+    ASSERT_TRUE(stored.accepted());
+    ASSERT_TRUE(stored.snapshot.has_value());
+    if (stored.snapshot) {
+        ASSERT_EQ(stored.snapshot->tabs, snapshot.tabs);
+        ASSERT_EQ(stored.snapshot->identity, identity);
+    }
+    ASSERT_FALSE(fs::exists(legacy));
+    ASSERT_TRUE(fs::exists(legacy.parent_path() / "keep.txt"));
+
+    auto stale = exampleSnapshot();
+    stale.tabs.front().draft = "stale";
+    ASSERT_TRUE(ssg::writeSessionSnapshot(legacy, stale).accepted());
+    ASSERT_TRUE(
+        ssg::migrateLegacySessionSnapshot(central, identity, legacy).accepted());
+    ASSERT_FALSE(fs::exists(legacy));
+    const auto preferred = ssg::readSessionSnapshot(central, identity);
+    ASSERT_TRUE(preferred.accepted());
+    if (preferred.snapshot) {
+        ASSERT_EQ(preferred.snapshot->tabs.front().draft,
+                  snapshot.tabs.front().draft);
+    }
+
+    writeBytes(legacy, "not a snapshot");
+    ASSERT_TRUE(
+        ssg::migrateLegacySessionSnapshot(central, identity, legacy).accepted());
+    ASSERT_EQ(readBytes(legacy), std::string{"not a snapshot"});
+    fs::remove_all(root);
+}
+
+TEST(legacyMigrationRejectsSymlinkedSessionDirectory) {
+    const auto root = testRuntimePath("session_snapshot_symlink_migration");
+    fs::remove_all(root);
+    const auto launch = root / "launch";
+    const auto foreign = root / "foreign" / ".ssg";
+    fs::create_directories(launch);
+    fs::create_directories(foreign);
+    const auto foreignSnapshot = foreign / ssg::kSessionSnapshotFilename;
+    ASSERT_TRUE(
+        ssg::writeSessionSnapshot(foreignSnapshot, exampleSnapshot()).accepted());
+
+    std::error_code error;
+    fs::create_directory_symlink(foreign, launch / ".ssg", error);
+    if (!error) {
+        const auto identity = ssg::sessionSnapshotIdentity(launch);
+        const auto migrated = ssg::migrateLegacySessionSnapshot(
+            ssg::sessionSnapshotPath(root / "state", launch), identity,
+            ssg::legacySessionSnapshotPath(launch));
+        ASSERT_FALSE(migrated.accepted());
+        ASSERT_TRUE(migrated.message.find("symbolic link") != std::string::npos);
+        ASSERT_TRUE(fs::exists(foreignSnapshot));
+    }
+    fs::remove_all(root);
 }
 
 TEST(twoEditorLifetimesRestoreAnUntitledDraft) {
@@ -301,6 +394,7 @@ TEST(savedFileReconciliationCoversTheCompleteMatrix) {
     const bool unreadable =
         !permissionsError &&
         !ssg::readFile(workspace / "unreadable.txt").ok();
+    const auto config = editorConfig(root);
 
     ssg::SessionSnapshot snapshot{{
         {ssg::SessionBackingKind::PersistedPath, "equal.txt", "equal.txt",
@@ -322,13 +416,13 @@ TEST(savedFileReconciliationCoversTheCompleteMatrix) {
          "nonregular.txt", ssg::DocumentMode::Edit, "directory draft",
          {'o', 'l', 'd'}, false},
     }};
+    snapshot.identity = config.snapshotIdentity;
     if (unreadable) {
         snapshot.tabs.push_back(
             {ssg::SessionBackingKind::PersistedPath, "unreadable.txt",
              "unreadable.txt", ssg::DocumentMode::Edit, "unreadable draft",
              {'o', 'l', 'd'}, false});
     }
-    const auto config = editorConfig(root);
     ASSERT_TRUE(ssg::writeSessionSnapshot(config.snapshotPath, snapshot).accepted());
     const auto changedBefore = readBytes(workspace / "changed.txt");
     const auto binaryBefore = readBytes(workspace / "binary.txt");
@@ -384,10 +478,11 @@ TEST(startupTargetFocusesRestoredPathWithoutDuplicatingIt) {
     const auto root = testRuntimePath("session_snapshot_startup_target");
     fs::remove_all(root);
     const auto config = editorConfig(root);
-    const ssg::SessionSnapshot snapshot{{{
+    ssg::SessionSnapshot snapshot{{{
         ssg::SessionBackingKind::NeverCreatedPath, "new.txt", "new.txt",
         ssg::DocumentMode::Edit, "draft", {}, false,
     }}};
+    snapshot.identity = config.snapshotIdentity;
     ASSERT_TRUE(ssg::writeSessionSnapshot(config.snapshotPath, snapshot).accepted());
     auto created = ssg::createEditor(config);
     ASSERT_TRUE(created.accepted());
@@ -414,8 +509,8 @@ TEST(corruptSnapshotAndNonDirectorySessionPathStopStartup) {
     root = testRuntimePath("session_snapshot_nondirectory");
     fs::remove_all(root);
     config = editorConfig(root);
-    fs::remove_all(root / ".ssg");
-    writeBytes(root / ".ssg", "not a directory");
+    fs::remove_all(config.snapshotPath.parent_path());
+    writeBytes(config.snapshotPath.parent_path(), "not a directory");
     auto blocked = ssg::createEditor(config);
     ASSERT_FALSE(blocked.accepted());
     ASSERT_TRUE(blocked.message.find(config.snapshotPath.string()) !=
@@ -448,14 +543,15 @@ TEST(saveFailureIsReportedAndStartingDirectoryOwnsTheSnapshot) {
     config.cwd = openedWorkspace;
     config.recoveryRoot = root / "recovery";
     config.archiveRoot = root / "archive";
-    config.snapshotPath = ssg::sessionSnapshotPath(start);
+    config.snapshotIdentity = ssg::sessionSnapshotIdentity(start);
+    config.snapshotPath = ssg::sessionSnapshotPath(root / "state", start);
     created = ssg::createEditor(config);
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     ASSERT_TRUE(created.session->dispatch("file.new").accepted());
     ASSERT_TRUE(ssg::test::typeText(*created.session, "cwd draft").accepted());
     ASSERT_TRUE(created.session->saveSession().accepted);
-    ASSERT_TRUE(fs::exists(start / ".ssg" / "session.snapshot"));
+    ASSERT_TRUE(fs::exists(config.snapshotPath));
     ASSERT_FALSE(fs::exists(openedWorkspace / ".ssg" / "session.snapshot"));
     fs::remove_all(root);
 }
@@ -472,6 +568,9 @@ SSG_TEST_SUITE(test_session_snapshot) {
     RUN(fileReadDoesNotConsumeAndEmptyWriteClearsStaleState);
     RUN(cleanEditorSaveReplacesStaleSnapshotWithEmptyState);
     RUN(pathDerivationUsesOnlyStartingDirectory);
+    RUN(identityMismatchRefusesRestore);
+    RUN(legacySnapshotMigratesAndCentralStateWins);
+    RUN(legacyMigrationRejectsSymlinkedSessionDirectory);
     RUN(twoEditorLifetimesRestoreAnUntitledDraft);
     RUN(savedDraftRestoresFromItsExactRawBaseline);
     RUN(snapshotKeepsOnlyDirtyEditableTabsInOrderAndActiveIdentity);

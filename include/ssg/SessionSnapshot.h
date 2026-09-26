@@ -12,7 +12,8 @@
 
 namespace ssg {
 
-inline constexpr std::string_view kSessionDirectoryName = ".ssg";
+inline constexpr std::string_view kSessionDirectoryName = "sessions";
+inline constexpr std::string_view kLegacySessionDirectoryName = ".ssg";
 inline constexpr std::string_view kSessionSnapshotFilename = "session.snapshot";
 
 enum class SessionBackingKind : std::uint8_t {
@@ -36,6 +37,7 @@ struct SessionSnapshotTab {
 
 struct SessionSnapshot {
     std::vector<SessionSnapshotTab> tabs;
+    std::string identity;
 
     friend bool operator==(const SessionSnapshot&,
                            const SessionSnapshot&) = default;
@@ -70,15 +72,32 @@ struct SessionSnapshotWriteResult {
     [[nodiscard]] bool accepted() const noexcept { return message.empty(); }
 };
 
+struct SessionSnapshotMigrationResult {
+    std::string message;
+
+    [[nodiscard]] bool accepted() const noexcept { return message.empty(); }
+};
+
+[[nodiscard]] std::string sessionSnapshotIdentity(
+    const std::filesystem::path& processStartingDirectory);
+[[nodiscard]] std::string sessionSnapshotKey(std::string_view identity);
 [[nodiscard]] std::filesystem::path sessionSnapshotPath(
+    const std::filesystem::path& stateRoot,
+    const std::filesystem::path& processStartingDirectory);
+[[nodiscard]] std::filesystem::path legacySessionSnapshotPath(
     const std::filesystem::path& processStartingDirectory);
 [[nodiscard]] SessionSnapshotEncodeResult encodeSessionSnapshot(
     const SessionSnapshot& snapshot);
 [[nodiscard]] SessionSnapshotDecodeResult decodeSessionSnapshot(
     std::span<const std::uint8_t> bytes);
 [[nodiscard]] SessionSnapshotReadResult readSessionSnapshot(
-    const std::filesystem::path& path);
+    const std::filesystem::path& path,
+    std::string_view expectedIdentity = {});
 [[nodiscard]] SessionSnapshotWriteResult writeSessionSnapshot(
     const std::filesystem::path& path, const SessionSnapshot& snapshot);
+[[nodiscard]] SessionSnapshotMigrationResult migrateLegacySessionSnapshot(
+    const std::filesystem::path& centralPath,
+    std::string_view identity,
+    const std::filesystem::path& legacyPath);
 
 } // namespace ssg

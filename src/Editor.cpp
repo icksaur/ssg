@@ -650,6 +650,7 @@ Editor::Editor(std::filesystem::path canonicalCwd,
                std::filesystem::path recoveryRoot,
                std::filesystem::path archiveRoot,
                std::filesystem::path snapshotPath,
+               std::string snapshotIdentity,
                bool deferEnrichment,
                std::shared_ptr<SyntaxParser> parser,
                bool enableGitDiffWorker,
@@ -659,6 +660,7 @@ Editor::Editor(std::filesystem::path canonicalCwd,
       recoveryRoot{weaklyCanonicalPath(recoveryRoot)},
       archiveRoot{weaklyCanonicalPath(archiveRoot)},
       snapshotPath{std::move(snapshotPath)},
+      snapshotIdentity{std::move(snapshotIdentity)},
       recovery{RecoveryManager::create(recoveryRoot)},
       workspace{Workspace::create(root, recovery, this->archiveRoot)},
       selection{initialSelection()}, clipboard{4}, tabs{},
@@ -1486,6 +1488,7 @@ OperationResult Editor::saveSession() {
     if (snapshotPath.empty()) return success();
 
     SessionSnapshot snapshot;
+    snapshot.identity = snapshotIdentity;
     const auto& view = tabs.viewState();
     for (const auto& tab : view.tabs) {
         if (tab.kind != TabKind::Document || tab.mode != DocumentMode::Edit ||
@@ -1525,7 +1528,7 @@ OperationResult Editor::saveSession() {
 
 OperationResult Editor::restoreSession() {
     if (snapshotPath.empty()) return success();
-    const auto read = readSessionSnapshot(snapshotPath);
+    const auto read = readSessionSnapshot(snapshotPath, snapshotIdentity);
     if (!read.accepted()) return failure(read.message);
     if (!read.snapshot) return success();
 
@@ -1642,7 +1645,8 @@ EditorCreateResult createEditor(EditorConfig config) {
         }
         auto editor = std::unique_ptr<Editor>{new Editor{
             cwd, config.recoveryRoot, config.archiveRoot, config.snapshotPath,
-            config.deferEnrichment, std::move(config.syntaxParser),
+            std::move(config.snapshotIdentity), config.deferEnrichment,
+            std::move(config.syntaxParser),
             config.enableGitDiffWorker, config.enableFilesystemWatcher}};
         (void)editor->workspace.pruneArchive();
         editor->keymap = defaultTerminalKeymap();

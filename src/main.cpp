@@ -86,15 +86,36 @@ int main(int argc, char** argv) {
     } else {
         stateBase = ssg::userStateRoot("ssg");
     }
-    (void)ssg::createDirectoriesDurably(stateBase / "archive");
-    for (const auto& dir : {stateBase, stateBase / "archive"}) {
+    for (const auto& dir :
+         {stateBase, stateBase / "archive", stateBase / "sessions"}) {
+        const auto created = ssg::ensureDirectory(dir);
+        if (!created.ok()) {
+            std::fprintf(stderr, "ssg: %s\n", created.message.c_str());
+            return 1;
+        }
         const auto status = ssg::statFile(dir);
         if (status && status->kind == ssg::FileKind::Directory) {
             try {
                 ssg::setOwnerOnlyPermissions(dir);
-            } catch (const std::exception&) {
+            } catch (const std::exception& error) {
+                std::fprintf(
+                    stderr, "ssg: could not secure state directory '%s': %s\n",
+                    dir.string().c_str(), error.what());
+                return 1;
             }
         }
+    }
+
+    const auto snapshotIdentity =
+        sessionSnapshotIdentity(processStartingDirectory);
+    const auto snapshotPath =
+        sessionSnapshotPath(stateBase, processStartingDirectory);
+    const auto migrated = migrateLegacySessionSnapshot(
+        snapshotPath, snapshotIdentity,
+        legacySessionSnapshotPath(processStartingDirectory));
+    if (!migrated.accepted()) {
+        std::fprintf(stderr, "ssg: %s\n", migrated.message.c_str());
+        return 1;
     }
 
     auto recoveryBase =
@@ -106,7 +127,8 @@ int main(int argc, char** argv) {
     config.cwd = target.cwd;
     config.recoveryRoot = recoveryBase / "recovery";
     config.archiveRoot = stateBase / "archive";
-    config.snapshotPath = sessionSnapshotPath(processStartingDirectory);
+    config.snapshotPath = snapshotPath;
+    config.snapshotIdentity = snapshotIdentity;
     config.deferEnrichment = true;
     config.syntaxParser = ssg::TreeSitterParserFactory::createDefault();
     auto created = ssg::createEditor(config);

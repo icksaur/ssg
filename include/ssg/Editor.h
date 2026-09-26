@@ -57,6 +57,7 @@ struct EditorConfig {
     std::filesystem::path recoveryRoot;
     std::filesystem::path archiveRoot;
     std::filesystem::path snapshotPath;
+    std::string snapshotIdentity;
     bool deferEnrichment = false;
     std::shared_ptr<SyntaxParser> syntaxParser;
     bool enableGitDiffWorker = true;
@@ -182,6 +183,7 @@ private:
            std::filesystem::path recoveryRoot,
            std::filesystem::path archiveRoot,
            std::filesystem::path snapshotPath,
+           std::string snapshotIdentity,
            bool deferEnrichment = false,
            std::shared_ptr<SyntaxParser> parser = nullptr,
            bool enableGitDiffWorker = true,
@@ -234,6 +236,7 @@ public:
     std::filesystem::path recoveryRoot;
     std::filesystem::path archiveRoot;
     std::filesystem::path snapshotPath;
+    std::string snapshotIdentity;
     RecoveryManager recovery;
     Workspace workspace;
     SelectionViewState selection;
