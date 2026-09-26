@@ -321,65 +321,9 @@ std::optional<std::string> applyInputMutation(
         return std::nullopt;
     }
 
-    const auto change = std::get<SearchQueryChange>(*mutation);
-    const auto binding = editor.tree.activeProviderBinding();
-    if (!binding || binding->kind != TreeProviderKind::Search) {
-        return "search query target changed before execution";
-    }
-    auto state = editor.tree.searchState(binding->id);
-    if (!state) return "search provider state is unavailable";
-    switch (change.kind) {
-    case SearchQueryChange::Kind::Edit: {
-        state->query = applyPromptTextEdit(state->query, change.edit);
-        state->editing = true;
-        break;
-    }
-    case SearchQueryChange::Kind::MoveFirst:
-    case SearchQueryChange::Kind::MoveLast: {
-        const auto view = editor.tree.viewState();
-        const auto* provider = activeTreeProvider(view);
-        if (provider == nullptr || provider->nodes.empty()) {
-            return std::nullopt;
-        }
-        const auto& node =
-            change.kind == SearchQueryChange::Kind::MoveFirst
-                ? provider->nodes.front()
-                : provider->nodes.back();
-        if (!editor.tree.select(node.node.id)) {
-            return "search result target changed before execution";
-        }
-        state->editing = false;
-        break;
-    }
-    case SearchQueryChange::Kind::Submit:
-        editor.search.cancelWorkspaceSearch();
-        editor.workspaceSearchState.reset();
-        editor.workspaceSearchCorpus.reset();
-        editor.panelWorkspaceSearchGeneration.reset();
-        editor.tree.replaceProvider(TreeProviderSnapshot{
-            binding->id, TreeProviderKind::Search, {}});
-        state->submittedQuery.reset();
-        state->searching = false;
-        if (!state->query.text().empty()) {
-            state->submittedQuery = state->query.text();
-            state->searching = true;
-            const auto sourceGeneration = ++editor.workspaceSearchGeneration;
-            editor.startWorkspaceSearch(
-                ParsedSearchQuery{.mode = SearchMode::Text,
-                                  .text = state->query.text()},
-                sourceGeneration);
-        }
-        break;
-    case SearchQueryChange::Kind::Focus:
-        if (!editor.screen.focusPanel()) {
-            return "search query sidebar is unavailable";
-        }
-        state->editing = true;
-        break;
-    }
-    if (!editor.tree.setSearchState(binding->id, std::move(*state))) {
-        return "search provider state changed before execution";
-    }
+    auto result =
+        editor.applySearchQueryChange(std::get<SearchQueryChange>(*mutation));
+    if (!result.accepted) return std::move(result.message);
     return std::nullopt;
 }
 
@@ -636,6 +580,62 @@ ClientInputResult executeInputRoute(Editor& editor, SubmitPicker route,
 OperationResult success() { return {}; }
 OperationResult failure(std::string message) {
     return {false, std::move(message), std::nullopt};
+}
+
+OperationResult Editor::applySearchQueryChange(SearchQueryChange change) {
+    const auto binding = tree.activeProviderBinding();
+    if (!binding || binding->kind != TreeProviderKind::Search) {
+        return failure("search query target changed before execution");
+    }
+    auto state = tree.searchState(binding->id);
+    if (!state) return failure("search provider state is unavailable");
+    switch (change.kind) {
+    case SearchQueryChange::Kind::Edit:
+        state->query = applyPromptTextEdit(state->query, change.edit);
+        state->editing = true;
+        break;
+    case SearchQueryChange::Kind::MoveFirst:
+    case SearchQueryChange::Kind::MoveLast: {
+        const auto view = tree.viewState();
+        const auto* provider = activeTreeProvider(view);
+        if (provider == nullptr || provider->nodes.empty()) {
+            return success();
+        }
+        const auto& node =
+            change.kind == SearchQueryChange::Kind::MoveFirst
+                ? provider->nodes.front()
+                : provider->nodes.back();
+        if (!tree.select(node.node.id)) {
+            return failure("search result target changed before execution");
+        }
+        state->editing = false;
+        break;
+    }
+    case SearchQueryChange::Kind::Submit:
+        cancelWorkspaceSearch();
+        state->submittedQuery.reset();
+        state->searching = false;
+        if (!state->query.text().empty()) {
+            state->submittedQuery = state->query.text();
+            state->searching = true;
+            const auto sourceGeneration = ++workspaceSearchGeneration;
+            startWorkspaceSearch(
+                ParsedSearchQuery{.mode = SearchMode::Text,
+                                  .text = state->query.text()},
+                sourceGeneration);
+        }
+        break;
+    case SearchQueryChange::Kind::Focus:
+        if (!screen.focusPanel()) {
+            return failure("search query sidebar is unavailable");
+        }
+        state->editing = true;
+        break;
+    }
+    if (!tree.setSearchState(binding->id, std::move(*state))) {
+        return failure("search provider state changed before execution");
+    }
+    return success();
 }
 
 std::string workspaceMessage(WorkspaceResult const& result) {
@@ -910,6 +910,21 @@ void Editor::startWorkspaceSearch(ParsedSearchQuery query,
 bool Editor::workspaceSearchPending() const noexcept {
     return workspaceSearchState.has_value() &&
            !workspaceSearchState->finished;
+}
+
+void Editor::cancelWorkspaceSearch() {
+    search.cancelWorkspaceSearch();
+    workspaceSearchState.reset();
+    workspaceSearchCorpus.reset();
+    panelWorkspaceSearchGeneration.reset();
+    const TreeProviderId searchProvider{"search"};
+    if (auto state = tree.searchState(searchProvider)) {
+        state->submittedQuery.reset();
+        state->searching = false;
+        tree.replaceProvider(TreeProviderSnapshot{
+            searchProvider, TreeProviderKind::Search, {}});
+        (void)tree.setSearchState(searchProvider, std::move(*state));
+    }
 }
 
 void Editor::advanceWorkspaceSearch() {
@@ -1716,18 +1731,7 @@ bool Editor::deferDispatch(std::string commandId) {
 
 CommandResult Editor::dispatchLocked(std::string_view commandId) {
     if (workspaceSearchPending() && commandId != "search.workspace") {
-        search.cancelWorkspaceSearch();
-        workspaceSearchState.reset();
-        workspaceSearchCorpus.reset();
-        panelWorkspaceSearchGeneration.reset();
-        const TreeProviderId searchProvider{"search"};
-        if (auto state = tree.searchState(searchProvider)) {
-            state->submittedQuery.reset();
-            state->searching = false;
-            tree.replaceProvider(TreeProviderSnapshot{
-                searchProvider, TreeProviderKind::Search, {}});
-            (void)tree.setSearchState(searchProvider, std::move(*state));
-        }
+        cancelWorkspaceSearch();
     }
     const auto dispatchAndReconcile = [&](std::string_view dispatched) {
         const auto revisionsBefore = documentRevisions(workspace);

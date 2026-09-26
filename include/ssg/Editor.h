@@ -215,6 +215,8 @@ public:
                               std::uint64_t sourceRevision);
     [[nodiscard]] bool workspaceSearchPending() const noexcept;
     void advanceWorkspaceSearch();
+    [[nodiscard]] OperationResult applySearchQueryChange(
+        SearchQueryChange change);
     void resetKeymapToDefault();
     [[nodiscard]] CompiledKeymap const& resolveInputKeymap();
     void focusEditor();
@@ -369,6 +371,7 @@ public:
     [[nodiscard]] OperationResult restoreSession();
 
     [[nodiscard]] WorkspaceCorpus workspaceCorpus() const;
+    void cancelWorkspaceSearch();
     [[nodiscard]] std::optional<FileDocumentId> activeDocumentId() const;
     [[nodiscard]] const TabState* activeTabState() const;
     // Whether the active tab shows a live diff. A guard several command

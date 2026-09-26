@@ -128,6 +128,12 @@ TEST(searchPanelEditsSubmitsPublishesAndCancelsWithoutEagerWork) {
     ASSERT_EQ(key(ssg::KeyCode::Enter).outcome,
               ssg::ClientInputOutcome::Dispatched);
     ASSERT_TRUE(runtime.workspaceSearchPending());
+    const auto firstGeneration = runtime.search.viewState().searchGeneration;
+    ASSERT_EQ(key(ssg::KeyCode::Enter).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    ASSERT_TRUE(runtime.workspaceSearchPending());
+    ASSERT_TRUE(runtime.search.viewState().searchGeneration >
+                firstGeneration);
     ASSERT_EQ(runtime.search.viewState().mode, ssg::SearchMode::Text);
     auto treeView = runtime.tree.viewState();
     auto active = ssg::activeTreeProvider(treeView);
