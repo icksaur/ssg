@@ -173,7 +173,7 @@ TEST(editReconciliationHonorsAcceptanceAndNotifiesFollowOnce) {
     ASSERT_TRUE(runtime->dispatch("find.open").accepted());
     ASSERT_TRUE(runtime->dispatch("text.newline").accepted());
     ASSERT_EQ(runtime->follow.viewState().generation, beforeCommand + 1);
-    ASSERT_FALSE(runtime->findReplace.viewState().open);
+    ASSERT_FALSE(runtime->findView().open);
 
     ASSERT_TRUE(runtime->follow.resume(runtime->diff.viewState()).accepted());
     const auto beforeRejected = runtime->follow.viewState().generation;
@@ -187,7 +187,7 @@ TEST(editReconciliationHonorsAcceptanceAndNotifiesFollowOnce) {
     });
     ASSERT_FALSE(runtime->dispatch("oracle.rejected_edit").accepted());
     ASSERT_EQ(runtime->follow.viewState().generation, beforeRejected);
-    ASSERT_FALSE(runtime->findReplace.viewState().open);
+    ASSERT_FALSE(runtime->findView().open);
 
     runtime->addCommand("oracle.edit_twice", "Edit twice", [&] {
         ASSERT_TRUE(ssg::applyEditorTextInput(
@@ -218,25 +218,25 @@ TEST(fileActivationAndRejectedCommandsReconcileFind) {
     ASSERT_TRUE(ssg::test::openFile(*runtime, "edit.txt").accepted());
 
     ASSERT_TRUE(runtime->dispatch("find.open").accepted());
-    ASSERT_TRUE(runtime->findReplace.viewState().open);
+    ASSERT_TRUE(runtime->findView().open);
     ASSERT_FALSE(runtime->dispatch("oracle.missing").accepted());
-    ASSERT_TRUE(runtime->findReplace.viewState().open);
+    ASSERT_TRUE(runtime->findView().open);
     ASSERT_TRUE(runtime->dispatch("file.new").accepted());
-    ASSERT_FALSE(runtime->findReplace.viewState().open);
+    ASSERT_FALSE(runtime->findView().open);
 
     ASSERT_TRUE(runtime->dispatch("find.open").accepted());
-    ASSERT_TRUE(runtime->findReplace.viewState().open);
+    ASSERT_TRUE(runtime->findView().open);
     ASSERT_TRUE(ssg::test::openFile(*runtime, "other.txt").accepted());
-    ASSERT_FALSE(runtime->findReplace.viewState().open);
+    ASSERT_FALSE(runtime->findView().open);
 
     ASSERT_TRUE(runtime->dispatch("find.open").accepted());
     const auto firstTab = runtime->tabs.viewState().tabs.front().id;
     auto rejected = runtime->input(ssg::TabPointerInput{ssg::TabId{99999}});
     ASSERT_EQ(rejected.outcome, ssg::ClientInputOutcome::Rejected);
-    ASSERT_TRUE(runtime->findReplace.viewState().open);
+    ASSERT_TRUE(runtime->findView().open);
     auto activated = runtime->input(ssg::TabPointerInput{firstTab});
     ASSERT_EQ(activated.outcome, ssg::ClientInputOutcome::Dispatched);
-    ASSERT_FALSE(runtime->findReplace.viewState().open);
+    ASSERT_FALSE(runtime->findView().open);
     fs::remove_all(root);
 }
 
@@ -313,14 +313,14 @@ TEST(deferredFindNextCannotUseMatchesFromPreviousRevision) {
     ASSERT_TRUE(ssg::test::openFile(*runtime, "edit.txt").accepted());
     ASSERT_TRUE(runtime->dispatch("find.open").accepted());
     ASSERT_TRUE(runtime->updateFindQuery(ssg::test::promptText("cat")).accepted());
-    ASSERT_EQ(runtime->findReplace.viewState().matches.size(), 2U);
+    ASSERT_EQ(runtime->findView().matches.size(), 2U);
 
     runtime->addCommand("oracle.edit", "Edit", [&] {
         return ssg::applyEditorTextInput(
             *runtime, ssg::TextInputCommand::Insert, {"!"});
     });
     runtime->addCommand("oracle.check_find", "Check find", [&] {
-        ASSERT_FALSE(runtime->findReplace.viewState().open);
+        ASSERT_FALSE(runtime->findView().open);
         return ssg::CommandResult{};
     });
     runtime->addCommand("oracle.edit_then_find", "Edit then find", [&] {
@@ -330,7 +330,7 @@ TEST(deferredFindNextCannotUseMatchesFromPreviousRevision) {
         return ssg::CommandResult{};
     });
     ASSERT_TRUE(runtime->dispatch("oracle.edit_then_find").accepted());
-    ASSERT_FALSE(runtime->findReplace.viewState().open);
+    ASSERT_FALSE(runtime->findView().open);
     fs::remove_all(root);
 }
 

@@ -121,6 +121,11 @@ struct EditorAccess {
         editor.findDocumentId = document;
     }
 
+    static std::optional<FileDocumentId> findAssociatedDocument(
+        const Editor& editor) {
+        return editor.findDocumentId;
+    }
+
     static FileDocumentId contentTabDocument(
         const Editor& editor, TabKind kind, std::string_view identity) {
         const auto& documents = kind == TabKind::LiveDiff
@@ -136,6 +141,10 @@ struct EditorAccess {
 
 bool hasDocumentAssociation(const Editor& editor, FileDocumentId document) {
     return EditorAccess::hasDocumentAssociation(editor, document);
+}
+
+std::optional<FileDocumentId> findAssociatedDocument(const Editor& editor) {
+    return EditorAccess::findAssociatedDocument(editor);
 }
 
 void seedDocumentAssociations(Editor& editor, FileDocumentId document) {

@@ -25,6 +25,7 @@ CommandResult dragDocument(Editor& editor, std::uint64_t anchor,
                            std::uint64_t active,
                            bool additive = false);
 bool hasDocumentAssociation(const Editor& editor, FileDocumentId document);
+std::optional<FileDocumentId> findAssociatedDocument(const Editor& editor);
 void seedDocumentAssociations(Editor& editor, FileDocumentId document);
 FileDocumentId contentTabDocument(
     const Editor& editor, TabKind kind, std::string_view identity);

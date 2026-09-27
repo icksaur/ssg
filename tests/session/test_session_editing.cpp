@@ -1228,6 +1228,93 @@ TEST(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret) {
     std::filesystem::remove_all(root);
 }
 
+TEST(findOperationsKeepDocumentAssociationThroughReconciliation) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "find.txt"} << "cat CAT cat";
+    auto created = ssg::createEditor(
+        {root / "workspace", root / "recovery", root / "archive"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& editor = *created.session;
+    ASSERT_TRUE(ssg::test::openFile(editor, "find.txt").accepted());
+    auto const documentId = editor.activeDocumentId();
+    ASSERT_TRUE(documentId.has_value());
+    if (!documentId) return;
+
+    const auto reconciles = [&] {
+        ASSERT_TRUE(editor.findView().open);
+        ASSERT_EQ(ssg::test::findAssociatedDocument(editor), documentId);
+        ASSERT_EQ(editor.findView().sourceRevision,
+                  editor.activeDocument()->revision());
+        ASSERT_TRUE(editor.dispatch("find.next").accepted());
+        ASSERT_TRUE(editor.findView().open);
+        ASSERT_EQ(ssg::test::findAssociatedDocument(editor), documentId);
+    };
+    const auto command = [&](std::string_view name) {
+        ASSERT_TRUE(editor.dispatch(name).accepted());
+        reconciles();
+    };
+
+    ASSERT_TRUE(ssg::test::setSelections(editor, {{0, 3}}).accepted());
+    command("find.open");
+    ASSERT_TRUE(editor.updateFindQuery(ssg::test::promptText("cat")).accepted());
+    command("find.toggle_selection");
+    ASSERT_EQ(editor.findView().matches.size(), std::size_t{1});
+    reconciles();
+    command("find.previous");
+    command("find.toggle_case");
+    command("find.toggle_whole_word");
+    command("find.toggle_regex");
+    command("find.toggle_selection");
+    command("find.word_under_cursor");
+    ASSERT_FALSE(editor.findView().options.selectionOnly);
+    ASSERT_FALSE(editor.findView().options.regex);
+    command("replace.open");
+    ASSERT_TRUE(editor.updateReplacement(ssg::test::promptText("dog")).accepted());
+    reconciles();
+    command("replace.current");
+    command("replace.all");
+    ASSERT_TRUE(editor.dispatch("find.close").accepted());
+    ASSERT_FALSE(editor.findView().open);
+    ASSERT_FALSE(ssg::test::findAssociatedDocument(editor).has_value());
+    std::filesystem::remove_all(root);
+}
+
+TEST(rejectedFindQueryDoesNotChangeControllerOrAdoptDocument) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "find.txt"} << "cat cat";
+    std::ofstream{root / "workspace" / "other.txt"} << "cat cat";
+    auto created = ssg::createEditor(
+        {root / "workspace", root / "recovery", root / "archive"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& editor = *created.session;
+    ASSERT_TRUE(ssg::test::openFile(editor, "find.txt").accepted());
+    auto rejected = editor.updateFindQuery(ssg::test::promptText("cat"));
+    ASSERT_FALSE(rejected.accepted());
+    ASSERT_FALSE(editor.findView().open);
+    ASSERT_FALSE(ssg::test::findAssociatedDocument(editor).has_value());
+    ASSERT_TRUE(editor.findView().query.empty());
+
+    ASSERT_TRUE(editor.dispatch("find.open").accepted());
+    ASSERT_TRUE(editor.updateFindQuery(ssg::test::promptText("cat")).accepted());
+    auto const before = editor.findView();
+    auto const associated = ssg::test::findAssociatedDocument(editor);
+    ASSERT_TRUE(editor.dispatch("palette.open").accepted());
+    rejected = editor.updateFindQuery(ssg::test::promptText("dog"));
+    ASSERT_FALSE(rejected.accepted());
+    ASSERT_EQ(editor.findView(), before);
+    ASSERT_EQ(ssg::test::findAssociatedDocument(editor), associated);
+    ASSERT_TRUE(editor.dispatch("find.toggle_selection").accepted());
+    ASSERT_EQ(editor.findView(), before);
+    ASSERT_TRUE(editor.updateReplacement(ssg::test::promptText("dog")).accepted());
+    ASSERT_EQ(editor.findView(), before);
+    ASSERT_TRUE(ssg::test::openFile(editor, "other.txt").accepted());
+    ASSERT_FALSE(editor.findView().open);
+    ASSERT_FALSE(ssg::test::findAssociatedDocument(editor).has_value());
+    std::filesystem::remove_all(root);
+}
+
 TEST(promptFocusIsSingleAndResolvesToItsRegion) {
     // The mapping itself (pure): palette -> header, every other kind -> footer.
     static_assert(ssg::promptFocusRegion(ssg::PromptKind::Palette) ==
@@ -1401,6 +1488,8 @@ SSG_TEST_SUITE(test_session_editing) {
     RUN(findWordUnderCursorTakesTheWordWhenTheCaretSitsJustPastIt);
     RUN(findWordUnderCursorPrefersTheSelectionAndSearchesItLiterally);
     RUN(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret);
+    RUN(findOperationsKeepDocumentAssociationThroughReconciliation);
+    RUN(rejectedFindQueryDoesNotChangeControllerOrAdoptDocument);
     RUN(promptFocusIsSingleAndResolvesToItsRegion);
     RUN(liveInlineDiffPointerSelectionCopiesOnlyCurrentContent);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

@@ -122,12 +122,6 @@ void registerAllCommands(Commands& commands, Editor& runtime);
 [[nodiscard]] OperationResult applyEditorTextInput(
     Editor& runtime, TextInputCommand command,
     TextInputArguments arguments = {});
-[[nodiscard]] OperationResult executeFindReplaceCommand(
-    Editor& runtime, FindReplaceCommand command);
-[[nodiscard]] FindReplaceOperationResult applyFindQuery(
-    Editor& runtime, PromptEditState query);
-[[nodiscard]] FindReplaceOperationResult applyReplacement(
-    Editor& runtime, PromptEditState replacement);
 [[nodiscard]] OperationResult activateTab(Editor& runtime, TabId tabId);
 [[nodiscard]] OperationResult closeTabById(Editor& runtime, TabId tabId);
 [[nodiscard]] OperationResult activateTreeNode(Editor& runtime,
@@ -217,6 +211,16 @@ public:
         PromptEditState query);
     [[nodiscard]] FindReplaceOperationResult updateReplacement(
         PromptEditState replacement);
+    // These operations are called by dispatch/input while operationMutex is held.
+    [[nodiscard]] OperationResult executeFindReplaceCommand(
+        FindReplaceCommand command);
+    [[nodiscard]] FindReplaceOperationResult applyFindQueryLocked(
+        PromptEditState query);
+    [[nodiscard]] FindReplaceOperationResult applyReplacementLocked(
+        PromptEditState replacement);
+    [[nodiscard]] FindReplaceViewState const& findView() const noexcept {
+        return findReplace.viewState();
+    }
     [[nodiscard]] OperationResult saveSession();
     [[nodiscard]] OperationResult deleteActiveFile();
 
@@ -242,12 +246,14 @@ private:
     std::map<std::uint64_t, DocumentRuntimeState> documentRuntimeStates;
 public:
     ClipboardRegister clipboard;
+private:
+    // Accepted evaluations and replacements adopt the document ID alongside
+    // their byte offsets and revision; rejected prompt updates adopt neither.
     FindReplaceController findReplace;
-    // The document the find/replace controller last evaluated against.  Find
-    // matches are byte offsets into one specific document; when the active
-    // document identity or revision drifts from this, the controller is stale
-    // and must be dismissed (see reconcile_find_document).
     std::optional<FileDocumentId> findDocumentId;
+    void closeFind();
+    void revealActiveFindMatch();
+public:
     std::string statusText;
     TabManager tabs;
     DiffModel diff;

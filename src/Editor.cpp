@@ -372,12 +372,12 @@ std::optional<std::string> applyInputMutation(
         return std::nullopt;
     }
     if (auto* update = std::get_if<UpdateFindQuery>(&*mutation)) {
-        auto result = applyFindQuery(editor, update->query);
+        auto result = editor.applyFindQueryLocked(update->query);
         if (!result.accepted()) return result.message;
         return std::nullopt;
     }
     if (auto* update = std::get_if<UpdateReplacement>(&*mutation)) {
-        auto result = applyReplacement(editor, update->replacement);
+        auto result = editor.applyReplacementLocked(update->replacement);
         if (!result.accepted()) return result.message;
         return std::nullopt;
     }
@@ -1186,7 +1186,7 @@ void Editor::discardDocumentRuntimeState(FileDocumentId document) {
     syntaxWorker.cancel(document);
     documentRuntimeStates.erase(document.value());
     documentLanguageOverrides.erase(document.value());
-    if (findDocumentId == document) findDocumentId.reset();
+    if (findDocumentId == document) closeFind();
     for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
         it = it->second == document ? liveDiffDocuments.erase(it)
                                     : std::next(it);
@@ -1400,6 +1400,217 @@ void Editor::rebuildFileCandidates() {
         buildWorkspaceFileIndex(root, *workspaceIgnore, options).candidates);
 }
 
+namespace {
+
+bool findPromptActive(Editor const& editor) {
+    auto const& request = editor.screen.prompt().request();
+    return editor.findView().open && request &&
+           (request->kind == PromptKind::Find ||
+            request->kind == PromptKind::Replace);
+}
+
+bool replacePromptActive(Editor const& editor) {
+    auto const& request = editor.screen.prompt().request();
+    return editor.findView().open && editor.findView().replaceMode &&
+           request && request->kind == PromptKind::Replace;
+}
+
+std::vector<PromptToggle> findOptionToggles(FindOptions const& options) {
+    return {{"find.toggle_case", "case", options.caseSensitive, 9},
+            {"find.toggle_whole_word", "word", options.wholeWord, 9},
+            {"find.toggle_regex", "regex", options.regex, 10}};
+}
+
+std::optional<ByteRange> findSelectionRange(SelectionSet const& selections) {
+    auto const& selected = selections.primary();
+    if (selected.isCaret()) return std::nullopt;
+    return ByteRange{selected.lower().byteOffset, selected.upper().byteOffset};
+}
+
+} // namespace
+
+void Editor::closeFind() {
+    findReplace.close();
+    findDocumentId.reset();
+    if (auto const& request = screen.prompt().request();
+        request && (request->kind == PromptKind::Find ||
+                    request->kind == PromptKind::Replace)) {
+        (void)screen.prompt().cancel();
+    }
+}
+
+void Editor::revealActiveFindMatch() {
+    auto const& state = findView();
+    if (!state.open || !state.activeMatch ||
+        *state.activeMatch >= state.matches.size()) return;
+    auto const& match = state.matches[*state.activeMatch];
+    auto const& text = activeText();
+    auto anchor = resolveSelectionPosition(text, match.begin);
+    auto active = resolveSelectionPosition(text, match.end);
+    if (!anchor || !active) return;
+    selection.selections =
+        SelectionSet{std::vector<Selection>{Selection{*anchor, *active}}};
+}
+
+OperationResult Editor::executeFindReplaceCommand(FindReplaceCommand command) {
+    if (activeTabIsLiveDiff() &&
+        (command == FindReplaceCommand::ReplaceOpen ||
+         command == FindReplaceCommand::ReplaceCurrent ||
+         command == FindReplaceCommand::ReplaceAll)) {
+        return failure("replace commands are unavailable in diff mode");
+    }
+    auto* document = activeDocument();
+    auto id = activeDocumentId();
+    if (!document && command != FindReplaceCommand::FindClose &&
+        command != FindReplaceCommand::FindNext &&
+        command != FindReplaceCommand::FindPrevious) {
+        return failure("no active document");
+    }
+    auto const query = findView().query;
+    auto const options = findView().options;
+    auto const range = document ? findSelectionRange(selection.selections)
+                                : std::nullopt;
+    switch (command) {
+        case FindReplaceCommand::FindOpen:
+        case FindReplaceCommand::FindWordUnderCursor:
+        case FindReplaceCommand::ReplaceOpen: {
+            auto needle = query;
+            auto searchOptions = options;
+            auto searchRange = range;
+            if (command == FindReplaceCommand::FindWordUnderCursor) {
+                needle = selection.selections.primary().wordOrCoveredText(
+                    document->snapshot().text);
+                if (needle.empty()) return success();
+                // Search the selected word literally in the whole document.
+                searchOptions.regex = false;
+                searchOptions.selectionOnly = false;
+                searchRange.reset();
+            }
+            auto const replacing = command == FindReplaceCommand::ReplaceOpen;
+            PromptRequest prompt{
+                replacing ? PromptKind::Replace : PromptKind::Find,
+                replacing ? "replace" : "find",
+                {{"find.query", "find query", PromptEditState{needle}}},
+                findOptionToggles(searchOptions),
+                PromptMatchCount{"find.count", "match count", ""}};
+            if (replacing) {
+                prompt.inputs.push_back(
+                    {"replace.replacement", "replace with",
+                     PromptEditState{std::string{}}});
+            }
+            auto opened = openGenericPrompt(screen.prompt(), std::move(prompt));
+            if (!opened.accepted()) return failure(opened.error->message);
+            auto snapshot = document->snapshot();
+            if (replacing) {
+                findReplace.openReplace(
+                    snapshot, FindRequest{needle, searchOptions, searchRange});
+            } else {
+                findReplace.open(
+                    snapshot, FindRequest{needle, searchOptions, searchRange});
+            }
+            findDocumentId = id;
+            revealActiveFindMatch();
+            return success();
+        }
+        case FindReplaceCommand::FindClose:
+            closeFind();
+            return success();
+        case FindReplaceCommand::FindNext:
+        case FindReplaceCommand::FindPrevious:
+            if (!findPromptActive(*this)) return success();
+            if (command == FindReplaceCommand::FindNext) {
+                findReplace.next();
+            } else {
+                findReplace.previous();
+            }
+            revealActiveFindMatch();
+            return success();
+        case FindReplaceCommand::FindToggleCase:
+        case FindReplaceCommand::FindToggleWholeWord:
+        case FindReplaceCommand::FindToggleRegex:
+        case FindReplaceCommand::FindToggleSelection: {
+            if (!findPromptActive(*this)) return success();
+            auto snapshot = document->snapshot();
+            switch (command) {
+                case FindReplaceCommand::FindToggleCase:
+                    findReplace.toggleCase(snapshot);
+                    break;
+                case FindReplaceCommand::FindToggleWholeWord:
+                    findReplace.toggleWholeWord(snapshot);
+                    break;
+                case FindReplaceCommand::FindToggleRegex:
+                    findReplace.toggleRegex(snapshot);
+                    break;
+                case FindReplaceCommand::FindToggleSelection:
+                    findReplace.toggleSelection(snapshot, range);
+                    break;
+                default: break;
+            }
+            findDocumentId = id;
+            return success();
+        }
+        case FindReplaceCommand::ReplaceCurrent:
+        case FindReplaceCommand::ReplaceAll: {
+            if (!replacePromptActive(*this)) return success();
+            auto replacement = findView().replacement;
+            auto before = selection.selections;
+            auto after = selection.selections;
+            auto result = command == FindReplaceCommand::ReplaceCurrent
+                ? findReplace.replaceCurrent(*document, historyFor(*id), before,
+                                             after, replacement, 0)
+                : findReplace.replaceAll(*document, historyFor(*id), before,
+                                         after, replacement, 0);
+            if (!result.accepted()) return failure(result.message);
+            findDocumentId = id;
+            clampSelectionsToActiveDocument();
+            refreshSyntax();
+            auto tabsResult = updateTabsFor(*id);
+            revealActiveFindMatch();
+            return tabsResult;
+        }
+    }
+    return failure("unknown find/replace command");
+}
+
+FindReplaceOperationResult Editor::applyFindQueryLocked(
+    PromptEditState query) {
+    auto* document = activeDocument();
+    if (!document) {
+        return {FindReplaceError::DocumentRejected, 0, "no active document"};
+    }
+    auto const snapshot = document->snapshot();
+    auto const& request = screen.prompt().request();
+    if (!request || (request->kind != PromptKind::Find &&
+                     request->kind != PromptKind::Replace)) {
+        return {FindReplaceError::DocumentRejected, snapshot.revision,
+                "no active find prompt"};
+    }
+    auto const range = findSelectionRange(selection.selections);
+    auto text = query.text();
+    auto promptResult = screen.prompt().updateValue(0, std::move(query));
+    if (!promptResult.accepted()) {
+        return {FindReplaceError::DocumentRejected, snapshot.revision,
+                promptResult.error->message};
+    }
+    findReplace.updateQuery(snapshot, std::move(text), range);
+    findDocumentId = activeDocumentId();
+    revealActiveFindMatch();
+    return {};
+}
+
+FindReplaceOperationResult Editor::applyReplacementLocked(
+    PromptEditState replacement) {
+    if (!replacePromptActive(*this)) return {};
+    auto text = replacement.text();
+    auto promptResult = screen.prompt().updateValue(1, std::move(replacement));
+    if (!promptResult.accepted()) {
+        return {FindReplaceError::DocumentRejected, 0,
+                promptResult.error->message};
+    }
+    findReplace.updateReplacement(std::move(text));
+    return {};
+}
+
 void Editor::reconcileFindDocument() {
     if (!findReplace.viewState().open) {
         findDocumentId.reset();
@@ -1411,13 +1622,7 @@ void Editor::reconcileFindDocument() {
         !active || active != findDocumentId || document == nullptr ||
         document->revision() != findReplace.viewState().sourceRevision;
     if (!stale) return;
-    findReplace.close();
-    if (auto const& request = screen.prompt().request();
-        request && (request->kind == PromptKind::Find ||
-                    request->kind == PromptKind::Replace)) {
-        (void)screen.prompt().cancel();
-    }
-    findDocumentId.reset();
+    closeFind();
 }
 
 void Editor::refreshSyntax(std::vector<SyntaxEdit> edits) {
@@ -1562,13 +1767,13 @@ WorkspaceSearchState Editor::workspaceSearch(std::string query) {
 
 FindReplaceOperationResult Editor::updateFindQuery(PromptEditState query) {
     std::lock_guard g{operationMutex};
-    return applyFindQuery(*this, std::move(query));
+    return applyFindQueryLocked(std::move(query));
 }
 
 FindReplaceOperationResult Editor::updateReplacement(
     PromptEditState replacement) {
     std::lock_guard g{operationMutex};
-    return applyReplacement(*this, std::move(replacement));
+    return applyReplacementLocked(std::move(replacement));
 }
 
 OperationResult Editor::saveSession() {

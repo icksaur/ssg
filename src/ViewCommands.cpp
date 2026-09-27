@@ -103,19 +103,19 @@ OperationResult promptCommand(Editor& runtime, std::string_view id) {
                 auto command = request->kind == PromptKind::Replace
                                    ? FindReplaceCommand::ReplaceCurrent
                                    : FindReplaceCommand::FindNext;
-                return executeFindReplaceCommand(runtime, command);
+                return runtime.executeFindReplaceCommand(command);
             }
             if (id == "prompt.cancel") {
-                return executeFindReplaceCommand(
-                    runtime, FindReplaceCommand::FindClose);
+                return runtime.executeFindReplaceCommand(
+                    FindReplaceCommand::FindClose);
             }
             if (id == "prompt.next") {
-                return executeFindReplaceCommand(
-                    runtime, FindReplaceCommand::FindNext);
+                return runtime.executeFindReplaceCommand(
+                    FindReplaceCommand::FindNext);
             }
             if (id == "prompt.previous") {
-                return executeFindReplaceCommand(
-                    runtime, FindReplaceCommand::FindPrevious);
+                return runtime.executeFindReplaceCommand(
+                    FindReplaceCommand::FindPrevious);
             }
             return failure("command is not valid for a find/replace prompt");
         }

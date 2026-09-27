@@ -250,14 +250,14 @@ TEST(externalActionReconcilesPresenceAndFindOnReload) {
         {ssg::DiffFileId{"external:missing.txt"},
          ssg::ExternalAction::Reload});
     ASSERT_FALSE(rejected.accepted());
-    ASSERT_TRUE(session.runtime->findReplace.viewState().open);
+    ASSERT_TRUE(session.runtime->findView().open);
     ASSERT_TRUE(session.runtime->screen.captureExternalFocus());
 
     const auto file = externalFiles(*session.runtime).front().id;
     ASSERT_TRUE(externalAction(
         *session.runtime, {file, ssg::ExternalAction::Reload}).accepted());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
-    ASSERT_FALSE(session.runtime->findReplace.viewState().open);
+    ASSERT_FALSE(session.runtime->findView().open);
     ASSERT_EQ(session.runtime->screen.effectiveFocus(),
               ssg::FocusTarget::Editor);
     ASSERT_FALSE(session.runtime->screen.captureExternalFocus());
