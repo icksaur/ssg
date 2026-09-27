@@ -1,5 +1,7 @@
 # SSG
 
+![screenshot](ssg.png)
+
 A **terminal text editor** — multiple cursors, a command palette, a
 fuzzy file finder, find-and-replace, syntax highlighting, mouse support, and
 themes — with the editing conveniences you expect from Sublime Text or VS Code,
