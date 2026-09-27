@@ -457,7 +457,7 @@ ClientInputResult executeInputRoute(Editor& editor, RouteDispatch route,
 
 ClientInputResult executeInputRoute(Editor& editor, InvokeExternalAction route,
                                     RoutedInput routed) {
-    auto result = invokeExternalAction(editor, route.invocation);
+    auto result = editor.executeExternalAction(route.invocation);
     if (!result.accepted) {
         if (routed.clearGestureOnRejection) {
             editor.documentPointerGesture.clear();
@@ -1019,6 +1019,69 @@ const TabState* Editor::activeTabState() const {
                               });
     if (found == view.tabs.end()) return nullptr;
     return &*found;
+}
+
+OperationResult Editor::executeExternalAction(
+    ExternalActionInvocation const& invocation) {
+    return executeExternalAction(invocation.action, invocation.fileId);
+}
+
+OperationResult Editor::executeExternalAction(ExternalAction action) {
+    return executeExternalAction(action, std::nullopt);
+}
+
+OperationResult Editor::executeExternalAction(
+    ExternalAction action, std::optional<DiffFileId> requestedFile) {
+    const auto view = external.viewState();
+    if (!requestedFile && !view.selected) {
+        return failure("no external modification is selected");
+    }
+    const DiffFileId file = requestedFile ? *requestedFile : *view.selected;
+    const auto selected = std::find_if(
+        view.files.begin(), view.files.end(),
+        [&](const ExternalDocumentView& candidate) {
+            return candidate.id == file;
+        });
+    if (selected == view.files.end() ||
+        std::none_of(selected->actions.begin(), selected->actions.end(),
+                     [&](const ExternalActionAffordance& offered) {
+                         return offered.action == action;
+                     })) {
+        return failure("external action is unavailable");
+    }
+
+    if (requestedFile) {
+        (void)external.selectFile(file);
+    }
+
+    if (action == ExternalAction::Reload) {
+        const auto document =
+            workspace.documentForPath(selected->path.generic_string());
+        const auto result = external.resolveReload(file);
+        if (!result.accepted()) {
+            return failure("external modification reload failed");
+        }
+        if (!document) {
+            return failure("external modification document is unavailable");
+        }
+        refreshDocumentSyntax(*document);
+        return updateTabsFor(*document);
+    }
+    if (action == ExternalAction::KeepBuffer) {
+        const auto result = external.keepBuffer(file);
+        return result.accepted()
+                   ? success()
+                   : failure("external modification command failed");
+    }
+
+    auto opened = external.openDiff(file);
+    if (!opened.accepted() || !opened.target) {
+        return failure("external diff target is unavailable");
+    }
+    const auto diffFile = diff.file(opened.target->id);
+    if (!diffFile) return failure("external diff is unavailable");
+    return openOrFocusLiveDiffTab(diffFile->get(),
+                                  NavigationClass::Programmatic);
 }
 
 OperationResult Editor::openOrFocusLiveDiffTab(
@@ -1628,11 +1691,16 @@ void Editor::reconcileFindDocument() {
 void Editor::refreshSyntax(std::vector<SyntaxEdit> edits) {
     auto id = activeDocumentId();
     if (!id) return;
-    auto& model = syntaxFor(*id);
-    auto const* document = activeDocument();
+    refreshDocumentSyntax(*id, std::move(edits));
+}
+
+void Editor::refreshDocumentSyntax(FileDocumentId documentId,
+                                   std::vector<SyntaxEdit> edits) {
+    auto& model = syntaxFor(documentId);
+    auto const* document = workspace.tryDocument(documentId);
     auto text = document ? document->snapshot().text : std::string{};
     auto revision = document ? document->revision() : std::uint64_t{0};
-    auto language = languageFor(*id);
+    auto language = languageFor(documentId);
     if (!model.hasParser()) {
         (void)model.parse(revision, std::move(language), std::move(text),
                           std::move(edits));
@@ -1641,7 +1709,7 @@ void Editor::refreshSyntax(std::vector<SyntaxEdit> edits) {
     auto prepared = model.request(revision, std::move(language), std::move(text),
                                   std::move(edits));
     if (prepared.accepted()) {
-        syntaxWorker.submit({*id, std::move(prepared.request)});
+        syntaxWorker.submit({documentId, std::move(prepared.request)});
     }
 }
 

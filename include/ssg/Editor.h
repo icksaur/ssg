@@ -126,8 +126,6 @@ void registerAllCommands(Commands& commands, Editor& runtime);
 [[nodiscard]] OperationResult closeTabById(Editor& runtime, TabId tabId);
 [[nodiscard]] OperationResult activateTreeNode(Editor& runtime,
                                                 TreeNodeId nodeId);
-[[nodiscard]] OperationResult invokeExternalAction(
-    Editor& runtime, ExternalActionInvocation const& invocation);
 [[nodiscard]] OperationResult applyUiNodeActivation(Editor& runtime,
                                                     UiNodeId const& nodeId);
 [[nodiscard]] OperationResult applyThemeSet(Editor& runtime,
@@ -218,6 +216,9 @@ public:
         PromptEditState query);
     [[nodiscard]] FindReplaceOperationResult applyReplacementLocked(
         PromptEditState replacement);
+    [[nodiscard]] OperationResult executeExternalAction(
+        ExternalActionInvocation const& invocation);
+    [[nodiscard]] OperationResult executeExternalAction(ExternalAction action);
     [[nodiscard]] FindReplaceViewState const& findView() const noexcept {
         return findReplace.viewState();
     }
@@ -451,6 +452,10 @@ public:
         return external.hasPending();
     }
 private:
+    [[nodiscard]] OperationResult executeExternalAction(
+        ExternalAction action, std::optional<DiffFileId> requestedFile);
+    void refreshDocumentSyntax(FileDocumentId document,
+                               std::vector<SyntaxEdit> edits = {});
     void reconcileFindDocument();
 public:
     // The projected and command-bound header/footer status fields the UI tree

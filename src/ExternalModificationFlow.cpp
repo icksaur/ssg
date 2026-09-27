@@ -113,97 +113,11 @@ ExternalActionAffordance externalActionAffordance(ExternalAction action) {
     throw std::invalid_argument("unknown external action");
 }
 
-OperationResult invokeExternalAction(
-    Editor& editor, ExternalActionInvocation const& invocation) {
-    if (!editor.external.hasFile(invocation.fileId)) {
-        return failure("external change is unavailable");
-    }
-    (void)editor.external.selectFile(invocation.fileId);
-    const auto view = editor.external.viewState();
-    if (!view.selected) return failure("no external modification is selected");
-    const DiffFileId file = *view.selected;
-    const auto selected = std::find_if(
-        view.files.begin(), view.files.end(),
-        [&](const ExternalDocumentView& candidate) {
-            return candidate.id == file;
-        });
-    if (selected == view.files.end() ||
-        std::none_of(selected->actions.begin(), selected->actions.end(),
-                     [&](const ExternalActionAffordance& offered) {
-                         return offered.action == invocation.action;
-                     })) {
-        return success();
-    }
-    if (invocation.action == ExternalAction::Reload) {
-        const auto result = editor.external.resolveReload(file);
-        if (!result.accepted()) {
-            return failure("external modification reload failed");
-        }
-        editor.refreshSyntax();
-        return success();
-    }
-    if (invocation.action == ExternalAction::KeepBuffer) {
-        const auto result = editor.external.keepBuffer(file);
-        return result.accepted() ? success()
-                                 : failure("external modification command failed");
-    }
-    auto opened = editor.external.openDiff(file);
-    if (!opened.accepted() || !opened.target) {
-        return failure("external diff target is unavailable");
-    }
-    const auto diffFile = editor.diff.file(opened.target->id);
-    if (!diffFile) return failure("external diff is unavailable");
-    return editor.openOrFocusLiveDiffTab(diffFile->get(),
-                                          NavigationClass::Programmatic);
-}
-
 void bindExternalModificationCommands(Commands& commands, Editor& editor) {
-    auto applyAction = [&editor](
-                           ExternalAction action) -> OperationResult {
-        const auto view = editor.external.viewState();
-        if (!view.selected) {
-            return failure("no external modification is selected");
-        }
-        const DiffFileId file = *view.selected;
-        const auto selected = std::find_if(
-            view.files.begin(), view.files.end(),
-            [&](const ExternalDocumentView& candidate) {
-                return candidate.id == file;
-            });
-        if (selected == view.files.end() ||
-            std::none_of(selected->actions.begin(), selected->actions.end(),
-                         [&](const ExternalActionAffordance& offered) {
-                             return offered.action == action;
-                         })) {
-            return success();
-        }
-        if (action == ExternalAction::Reload) {
-            const auto result = editor.external.resolveReload(file);
-            if (!result.accepted()) {
-                return failure("external modification reload failed");
-            }
-            editor.refreshSyntax();
-            return success();
-        }
-        if (action == ExternalAction::KeepBuffer) {
-            const auto result = editor.external.keepBuffer(file);
-            return result.accepted()
-                       ? success()
-                       : failure("external modification command failed");
-        }
-        auto opened = editor.external.openDiff(file);
-        if (!opened.accepted() || !opened.target) {
-            return failure("external diff target is unavailable");
-        }
-        const auto diffFile = editor.diff.file(opened.target->id);
-        if (!diffFile) return failure("external diff is unavailable");
-        return editor.openOrFocusLiveDiffTab(
-            diffFile->get(), NavigationClass::Programmatic);
-    };
     auto action = [&](std::string id, std::string label,
                       ExternalAction which) {
-        commands.add(std::move(id), std::move(label), [applyAction, which] {
-            return applyAction(which);
+        commands.add(std::move(id), std::move(label), [&editor, which] {
+            return editor.executeExternalAction(which);
         });
     };
     action("external.reload", "External Reload", ExternalAction::Reload);

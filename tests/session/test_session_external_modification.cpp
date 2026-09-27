@@ -77,6 +77,7 @@ struct Session {
     std::filesystem::path root;
     ssg::EditorCreateResult created;
     ssg::Editor* runtime = nullptr;
+    ssg::FileDocumentId document;
 
     static Session open(std::string_view name, std::string_view diskContent,
                         bool dirty) {
@@ -88,6 +89,7 @@ struct Session {
         (void)ssg::applyFilePathCompletion(*session.runtime,
                                           ssg::PromptCompletion::FileOpen,
                                           "note.txt");
+        session.document = *session.runtime->activeDocumentId();
         if (dirty) {
             (void)ssg::test::typeText(*session.runtime, "!");
         }
@@ -121,6 +123,119 @@ ssg::CommandResult externalAction(
     if (result.command) return std::move(*result.command);
     return {ssg::CommandError::HandlerFailed,
             "external action did not produce a result", {}};
+}
+
+struct ExternalActionOutcome {
+    bool accepted = false;
+    std::string message;
+    std::string documentText;
+    std::uint64_t documentRevision = 0;
+    std::uint64_t syntaxRevision = 0;
+    ssg::ExternalModificationViewState external;
+    ssg::DiffViewState diff;
+    ssg::TabViewState tabs;
+    bool activeLiveDiff = false;
+    ssg::FocusTarget focus = ssg::FocusTarget::Editor;
+
+    friend bool operator==(const ExternalActionOutcome&,
+                           const ExternalActionOutcome&) = default;
+};
+
+ExternalActionOutcome invokeThrough(
+    Session& session, ssg::ExternalAction action, bool typed) {
+    const auto file = externalFiles(*session.runtime).front().id;
+    ASSERT_TRUE(session.runtime->dispatch("external.focus").accepted());
+    const auto result =
+        typed
+            ? externalAction(*session.runtime, {file, action})
+            : session.runtime->dispatch(
+                  ssg::externalActionAffordance(action).command);
+    const auto document =
+        session.runtime->workspace.document(session.document).snapshot();
+    return {result.accepted(),
+            result.message,
+            document.text,
+            document.revision,
+            session.runtime->syntaxFor(session.document).viewState().revision(),
+            session.runtime->external.viewState(),
+            session.runtime->diff.viewState(),
+            session.runtime->tabs.viewState(),
+            activeTabIsLiveDiff(*session.runtime),
+            session.runtime->screen.effectiveFocus()};
+}
+
+ExternalActionOutcome offeredActionOutcome(
+    std::string_view name, ssg::ExternalAction action, bool typed) {
+    auto session = Session::open(name, "hi\n", true);
+    writeFile(session.workspacePath("note.txt"), "external\n");
+    session.runtime->external.ingest(
+        {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
+    return invokeThrough(session, action, typed);
+}
+
+ExternalActionOutcome unavailableReloadOutcome(
+    std::string_view name, bool typed) {
+    auto session = Session::open(name, "hi\n", true);
+    std::filesystem::remove(session.workspacePath("note.txt"));
+    session.runtime->external.ingest(
+        {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
+    return invokeThrough(session, ssg::ExternalAction::Reload, typed);
+}
+
+TEST(typedAndCommandExternalActionsHaveEquivalentEffects) {
+    const std::array actions{
+        ssg::ExternalAction::Reload,
+        ssg::ExternalAction::KeepBuffer,
+        ssg::ExternalAction::OpenDiff,
+    };
+    const std::array names{"reload", "keep", "diff"};
+    for (std::size_t index = 0; index < actions.size(); ++index) {
+        const auto typed = offeredActionOutcome(
+            std::string{"paired_typed_"} + names[index], actions[index], true);
+        const auto command = offeredActionOutcome(
+            std::string{"paired_command_"} + names[index], actions[index],
+            false);
+        ASSERT_EQ(typed, command);
+    }
+}
+
+TEST(typedAndCommandUnavailableExternalActionsRejectIdentically) {
+    const auto typed =
+        unavailableReloadOutcome("paired_unavailable_typed", true);
+    const auto command =
+        unavailableReloadOutcome("paired_unavailable_command", false);
+
+    ASSERT_FALSE(typed.accepted);
+    ASSERT_EQ(typed, command);
+}
+
+TEST(rejectedTypedExternalActionPreservesTheSelectedFile) {
+    auto session = Session::open("rejected_preserves_selection", "hi\n", true);
+    writeFile(session.workspacePath("other.txt"), "other\n");
+    ASSERT_TRUE(ssg::applyFilePathCompletion(
+                    *session.runtime, ssg::PromptCompletion::FileOpen,
+                    "other.txt")
+                    .accepted);
+    ASSERT_TRUE(ssg::test::typeText(*session.runtime, "!").accepted());
+
+    writeFile(session.workspacePath("note.txt"), "external note\n");
+    session.runtime->external.ingest(
+        {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
+    auto external = session.runtime->external.viewState();
+    ASSERT_EQ(external.files.size(), 1U);
+    const auto selected = *external.selected;
+
+    std::filesystem::remove(session.workspacePath("other.txt"));
+    session.runtime->external.ingest(
+        {watchEvent(ssg::WatchEventKind::Remove, "other.txt", 2)});
+    const auto other = ssg::externalDiffFileId("other.txt");
+    const auto rejected = externalAction(
+        *session.runtime, {other, ssg::ExternalAction::Reload});
+
+    ASSERT_FALSE(rejected.accepted());
+    external = session.runtime->external.viewState();
+    ASSERT_TRUE(external.selected.has_value());
+    ASSERT_EQ(*external.selected, selected);
 }
 
 TEST(anOpenDocumentChangedOnDiskPopulatesTheExternalSection) {
@@ -804,11 +919,10 @@ TEST(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile) {
     auto rejectedAction = session.runtime->input(ssg::ExternalActionPointerInput{
             {files[0].id, ssg::ExternalAction::Reload}});
     ASSERT_TRUE(rejectedAction.command.has_value());
-    ASSERT_TRUE(rejectedAction.command->accepted());
+    ASSERT_FALSE(rejectedAction.command->accepted());
     ASSERT_EQ(externalFiles(*session.runtime).size(), 1U);
 
-    // The unoffered action is a guarded no-op: the section is untouched and the
-    // buffer preserved.
+    // The unoffered action is rejected without changing the section or buffer.
     files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
     ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
@@ -850,6 +964,9 @@ TEST(aHostRoutesExternalKeysInTheExternalContextWhenExternalFocusHeld) {
 }  // namespace
 
 SSG_TEST_SUITE(test_session_external_modification) {
+    RUN(typedAndCommandExternalActionsHaveEquivalentEffects);
+    RUN(typedAndCommandUnavailableExternalActionsRejectIdentically);
+    RUN(rejectedTypedExternalActionPreservesTheSelectedFile);
     RUN(anOpenDocumentChangedOnDiskPopulatesTheExternalSection);
     RUN(anOpenDocumentRemovedOnDiskPublishesRemovedStatusAndItsActions);
     RUN(aChangeToANonOpenFileRaisesNoExternalSection);
