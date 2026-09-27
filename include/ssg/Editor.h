@@ -135,6 +135,7 @@ void registerAllCommands(Commands& commands, Editor& runtime);
 [[nodiscard]] OperationResult applyKeymapUnbind(Editor& runtime,
                                                 KeymapUnbindArguments arguments);
 
+// Coordinates session models and owns operations that maintain cross-model state.
 struct Editor final {
 private:
     friend EditorCreateResult createEditor(EditorConfig config);
