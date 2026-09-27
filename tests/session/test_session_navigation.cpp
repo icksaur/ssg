@@ -2357,6 +2357,185 @@ std::uint64_t caretByteOffset(ssg::Editor& runtime) {
     return runtime.selection.selections.primary().active.byteOffset.value();
 }
 
+struct TreeActivationOutcome {
+    ssg::CommandError error = ssg::CommandError::None;
+    std::string message;
+    std::optional<ssg::ViewAction> viewAction;
+    ssg::TreeViewState tree;
+    ssg::TabViewState tabs;
+    std::optional<std::string> activePath;
+    std::optional<ssg::SelectionViewState> selection;
+    ssg::FocusTarget focus = ssg::FocusTarget::Editor;
+    ssg::FollowMode follow = ssg::FollowMode::Following;
+
+    friend bool operator==(const TreeActivationOutcome&,
+                           const TreeActivationOutcome&) = default;
+};
+
+TreeActivationOutcome activateTreeThrough(ssg::Editor& runtime,
+                                          ssg::TreeNodeId node,
+                                          bool pointer) {
+    ssg::CommandResult result;
+    if (pointer) {
+        result = ssg::test::dispatchInput(
+            runtime, ssg::TreePointerInput{std::move(node)});
+    } else {
+        ASSERT_TRUE(runtime.dispatch("panel.focus").accepted());
+        ASSERT_TRUE(runtime.tree.select(node));
+        result = runtime.dispatch("tree.activate");
+    }
+    return {result.error,
+            std::move(result.message),
+            std::move(result.viewAction),
+            runtime.tree.viewState(),
+            runtime.tabs.viewState(),
+            activeSavedPath(runtime),
+            runtime.selection,
+            runtime.screen.effectiveFocus(),
+            followMode(runtime)};
+}
+
+std::unique_ptr<ssg::Editor> treeActivationRuntime(
+    std::string_view directoryName) {
+    auto root = testRuntimePath(std::filesystem::path{directoryName});
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace" / "folder");
+    std::filesystem::create_directories(root / "recovery");
+    std::ofstream{root / "workspace" / "needle.txt"}
+        << "zero\nneedle here\n";
+    std::ofstream{root / "workspace" / "folder" / "nested.txt"} << "nested\n";
+    auto created = ssg::createEditor(
+        {.cwd = root / "workspace",
+         .recoveryRoot = root / "recovery",
+         .enableGitDiffWorker = false,
+         .enableFilesystemWatcher = false});
+    if (!created.accepted()) return nullptr;
+    return std::move(created.session);
+}
+
+TreeActivationOutcome filesystemActivationOutcome(bool pointer,
+                                                  bool directory) {
+    auto runtime = treeActivationRuntime(
+        pointer ? "tree_activation_files_pointer"
+                : "tree_activation_files_keyboard");
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return {};
+    ASSERT_TRUE(runtime->dispatch("panel.show_files").accepted());
+    return activateTreeThrough(
+        *runtime,
+        ssg::TreeNodeId{directory ? "filesystem:folder"
+                                  : "filesystem:needle.txt"},
+        pointer);
+}
+
+TreeActivationOutcome gitActivationOutcome(bool pointer) {
+    auto runtime = treeActivationRuntime(
+        pointer ? "tree_activation_git_pointer"
+                : "tree_activation_git_keyboard");
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return {};
+    ASSERT_TRUE(runtime->dispatch("follow_edits.pause").accepted());
+    ASSERT_TRUE(ssg::test::applyGitDiffScan(
+                    *runtime,
+                    {.revision = std::uint64_t{1},
+                     .baselineIdentity = "head:index",
+                     .files = {{.id = ssg::DiffFileId{"needle-diff"},
+                                .path = "needle.txt",
+                                .baselineContent = std::string{"before\n"},
+                                .workingContent =
+                                    std::string{"zero\nneedle here\n"}}}})
+                    .accepted());
+    ASSERT_TRUE(runtime->dispatch("panel.show_git_status").accepted());
+    const auto tree = runtime->tree.viewState();
+    const auto provider = findProvider(tree, ssg::TreeProviderKind::Git);
+    ASSERT_TRUE(provider != nullptr);
+    if (!provider || provider->nodes.empty()) return {};
+    return activateTreeThrough(*runtime, provider->nodes.front().node.id,
+                               pointer);
+}
+
+TreeActivationOutcome searchActivationOutcome(bool pointer) {
+    auto runtime = treeActivationRuntime(
+        pointer ? "tree_activation_search_pointer"
+                : "tree_activation_search_keyboard");
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return {};
+    ASSERT_TRUE(
+        ssg::test::openFile(*runtime, std::string{"needle.txt"}).accepted());
+    const auto opened = runtime->input(ssg::ClientKeyInput{
+        ssg::KeyStroke{.code = ssg::KeyCode::KeyF,
+                       .mod = true,
+                       .shift = true},
+        {}});
+    ASSERT_EQ(opened.outcome, ssg::ClientInputOutcome::Dispatched);
+    const auto typed =
+        runtime->input(ssg::ClientKeyInput{{}, "needle"});
+    ASSERT_EQ(typed.outcome, ssg::ClientInputOutcome::Dispatched);
+    const auto submitted = runtime->input(ssg::ClientKeyInput{
+        ssg::KeyStroke{.code = ssg::KeyCode::Enter}, {}});
+    ASSERT_EQ(submitted.outcome, ssg::ClientInputOutcome::Dispatched);
+    while (runtime->workspaceSearchPending()) {
+        runtime->advanceWorkspaceSearch();
+    }
+    const auto tree = runtime->tree.viewState();
+    const auto provider = findProvider(tree, ssg::TreeProviderKind::Search);
+    ASSERT_TRUE(provider != nullptr);
+    ASSERT_TRUE(provider != nullptr && !provider->nodes.empty());
+    if (!provider || provider->nodes.empty()) return {};
+    return activateTreeThrough(*runtime, provider->nodes.front().node.id,
+                               pointer);
+}
+
+TEST(keyboardAndPointerTreeActivationAreProviderEquivalent) {
+    const auto directoryKeyboard = filesystemActivationOutcome(false, true);
+    const auto directoryPointer = filesystemActivationOutcome(true, true);
+    ASSERT_EQ(directoryKeyboard.error, ssg::CommandError::None);
+    const auto filesystem =
+        findProvider(directoryKeyboard.tree, ssg::TreeProviderKind::Filesystem);
+    ASSERT_TRUE(filesystem != nullptr);
+    ASSERT_TRUE(filesystem != nullptr &&
+                std::ranges::any_of(
+                    filesystem->nodes, [](const ssg::TreeNodeView& node) {
+                        return node.node.workspacePath ==
+                               std::optional<std::string>{"folder/nested.txt"};
+                    }));
+    ASSERT_EQ(directoryKeyboard, directoryPointer);
+
+    const auto fileKeyboard = filesystemActivationOutcome(false, false);
+    const auto filePointer = filesystemActivationOutcome(true, false);
+    ASSERT_EQ(fileKeyboard.error, ssg::CommandError::None);
+    ASSERT_EQ(fileKeyboard.activePath,
+              std::optional<std::string>{"needle.txt"});
+    ASSERT_EQ(fileKeyboard.focus, ssg::FocusTarget::Editor);
+    ASSERT_EQ(fileKeyboard, filePointer);
+
+    const auto gitKeyboard = gitActivationOutcome(false);
+    const auto gitPointer = gitActivationOutcome(true);
+    ASSERT_EQ(gitKeyboard.error, ssg::CommandError::None);
+    ASSERT_EQ(countTabsOfKind(gitKeyboard.tabs, ssg::TabKind::LiveDiff),
+              std::size_t{1});
+    ASSERT_EQ(gitKeyboard.follow, ssg::FollowMode::Paused);
+    ASSERT_EQ(gitKeyboard, gitPointer);
+
+    const auto searchKeyboard = searchActivationOutcome(false);
+    const auto searchPointer = searchActivationOutcome(true);
+    ASSERT_EQ(searchKeyboard.error, ssg::CommandError::None);
+    ASSERT_EQ(searchKeyboard.activePath,
+              std::optional<std::string>{"needle.txt"});
+    ASSERT_TRUE(searchKeyboard.viewAction.has_value());
+    ASSERT_TRUE(
+        searchKeyboard.viewAction &&
+        std::holds_alternative<ssg::RevealSelection>(
+            *searchKeyboard.viewAction));
+    ASSERT_TRUE(searchKeyboard.selection.has_value());
+    if (searchKeyboard.selection) {
+        ASSERT_EQ(searchKeyboard.selection->selections.primary()
+                      .active.byteOffset.value(),
+                  std::uint64_t{5});
+    }
+    ASSERT_EQ(searchKeyboard, searchPointer);
+}
+
 TEST(filesTreeLoadsOneLevelBelowVisibleDirectories) {
     auto root = uniqueRoot();
     auto workspace = root / "workspace";
@@ -2523,6 +2702,7 @@ TEST(gotoBackAndForwardApplyTransitions) {
 } // namespace
 
 SSG_TEST_SUITE(test_session_navigation) {
+    RUN(keyboardAndPointerTreeActivationAreProviderEquivalent);
     RUN(filesTreeLoadsOneLevelBelowVisibleDirectories);
     RUN(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow);
     RUN(followPauseQueuesMultipleChangesAndResumeAdoptsTheNewest);

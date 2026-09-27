@@ -498,7 +498,7 @@ ClientInputResult executeInputRoute(Editor& editor, ActivateUiNode route,
 
 ClientInputResult executeInputRoute(Editor& editor, ActivateTreeNode route,
                                     RoutedInput routed) {
-    auto result = activateTreeNode(editor, route.nodeId);
+    auto result = editor.activateTreeNode(route.nodeId);
     if (!result.accepted) {
         if (routed.clearGestureOnRejection) {
             editor.documentPointerGesture.clear();

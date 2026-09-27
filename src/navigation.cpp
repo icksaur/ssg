@@ -185,53 +185,10 @@ OperationResult treeCommand(Editor& runtime, std::string_view id) {
     if (id == "tree.select_next") { (void)runtime.tree.selectNext(); return success(); }
     if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); return success(); }
     if (id == "tree.activate") {
-        const auto binding = runtime.tree.activeProviderBinding();
-        auto selected = runtime.tree.selectedNode();
+        const auto selected = runtime.tree.selectedNode();
         if (!selected) return failure("no tree node is selected");
-        if (selected->expandable) {
-            if (!binding) {
-                return failure("tree node is not expandable");
-            }
-            return runtime.toggleTreeExpanded(binding->id, selected->id);
-        }
-        if (binding && binding->kind == TreeProviderKind::Git &&
-            selected->workspacePath) {
-            const auto diffView = runtime.diff.viewState();
-            auto file = std::find_if(
-                diffView.files.begin(), diffView.files.end(),
-                [&](const DiffFileView& candidate) {
-                    return candidate.path.generic_string() == *selected->workspacePath;
-                });
-            if (file == diffView.files.end()) {
-                if (selected->gitStatus &&
-                    selected->gitStatus->status == DiffFileStatus::Deleted) {
-                    return failure("detailed view is unavailable for deleted file");
-                }
-            } else {
-                return runtime.openOrFocusLiveDiffTab(*file,
-                                                       NavigationClass::User);
-            }
-        }
-        if (binding && binding->kind == TreeProviderKind::Search) {
-            if (!selected->workspacePath || !selected->sourceLine ||
-                !selected->sourceColumn) {
-                return failure("search result has no navigation target");
-            }
-            NavigationTarget target{
-                .path = *selected->workspacePath,
-                .line = LineIndex{*selected->sourceLine},
-                .column = static_cast<std::size_t>(*selected->sourceColumn)};
-            return deferNavigationViewAction(
-                runtime, navigateTo(runtime, std::move(target)));
-        }
-        if (selected->workspacePath) {
-            auto result = runtime.workspace.openFile(*selected->workspacePath);
-            if (!result.accepted() || !result.document) return failure("failed to open tree file");
-            auto opened = runtime.activateDocument(*result.document);
-            if (opened.accepted) runtime.screen.focusEditor();
-            return opened;
-        }
-        return success();
+        return deferNavigationViewAction(
+            runtime, runtime.activateTreeNode(selected->id));
     }
     if (id == "tree.toggle_expanded") {
         const auto binding = runtime.tree.activeProviderBinding();
@@ -320,32 +277,32 @@ OperationResult applyGotoLine(Editor& runtime, std::string_view lineText) {
             true});
 }
 
-OperationResult activateTreeNode(Editor& runtime, TreeNodeId nodeId) {
-    if (!runtime.tree.select(nodeId)) {
+OperationResult Editor::activateTreeNode(TreeNodeId nodeId) {
+    if (!tree.select(nodeId)) {
         return failure("tree node is not selectable");
     }
-    (void)runtime.screen.focusPanel();
+    (void)screen.focusPanel();
 
-    auto selected = runtime.tree.selectedNode();
+    auto selected = tree.selectedNode();
     if (!selected) return failure("no tree node is selected");
 
-    const auto binding = runtime.tree.activeProviderBinding();
+    const auto binding = tree.activeProviderBinding();
     const auto providerKind =
         binding ? std::optional<TreeProviderKind>{binding->kind} : std::nullopt;
 
     if (selected->expandable) {
         if (!binding) return failure("tree node is not expandable");
-        return runtime.toggleTreeExpanded(binding->id, selected->id);
+        return toggleTreeExpanded(binding->id, selected->id);
     }
     if (providerKind == TreeProviderKind::Git && selected->workspacePath) {
-        const auto diffView = runtime.diff.viewState();
+        const auto diffView = diff.viewState();
         auto file = std::find_if(
             diffView.files.begin(), diffView.files.end(),
             [&](const DiffFileView& candidate) {
                 return candidate.path.generic_string() == *selected->workspacePath;
             });
         if (file != diffView.files.end()) {
-            return runtime.openOrFocusLiveDiffTab(*file, NavigationClass::User);
+            return openOrFocusLiveDiffTab(*file, NavigationClass::User);
         }
         if (selected->gitStatus &&
             selected->gitStatus->status == DiffFileStatus::Deleted) {
@@ -361,15 +318,15 @@ OperationResult activateTreeNode(Editor& runtime, TreeNodeId nodeId) {
             .path = *selected->workspacePath,
             .line = LineIndex{*selected->sourceLine},
             .column = static_cast<std::size_t>(*selected->sourceColumn)};
-        return navigateTo(runtime, std::move(target));
+        return navigateTo(*this, std::move(target));
     }
     if (selected->workspacePath) {
-        auto result = runtime.workspace.openFile(*selected->workspacePath);
+        auto result = workspace.openFile(*selected->workspacePath);
         if (!result.accepted() || !result.document) {
             return failure("failed to open tree file");
         }
-        auto opened = runtime.activateDocument(*result.document);
-        if (opened.accepted) runtime.screen.focusEditor();
+        auto opened = activateDocument(*result.document);
+        if (opened.accepted) screen.focusEditor();
         return opened;
     }
     return success();

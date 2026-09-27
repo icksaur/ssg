@@ -124,8 +124,6 @@ void registerAllCommands(Commands& commands, Editor& runtime);
     TextInputArguments arguments = {});
 [[nodiscard]] OperationResult activateTab(Editor& runtime, TabId tabId);
 [[nodiscard]] OperationResult closeTabById(Editor& runtime, TabId tabId);
-[[nodiscard]] OperationResult activateTreeNode(Editor& runtime,
-                                                TreeNodeId nodeId);
 [[nodiscard]] OperationResult applyUiNodeActivation(Editor& runtime,
                                                     UiNodeId const& nodeId);
 [[nodiscard]] OperationResult applyThemeSet(Editor& runtime,
@@ -219,6 +217,7 @@ public:
     [[nodiscard]] OperationResult executeExternalAction(
         ExternalActionInvocation const& invocation);
     [[nodiscard]] OperationResult executeExternalAction(ExternalAction action);
+    [[nodiscard]] OperationResult activateTreeNode(TreeNodeId nodeId);
     [[nodiscard]] FindReplaceViewState const& findView() const noexcept {
         return findReplace.viewState();
     }
