@@ -30,26 +30,8 @@ CommandResult openFile(Editor& editor, std::string_view path) {
 }
 
 CommandResult typeText(Editor& editor, std::string text) {
-    std::lock_guard operationLock{editor.operationMutex};
-    auto const active = editor.activeDocumentId();
-    auto const revisionBefore =
-        active && editor.activeDocument()
-            ? std::optional<std::uint64_t>{editor.activeDocument()->revision()}
-            : std::nullopt;
-    editor.screen.refreshExternalModificationPresence(
-        editor.externalModificationPresent());
-    auto result = applyEditorTextInput(
-        editor, TextInputCommand::Insert,
-        TextInputArguments{std::move(text)});
-    editor.reconcileFindDocument();
-    editor.screen.refreshExternalModificationPresence(
-        editor.externalModificationPresent());
-    if (result.accepted && active && revisionBefore &&
-        editor.activeDocumentId() == active &&
-        editor.activeDocument() != nullptr &&
-        editor.activeDocument()->revision() != *revisionBefore) {
-        (void)editor.follow.notifyLocalEdit();
-    }
+    auto result = editor.applyTextInput(TextInputCommand::Insert,
+                                        TextInputArguments{std::move(text)});
     return {result.accepted ? CommandError::None : CommandError::HandlerFailed,
             std::move(result.message), std::move(result.viewAction)};
 }

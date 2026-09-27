@@ -209,6 +209,10 @@ OperationResult Editor::activateDocument(FileDocumentId document) {
     if (!state) return failure("workspace document does not exist");
     auto const* opened = workspace.tryDocument(document);
     if (opened == nullptr) return failure("workspace document does not exist");
+    std::optional<OperationScope> standaloneOperation;
+    if (activeOperation_ == nullptr) {
+        standaloneOperation.emplace(*this, OperationScope::RevisionScope::None);
+    }
     // Note the startup empty buffer before opening, while it is still the only
     // tab.  Every session begins on an empty untitled buffer; opening a file
     // beside it leaves a blank tab nobody asked for and nobody will use.  It is
@@ -241,8 +245,6 @@ OperationResult Editor::activateDocument(FileDocumentId document) {
     }
     resetSelectionForActiveDocument();
     refreshSyntax();
-    reconcileFindDocument();
-    screen.refreshExternalModificationPresence(externalModificationPresent());
     return success();
 }
 

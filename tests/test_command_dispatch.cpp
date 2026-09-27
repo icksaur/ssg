@@ -1,9 +1,11 @@
 #include <ssg/Editor.h>
 
+#include "editor_test_support.h"
 #include "grid_test_frame.h"
 #include "test_helpers.h"
 
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -148,6 +150,246 @@ TEST(editorRefusesRegistryMutationDuringAHandler) {
     fs::remove_all(root);
 }
 
+TEST(editReconciliationHonorsAcceptanceAndNotifiesFollowOnce) {
+    const auto root = uniqueRoot();
+    std::ofstream{root / "edit.txt"} << "original";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(ssg::test::openFile(*runtime, "edit.txt").accepted());
+
+    const auto insert = [&] {
+        return ssg::test::requireCommand(
+            runtime->input(ssg::ClientKeyInput{{}, "x"}));
+    };
+    ASSERT_TRUE(runtime->follow.resume(runtime->diff.viewState()).accepted());
+    const auto before = runtime->follow.viewState().generation;
+    ASSERT_TRUE(insert().accepted());
+    ASSERT_EQ(runtime->follow.viewState().mode, ssg::FollowMode::Paused);
+    ASSERT_EQ(runtime->follow.viewState().generation, before + 1);
+
+    ASSERT_TRUE(runtime->follow.resume(runtime->diff.viewState()).accepted());
+    const auto beforeCommand = runtime->follow.viewState().generation;
+    ASSERT_TRUE(runtime->dispatch("find.open").accepted());
+    ASSERT_TRUE(runtime->dispatch("text.newline").accepted());
+    ASSERT_EQ(runtime->follow.viewState().generation, beforeCommand + 1);
+    ASSERT_FALSE(runtime->findReplace.viewState().open);
+
+    ASSERT_TRUE(runtime->follow.resume(runtime->diff.viewState()).accepted());
+    const auto beforeRejected = runtime->follow.viewState().generation;
+    ASSERT_TRUE(runtime->dispatch("find.open").accepted());
+    runtime->addCommand("oracle.rejected_edit", "Rejected edit", [&] {
+        auto edited = ssg::applyEditorTextInput(
+            *runtime, ssg::TextInputCommand::Insert, {"!"});
+        ASSERT_TRUE(edited.accepted);
+        return ssg::CommandResult{ssg::CommandError::HandlerFailed,
+                                  "rejected after edit"};
+    });
+    ASSERT_FALSE(runtime->dispatch("oracle.rejected_edit").accepted());
+    ASSERT_EQ(runtime->follow.viewState().generation, beforeRejected);
+    ASSERT_FALSE(runtime->findReplace.viewState().open);
+
+    runtime->addCommand("oracle.edit_twice", "Edit twice", [&] {
+        ASSERT_TRUE(ssg::applyEditorTextInput(
+            *runtime, ssg::TextInputCommand::Insert, {"a"}).accepted);
+        ASSERT_TRUE(ssg::applyEditorTextInput(
+            *runtime, ssg::TextInputCommand::Insert, {"b"}).accepted);
+        return ssg::CommandResult{};
+    });
+    ASSERT_TRUE(runtime->dispatch("oracle.edit_twice").accepted());
+    ASSERT_EQ(runtime->follow.viewState().generation, beforeRejected + 1);
+
+    ASSERT_TRUE(runtime->dispatch("help.open").accepted());
+    ASSERT_TRUE(runtime->follow.resume(runtime->diff.viewState()).accepted());
+    const auto beforeReadOnly = runtime->follow.viewState().generation;
+    ASSERT_FALSE(runtime->applyTextInput(
+        ssg::TextInputCommand::Insert, {"rejected"}).accepted);
+    ASSERT_EQ(runtime->follow.viewState().generation, beforeReadOnly);
+    fs::remove_all(root);
+}
+
+TEST(fileActivationAndRejectedCommandsReconcileFind) {
+    const auto root = uniqueRoot();
+    std::ofstream{root / "edit.txt"} << "original";
+    std::ofstream{root / "other.txt"} << "other";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(ssg::test::openFile(*runtime, "edit.txt").accepted());
+
+    ASSERT_TRUE(runtime->dispatch("find.open").accepted());
+    ASSERT_TRUE(runtime->findReplace.viewState().open);
+    ASSERT_FALSE(runtime->dispatch("oracle.missing").accepted());
+    ASSERT_TRUE(runtime->findReplace.viewState().open);
+    ASSERT_TRUE(runtime->dispatch("file.new").accepted());
+    ASSERT_FALSE(runtime->findReplace.viewState().open);
+
+    ASSERT_TRUE(runtime->dispatch("find.open").accepted());
+    ASSERT_TRUE(runtime->findReplace.viewState().open);
+    ASSERT_TRUE(ssg::test::openFile(*runtime, "other.txt").accepted());
+    ASSERT_FALSE(runtime->findReplace.viewState().open);
+
+    ASSERT_TRUE(runtime->dispatch("find.open").accepted());
+    const auto firstTab = runtime->tabs.viewState().tabs.front().id;
+    auto rejected = runtime->input(ssg::TabPointerInput{ssg::TabId{99999}});
+    ASSERT_EQ(rejected.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_TRUE(runtime->findReplace.viewState().open);
+    auto activated = runtime->input(ssg::TabPointerInput{firstTab});
+    ASSERT_EQ(activated.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_FALSE(runtime->findReplace.viewState().open);
+    fs::remove_all(root);
+}
+
+TEST(deferredFailureStillNotifiesAnAcceptedEditOnce) {
+    const auto root = uniqueRoot();
+    std::ofstream{root / "edit.txt"} << "original";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(ssg::test::openFile(*runtime, "edit.txt").accepted());
+
+    runtime->addCommand("oracle.edit", "Edit", [&] {
+        return ssg::applyEditorTextInput(
+            *runtime, ssg::TextInputCommand::Insert, {"x"});
+    });
+    runtime->addCommand("oracle.fail", "Fail", [] {
+        return ssg::CommandResult{ssg::CommandError::HandlerFailed, "failed"};
+    });
+    runtime->addCommand("oracle.queue", "Queue", [&] {
+        ASSERT_TRUE(runtime->deferDispatch("oracle.edit"));
+        ASSERT_TRUE(runtime->deferDispatch("oracle.fail"));
+        return ssg::CommandResult{};
+    });
+    ASSERT_TRUE(runtime->follow.resume(runtime->diff.viewState()).accepted());
+    const auto generation = runtime->follow.viewState().generation;
+    ASSERT_FALSE(runtime->dispatch("oracle.queue").accepted());
+    ASSERT_EQ(runtime->follow.viewState().generation, generation + 1);
+    fs::remove_all(root);
+}
+
+TEST(deferredEditDetectsDocumentOpenedByPreviousCommand) {
+    const auto root = uniqueRoot();
+    std::ofstream{root / "first.txt"} << "first";
+    std::ofstream{root / "second.txt"} << "second";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(ssg::test::openFile(*runtime, "first.txt").accepted());
+
+    runtime->addCommand("oracle.edit_opened", "Edit opened file", [&] {
+        return ssg::applyEditorTextInput(
+            *runtime, ssg::TextInputCommand::Insert, {"!"});
+    });
+    runtime->addCommand("oracle.open_then_edit", "Open then edit", [&] {
+        auto opened = runtime->workspace.openFile("second.txt");
+        if (!opened.accepted() || !opened.document) {
+            return ssg::CommandResult{ssg::CommandError::HandlerFailed,
+                                      "failed to open second.txt"};
+        }
+        auto activated = runtime->activateDocument(*opened.document);
+        if (!activated.accepted) {
+            return ssg::CommandResult{ssg::CommandError::HandlerFailed,
+                                      activated.message};
+        }
+        ASSERT_TRUE(runtime->deferDispatch("oracle.edit_opened"));
+        return ssg::CommandResult{};
+    });
+
+    ASSERT_TRUE(runtime->follow.resume(runtime->diff.viewState()).accepted());
+    const auto before = runtime->follow.viewState().generation;
+    ASSERT_TRUE(runtime->dispatch("oracle.open_then_edit").accepted());
+    ASSERT_EQ(runtime->activeDocument()->snapshot().text, std::string{"!second"});
+    ASSERT_EQ(runtime->follow.viewState().mode, ssg::FollowMode::Paused);
+    ASSERT_EQ(runtime->follow.viewState().generation, before + 1);
+    fs::remove_all(root);
+}
+
+TEST(deferredFindNextCannotUseMatchesFromPreviousRevision) {
+    const auto root = uniqueRoot();
+    std::ofstream{root / "edit.txt"} << "cat cat";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(ssg::test::openFile(*runtime, "edit.txt").accepted());
+    ASSERT_TRUE(runtime->dispatch("find.open").accepted());
+    ASSERT_TRUE(runtime->updateFindQuery(ssg::test::promptText("cat")).accepted());
+    ASSERT_EQ(runtime->findReplace.viewState().matches.size(), 2U);
+
+    runtime->addCommand("oracle.edit", "Edit", [&] {
+        return ssg::applyEditorTextInput(
+            *runtime, ssg::TextInputCommand::Insert, {"!"});
+    });
+    runtime->addCommand("oracle.check_find", "Check find", [&] {
+        ASSERT_FALSE(runtime->findReplace.viewState().open);
+        return ssg::CommandResult{};
+    });
+    runtime->addCommand("oracle.edit_then_find", "Edit then find", [&] {
+        ASSERT_TRUE(runtime->deferDispatch("oracle.edit"));
+        ASSERT_TRUE(runtime->deferDispatch("oracle.check_find"));
+        ASSERT_TRUE(runtime->deferDispatch("find.next"));
+        return ssg::CommandResult{};
+    });
+    ASSERT_TRUE(runtime->dispatch("oracle.edit_then_find").accepted());
+    ASSERT_FALSE(runtime->findReplace.viewState().open);
+    fs::remove_all(root);
+}
+
+TEST(deferredEditNotifiesBeforeFollowResumeWithoutDuplicateNotification) {
+    const auto root = uniqueRoot();
+    std::ofstream{root / "edit.txt"} << "original";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(ssg::test::openFile(*runtime, "edit.txt").accepted());
+    runtime->addCommand("oracle.edit_twice", "Edit twice", [&] {
+        ASSERT_TRUE(ssg::applyEditorTextInput(
+            *runtime, ssg::TextInputCommand::Insert, {"a"}).accepted);
+        ASSERT_TRUE(ssg::applyEditorTextInput(
+            *runtime, ssg::TextInputCommand::Insert, {"b"}).accepted);
+        return ssg::CommandResult{};
+    });
+    runtime->addCommand("oracle.edit_then_resume", "Edit then resume", [&] {
+        ASSERT_TRUE(runtime->deferDispatch("oracle.edit_twice"));
+        ASSERT_TRUE(runtime->deferDispatch("follow_edits.resume"));
+        return ssg::CommandResult{};
+    });
+    ASSERT_TRUE(runtime->follow.resume(runtime->diff.viewState()).accepted());
+    const auto before = runtime->follow.viewState().generation;
+    ASSERT_TRUE(runtime->dispatch("oracle.edit_then_resume").accepted());
+    ASSERT_EQ(runtime->follow.viewState().mode, ssg::FollowMode::Following);
+    ASSERT_EQ(runtime->follow.viewState().generation, before + 2);
+    fs::remove_all(root);
+}
+
+TEST(pickerSubmitReconcilesItsCommandAndCloseAsOneOperation) {
+    const auto root = uniqueRoot();
+    std::ofstream{root / "edit.txt"} << "original";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(ssg::test::openFile(*runtime, "edit.txt").accepted());
+    runtime->addCommand("oracle.picker_edit", "Picker edit", [&] {
+        return ssg::applyEditorTextInput(
+            *runtime, ssg::TextInputCommand::Insert, {"x"});
+    });
+    ASSERT_TRUE(runtime->dispatch("palette.open").accepted());
+    const auto activation = runtime->screen.openPickerActivation();
+    ASSERT_TRUE(activation.has_value());
+    if (!activation) return;
+    ASSERT_TRUE(runtime->follow.resume(runtime->diff.viewState()).accepted());
+    const auto before = runtime->follow.viewState().generation;
+    const auto rejected = runtime->input(
+        ssg::PickerPointerInput{*activation, "oracle.not_published"});
+    ASSERT_EQ(rejected.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_EQ(runtime->follow.viewState().generation, before);
+    const auto submitted = runtime->input(
+        ssg::PickerPointerInput{*activation, "oracle.picker_edit"});
+    ASSERT_EQ(submitted.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(runtime->follow.viewState().generation, before + 1);
+    ASSERT_FALSE(runtime->screen.openPickerActivation().has_value());
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 SSG_TEST_SUITE(test_command_dispatch) {
@@ -155,6 +397,13 @@ SSG_TEST_SUITE(test_command_dispatch) {
     RUN(keyBoundToUnknownIdWorksAfterRegistrationWithoutRebuildingTheBinding);
     RUN(nestedDispatchIsRefusedAndDeferredIdsDrainInOrder);
     RUN(editorRefusesRegistryMutationDuringAHandler);
+    RUN(editReconciliationHonorsAcceptanceAndNotifiesFollowOnce);
+    RUN(fileActivationAndRejectedCommandsReconcileFind);
+    RUN(deferredFailureStillNotifiesAnAcceptedEditOnce);
+    RUN(deferredEditDetectsDocumentOpenedByPreviousCommand);
+    RUN(deferredFindNextCannotUseMatchesFromPreviousRevision);
+    RUN(deferredEditNotifiesBeforeFollowResumeWithoutDuplicateNotification);
+    RUN(pickerSubmitReconcilesItsCommandAndCloseAsOneOperation);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

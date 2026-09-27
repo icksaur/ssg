@@ -71,6 +71,75 @@ std::string resolveHomeDirectory() {
 
 } // namespace
 
+Editor::OperationScope::OperationScope(Editor& editor, RevisionScope scope)
+    : editor_{editor}, scope_{scope} {
+    if (editor_.activeOperation_ != nullptr) {
+        throw std::logic_error{"editor operation is already active"};
+    }
+    if (scope == RevisionScope::ActiveDocument) {
+        if (const auto id = editor_.activeDocumentId()) {
+            if (const auto* document = editor_.workspace.tryDocument(*id)) {
+                activeRevision_ = std::pair{*id, document->revision()};
+            }
+        }
+    } else if (scope == RevisionScope::Workspace) {
+        for (const auto id : editor_.workspace.documents()) {
+            revisions_.emplace(id.value(), editor_.workspace.document(id).revision());
+        }
+    }
+    externalPresentBefore_ = editor_.externalModificationPresent();
+    editor_.screen.refreshExternalModificationPresence(externalPresentBefore_);
+    editor_.activeOperation_ = this;
+}
+
+void Editor::OperationScope::checkpoint(bool accepted) {
+    bool acceptedEdit = false;
+    if (scope_ == RevisionScope::ActiveDocument) {
+        if (activeRevision_) {
+            const auto* document =
+                editor_.workspace.tryDocument(activeRevision_->first);
+            acceptedEdit = accepted && document != nullptr &&
+                           document->revision() != activeRevision_->second;
+        }
+        if (const auto id = editor_.activeDocumentId()) {
+            if (const auto* active = editor_.workspace.tryDocument(*id)) {
+                activeRevision_ = std::pair{*id, active->revision()};
+            } else {
+                activeRevision_.reset();
+            }
+        } else {
+            activeRevision_.reset();
+        }
+    } else if (scope_ == RevisionScope::Workspace) {
+        for (const auto id : editor_.workspace.documents()) {
+            const auto revision = editor_.workspace.document(id).revision();
+            const auto previous = revisions_.find(id.value());
+            acceptedEdit |= accepted && previous != revisions_.end() &&
+                            previous->second != revision;
+            revisions_.insert_or_assign(id.value(), revision);
+        }
+    }
+    editor_.reconcileFindDocument();
+    const bool externalPresentAfter = editor_.externalModificationPresent();
+    if (externalPresentAfter != externalPresentBefore_) {
+        editor_.screen.refreshExternalModificationPresence(externalPresentAfter);
+    }
+    externalPresentBefore_ = externalPresentAfter;
+    if (acceptedEdit) (void)editor_.follow.notifyLocalEdit();
+    pending_ = false;
+}
+
+Editor::OperationScope::~OperationScope() {
+    if (pending_) {
+        editor_.reconcileFindDocument();
+        const bool externalPresentAfter = editor_.externalModificationPresent();
+        if (externalPresentAfter != externalPresentBefore_) {
+            editor_.screen.refreshExternalModificationPresence(externalPresentAfter);
+        }
+    }
+    editor_.activeOperation_ = nullptr;
+}
+
 KeymapViewState defaultTerminalKeymap() {
     auto seq = [](std::initializer_list<std::string_view> strokes) {
         auto parsed = parseKeySequence(strokes);
@@ -186,43 +255,6 @@ std::filesystem::path canonicalDirectory(std::filesystem::path const& path) {
         throw std::invalid_argument{"workspace root must be an existing directory"};
     }
     return canonical;
-}
-
-std::unordered_map<std::uint64_t, std::uint64_t>
-documentRevisions(const Workspace& workspace) {
-    std::unordered_map<std::uint64_t, std::uint64_t> revisions;
-    for (auto const id : workspace.documents()) {
-        revisions.emplace(id.value(), workspace.document(id).revision());
-    }
-    return revisions;
-}
-
-bool existingDocumentMutated(
-    const std::unordered_map<std::uint64_t, std::uint64_t>& before,
-    const Workspace& workspace) {
-    for (auto const id : workspace.documents()) {
-        const auto found = before.find(id.value());
-        if (found == before.end()) {
-            continue;
-        }
-        if (workspace.document(id).revision() != found->second) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void reconcileAfterOperation(
-    Editor& editor,
-    const std::unordered_map<std::uint64_t, std::uint64_t>& revisionsBefore,
-    bool accepted) {
-    editor.reconcileFindDocument();
-    editor.screen.refreshExternalModificationPresence(
-        editor.externalModificationPresent());
-    if (accepted &&
-        existingDocumentMutated(revisionsBefore, editor.workspace)) {
-        (void)editor.follow.notifyLocalEdit();
-    }
 }
 
 PromptRoutingState inputPromptState(Editor const& editor) {
@@ -372,16 +404,7 @@ ClientInputResult executeInputRoute(Editor& editor, RouteRejected route,
 
 ClientInputResult executeInputRoute(Editor& editor, RouteAccepted route,
                                     RoutedInput routed) {
-    const auto revisionsBefore = documentRevisions(editor.workspace);
-    editor.screen.refreshExternalModificationPresence(
-        editor.externalModificationPresent());
     auto error = applyInputMutation(editor, std::move(route.mutation));
-    editor.reconcileFindDocument();
-    editor.screen.refreshExternalModificationPresence(
-        editor.externalModificationPresent());
-    if (!error && existingDocumentMutated(revisionsBefore, editor.workspace)) {
-        (void)editor.follow.notifyLocalEdit();
-    }
     if (error) {
         if (routed.clearGestureOnRejection) {
             editor.documentPointerGesture.clear();
@@ -431,17 +454,7 @@ ClientInputResult executeInputRoute(Editor& editor, RouteDispatch route,
 
 ClientInputResult executeInputRoute(Editor& editor, InvokeExternalAction route,
                                     RoutedInput routed) {
-    const auto revisionsBefore = documentRevisions(editor.workspace);
-    editor.screen.refreshExternalModificationPresence(
-        editor.externalModificationPresent());
     auto result = invokeExternalAction(editor, route.invocation);
-    editor.reconcileFindDocument();
-    editor.screen.refreshExternalModificationPresence(
-        editor.externalModificationPresent());
-    if (result.accepted &&
-        existingDocumentMutated(revisionsBefore, editor.workspace)) {
-        (void)editor.follow.notifyLocalEdit();
-    }
     if (!result.accepted) {
         if (routed.clearGestureOnRejection) {
             editor.documentPointerGesture.clear();
@@ -463,17 +476,7 @@ ClientInputResult executeInputRoute(Editor& editor, InvokeExternalAction route,
 
 ClientInputResult executeInputRoute(Editor& editor, ActivateUiNode route,
                                     RoutedInput routed) {
-    const auto revisionsBefore = documentRevisions(editor.workspace);
-    editor.screen.refreshExternalModificationPresence(
-        editor.externalModificationPresent());
     auto result = applyUiNodeActivation(editor, route.nodeId);
-    editor.reconcileFindDocument();
-    editor.screen.refreshExternalModificationPresence(
-        editor.externalModificationPresent());
-    if (result.accepted &&
-        existingDocumentMutated(revisionsBefore, editor.workspace)) {
-        (void)editor.follow.notifyLocalEdit();
-    }
     if (!result.accepted) {
         return {ClientInputOutcome::Rejected, std::nullopt,
                 CommandResult{CommandError::HandlerFailed,
@@ -492,17 +495,7 @@ ClientInputResult executeInputRoute(Editor& editor, ActivateUiNode route,
 
 ClientInputResult executeInputRoute(Editor& editor, ActivateTreeNode route,
                                     RoutedInput routed) {
-    const auto revisionsBefore = documentRevisions(editor.workspace);
-    editor.screen.refreshExternalModificationPresence(
-        editor.externalModificationPresent());
     auto result = activateTreeNode(editor, route.nodeId);
-    editor.reconcileFindDocument();
-    editor.screen.refreshExternalModificationPresence(
-        editor.externalModificationPresent());
-    if (result.accepted &&
-        existingDocumentMutated(revisionsBefore, editor.workspace)) {
-        (void)editor.follow.notifyLocalEdit();
-    }
     if (!result.accepted) {
         if (routed.clearGestureOnRejection) {
             editor.documentPointerGesture.clear();
@@ -557,10 +550,7 @@ ClientInputResult executeInputRoute(Editor& editor, SubmitPicker route,
                     std::nullopt};
         }
         if (editor.screen.openPickerActivation() == route.activation) {
-            const auto revisionsBeforeClose =
-                documentRevisions(editor.workspace);
             (void)editor.screen.closeFinder();
-            reconcileAfterOperation(editor, revisionsBeforeClose, true);
         }
         auto const activation = editor.screen.openPickerActivation();
         const auto outcome =
@@ -569,12 +559,8 @@ ClientInputResult executeInputRoute(Editor& editor, SubmitPicker route,
         return {outcome, std::nullopt, std::move(result), activation};
     }
     if (route.activation.mode == SearchMode::File) {
-        const auto revisionsBefore = documentRevisions(editor.workspace);
-        editor.screen.refreshExternalModificationPresence(
-            editor.externalModificationPresent());
         auto result = applyFilePathCompletion(editor, PromptCompletion::FileOpen,
                                               route.candidateId);
-        reconcileAfterOperation(editor, revisionsBefore, result.accepted);
         if (!result.accepted) {
             return {ClientInputOutcome::Rejected, std::nullopt,
                     CommandResult{CommandError::HandlerFailed,
@@ -582,10 +568,7 @@ ClientInputResult executeInputRoute(Editor& editor, SubmitPicker route,
                     std::nullopt};
         }
         if (editor.screen.openPickerActivation() == route.activation) {
-            const auto revisionsBeforeClose =
-                documentRevisions(editor.workspace);
             (void)editor.screen.closeFinder();
-            reconcileAfterOperation(editor, revisionsBeforeClose, true);
         }
         const auto outcome =
             result.viewAction ? ClientInputOutcome::ViewOwned
@@ -1419,7 +1402,7 @@ void Editor::reconcileFindDocument() {
     auto const* document = activeDocument();
     bool const stale =
         !active || active != findDocumentId || document == nullptr ||
-        document->snapshot().revision != findReplace.viewState().sourceRevision;
+        document->revision() != findReplace.viewState().sourceRevision;
     if (!stale) return;
     findReplace.close();
     if (auto const& request = screen.prompt().request();
@@ -1769,7 +1752,33 @@ PumpResult Editor::pump() {
         throw std::logic_error{"worker results cannot be pumped during dispatch"};
     }
     std::lock_guard operationLock{operationMutex};
-    return {adoptGitDiffWorkerDrainLocked(gitDiffIngress.drain())};
+    auto batch = gitDiffIngress.drain();
+    if (batch.watchEvents.empty() && !batch.fullReconcile) {
+        const bool findOpen = findReplace.viewState().open;
+        std::optional<std::pair<FileDocumentId, std::uint64_t>> activeBefore;
+        if (findOpen) {
+            if (const auto id = activeDocumentId()) {
+                if (const auto* document = workspace.tryDocument(*id)) {
+                    activeBefore = std::pair{*id, document->revision()};
+                }
+            }
+        }
+        auto accepted = adoptGitDiffWorkerDrainLocked(std::move(batch));
+        std::optional<std::pair<FileDocumentId, std::uint64_t>> activeAfter;
+        if (findOpen) {
+            if (const auto id = activeDocumentId()) {
+                if (const auto* document = workspace.tryDocument(*id)) {
+                    activeAfter = std::pair{*id, document->revision()};
+                }
+            }
+        }
+        if (activeBefore != activeAfter) {
+            reconcileFindDocument();
+        }
+        return {accepted};
+    }
+    OperationScope operation{*this, OperationScope::RevisionScope::None};
+    return {adoptGitDiffWorkerDrainLocked(std::move(batch))};
 }
 
 bool Editor::adoptGitDiffWorkerDrainLocked(GitDiffWorkerDrain batch) {
@@ -1801,8 +1810,11 @@ bool Editor::adoptGitDiffWorkerDrainLocked(GitDiffWorkerDrain batch) {
         for (const auto document : workspace.documents()) {
             (void)updateTabsFor(document);
         }
-        screen.refreshExternalModificationPresence(
-            externalModificationPresent());
+        if (activeOperation_ == nullptr) {
+            reconcileFindDocument();
+            screen.refreshExternalModificationPresence(
+                externalModificationPresent());
+        }
     }
     return accepted;
 }
@@ -1895,32 +1907,27 @@ bool Editor::deferDispatch(std::string commandId) {
 }
 
 CommandResult Editor::dispatchLocked(std::string_view commandId) {
+    std::optional<OperationScope> standaloneOperation;
+    if (activeOperation_ == nullptr) {
+        standaloneOperation.emplace(*this, OperationScope::RevisionScope::Workspace);
+    }
     if (workspaceSearchPending() && commandId != "search.workspace") {
         cancelWorkspaceSearch();
     }
-    const auto dispatchAndReconcile = [&](std::string_view dispatched) {
-        const auto revisionsBefore = documentRevisions(workspace);
-        screen.refreshExternalModificationPresence(
-            externalModificationPresent());
+    const auto dispatchCommand = [&](std::string_view dispatched) {
         auto result = commands.dispatch(dispatched);
-        reconcileFindDocument();
-        screen.refreshExternalModificationPresence(
-            externalModificationPresent());
-        if (result.accepted() &&
-            existingDocumentMutated(revisionsBefore, workspace)) {
-            (void)follow.notifyLocalEdit();
-        }
+        activeOperation_->checkpoint(result.accepted());
         return result;
     };
     const auto dispatchAndDrain = [&](std::string_view dispatched) {
-        auto outcome = dispatchAndReconcile(dispatched);
+        auto outcome = dispatchCommand(dispatched);
         if (!outcome.accepted()) {
             deferredCommands.clear();
             return outcome;
         }
         while (!deferredCommands.empty()) {
             auto deferred = deferredCommands.takeFront();
-            auto deferredResult = dispatchAndReconcile(deferred);
+            auto deferredResult = dispatchCommand(deferred);
             if (!deferredResult.accepted()) {
                 deferredCommands.clear();
                 return CommandResult{
@@ -1948,12 +1955,51 @@ ClientInputResult Editor::input(ClientInput const& input) {
     }
     std::lock_guard operationLock{operationMutex};
     auto routed = routeInput(inputRoutingSnapshot(*this), input);
-    return std::visit(
+    const bool activeDocumentOnly =
+        std::holds_alternative<RouteAccepted>(routed.action);
+    const auto* picker = std::get_if<SubmitPicker>(&routed.action);
+    const bool commandPicker =
+        picker && picker->activation.mode == SearchMode::Command;
+    const bool needsReconciliation =
+        activeDocumentOnly ||
+        std::holds_alternative<InvokeExternalAction>(routed.action) ||
+        std::holds_alternative<ActivateUiNode>(routed.action) ||
+        std::holds_alternative<ActivateTreeNode>(routed.action) ||
+        (std::holds_alternative<SubmitPicker>(routed.action) && !commandPicker);
+    std::optional<OperationScope> operation;
+    if (needsReconciliation) {
+        auto scope = OperationScope::RevisionScope::Workspace;
+        if (activeDocumentOnly) {
+            scope = OperationScope::RevisionScope::ActiveDocument;
+        } else if (std::holds_alternative<ActivateTreeNode>(routed.action)) {
+            scope = OperationScope::RevisionScope::None;
+        } else if (picker && picker->activation.mode == SearchMode::File) {
+            scope = OperationScope::RevisionScope::None;
+        }
+        operation.emplace(*this, scope);
+    }
+    auto result = std::visit(
         [&](auto route) {
             return executeInputRoute(*this, std::move(route),
                                      std::move(routed));
         },
         std::move(routed.action));
+    if (operation && result.command) {
+        operation->checkpoint(result.command->accepted());
+    }
+    return result;
+}
+
+OperationResult Editor::applyTextInput(TextInputCommand command,
+                                       TextInputArguments arguments) {
+    if (commands.dispatchInProgress()) {
+        return failure(std::string{kNestedDispatchRefusal});
+    }
+    std::lock_guard operationLock{operationMutex};
+    OperationScope operation{*this, OperationScope::RevisionScope::ActiveDocument};
+    auto result = applyEditorTextInput(*this, command, std::move(arguments));
+    operation.checkpoint(result.accepted);
+    return result;
 }
 
 CommandResult Editor::dispatch(std::string_view commandId) {

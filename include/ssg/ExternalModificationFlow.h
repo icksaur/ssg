@@ -156,6 +156,7 @@ class ExternalModificationFlow {
     [[nodiscard]] bool hasFile(const DiffFileId& id);
     [[nodiscard]] bool selectNext();
     [[nodiscard]] bool selectPrevious();
+    [[nodiscard]] bool hasPending() const noexcept { return !pending_.empty(); }
     [[nodiscard]] ExternalModificationViewState viewState() const;
 
   private:

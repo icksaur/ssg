@@ -237,6 +237,32 @@ TEST(externalActionOnAnUnknownIdIsARejectedNoOp) {
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 }
 
+TEST(externalActionReconcilesPresenceAndFindOnReload) {
+    auto session = Session::open("operation_boundary", "hi\n", true);
+    ASSERT_TRUE(session.runtime->dispatch("find.open").accepted());
+    writeFile(session.workspacePath("note.txt"), "external\n");
+    session.runtime->external.ingest(
+        {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
+    ASSERT_EQ(externalFiles(*session.runtime).size(), 1U);
+
+    auto rejected = externalAction(
+        *session.runtime,
+        {ssg::DiffFileId{"external:missing.txt"},
+         ssg::ExternalAction::Reload});
+    ASSERT_FALSE(rejected.accepted());
+    ASSERT_TRUE(session.runtime->findReplace.viewState().open);
+    ASSERT_TRUE(session.runtime->screen.captureExternalFocus());
+
+    const auto file = externalFiles(*session.runtime).front().id;
+    ASSERT_TRUE(externalAction(
+        *session.runtime, {file, ssg::ExternalAction::Reload}).accepted());
+    ASSERT_TRUE(externalFiles(*session.runtime).empty());
+    ASSERT_FALSE(session.runtime->findReplace.viewState().open);
+    ASSERT_EQ(session.runtime->screen.effectiveFocus(),
+              ssg::FocusTarget::Editor);
+    ASSERT_FALSE(session.runtime->screen.captureExternalFocus());
+}
+
 TEST(exmdStaleIdDoesNotActOnThePreviousSelection) {
     auto session = Session::open("stale_select", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
@@ -832,6 +858,7 @@ SSG_TEST_SUITE(test_session_external_modification) {
     RUN(externalKeepBufferClearsTheSectionWithoutTouchingTheBuffer);
     RUN(externalOpenDiffOpensALiveDiffTabForThatFile);
     RUN(externalActionOnAnUnknownIdIsARejectedNoOp);
+    RUN(externalActionReconcilesPresenceAndFindOnReload);
     RUN(exmdStaleIdDoesNotActOnThePreviousSelection);
     RUN(exmdOnAnAlreadySelectedPresentIdStillActsOnIt);
     RUN(anSsgSaveIsCorrelatedAndRaisesNoExternalNotice);

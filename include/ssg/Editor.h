@@ -50,6 +50,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace ssg {
@@ -196,6 +197,9 @@ public:
     [[nodiscard]] CommandResult dispatch(std::string_view commandId);
     // CMD-6: payload-bearing client operations remain typed through application.
     [[nodiscard]] ClientInputResult input(ClientInput const& input);
+    // Programmatic text edits bypass key routing but share its locked maintenance.
+    [[nodiscard]] OperationResult applyTextInput(
+        TextInputCommand command, TextInputArguments arguments = {});
     [[nodiscard]] bool deferDispatch(std::string commandId);
     [[nodiscard]] bool dispatchInProgress() const noexcept;
     [[nodiscard]] Commands const& commandRegistry() const;
@@ -338,6 +342,28 @@ public:
     // stopping at the first failure.
     DeferredCommandQueue deferredCommands;
 
+private:
+    // Owns post-operation maintenance while the editor operation lock is held.
+    // Deferred commands checkpoint separately so each observes reconciled state.
+    class OperationScope {
+    public:
+        // None is for worker adoption and activation paths without local edits.
+        enum class RevisionScope { None, ActiveDocument, Workspace };
+        OperationScope(Editor& editor, RevisionScope revisions);
+        ~OperationScope();
+        void checkpoint(bool accepted);
+
+    private:
+        Editor& editor_;
+        RevisionScope scope_;
+        std::optional<std::pair<FileDocumentId, std::uint64_t>> activeRevision_;
+        std::unordered_map<std::uint64_t, std::uint64_t> revisions_;
+        bool externalPresentBefore_ = false;
+        bool pending_ = true;
+    };
+    OperationScope* activeOperation_ = nullptr;
+
+public:
     CommandResult dispatchLocked(std::string_view commandId);
     // The open file picker's candidate set, built when the picker opens and
     // rebuilt on filesystem refresh only while that picker remains open.
@@ -404,7 +430,7 @@ public:
     [[nodiscard]] PromptViewState promptView() const;
     // Whether any file is externally modified.
     [[nodiscard]] bool externalModificationPresent() const {
-        return !external.viewState().files.empty();
+        return external.hasPending();
     }
     // Dismiss the find/replace controller (and its prompt) when the active
     // document identity or revision no longer matches what it evaluated
