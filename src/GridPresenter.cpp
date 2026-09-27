@@ -1,10 +1,7 @@
 #include <ssg/GridPresenter.h>
 
-#include <ssg/Editor.h>
-
 #include <algorithm>
 #include <set>
-#include <stdexcept>
 #include <type_traits>
 
 namespace ssg {
@@ -213,49 +210,19 @@ GridPresenter::GridPresenter(GridPresenter&&) noexcept = default;
 GridPresenter& GridPresenter::operator=(GridPresenter&&) noexcept = default;
 
 std::optional<GridPresentation> GridPresenter::project(
-    Editor& runtime, GridPresentationRequest request) {
-    if (runtime.commands.dispatchInProgress()) {
-        throw std::logic_error{"a view cannot be presented during dispatch"};
-    }
-    std::lock_guard operationLock{runtime.operationMutex};
-    const auto* activeDocument = runtime.activeDocument();
-    std::string documentText = runtime.activeText();
-    std::uint64_t documentRevision =
-        activeDocument ? activeDocument->revision() : 0;
-    std::uint64_t documentLineCount =
-        activeDocument ? activeDocument->lineCount() : 1;
-    std::optional<std::string> diffFileIdentity;
-    if (const auto* tab = runtime.activeTabState();
-        tab && tab->kind == TabKind::LiveDiff &&
-        !tab->contentIdentity.empty()) {
-        diffFileIdentity = tab->contentIdentity;
-        documentRevision = runtime.diff.viewState().revision;
-    }
-    auto style = runtime.style;
-    auto panes = runtime.paneTopology;
-    auto selections = runtime.selection.selections;
-    auto findReplace = runtime.findReplace.viewState();
-    auto diff = runtime.diff.viewState();
-    auto lspSync = runtime.lspSync;
-    auto syntax = runtime.activeSyntaxView();
-    if (!syntax || syntax->revision() != documentRevision ||
-        syntax->language() != runtime.activeSyntaxLanguage() ||
-        syntax->textBytes() != documentText.size()) {
-        syntax = std::make_shared<const SyntaxViewState>(
-            documentRevision, LanguageId::plainText(),
-            documentText.size(), std::vector<SyntaxSpan>{});
-    }
-    auto theme = runtime.theme;
-    auto uiTree = runtime.projectedUiTree();
-    auto tabs = runtime.tabs.viewState();
-    auto externalModification = runtime.external.viewState();
-    auto followMode = runtime.follow.viewState().mode;
-    auto prompt = runtime.promptView();
-    auto paletteView = runtime.paletteView();
-    auto tree = runtime.tree.viewState();
-    auto clipboardWrite = runtime.clipboard.viewState().systemWrite;
-    const bool wordWrap = runtime.wordWrap;
-    const bool lineNumbers = runtime.lineNumbers;
+    EditorFrameState&& frame, GridPresentationRequest request) {
+    const auto& documentText = frame.documentText;
+    const auto documentRevision = frame.documentRevision;
+    const auto& selections = frame.selections;
+    const auto& findReplace = frame.findReplace;
+    const auto& diff = frame.diff;
+    const auto& tabs = frame.tabs;
+    const auto& uiTree = frame.uiTree;
+    const auto& style = frame.style;
+    const auto& prompt = frame.prompt;
+    const auto& paletteView = frame.paletteView;
+    const auto& tree = frame.tree;
+    const bool wordWrap = frame.wordWrap;
 
     auto& state = *state_;
     auto proposedNavigation = state.navigation;
@@ -282,7 +249,7 @@ std::optional<GridPresentation> GridPresenter::project(
         static_cast<int>(request.dimensions.columns),
         static_cast<int>(request.dimensions.rows)};
     auto solved = solveFrameLayout(
-        uiTree, prompt, externalModification,
+        uiTree, prompt, frame.externalModification,
         paletteView.activePicker.has_value(), gridSize, style);
     if (!solved.tree) return std::nullopt;
     auto layout = std::move(*solved.tree);
@@ -319,8 +286,8 @@ std::optional<GridPresentation> GridPresenter::project(
     if (const auto* node =
             layout.find(UiNodeId{std::string{kDocumentViewportNodeId}})) {
         document = solveDocumentSurface(
-            *node, panes, lineNumbers,
-            static_cast<std::uint32_t>(documentLineCount),
+            *node, frame.panes, frame.lineNumbers,
+            static_cast<std::uint32_t>(frame.documentLineCount),
             style.dimensions);
     }
 
@@ -332,7 +299,7 @@ std::optional<GridPresentation> GridPresenter::project(
         paneColumns = static_cast<std::uint32_t>(std::max(content.width, 1));
     }
     auto navigation = proposedNavigation;
-    const auto activeDiff = diff.fileForIdentity(diffFileIdentity);
+    const auto activeDiff = diff.fileForIdentity(frame.diffFileIdentity);
     const DiffFileView* activeDiffFile =
         activeDiff ? &activeDiff->get() : nullptr;
     if (documentChanged && !confirmedSelection) {
@@ -406,29 +373,29 @@ std::optional<GridPresentation> GridPresenter::project(
     return GridPresentation{
         .presentationGeneration = state.generation,
         .viewport = std::move(viewport),
-        .style = std::move(style),
+        .style = std::move(frame.style),
         .layout = std::move(layout),
         .palette = std::move(palette),
         .header = std::move(header),
         .footer = std::move(footer),
         .panel = std::move(panel),
         .document = std::move(document),
-        .documentText = std::move(documentText),
+        .documentText = std::move(frame.documentText),
         .documentRevision = documentRevision,
-        .diffFileIdentity = std::move(diffFileIdentity),
-        .selections = std::move(selections),
-        .findReplace = std::move(findReplace),
-        .diff = std::move(diff),
-        .lspSync = std::move(lspSync),
-        .syntax = std::move(syntax),
-        .theme = std::move(theme),
-        .uiTree = std::move(uiTree),
-        .tabs = std::move(tabs),
-        .externalModification = std::move(externalModification),
-        .followMode = followMode,
-        .prompt = std::move(prompt),
-        .paletteView = std::move(paletteView),
-        .clipboardWrite = std::move(clipboardWrite),
+        .diffFileIdentity = std::move(frame.diffFileIdentity),
+        .selections = std::move(frame.selections),
+        .findReplace = std::move(frame.findReplace),
+        .diff = std::move(frame.diff),
+        .lspSync = std::move(frame.lspSync),
+        .syntax = std::move(frame.syntax),
+        .theme = std::move(frame.theme),
+        .uiTree = std::move(frame.uiTree),
+        .tabs = std::move(frame.tabs),
+        .externalModification = std::move(frame.externalModification),
+        .followMode = frame.followMode,
+        .prompt = std::move(frame.prompt),
+        .paletteView = std::move(frame.paletteView),
+        .clipboardWrite = std::move(frame.clipboardWrite),
         .wordWrap = wordWrap,
     };
 }

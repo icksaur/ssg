@@ -7,6 +7,7 @@
 #include <ssg/DiffModel.h>
 #include <ssg/DocumentHistory.h>
 #include <ssg/DocumentPointerGesture.h>
+#include <ssg/EditorFrameState.h>
 #include <ssg/EditCommands.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/FileCommands.h>
@@ -184,6 +185,7 @@ public:
     Editor& operator=(Editor&&) = delete;
 
     [[nodiscard]] PumpResult pump();
+    [[nodiscard]] EditorFrameState captureFrameState() const;
     // Runtime-thread scan adoption; the caller holds operationMutex.
     [[nodiscard]] DiffIngressResult applyGitDiffScanLocked(GitDiffScan scan);
     // Applies a drained batch; the caller holds operationMutex as in pump.

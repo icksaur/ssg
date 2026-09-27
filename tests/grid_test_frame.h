@@ -12,7 +12,8 @@ inline std::optional<GridPresentation> projectGridFrame(
     Editor& session,
     ViewportDimensions dimensions, PaletteReport palette = {}) {
     GridPresenter presenter{};
-    return presenter.project(session, {dimensions, std::move(palette)});
+    return presenter.project(session.captureFrameState(),
+                             {dimensions, std::move(palette)});
 }
 
 inline std::optional<GridPresentation> projectGridFrame(

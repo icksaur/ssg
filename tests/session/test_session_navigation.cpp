@@ -1614,7 +1614,7 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     ssg::GridPresenter presenter{};
     ASSERT_TRUE(ssg::test::openFile(runtime, std::string{"lines.txt"})
                     .accepted());
-    auto frame = presenter.project(runtime, {{20, 4}, {}});
+    auto frame = presenter.project(runtime.captureFrameState(), {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto noGesture = runtime.input(ssg::ViewTransitionInput{
@@ -1624,7 +1624,7 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
                     .input(ssg::DocumentPointerInput{
                                        ssg::ByteOffset{1}})
                     .command->accepted());
-    frame = presenter.project(runtime, {{20, 4}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto invalidEdge = presenter.apply(
@@ -1657,7 +1657,7 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
         if (!applied.transition) return;
         ASSERT_EQ(runtime.input(*applied.transition).outcome,
                   ssg::ClientInputOutcome::Dispatched);
-        auto snapshot = presenter.project(runtime, {{20, 4}, {}});
+        auto snapshot = presenter.project(runtime.captureFrameState(), {{20, 4}, {}});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
         ASSERT_EQ(snapshot->selections.primary().anchor.byteOffset,
@@ -1682,7 +1682,7 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     if (!beforeApplied.transition) return;
     ASSERT_EQ(runtime.input(*beforeApplied.transition).outcome,
               ssg::ClientInputOutcome::Dispatched);
-    auto snapshot = presenter.project(runtime, {{20, 4}, {}});
+    auto snapshot = presenter.project(runtime.captureFrameState(), {{20, 4}, {}});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
         ASSERT_EQ(snapshot->selections.primary().active.byteOffset,
@@ -1732,7 +1732,7 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
                     .command->accepted());
 
     ssg::GridPresenter presenter{};
-    auto frame = presenter.project(runtime, {{20, 4}, {}});
+    auto frame = presenter.project(runtime.captureFrameState(), {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto baseline = frame->selections.items();
@@ -1749,7 +1749,7 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
     if (!applied.transition) return;
     ASSERT_EQ(runtime.input(*applied.transition).outcome,
               ssg::ClientInputOutcome::Dispatched);
-    frame = presenter.project(runtime, {{20, 4}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto& selections = frame->selections.items();

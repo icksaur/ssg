@@ -252,7 +252,7 @@ TEST(searchPanelPointerActivationRevealsTheMatch) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ssg::GridPresenter presenter;
-    ASSERT_TRUE(presenter.project(runtime, {{40, 8}, {}}).has_value());
+    ASSERT_TRUE(presenter.project(runtime.captureFrameState(), {{40, 8}, {}}).has_value());
     ASSERT_TRUE(runtime.dispatch("panel.show_search").accepted());
     ASSERT_EQ(runtime.input(ssg::ClientKeyInput{{}, "needle"}).outcome,
               ssg::ClientInputOutcome::Dispatched);
@@ -270,7 +270,7 @@ TEST(searchPanelPointerActivationRevealsTheMatch) {
     ASSERT_EQ(activation.outcome, ssg::ClientInputOutcome::ViewOwned);
     ASSERT_TRUE(activation.command && activation.command->viewAction);
     if (!activation.command || !activation.command->viewAction) return;
-    auto frame = presenter.project(runtime, {{40, 8}, {}});
+    auto frame = presenter.project(runtime.captureFrameState(), {{40, 8}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     ASSERT_EQ(frame->selections.primary().active.line, ssg::LineIndex{30});
@@ -279,7 +279,7 @@ TEST(searchPanelPointerActivationRevealsTheMatch) {
     ASSERT_TRUE(frame->viewport.firstVisualRow > 0);
     ASSERT_TRUE(
         presenter.apply(*activation.command->viewAction, *frame).accepted());
-    frame = presenter.project(runtime, {{40, 8}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{40, 8}, {}});
     ASSERT_TRUE(frame.has_value());
     if (frame) ASSERT_TRUE(frame->viewport.firstVisualRow > 0);
     std::filesystem::remove_all(root);

@@ -14,7 +14,8 @@ public:
 
     [[nodiscard]] std::optional<GridPresentation> present(
         Editor& session, PaletteReport palette = {}) {
-        return presenter_.project(session, {dimensions_, std::move(palette)});
+        return presenter_.project(session.captureFrameState(),
+                                  {dimensions_, std::move(palette)});
     }
 
     void resize(ViewportDimensions dimensions) noexcept {

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
+#include <utility>
 #include <variant>
 
 namespace ssg {
@@ -284,6 +285,63 @@ PaletteViewState Editor::paletteView() const {
     }
     view.fileCandidates = fileCandidates;
     return view;
+}
+
+EditorFrameState Editor::captureFrameState() const {
+    if (commands.dispatchInProgress()) {
+        throw std::logic_error{"a view cannot be presented during dispatch"};
+    }
+    std::lock_guard operationLock{operationMutex};
+    const auto* document = activeDocument();
+    const auto* tab = activeTabState();
+    const auto& text = activeText();
+    const auto revision = document ? document->revision() : std::uint64_t{0};
+    auto diffState = diff.viewState();
+    std::optional<std::string> diffFileIdentity;
+    if (tab && tab->kind == TabKind::LiveDiff &&
+        !tab->contentIdentity.empty()) {
+        diffFileIdentity = tab->contentIdentity;
+    }
+    const auto displayRevision =
+        diffFileIdentity ? diffState.revision : revision;
+    std::shared_ptr<const SyntaxViewState> syntax;
+    if (auto id = activeDocumentId()) {
+        if (auto it = documentRuntimeStates.find(id->value());
+            it != documentRuntimeStates.end()) {
+            syntax = it->second.syntax.sharedViewState();
+        }
+    }
+    if (!syntax || syntax->revision() != displayRevision ||
+        syntax->language() != activeSyntaxLanguage() ||
+        syntax->textBytes() != text.size()) {
+        syntax = std::make_shared<const SyntaxViewState>(
+            displayRevision, LanguageId::plainText(), text.size(),
+            std::vector<SyntaxSpan>{});
+    }
+    EditorFrameState frame;
+    frame.documentText = text;
+    frame.documentRevision = displayRevision;
+    frame.documentLineCount = document ? document->lineCount() : 1;
+    frame.diffFileIdentity = std::move(diffFileIdentity);
+    frame.style = style;
+    frame.panes = paneTopology;
+    frame.selections = selection.selections;
+    frame.findReplace = findReplace.viewState();
+    frame.diff = std::move(diffState);
+    frame.lspSync = lspSync;
+    frame.syntax = std::move(syntax);
+    frame.theme = theme;
+    frame.uiTree = projectedUiTree();
+    frame.tabs = tabs.viewState();
+    frame.externalModification = external.viewState();
+    frame.followMode = follow.viewState().mode;
+    frame.prompt = promptView();
+    frame.paletteView = paletteView();
+    frame.tree = tree.viewState();
+    frame.clipboardWrite = clipboard.viewState().systemWrite;
+    frame.wordWrap = wordWrap;
+    frame.lineNumbers = lineNumbers;
+    return frame;
 }
 
 } // namespace ssg

@@ -18,6 +18,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <string>
 
 namespace {
@@ -51,6 +52,77 @@ std::vector<std::string> documentRows(ssg::CellGrid const& grid) {
         if (!text.empty()) rows.push_back(std::move(text));
     }
     return rows;
+}
+
+const ssg::UiNode* findNode(const ssg::UiNode& node, std::string_view id) {
+    if (node.id.value() == id) return &node;
+    if (const auto* children = std::get_if<ssg::UiContainer>(&node.content)) {
+        for (const auto& child : children->children) {
+            if (const auto* found = findNode(child, id)) return found;
+        }
+    }
+    return nullptr;
+}
+
+TEST(editorFrameCapturesOneOperationAndMovesTextIntoPresentation) {
+    auto root = uniqueRoot();
+    const std::string text(32 * 1024, 'x');
+    std::ofstream{root / "a.txt", std::ios::binary} << text;
+    auto created = ssg::createEditor(
+        {root, root / "recovery", root / "archive"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto runtime = std::move(created.session);
+    ASSERT_TRUE(ssg::test::openFile(*runtime, std::string{"a.txt"}).accepted());
+
+    std::unique_lock operation{runtime->operationMutex};
+    runtime->statusText = "in progress";
+    std::promise<void> started;
+    auto ready = started.get_future();
+    auto capture = std::async(std::launch::async, [&] {
+        started.set_value();
+        return runtime->captureFrameState();
+    });
+    ready.wait();
+    const ssg::DocumentPosition end{
+        ssg::ByteOffset{text.size()}, ssg::LineIndex{0},
+        ssg::CellIndex{static_cast<std::uint32_t>(text.size())}};
+    runtime->selection.selections =
+        ssg::SelectionSet{{ssg::Selection{end, end}}};
+    runtime->statusText = "complete";
+    operation.unlock();
+
+    auto frame = capture.get();
+    const auto* status = findNode(frame.uiTree.root, ssg::kFooterStatusFieldNodeId);
+    ASSERT_TRUE(status && status->resolved);
+    if (status && status->resolved) {
+        ASSERT_EQ(status->resolved->value, std::string{"complete"});
+    }
+    ASSERT_EQ(frame.selections.primary().active.byteOffset,
+              ssg::ByteOffset{text.size()});
+    ASSERT_EQ(frame.documentText, text);
+    ASSERT_TRUE(frame.syntax != nullptr);
+    if (frame.syntax) {
+        ASSERT_EQ(frame.syntax->revision(), frame.documentRevision);
+        ASSERT_EQ(frame.syntax->textBytes(), text.size());
+    }
+
+    const char* capturedText = frame.documentText.data();
+    const auto* capturedCandidates = frame.paletteView.commandCandidates.data();
+    ASSERT_FALSE(frame.paletteView.commandCandidates.empty());
+    ssg::GridPresenter presenter;
+    auto presented = presenter.project(std::move(frame), {{80, 24}, {}});
+    ASSERT_TRUE(presented.has_value());
+    if (presented) {
+        ASSERT_EQ(presented->documentText.data(), capturedText);
+        ASSERT_EQ(presented->paletteView.commandCandidates.data(),
+                  capturedCandidates);
+        ASSERT_EQ(presented->selections.primary().active.byteOffset,
+                  ssg::ByteOffset{text.size()});
+    }
+    ASSERT_TRUE(runtime->dispatch("file.new").accepted());
+    if (presented) ASSERT_EQ(presented->documentText, text);
+    fs::remove_all(root);
 }
 
 TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
@@ -157,6 +229,7 @@ TEST(builderSettersReachTheRenderedScreen) {
 }  // namespace
 
 SSG_TEST_SUITE(test_grid_presentation_builder) {
+    RUN(editorFrameCapturesOneOperationAndMovesTextIntoPresentation);
     RUN(builtSnapshotRendersTheDocumentLikeTheRealRuntime);
     RUN(theBuilderProducesARenderableScreenWithoutAnyFilesystem);
     RUN(builderSettersReachTheRenderedScreen);

@@ -1,10 +1,11 @@
 #pragma once
 
-#include <ssg/Editor.h>
+#include <ssg/EditorFrameState.h>
 #include <ssg/ViewActionResult.h>
 #include <ssg/Layout.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/UiRegionProjection.h>
+#include <ssg/Viewport.h>
 
 #include <cstdint>
 #include <memory>
@@ -58,7 +59,7 @@ public:
     GridPresenter& operator=(GridPresenter&&) noexcept;
 
     [[nodiscard]] std::optional<GridPresentation> project(
-        Editor& session, GridPresentationRequest request);
+        EditorFrameState&& frame, GridPresentationRequest request);
     [[nodiscard]] ViewActionResult apply(
         ViewAction const& request, GridPresentation const& presentation);
 

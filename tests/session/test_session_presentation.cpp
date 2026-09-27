@@ -606,7 +606,7 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
                     .accepted());
 
     ssg::GridPresenter presenter{};
-    auto frame = presenter.project(runtime, {{80, 12}, {}});
+    auto frame = presenter.project(runtime.captureFrameState(), {{80, 12}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const ssg::ViewAction noOpAction =
@@ -614,7 +614,7 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     auto noOp = presenter.apply(noOpAction, *frame);
     ASSERT_TRUE(noOp.accepted());
     ASSERT_FALSE(presenter.apply(noOpAction, *frame).accepted());
-    frame = presenter.project(runtime, {{80, 12}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{80, 12}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
@@ -625,7 +625,7 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     auto stale = presenter.apply(scrollAction, *frame);
     ASSERT_FALSE(stale.accepted());
 
-    auto scrolled = presenter.project(runtime, {{80, 12}, {}});
+    auto scrolled = presenter.project(runtime.captureFrameState(), {{80, 12}, {}});
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
     ASSERT_EQ(scrolled->viewport.firstVisualRow, 5U);
@@ -649,7 +649,7 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     auto& runtime = *created.session;
 
     ssg::GridPresenter presenter{};
-    auto frame = presenter.project(runtime, {{80, 24}, {}});
+    auto frame = presenter.project(runtime.captureFrameState(), {{80, 24}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     ASSERT_TRUE(frame->document.has_value());
@@ -660,7 +660,7 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     ASSERT_TRUE(split.completed());
     ASSERT_FALSE(split.viewAction.has_value());
 
-    frame = presenter.project(runtime, {{80, 24}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{80, 24}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     ASSERT_TRUE(frame->document.has_value());
@@ -676,7 +676,7 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     ASSERT_TRUE(runtime
                     .dispatch("panel.show_files")
                     .accepted());
-    frame = presenter.project(runtime, {{80, 24}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{80, 24}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto focused = runtime.dispatch("pane.focus_up");
@@ -706,7 +706,7 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     ASSERT_EQ(focusedSnapshot->followMode,
               ssg::FollowMode::Paused);
 
-    frame = presenter.project(runtime, {{80, 24}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{80, 24}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto focusedAgain = runtime.dispatch("pane.focus_down");
@@ -734,14 +734,14 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     ASSERT_TRUE(repeatedFocusSnapshot.has_value());
     if (!repeatedFocusSnapshot) return;
 
-    frame = presenter.project(runtime, {{80, 24}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{80, 24}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto cycled =
         runtime.dispatch("pane.next");
     ASSERT_TRUE(cycled.completed());
     ASSERT_FALSE(cycled.viewAction.has_value());
-    auto cycledFrame = presenter.project(runtime, {{80, 24}, {}});
+    auto cycledFrame = presenter.project(runtime.captureFrameState(), {{80, 24}, {}});
     ASSERT_TRUE(cycledFrame && cycledFrame->document);
     if (!cycledFrame || !cycledFrame->document) return;
     ASSERT_EQ(cycledFrame->document
@@ -749,7 +749,7 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
                   .id,
               ssg::PaneId{1});
 
-    frame = presenter.project(runtime, {{80, 24}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{80, 24}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto closed =
@@ -757,7 +757,7 @@ TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     ASSERT_TRUE(closed.completed());
     ASSERT_FALSE(closed.viewAction.has_value());
 
-    auto closedFrame = presenter.project(runtime, {{80, 24}, {}});
+    auto closedFrame = presenter.project(runtime.captureFrameState(), {{80, 24}, {}});
     ASSERT_TRUE(closedFrame.has_value());
     if (closedFrame) {
         ASSERT_TRUE(closedFrame->document.has_value());
@@ -792,7 +792,7 @@ TEST(visualLineMovementRequiresPresenterResolution) {
     ASSERT_EQ(*moved.viewAction, expectedMove);
 
     ssg::GridPresenter presenter{};
-    auto frame = presenter.project(runtime, {{80, 12}, {}});
+    auto frame = presenter.project(runtime.captureFrameState(), {{80, 12}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto applied = presenter.apply(*moved.viewAction, *frame);
@@ -803,7 +803,7 @@ TEST(visualLineMovementRequiresPresenterResolution) {
             applied.transition->transition));
     const auto submitted = runtime.input(*applied.transition);
     ASSERT_EQ(submitted.outcome, ssg::ClientInputOutcome::Dispatched);
-    auto confirmed = presenter.project(runtime, {{80, 12}, {}});
+    auto confirmed = presenter.project(runtime.captureFrameState(), {{80, 12}, {}});
     ASSERT_TRUE(confirmed.has_value());
     if (!confirmed) return;
     ASSERT_EQ(confirmed->selections.primary().active.line,
@@ -837,7 +837,7 @@ TEST(visualLineMovementRequiresPresenterResolution) {
         if (!result.transition) return;
         ASSERT_EQ(runtime.input(*result.transition).outcome,
                   ssg::ClientInputOutcome::Dispatched);
-        confirmed = presenter.project(runtime, {{80, 12}, {}});
+        confirmed = presenter.project(runtime.captureFrameState(), {{80, 12}, {}});
         ASSERT_TRUE(confirmed.has_value());
         if (!confirmed) return;
         ASSERT_NE(confirmed->selections, before);
@@ -860,12 +860,12 @@ TEST(visualMovementUsesActivePaneAcrossSerializedInput) {
                     .accepted());
 
     ssg::GridPresenter presenter{};
-    auto frame = presenter.project(runtime, {{41, 15}, {}});
+    auto frame = presenter.project(runtime.captureFrameState(), {{41, 15}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto split = runtime.dispatch("pane.split_horizontal");
     ASSERT_TRUE(split.completed());
-    frame = presenter.project(runtime, {{41, 15}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{41, 15}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame || !frame->document ||
         frame->document->panes.size() != 2) {
@@ -882,7 +882,7 @@ TEST(visualMovementUsesActivePaneAcrossSerializedInput) {
     if (!proposed.transition) return;
     ASSERT_EQ(runtime.input(*proposed.transition).outcome,
               ssg::ClientInputOutcome::Dispatched);
-    frame = presenter.project(runtime, {{41, 15}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{41, 15}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     ASSERT_EQ(frame->selections.primary().active.line.value(),
@@ -902,7 +902,7 @@ TEST(visualMovementUsesActivePaneAcrossSerializedInput) {
         ssg::ClientInputOutcome::Dispatched);
     ASSERT_EQ(runtime.input(*proposal.transition).outcome,
               ssg::ClientInputOutcome::Dispatched);
-    frame = presenter.project(runtime, {{41, 15}, {}});
+    frame = presenter.project(runtime.captureFrameState(), {{41, 15}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     ASSERT_EQ(frame->selections.primary().active.line.value(),

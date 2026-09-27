@@ -54,7 +54,8 @@ void TuiClient::applyViewAction(CommandResult const& result) {
 
 void TuiClient::refresh() {
     auto next = presenter_.project(
-        *runtime_, GridPresentationRequest{dimensions_, PaletteReport{}});
+        runtime_->captureFrameState(),
+        GridPresentationRequest{dimensions_, PaletteReport{}});
     if (!next) {
         throw std::logic_error{"TUI runtime did not return its attached snapshot"};
     }

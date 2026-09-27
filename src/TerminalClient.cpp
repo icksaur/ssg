@@ -370,8 +370,9 @@ struct TerminalClient::Impl {
         if (!presentationRequested) return false;
         presentationRequested = false;
         trace(TerminalClientStage::Project);
-        auto snapshot =
-            presenter.project(editor, {dimensions(), palette.report()});
+        auto frame = editor.captureFrameState();
+        auto snapshot = presenter.project(
+            std::move(frame), {dimensions(), palette.report()});
         if (!snapshot) return false;
         focus = effectiveUiFocus(snapshot->uiTree);
         palette.adopt(*snapshot);
