@@ -218,8 +218,9 @@ TEST(helpOpenIsIdempotentAndRefreshes) {
     ASSERT_TRUE(runtime.dispatch("help.open")
                     .accepted());
     const auto firstCount = tabCount(runtime);
-    const auto firstDocument = runtime.readOnlyTabDocuments.at("help:main");
-    runtime.findDocumentId = firstDocument;
+    const auto firstDocument = ssg::test::contentTabDocument(
+        runtime, ssg::TabKind::ReadOnlyOutput, "help:main");
+    ssg::test::seedDocumentAssociations(runtime, firstDocument);
     ASSERT_TRUE(ssg::test::hasDocumentAssociation(runtime, firstDocument));
     ASSERT_TRUE(runtime.dispatch("help.open")
                     .accepted());

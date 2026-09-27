@@ -3,6 +3,7 @@
 #include "grid_test_frame.h"
 
 #include <ssg/FilesystemWatcher.h>
+#include <ssg/SessionSnapshot.h>
 
 #include <filesystem>
 #include <fstream>

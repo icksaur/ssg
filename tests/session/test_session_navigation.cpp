@@ -498,9 +498,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     ASSERT_TRUE(documentId.has_value());
     if (!documentTab || !liveDiffTab || !documentId) return;
 
-    runtime.documentLanguageOverrides.insert_or_assign(
-        documentId->value(), ssg::LanguageId::plainText());
-    runtime.findDocumentId = documentId;
+    ssg::test::seedDocumentAssociations(runtime, *documentId);
     ASSERT_TRUE(ssg::test::dispatchInput(runtime, ssg::TabPointerInput{*documentTab}).accepted());
     ASSERT_TRUE(ssg::closeTabById(runtime, *documentTab).accepted);
     ASSERT_FALSE(ssg::test::hasDocumentAssociation(runtime, *documentId));
@@ -528,11 +526,9 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     ASSERT_EQ(countTabsOfKind(reopened->tabs, ssg::TabKind::LiveDiff),
               std::size_t{1});
 
-    const auto liveDiffDocument =
-        runtime.liveDiffDocuments.at("coexist-id");
-    runtime.documentLanguageOverrides.insert_or_assign(
-        liveDiffDocument.value(), ssg::LanguageId::plainText());
-    runtime.findDocumentId = liveDiffDocument;
+    const auto liveDiffDocument = ssg::test::contentTabDocument(
+        runtime, ssg::TabKind::LiveDiff, "coexist-id");
+    ssg::test::seedDocumentAssociations(runtime, liveDiffDocument);
     ASSERT_TRUE(ssg::test::dispatchInput(runtime, ssg::TabPointerInput{*liveDiffTab}).accepted());
     ASSERT_TRUE(ssg::closeTabById(runtime, *liveDiffTab).accepted);
     ASSERT_FALSE(
@@ -1038,7 +1034,12 @@ TEST(workerFilesystemRefreshPublishesChangedFileCandidates) {
     ASSERT_TRUE(runtime.dispatch("file_finder.open").accepted());
     std::ofstream{root / "workspace" / "arrived.txt"} << "new\n";
 
-    runtime.refreshTreeForPublication();
+    {
+        std::lock_guard lock{runtime.operationMutex};
+        ssg::GitDiffWorkerDrain batch;
+        batch.fullReconcile = true;
+        ASSERT_TRUE(runtime.adoptGitDiffWorkerDrainLocked(std::move(batch)));
+    }
 
     auto snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});

@@ -3,6 +3,7 @@
 
 #include <ssg/Editor.h>
 #include <ssg/GridPresenter.h>
+#include <ssg/SessionSnapshot.h>
 #include <ssg/TreeSitterGrammars.h>
 #include <ssg/PlatformRuntime.h>
 #include <ssg/RuntimeTiming.h>

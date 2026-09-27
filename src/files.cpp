@@ -251,6 +251,21 @@ OperationResult Editor::activateDocument(FileDocumentId document) {
 // Opening, saving, renaming and deleting files. All registered commands are
 // no-argument; callers with explicit paths use applyFilePathCompletion or the
 // typed file functions directly.
+OperationResult Editor::deleteActiveFile() {
+    if (activeTabIsLiveDiff())
+        return failure("command is unavailable in live diff tabs");
+    auto id = activeDocumentId();
+    if (!id) return failure("no active document");
+    auto result = workspace.deleteFile(*id);
+    if (!result.accepted()) return failure(workspaceMessage(result));
+    // Ordinary tab close would try to close the workspace document that
+    // deleteFile has already removed.
+    (void)tabs.dropDocument(*id);
+    discardDocumentRuntimeState(*id);
+    (void)refreshTree();
+    return success();
+}
+
 void registerFileCommands(Commands& commands, Editor& runtime) {
     commands.add("workspace.open_directory", "Workspace Open Directory",
         [&runtime] {
@@ -325,24 +340,7 @@ void registerFileCommands(Commands& commands, Editor& runtime) {
             return success();
         });
     commands.add("file.delete", "Delete File", [&runtime] {
-            if (runtime.activeTabIsLiveDiff())
-                return failure("command is unavailable in live diff tabs");
-            auto id = runtime.activeDocumentId();
-            if (!id) return failure("no active document");
-            auto result = runtime.workspace.deleteFile(*id);
-            if (!result.accepted()) return failure(workspaceMessage(result));
-            // The tab's document no longer has backing bytes, so leaving it
-            // open would offer editing and saving of a file that is gone.
-            // Dropped rather than closed: deleteFile has already removed the
-            // workspace entry, so the ordinary close path would fail on a
-            // missing document and strand the tab. That path also owns the
-            // per-document runtime state, so bypassing it means discarding
-            // that state here or it accumulates for a document nobody can
-            // reach again.
-            (void)runtime.tabs.dropDocument(*id);
-            runtime.discardDocumentRuntimeState(*id);
-            (void)runtime.refreshTree();
-            return success();
+            return runtime.deleteActiveFile();
         });
     commands.add("file.new_directory", "File New Directory", [&runtime] {
             auto opened = openGenericPrompt(runtime.screen.prompt(),

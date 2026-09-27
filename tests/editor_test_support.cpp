@@ -99,17 +99,56 @@ CommandResult dragDocument(Editor& editor, std::uint64_t anchor,
     return move;
 }
 
+struct EditorAccess {
+    static bool hasDocumentAssociation(
+        const Editor& editor, FileDocumentId document) {
+        const auto mappedDocument =
+            [&](const auto& entry) { return entry.second == document; };
+        return editor.workspace.tryDocument(document) != nullptr ||
+               editor.documentRuntimeStates.contains(document.value()) ||
+               editor.documentLanguageOverrides.contains(document.value()) ||
+               editor.findDocumentId == document ||
+               std::any_of(editor.liveDiffDocuments.begin(),
+                           editor.liveDiffDocuments.end(), mappedDocument) ||
+               std::any_of(editor.readOnlyTabDocuments.begin(),
+                           editor.readOnlyTabDocuments.end(), mappedDocument);
+    }
+
+    static void seedDocumentAssociations(
+        Editor& editor, FileDocumentId document) {
+        editor.documentLanguageOverrides.insert_or_assign(
+            document.value(), LanguageId::plainText());
+        editor.findDocumentId = document;
+    }
+
+    static FileDocumentId contentTabDocument(
+        const Editor& editor, TabKind kind, std::string_view identity) {
+        const auto& documents = kind == TabKind::LiveDiff
+                                    ? editor.liveDiffDocuments
+                                    : editor.readOnlyTabDocuments;
+        return documents.at(std::string{identity});
+    }
+
+    static std::size_t liveDiffDocumentCount(const Editor& editor) {
+        return editor.liveDiffDocuments.size();
+    }
+};
+
 bool hasDocumentAssociation(const Editor& editor, FileDocumentId document) {
-    const auto mappedDocument =
-        [&](const auto& entry) { return entry.second == document; };
-    return editor.workspace.tryDocument(document) != nullptr ||
-           editor.documentRuntimeStates.contains(document.value()) ||
-           editor.documentLanguageOverrides.contains(document.value()) ||
-           editor.findDocumentId == document ||
-           std::any_of(editor.liveDiffDocuments.begin(),
-                       editor.liveDiffDocuments.end(), mappedDocument) ||
-           std::any_of(editor.readOnlyTabDocuments.begin(),
-                       editor.readOnlyTabDocuments.end(), mappedDocument);
+    return EditorAccess::hasDocumentAssociation(editor, document);
+}
+
+void seedDocumentAssociations(Editor& editor, FileDocumentId document) {
+    EditorAccess::seedDocumentAssociations(editor, document);
+}
+
+FileDocumentId contentTabDocument(
+    const Editor& editor, TabKind kind, std::string_view identity) {
+    return EditorAccess::contentTabDocument(editor, kind, identity);
+}
+
+std::size_t liveDiffDocumentCount(const Editor& editor) {
+    return EditorAccess::liveDiffDocumentCount(editor);
 }
 
 }

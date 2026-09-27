@@ -4,27 +4,25 @@
 #include <ssg/ClipboardRegister.h>
 #include <ssg/Command.h>
 #include <ssg/CompiledKeymap.h>
+#include <ssg/DiffIngressResult.h>
 #include <ssg/DiffModel.h>
 #include <ssg/DocumentHistory.h>
 #include <ssg/DocumentPointerGesture.h>
 #include <ssg/EditorFrameState.h>
 #include <ssg/EditCommands.h>
 #include <ssg/ExternalModificationFlow.h>
-#include <ssg/FileCommands.h>
 #include <ssg/FindReplace.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/GitDiffIngress.h>
-#include <ssg/GitDiffScanStage.h>
 #include <ssg/InputRouting.h>
 #include <ssg/Keymap.h>
-#include <ssg/LineLayoutCache.h>
 #include <ssg/LspState.h>
+#include <ssg/PaletteSearcher.h>
 #include <ssg/PaneTopology.h>
 #include <ssg/Picker.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/ScreenState.h>
 #include <ssg/Search.h>
-#include <ssg/SessionSnapshot.h>
 #include <ssg/Settings.h>
 #include <ssg/StatusFields.h>
 #include <ssg/Style.h>
@@ -34,11 +32,8 @@
 #include <ssg/Theme.h>
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
-#include <ssg/Viewport.h>
 #include <ssg/Workspace.h>
-#include <ssg/WorkspaceFileIndex.h>
 
-#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -68,6 +63,7 @@ struct EditorConfig {
 };
 
 struct Editor;
+namespace test { struct EditorAccess; }
 
 struct EditorCreateResult {
     std::unique_ptr<Editor> session;
@@ -114,21 +110,6 @@ inline std::uint32_t uint32Setting(SettingsModel const& settings, SettingKey key
     return fallback;
 }
 
-struct DocumentRuntimeState {
-    explicit DocumentRuntimeState(
-        const SettingsModel& settings,
-        std::shared_ptr<SyntaxParser> parser = nullptr)
-        : history{settings}, syntax{std::move(parser)} {}
-
-    DocumentRuntimeState(const DocumentRuntimeState&) = delete;
-    DocumentRuntimeState& operator=(const DocumentRuntimeState&) = delete;
-    DocumentRuntimeState(DocumentRuntimeState&&) noexcept = default;
-    DocumentRuntimeState& operator=(DocumentRuntimeState&&) = default;
-
-    DocumentHistory history;
-    SyntaxModel syntax;
-};
-
 void bindRuntimeEditing(Commands& commands, Editor& runtime);
 void bindRuntimeFiles(Commands& commands, Editor& runtime);
 void bindRuntimePresentation(Commands& commands, Editor& runtime);
@@ -167,6 +148,21 @@ void registerAllCommands(Commands& commands, Editor& runtime);
 struct Editor final {
 private:
     friend EditorCreateResult createEditor(EditorConfig config);
+
+    struct DocumentRuntimeState {
+        explicit DocumentRuntimeState(
+            const SettingsModel& settings,
+            std::shared_ptr<SyntaxParser> parser = nullptr)
+            : history{settings}, syntax{std::move(parser)} {}
+
+        DocumentRuntimeState(const DocumentRuntimeState&) = delete;
+        DocumentRuntimeState& operator=(const DocumentRuntimeState&) = delete;
+        DocumentRuntimeState(DocumentRuntimeState&&) noexcept = default;
+        DocumentRuntimeState& operator=(DocumentRuntimeState&&) = default;
+
+        DocumentHistory history;
+        SyntaxModel syntax;
+    };
 
     Editor(std::filesystem::path canonicalCwd,
            std::filesystem::path recoveryRoot,
@@ -207,9 +203,7 @@ public:
                     std::function<CommandResult()> handler);
     void replaceCommands(std::span<std::string const> oldIds,
                          Commands::Replacements replacements);
-    void startWorkspaceSearch(std::string query, std::uint64_t sourceRevision);
-    void startWorkspaceSearch(ParsedSearchQuery query,
-                              std::uint64_t sourceRevision);
+    void openWorkspaceSearch();
     [[nodiscard]] bool workspaceSearchPending() const noexcept;
     void advanceWorkspaceSearch();
     [[nodiscard]] OperationResult applySearchQueryChange(
@@ -224,6 +218,7 @@ public:
     [[nodiscard]] FindReplaceOperationResult updateReplacement(
         PromptEditState replacement);
     [[nodiscard]] OperationResult saveSession();
+    [[nodiscard]] OperationResult deleteActiveFile();
 
     struct ResolvedPromptControls {
         std::vector<PromptControl> controls;
@@ -231,16 +226,21 @@ public:
     };
 
     std::filesystem::path root;
+private:
     std::unique_ptr<GitIgnoreMatcher> workspaceIgnore;
     std::filesystem::path recoveryRoot;
     std::filesystem::path archiveRoot;
     std::filesystem::path snapshotPath;
     std::string snapshotIdentity;
     RecoveryManager recovery;
+public:
     Workspace workspace;
     SelectionViewState selection;
     SettingsModel settings;
+private:
+    friend struct test::EditorAccess;
     std::map<std::uint64_t, DocumentRuntimeState> documentRuntimeStates;
+public:
     ClipboardRegister clipboard;
     FindReplaceController findReplace;
     // The document the find/replace controller last evaluated against.  Find
@@ -254,14 +254,17 @@ public:
     ExternalModificationFlow external;
     FollowEditsModel follow;
     TreeModel tree;
+private:
     std::shared_ptr<SyntaxParser> syntaxParser;
     SyntaxWorker syntaxWorker;
+public:
     // The single interaction authority: owner of the screen schema, the
     // prompt surface, panel/focus/provider truth, the interaction projection,
     // and the tree revision source. Presentation reads its projection; every
     // focus, presence, and prompt change flows through it. Declared after
     // `tree` so it is constructed first.
     ScreenState screen;
+private:
     std::unordered_map<std::string, FileDocumentId> liveDiffDocuments;
     // Read-only, in-memory "output" tabs (help, and any future
     // generated-content tab), keyed by the tab's content identity. Mirrors
@@ -271,20 +274,18 @@ public:
     // from autosave and cannot be saved; their content is refreshed by
     // remove+recreate, never edited in place (see openReadOnlyTab).
     std::unordered_map<std::string, FileDocumentId> readOnlyTabDocuments;
-    // The user's home directory, resolved once at construction (HOME, then
-    // USERPROFILE, with trailing separators stripped) so the header path
-    // field's
-    // "~" abbreviation is deterministic across a session rather than re-reading
-    // the process environment on every presentation. Empty disables
-    // abbreviation.
+    // Resolved once so the header path abbreviation is stable for the session.
     std::string homeDirectory;
     // Per-document syntax language override for documents with no on-disk path
     // to infer a language from (a read-only help/output tab). refreshSyntax
     // consults this before falling back to path-derived detection, so a help
     // tab can be highlighted as e.g. Markdown despite being untitled.
     std::unordered_map<std::uint64_t, LanguageId> documentLanguageOverrides;
+public:
     SearchController search;
+private:
     std::uint64_t workspaceSearchGeneration = 0;
+public:
     NavigationHistory navigation{64};
     LspSyncViewState lspSync;
     LspFeatureViewState lspFeatures;
@@ -306,6 +307,8 @@ public:
     Style style{};
     mutable std::mutex operationMutex;
     Commands commands;
+    CommandResult dispatchLocked(std::string_view commandId);
+private:
     // Holds command IDs requested by the active handler until it finishes.
     // Only Editor can enqueue, so work cannot be stranded outside dispatch.
     class DeferredCommandQueue {
@@ -364,23 +367,29 @@ private:
     OperationScope* activeOperation_ = nullptr;
 
 public:
-    CommandResult dispatchLocked(std::string_view commandId);
     // The open file picker's candidate set, built when the picker opens and
     // rebuilt on filesystem refresh only while that picker remains open.
     std::vector<PaletteCandidate> fileCandidates;
+private:
     std::vector<std::string> loadedFilesystemDirectories;
     std::optional<WorkspaceCorpus> workspaceSearchCorpus;
     std::optional<WorkspaceSearchState> workspaceSearchState;
     std::optional<std::uint64_t> panelWorkspaceSearchGeneration;
+public:
     PaneTopology paneTopology = PaneTopology::initial();
     DocumentPointerGesture documentPointerGesture;
     bool wordWrap = false;
     bool lineNumbers = false;
+private:
     // The active document's immutable flattened text, shared by navigation and
     // presentation until its document revision changes.
     mutable std::optional<std::uint64_t> activeTextRevision;
     mutable std::optional<FileDocumentId> activeTextDocument;
     mutable std::string activeTextCache;
+    void startWorkspaceSearch(std::string query, std::uint64_t sourceRevision);
+    void startWorkspaceSearch(ParsedSearchQuery query,
+                              std::uint64_t sourceRevision);
+public:
     // I1: Editor alone performs workspace/recovery effects for
     // close/reopen.
     [[nodiscard]] TabLifecycleResult closeTab(
@@ -389,8 +398,10 @@ public:
         const TabState& tab, const RecoveryRecordId& compensation);
     [[nodiscard]] OperationResult restoreSession();
 
+private:
     [[nodiscard]] WorkspaceCorpus workspaceCorpus() const;
     void cancelWorkspaceSearch();
+public:
     [[nodiscard]] std::optional<FileDocumentId> activeDocumentId() const;
     [[nodiscard]] const TabState* activeTabState() const;
     // Whether the active tab shows a live diff. A guard several command
@@ -403,9 +414,10 @@ public:
     [[nodiscard]] Document const* activeDocument() const;
     [[nodiscard]] Document* activeDocument();
     void ensureDocumentRuntimeState(FileDocumentId document);
-    // Called after workspace ownership ends. Removes every runtime association
-    // for the document and is safe to repeat.
+private:
+    // After workspace removal, erase all associations; safe to repeat.
     void discardDocumentRuntimeState(FileDocumentId document);
+public:
     [[nodiscard]] DocumentHistory& historyFor(FileDocumentId document);
     [[nodiscard]] SyntaxModel& syntaxFor(FileDocumentId document);
     [[nodiscard]] std::shared_ptr<const SyntaxViewState>
@@ -432,10 +444,9 @@ public:
     [[nodiscard]] bool externalModificationPresent() const {
         return external.hasPending();
     }
-    // Dismiss the find/replace controller (and its prompt) when the active
-    // document identity or revision no longer matches what it evaluated
-    // against, so stale matches are never navigable or projected.
+private:
     void reconcileFindDocument();
+public:
     // The projected and command-bound header/footer status fields the UI tree
     // resolves its provider widgets against.
     // The status-field styling UI resolution wants: the grid path prefixes
@@ -476,7 +487,9 @@ public:
     [[nodiscard]] OperationResult cyclePane(CycleDirection direction);
     [[nodiscard]] bool focusPane(PaneId pane);
     [[nodiscard]] bool refreshTree();
+private:
     void refreshTreeForPublication();
+public:
     [[nodiscard]] OperationResult toggleTreeExpanded(
         const TreeProviderId& providerId, const TreeNodeId& nodeId);
     // Re-assemble the authority-owned screen schema from the given UI inputs
@@ -490,17 +503,21 @@ public:
     // setting.
     void rebuildFileCandidates();
     void refreshSyntax(std::vector<SyntaxEdit> edits = {});
+private:
     void refreshLiveDiffDocuments(const DiffViewState& view);
+public:
     [[nodiscard]] bool revealCurrentDiffTarget(const FollowTarget& target);
     // While `deferringEnrichment` is set, workspace tree scans wait until
     // `primeDeferred`; syntax requests are always non-blocking.
     void primeDeferred();
+private:
     bool deferringEnrichment = false;
     bool pendingTreeRefresh = false;
     std::uint64_t lastGitScanRevision = 0;
     std::optional<std::string> currentGitBranch;
     GitDiffIngress gitDiffIngress;
 
+public:
     void showStatus(std::string text);
     [[nodiscard]] const PlatformWake* gitDiffWake() const noexcept;
 };

@@ -1,10 +1,13 @@
 #include <ssg/Editor.h>
 #include <ssg/FilesystemWatcher.h>
+#include <ssg/GitDiffScanStage.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/ScreenLayout.h>
 #include <ssg/Selection.h>
-#include <ssg/TextCodec.h>
+#include <ssg/SessionSnapshot.h>
 #include <ssg/Style.h>
+#include <ssg/TextCodec.h>
+#include <ssg/WorkspaceFileIndex.h>
 #include <ssg/platform_files.h>
 
 #include <algorithm>
@@ -904,6 +907,10 @@ void Editor::startWorkspaceSearch(std::string query,
     workspaceSearchState =
         search.beginWorkspaceSearch(std::move(query), sourceRevision);
     workspaceSearchCorpus = workspaceCorpus();
+}
+
+void Editor::openWorkspaceSearch() {
+    startWorkspaceSearch(std::string{}, ++workspaceSearchGeneration);
 }
 
 void Editor::startWorkspaceSearch(ParsedSearchQuery query,

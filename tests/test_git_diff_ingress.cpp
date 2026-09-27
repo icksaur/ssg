@@ -126,7 +126,7 @@ TEST(batchAdoptionPublishesFollowAndRejectsStaleAndInvalidScans) {
     ASSERT_EQ(frame->documentText, std::string{"same\nnew\n"});
     ASSERT_EQ(frame->selections.primary().active.byteOffset, ByteOffset{5});
     ASSERT_EQ(frame->followMode, FollowMode::Following);
-    ASSERT_EQ(editor.liveDiffDocuments.size(), std::size_t{1});
+    ASSERT_EQ(test::liveDiffDocumentCount(editor), std::size_t{1});
     const auto beforeDiff = editor.diff.viewState();
     const auto beforeFollow = editor.follow.viewState();
     const auto beforeTree = editor.tree.viewState();
@@ -154,7 +154,13 @@ TEST(batchAdoptionPublishesFollowAndRejectsStaleAndInvalidScans) {
         std::lock_guard lock{editor.operationMutex};
         ASSERT_TRUE(editor.adoptGitDiffWorkerDrainLocked(std::move(branchOnly)));
     }
-    ASSERT_EQ(editor.currentGitBranch, std::optional<std::string>{"feature"});
+    const auto fields = editor.uiStatusFields();
+    ASSERT_TRUE(std::any_of(fields.header.begin(), fields.header.end(),
+                            [](const StatusField& field) {
+                                return field.id == kBranchStatusFieldId &&
+                                       field.value.find("feature") !=
+                                           std::string::npos;
+                            }));
     ASSERT_EQ(editor.diff.viewState(), beforeDiff);
     ASSERT_EQ(editor.follow.viewState(), beforeFollow);
     ASSERT_EQ(editor.tree.viewState(), beforeTree);
@@ -162,7 +168,7 @@ TEST(batchAdoptionPublishesFollowAndRejectsStaleAndInvalidScans) {
     ASSERT_TRUE(test::applyGitDiffScan(editor, scan(6, "same\nnewer\n"))
                     .accepted());
     ASSERT_EQ(test::activeDocumentText(editor), std::string{"same\nnewer\n"});
-    ASSERT_EQ(editor.liveDiffDocuments.size(), std::size_t{1});
+    ASSERT_EQ(test::liveDiffDocumentCount(editor), std::size_t{1});
 }
 
 TEST(statusOnlyScanClosesLiveTabAndRetainsTreeStatus) {
@@ -176,14 +182,15 @@ TEST(statusOnlyScanClosesLiveTabAndRetainsTreeStatus) {
                                         .maximumWordMatrixCells = 100}};
     ASSERT_TRUE(test::applyGitDiffScan(editor, scan(1, "same\nnew\n"))
                     .accepted());
-    ASSERT_EQ(editor.liveDiffDocuments.size(), std::size_t{1});
-    const auto liveDocument = editor.liveDiffDocuments.at("note");
+    ASSERT_EQ(test::liveDiffDocumentCount(editor), std::size_t{1});
+    const auto liveDocument = test::contentTabDocument(
+        editor, TabKind::LiveDiff, "note");
     auto overBudget = scan(2, "one\ntwo\nthree\nfour\nfive\n");
     ASSERT_TRUE(test::applyGitDiffScan(editor, std::move(overBudget))
                     .accepted());
 
     ASSERT_FALSE(editor.diff.file(DiffFileId{"note"}).has_value());
-    ASSERT_TRUE(editor.liveDiffDocuments.empty());
+    ASSERT_EQ(test::liveDiffDocumentCount(editor), std::size_t{0});
     ASSERT_FALSE(test::hasDocumentAssociation(editor, liveDocument));
     const auto tabs = editor.tabs.viewState();
     ASSERT_TRUE(std::none_of(

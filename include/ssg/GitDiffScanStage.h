@@ -1,25 +1,12 @@
 #pragma once
 
+#include <ssg/DiffIngressResult.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/GitDiffSource.h>
 
 #include <vector>
 
 namespace ssg {
-
-enum class DiffIngressError {
-    None,
-    EmptyBurst,
-    DiffRejected,
-    FollowRejected,
-};
-
-struct DiffIngressResult {
-    DiffIngressError error = DiffIngressError::None;
-    [[nodiscard]] bool accepted() const noexcept {
-        return error == DiffIngressError::None;
-    }
-};
 
 // Stages an entire git scan before the editor adopts any diff or follow state.
 // On rejection, the editor must not adopt either model or any status-only ids.

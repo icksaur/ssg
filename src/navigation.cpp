@@ -154,8 +154,7 @@ OperationResult searchCommand(Editor& runtime, std::string_view id) {
     else if (id == "palette.next" || id == "search.results_next") runtime.search.selectNext();
     else if (id == "palette.previous" || id == "search.results_previous") runtime.search.selectPrevious();
     else if (id == "search.workspace") {
-        const auto sourceGeneration = ++runtime.workspaceSearchGeneration;
-        runtime.startWorkspaceSearch(std::string{}, sourceGeneration);
+        runtime.openWorkspaceSearch();
     } else if (id == "goto.back" || id == "goto.forward") {
         bool const backward = id == "goto.back";
         auto const transition = backward ? runtime.navigation.peekBack()

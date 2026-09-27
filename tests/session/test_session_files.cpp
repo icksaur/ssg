@@ -159,9 +159,7 @@ TEST(deletingAFileDiscardsEveryDocumentAssociation) {
     const auto document = runtime.activeDocumentId();
     ASSERT_TRUE(document.has_value());
     if (!document) return;
-    runtime.documentLanguageOverrides.insert_or_assign(
-        document->value(), ssg::LanguageId::plainText());
-    runtime.findDocumentId = document;
+    ssg::test::seedDocumentAssociations(runtime, *document);
     ASSERT_TRUE(ssg::test::hasDocumentAssociation(runtime, *document));
 
     ASSERT_TRUE(runtime.dispatch("file.delete").accepted());

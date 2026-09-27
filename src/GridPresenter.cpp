@@ -1,4 +1,5 @@
 #include <ssg/GridPresenter.h>
+#include <ssg/LineLayoutCache.h>
 
 #include <algorithm>
 #include <set>
