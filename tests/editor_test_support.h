@@ -30,5 +30,6 @@ void seedDocumentAssociations(Editor& editor, FileDocumentId document);
 FileDocumentId contentTabDocument(
     const Editor& editor, TabKind kind, std::string_view identity);
 std::size_t liveDiffDocumentCount(const Editor& editor);
+std::uint64_t keymapGeneration(const Editor& editor);
 
 }

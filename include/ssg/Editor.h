@@ -138,6 +138,10 @@ void registerAllCommands(Commands& commands, Editor& runtime);
 struct Editor final {
 private:
     friend EditorCreateResult createEditor(EditorConfig config);
+    friend OperationResult applyKeymapBind(
+        Editor& runtime, KeymapBindArguments arguments);
+    friend OperationResult applyKeymapUnbind(
+        Editor& runtime, KeymapUnbindArguments arguments);
 
     struct DocumentRuntimeState {
         explicit DocumentRuntimeState(
@@ -200,6 +204,9 @@ public:
         SearchQueryChange change);
     void resetKeymapToDefault();
     [[nodiscard]] CompiledKeymap const& resolveInputKeymap();
+    [[nodiscard]] KeymapViewState const& keymapView() const noexcept {
+        return keymap;
+    }
     void focusEditor();
 
     [[nodiscard]] WorkspaceSearchState workspaceSearch(std::string query);
@@ -295,16 +302,16 @@ public:
     NavigationHistory navigation{64};
     LspSyncViewState lspSync;
     LspFeatureViewState lspFeatures;
+private:
     KeymapViewState keymap{"default", {}};
     // Advances on every keymap mutation (keymap.bind/unbind, reset to default).
     // The catalog revision does NOT move on a rebind -- binding an existing
     // command registers nothing -- so routing-change detection needs this
     // separate counter.
     std::uint64_t keymapGeneration = 0;
-
-private:
     std::unique_ptr<CompiledKeymap> inputKeymap;
     std::optional<std::uint64_t> inputKeymapGeneration;
+    void adoptKeymap(KeymapViewState replacement);
 
 public:
     ThemeSnapshot theme{};

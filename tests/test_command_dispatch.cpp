@@ -55,12 +55,9 @@ TEST(keyBoundToUnknownIdWorksAfterRegistrationWithoutRebuildingTheBinding) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
 
-    auto bound = ssg::applyKeymapBind(
-        runtime->keymap, {"Mod+KeyG", "oracle.late", "editor"});
-    ASSERT_TRUE(bound.accepted());
-    if (!bound.accepted()) return;
-    runtime->keymap = std::move(bound.keymap);
-    ++runtime->keymapGeneration;
+    ASSERT_TRUE(ssg::applyKeymapBind(
+                    *runtime, {"Mod+KeyG", "oracle.late", "editor"})
+                    .accepted);
     ssg::KeyStroke key{ssg::KeyCode::KeyG, true};
     auto unknown = runtime->input(ssg::ClientKeyInput{key, {}});
     ASSERT_EQ(unknown.outcome, ssg::ClientInputOutcome::Rejected);
@@ -79,6 +76,87 @@ TEST(keyBoundToUnknownIdWorksAfterRegistrationWithoutRebuildingTheBinding) {
     auto registered = runtime->input(ssg::ClientKeyInput{key, {}});
     ASSERT_EQ(registered.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_EQ(calls, 1);
+    fs::remove_all(root);
+}
+
+TEST(keymapMutationsAdoptRoutingAndGenerationTogether) {
+    const auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+
+    int firstCalls = 0;
+    int secondCalls = 0;
+    runtime->addCommand("oracle.first", "First", [&] {
+        ++firstCalls;
+        return ssg::CommandResult{};
+    });
+    runtime->addCommand("oracle.second", "Second", [&] {
+        ++secondCalls;
+        return ssg::CommandResult{};
+    });
+    const ssg::KeyStroke key{ssg::KeyCode::KeyG, true};
+    const auto initialGeneration = ssg::test::keymapGeneration(*runtime);
+
+    ASSERT_TRUE(ssg::applyKeymapBind(
+                    *runtime, {"Mod+KeyG", "oracle.first", "editor"})
+                    .accepted);
+    ASSERT_EQ(ssg::test::keymapGeneration(*runtime),
+              initialGeneration + 1);
+    ASSERT_EQ(runtime->input(ssg::ClientKeyInput{key, {}}).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(firstCalls, 1);
+
+    ASSERT_TRUE(ssg::applyKeymapBind(
+                    *runtime, {"Mod+KeyG", "oracle.second", "editor"})
+                    .accepted);
+    ASSERT_EQ(ssg::test::keymapGeneration(*runtime),
+              initialGeneration + 2);
+    ASSERT_EQ(runtime->input(ssg::ClientKeyInput{key, {}}).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(firstCalls, 1);
+    ASSERT_EQ(secondCalls, 1);
+
+    ASSERT_TRUE(ssg::applyKeymapUnbind(
+                    *runtime, {"Mod+KeyG", "editor"})
+                    .accepted);
+    ASSERT_EQ(ssg::test::keymapGeneration(*runtime),
+              initialGeneration + 3);
+    ASSERT_EQ(runtime->input(ssg::ClientKeyInput{key, {}}).outcome,
+              ssg::ClientInputOutcome::Unhandled);
+    ASSERT_EQ(secondCalls, 1);
+
+    ASSERT_TRUE(ssg::applyKeymapUnbind(
+                    *runtime, {"Mod+KeyQ", "editor"})
+                    .accepted);
+    ASSERT_EQ(ssg::test::keymapGeneration(*runtime),
+              initialGeneration + 4);
+
+    ASSERT_TRUE(ssg::applyKeymapBind(
+                    *runtime, {"Mod+KeyG", "oracle.second", "editor"})
+                    .accepted);
+    ASSERT_EQ(ssg::test::keymapGeneration(*runtime),
+              initialGeneration + 5);
+
+    ASSERT_FALSE(ssg::applyKeymapBind(
+                     *runtime, {"NotAKey", "oracle.first", "editor"})
+                     .accepted);
+    ASSERT_FALSE(ssg::applyKeymapUnbind(
+                     *runtime, {"NotAKey", "editor"})
+                     .accepted);
+    ASSERT_EQ(ssg::test::keymapGeneration(*runtime),
+              initialGeneration + 5);
+    ASSERT_EQ(runtime->input(ssg::ClientKeyInput{key, {}}).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(secondCalls, 2);
+
+    runtime->resetKeymapToDefault();
+    ASSERT_EQ(ssg::test::keymapGeneration(*runtime),
+              initialGeneration + 6);
+    ASSERT_EQ(runtime->input(ssg::ClientKeyInput{key, {}}).outcome,
+              ssg::ClientInputOutcome::Unhandled);
+    ASSERT_EQ(secondCalls, 2);
+
     fs::remove_all(root);
 }
 
@@ -395,6 +473,7 @@ TEST(pickerSubmitReconcilesItsCommandAndCloseAsOneOperation) {
 SSG_TEST_SUITE(test_command_dispatch) {
     RUN(viewActionsRemainExplicitAcrossEditorDispatch);
     RUN(keyBoundToUnknownIdWorksAfterRegistrationWithoutRebuildingTheBinding);
+    RUN(keymapMutationsAdoptRoutingAndGenerationTogether);
     RUN(nestedDispatchIsRefusedAndDeferredIdsDrainInOrder);
     RUN(editorRefusesRegistryMutationDuringAHandler);
     RUN(editReconciliationHonorsAcceptanceAndNotifiesFollowOnce);

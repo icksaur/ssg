@@ -137,6 +137,10 @@ struct EditorAccess {
     static std::size_t liveDiffDocumentCount(const Editor& editor) {
         return editor.liveDiffDocuments.size();
     }
+
+    static std::uint64_t keymapGeneration(const Editor& editor) {
+        return editor.keymapGeneration;
+    }
 };
 
 bool hasDocumentAssociation(const Editor& editor, FileDocumentId document) {
@@ -158,6 +162,10 @@ FileDocumentId contentTabDocument(
 
 std::size_t liveDiffDocumentCount(const Editor& editor) {
     return EditorAccess::liveDiffDocumentCount(editor);
+}
+
+std::uint64_t keymapGeneration(const Editor& editor) {
+    return EditorAccess::keymapGeneration(editor);
 }
 
 }

@@ -235,8 +235,7 @@ OperationResult applyStyleDefine(Editor& runtime, StyleDefineArguments arguments
 OperationResult applyKeymapBind(Editor& runtime, KeymapBindArguments arguments) {
     auto result = applyKeymapBind(runtime.keymap, arguments);
     if (!result.accepted()) return failure(result.error->message);
-    runtime.keymap = std::move(result.keymap);
-    ++runtime.keymapGeneration;
+    runtime.adoptKeymap(std::move(result.keymap));
     return success();
 }
 
@@ -244,8 +243,7 @@ OperationResult applyKeymapUnbind(Editor& runtime,
                                  KeymapUnbindArguments arguments) {
     auto result = applyKeymapUnbind(runtime.keymap, arguments);
     if (!result.accepted()) return failure(result.error->message);
-    runtime.keymap = std::move(result.keymap);
-    ++runtime.keymapGeneration;
+    runtime.adoptKeymap(std::move(result.keymap));
     return success();
 }
 

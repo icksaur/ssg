@@ -169,7 +169,7 @@ std::string renderCommandList(Commands const& commands) {
 // current keymap and registry.
 std::string buildHelpDocument(Editor const& runtime) {
     std::string document{kHelpPreamble};
-    document += renderKeybindings(runtime.keymap, runtime.commands);
+    document += renderKeybindings(runtime.keymapView(), runtime.commands);
     document += kHelpConfigSection;
     document += renderGlyphList(runtime.style);
     document += "\n## All commands\n";

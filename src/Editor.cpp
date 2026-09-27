@@ -1809,7 +1809,11 @@ bool Editor::focusPane(PaneId pane) {
 
 void Editor::resetKeymapToDefault() {
     std::lock_guard operationLock{operationMutex};
-    keymap = defaultTerminalKeymap();
+    adoptKeymap(defaultTerminalKeymap());
+}
+
+void Editor::adoptKeymap(KeymapViewState replacement) {
+    keymap = std::move(replacement);
     ++keymapGeneration;
 }
 
